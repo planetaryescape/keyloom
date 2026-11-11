@@ -81,7 +81,8 @@ export type AfterApply = {
   text: string;
   /** The same news in a few words, for the Applied toast that follows an Apply from chat. */
   toast: string;
-  action: { id: "apply_now" | "open_release" | "put_on"; label: string } | null;
+  /** `open_status` opens the keyboard's status, where kanata's setup checklist is; `replace_foreign` the confirm that replaces kanata's config. */
+  action: { id: "apply_now" | "open_release" | "put_on" | "open_status" | "replace_foreign"; label: string } | null;
 };
 
 const UNDO = "Undo above the board takes it back.";
@@ -117,6 +118,13 @@ export function afterApply(board: { firmware: string; name: string }, sync: Boar
   const autoRuns = auto && (state?.kind === "in_sync" || state?.kind === "syncing" || (state?.kind === "behind" && state.why === "waiting"));
   if (kanata) {
     if (autoRuns) return { lead: "Applied.", text: `Auto-apply puts it on your ${name} in a moment. ${UNDO}`, toast: `Auto-apply puts it on your ${name}.`, action: null };
+    // Apply now would be refused in these two states (R3-03): offer what gets kanata to a state where it works.
+    if (state?.kind === "not_connected") {
+      return { lead: "Applied to your layout.", text: `kanata isn't running, so it isn't on your ${name} yet. ${UNDO}`, toast: "kanata isn't running yet.", action: { id: "open_status", label: "Open keyboard status" } };
+    }
+    if (state?.kind === "not_keyloom") {
+      return { lead: "Applied to your layout.", text: `kanata runs a config keyloom didn't write, so this isn't on your ${name} yet. ${UNDO}`, toast: "kanata runs a config keyloom didn't write.", action: { id: "replace_foreign", label: "Replace it…" } };
+    }
     return { lead: "Applied to your layout.", text: `It isn't on your ${name} yet. ${UNDO}`, toast: `It isn't on your ${name} yet.`, action: { id: "apply_now", label: "Apply now" } };
   }
   if (autoRuns) return { lead: "Applied.", text: `Auto-sync builds it and puts it on your ${name} by itself. ${UNDO}`, toast: `Auto-sync puts it on your ${name}.`, action: null };

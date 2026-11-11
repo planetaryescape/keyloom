@@ -34,7 +34,7 @@ export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts"
 export { type CredentialOverrides, type DoctorCheck, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
 export { type DockerReadiness, type EnsureDockerResult, type ToolchainOverrides, dockerAutoStart, dockerReadiness, ensureDocker, reasonWithHint, restartDocker, startDocker } from "./toolchain.ts";
 export {
-  type RemapperOverrides, applyToRemapper, confirmExitChord, disableRemapperFor, probeRemapper, readRemapper, remapperDoctor, setupRemapper,
+  type RemapperOverrides, EXIT_CHORD_WINDOW_MS, applyToRemapper, confirmExitChord, disableRemapperFor, lookAtRemapper, probeRemapper, readRemapper, remapperDoctor, setupRemapper,
 } from "./remapper.ts";
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {

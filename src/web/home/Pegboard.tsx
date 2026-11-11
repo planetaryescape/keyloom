@@ -89,6 +89,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
                 ) : (
                   <WallBoard
                     detail={detail}
+                    name={layout.name}
                     flying={flying === layout.id}
                     onOpen={(element) => onOpen(layout, detail, element)}
                   />
@@ -112,7 +113,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
   );
 }
 
-function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: boolean; onOpen: (element: HTMLElement | null) => void }) {
+function WallBoard({ detail, name, flying, onOpen }: { detail: LayoutDetail; name: string; flying?: boolean; onOpen: (element: HTMLElement | null) => void }) {
   const { document: layout, board, geometry } = detail;
   const keys = useMemo<readonly GeometryKey[] | null>(() => {
     try {
@@ -162,7 +163,20 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
     return () => cancelAnimationFrame(frameId);
   }, [scale, keys]);
 
-  if (keys === null) return <div className="peg-board peg-board-empty"><span className="peg-missing">Can't draw this board</span></div>;
+  // Opening it is still the way on: the layout page says why it can't be drawn and offers a way back (R3-22).
+  if (keys === null) {
+    return (
+      <div className="peg-board peg-board-empty">
+        <span className="peg-missing">
+          Can't draw this board
+          <span className="peg-missing-actions">
+            {/* The layout's name, as on the tile that failed to load: two configs on one board would otherwise read the same. */}
+            <button type="button" className="button" onClick={() => onOpen(null)}>Open {name}</button>
+          </span>
+        </span>
+      </div>
+    );
+  }
   return (
     // The drawn keyboard's caps are buttons, so the board can't be one: an open button is laid over it instead.
     <div ref={frame} className="peg-board">

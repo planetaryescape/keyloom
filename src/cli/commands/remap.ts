@@ -2,12 +2,12 @@
 // parts around it: the setup keyloom can do without root, the setup doctor, the emergency switch and the exit-chord proof.
 import type { HandsFreeOverrides } from "../../app/index.ts";
 import {
-  applyToRemapper, confirmExitChord, disableRemapperFor, probeRemapper, remapperDoctor, setupRemapper, UsageError,
+  EXIT_CHORD_WINDOW_MS, applyToRemapper, confirmExitChord, disableRemapperFor, lookAtRemapper, remapperDoctor, setupRemapper, UsageError,
 } from "../../app/index.ts";
 import type { Command } from "commander";
 import type { CliContext } from "./context.ts";
 import { print } from "../output.ts";
-import { ROOT_KANATA_PATH } from "../../app/remapper.ts";
+import { ROOT_KANATA_PATH, noteKanataSeen } from "../../app/remapper.ts";
 import { commandArg } from "../../app/command-words.ts";
 
 const DEFAULT_BOARD = "apple/macbook-ansi";
@@ -40,7 +40,7 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
               `  ${r.rootCommand}`,
             ]),
           "",
-          "Then prove the way out before you rely on it: hold Left Control + Space + Escape, see kanata stop, and run `keyloom remap confirm-exit-chord`.",
+          "Then prove the way out before you rely on it: once kanata runs, run `keyloom remap confirm-exit-chord`, hold Left Control + Space + Escape until kanata stops, and run it again.",
         ].join("\n"),
       });
     });
@@ -84,15 +84,29 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
 
   remap
     .command("confirm-exit-chord")
-    .description("record that you held Left Control + Space + Escape and saw kanata stop; auto-apply can turn on after this")
+    .description("record that you held Left Control + Space + Escape and saw kanata stop; run it once while kanata runs, then again after the chord. Auto-apply can turn on after this")
     .option("--board <board>", "board ID", DEFAULT_BOARD)
     .action(async (opts: { board: string }) => {
-      // The same check as the app's button (D-497): only a refused port shows the chord stopped kanata.
-      const probe = await probeRemapper(opts.board, over);
-      if (probe === "running") throw new UsageError("kanata is still running, so the chord didn't stop it yet. Hold Left Control + Space + Escape until the MacBook keyboard types plainly, then run this again");
-      if (probe === "unreadable") throw new UsageError("keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; run this again in a moment");
-      await withApp((app) => confirmExitChord(app, opts.board));
-      print(io, format(), { json: { ok: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
+      // The same checks as the app's button (D-497, D-509): only a refused port shows kanata stopped, and only a kanata keyloom saw
+      // running its config shortly before shows the chord stopped it. Run while kanata runs keyloom's config, this is that sighting.
+      const minutes = EXIT_CHORD_WINDOW_MS / 60_000;
+      const look = await lookAtRemapper(opts.board, over);
+      if (look === "keyloom") {
+        await withApp((app) => noteKanataSeen(app, opts.board));
+        // The first of the two runs, not a failure: it exits 0 so a --json caller reads the next step, not an error.
+        print(io, format(), {
+          json: { ok: true, recorded: false, next: "hold_exit_chord", within_minutes: minutes },
+          table: `keyloom saw kanata running its config. Hold Left Control + Space + Escape until the MacBook keyboard types plainly, then run this again within ${minutes} minutes.`,
+        });
+        return;
+      }
+      if (look === "other") throw new UsageError("kanata is still running a config keyloom didn't write. The proof counts only for a kanata keyloom saw running its own config: `keyloom remap apply <layout> --overwrite` puts one on, then run this again");
+      if (look === "unreadable") throw new UsageError("keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; run this again in a moment");
+      const outcome = await withApp((app) => confirmExitChord(app, opts.board));
+      if (outcome === "not_seen") {
+        throw new UsageError(`kanata isn't running, but keyloom hasn't seen it run keyloom's config in the last ${minutes} minutes, so this doesn't show the chord stopped it. Nothing was recorded. Start kanata (\`keyloom remap doctor\` says how), run this while it runs, then hold the chord and run this again`);
+      }
+      print(io, format(), { json: { ok: true, recorded: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
     });
 }
 

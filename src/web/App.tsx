@@ -20,8 +20,12 @@ import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened, undoChange } from "./api-write.ts";
 import { fetchFittingRevision } from "./release/flash-api.ts";
 import { headline } from "../layout/history-summary.ts";
-import { archiveConfig } from "./configs/api-configs.ts";
+import { archiveConfig, useConfig } from "./configs/api-configs.ts";
+import { archiveChoice } from "./configs/archive-choice.ts";
+import { useConfigs } from "./configs/useConfigs.ts";
+import { ConfirmDialog } from "./configs/ConfigDialogs.tsx";
 import { type GoBackRefusal, goBackRefusal } from "./shell/mismatch-words.ts";
+import { refusalProblem } from "./sync/useSyncToasts.ts";
 import type { FindingRepairDraft } from "../api/review.ts";
 
 // `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
@@ -364,7 +368,7 @@ function LayoutPage({
   const page = (release: ReleaseHandle | null, dialog: ReactNode) => (
     <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
-        <MismatchState token={token} summary={summary} fixable={problem !== null && board.keyCount === geometry.keys.length} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
+        <MismatchState token={token} summary={summary} kanata={board.firmware === "kanata"} fixable={problem !== null && board.keyCount === geometry.keys.length} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
       ) : (
         <Viewer
           detail={detail}
@@ -413,8 +417,13 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
  * button: History lives in the editor, which can't draw this layout, so the page offers that revision itself (D-502). Otherwise it
  * offers another layout, from the wall or the board switcher in the header, or archiving this one, which keeps its history.
  */
-function MismatchState({ token, summary, problem, fixable, onHome, onReload }: { token: string; summary: LayoutSummary; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
+function MismatchState({ token, summary, kanata, problem, fixable, onHome, onReload }: { token: string; summary: LayoutSummary; kanata: boolean; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
   const [busy, setBusy] = useState(false);
+  // The config on its keyboard can't be archived (R3-06): the page hides Archive, says why, and offers to put another config on first.
+  // A list that failed to load is empty, which keeps Archive; the server refuses it with its reason if it is on the keyboard after all.
+  const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.revisionId}`);
+  const archive = archiveChoice(configs.live, summary.id);
+  const [putting, setPutting] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
   // A lookup that failed is not "none fits": the page says so and offers to look again.
@@ -463,9 +472,13 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
         throw error;
       }
     }, "keyloom couldn't go back to that revision.", true);
-  const archive = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
+  const archiveIt = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
+  const onKeyboard = archive.kind === "on_keyboard" ? archive : null;
+  const other = onKeyboard?.putOn ?? null;
   return (
+    <>
     <ErrorState
+      level={1}
       title="This layout doesn't match its board"
       actions={
         <>
@@ -484,7 +497,8 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
             </button>
           ) : null}
           {onHome === undefined ? null : <button type="button" className={fitting === null && !lookupFailed ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
-          <button type="button" className="button" disabled={busy} onClick={() => void archive()}>Archive this config</button>
+          {archive.kind === "archive" ? <button type="button" className="button" disabled={busy} onClick={() => void archiveIt()}>Archive this config</button> : null}
+          {other === null ? null : <button type="button" className="button" disabled={busy} onClick={() => setPutting(true)}>Put {other.name} on it…</button>}
         </>
       }
     >
@@ -494,8 +508,32 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
         : fitting === null
         ? "Pick another layout, or archive this one; it keeps its history."
         : <>The last revision that matched is “{headline(fitting.summary)}”. Going back adds a new revision, so this one stays in History.</>}
+      {onKeyboard === null ? null : <> {onKeyboard.reason}</>}
       {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused}</span>}
     </ErrorState>
+    {putting && other !== null && onKeyboard !== null ? (
+      <ConfirmDialog
+        title={`Put ${other.name} on your ${onKeyboard.boardName}?`}
+        lines={[
+          kanata
+            ? `keyloom loads ${other.name} into kanata. From then on ${other.name} is the config your MacBook keyboard types.`
+            : `keyloom builds ${other.name} and puts it on the keyboard. From then on ${other.name} is the config that syncs.`,
+          `${summary.name} comes off the keyboard. It stays here with its history, and then you can archive it.`,
+        ]}
+        confirmLabel="Put it on"
+        onConfirm={async () => {
+          await useConfig(token, other.id);
+          configs.reload();
+        }}
+        // This page has none of the refusals' fixes, so their button opens the config being put on, whose page has Build and flash and
+        // Replace it. Not keyboard status: a config that isn't on the keyboard opens that on the keyboard's config, which is this page.
+        problemFor={(error) => (error instanceof ApiError
+          ? refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }))
+          : null)}
+        onClose={() => setPutting(false)}
+      />
+    ) : null}
+    </>
   );
 }
 

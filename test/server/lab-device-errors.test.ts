@@ -65,12 +65,15 @@ test("denied keyboard access returns the platform remedy without retrying", asyn
     const result = await startFailure(error);
     expect(result.response.status).toBe(409);
     expect(await result.response.json()).toEqual({
-      error: {
-        code: "permission_denied",
-        message: process.platform === "linux"
-          ? "Keyboard hidraw access was denied. Add a udev rule scoped to this keyboard's VID/PID that grants your user read/write access, reload the rules and reconnect, then try again."
-          : "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.",
-      },
+      // A Mac refuses raw HID until keyloom is allowed in Input Monitoring, which the lab opens with a button (R3-09).
+      error: process.platform === "darwin"
+        ? { code: "permission_input_monitoring", message: "macOS didn't let keyloom read the keyboard. Allow keyloom in System Settings > Privacy & Security > Input Monitoring, then try again." }
+        : {
+          code: "permission_denied",
+          message: process.platform === "linux"
+            ? "Keyboard hidraw access was denied. Add a udev rule scoped to this keyboard's VID/PID that grants your user read/write access, reload the rules and reconnect, then try again."
+            : "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.",
+        },
     });
     expect(result.opens()).toBe(1);
     expect(result.writes()).toBe(0);
@@ -111,4 +114,12 @@ test("an unclassified capture error remains an internal error and is not exposed
     expect(result.replays()).toBe(0);
     expect(log).toHaveBeenCalledTimes(1);
   } finally { log.mockRestore(); }
+});
+
+test("macOS's refusal of raw HID is Input Monitoring's; serial and other systems keep their own remedy (R3-09)", async () => {
+  const { accessRefused } = await import("../../src/app/lab.ts");
+  expect(accessRefused("permission_denied", "qmk", "darwin").code).toBe("permission_input_monitoring");
+  expect(accessRefused("permission_denied", "zmk", "darwin").code).toBe("permission_denied");
+  expect(accessRefused("permission_denied", "qmk", "linux").message).toContain("udev rule");
+  expect(accessRefused("busy", "qmk", "darwin").code).toBe("busy");
 });

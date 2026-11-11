@@ -150,15 +150,26 @@ describe("keyloom remap", () => {
   test("confirm-exit-chord is what lets auto-apply turn on", async () => {
     const world = (w = remapperWorld());
     expect((await cli(world, ["autosync", "on", MAC])).code).not.toBe(0);
-    // kanata still answers, so the chord didn't stop it: nothing is recorded (D-497).
-    const early = await cli(world, ["remap", "confirm-exit-chord"]);
-    expect(early.code).not.toBe(0);
-    expect(early.err).toContain("still running");
+    // kanata still answers, so the chord didn't stop it: nothing is recorded (D-497). The run is the first step, not a failure.
+    const early = await cli(world, ["remap", "confirm-exit-chord", "--format", "json"]);
+    expect(early.code).toBe(0);
+    expect(JSON.parse(early.out)).toMatchObject({ ok: true, recorded: false, next: "hold_exit_chord" });
     expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
     world.fake.stop();
     expect((await cli(world, ["remap", "confirm-exit-chord"])).code).toBe(0);
     expect(getBoardSync(world.app.db, MAC).provenAt).not.toBeNull();
     expect((await cli(world, ["autosync", "on", MAC])).code).toBe(0);
+  });
+
+  test("confirm-exit-chord records nothing for a kanata keyloom never saw running (R3-00, D-509)", async () => {
+    const world = (w = remapperWorld());
+    // Never started: the port refuses as it would after the chord, but nothing shows the chord stopped it.
+    world.fake.stop();
+    const r = await cli(world, ["remap", "confirm-exit-chord"]);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain("hasn't seen it run keyloom's config");
+    expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+    expect((await cli(world, ["autosync", "on", MAC])).code).not.toBe(0);
   });
 
   test("disable with kanata not running fails with the way out", async () => {

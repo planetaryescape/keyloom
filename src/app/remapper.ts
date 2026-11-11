@@ -15,7 +15,7 @@ import { type RemapperPaths, remapperPaths } from "../firmware/kanata/paths.ts";
 import { identityLayout } from "../firmware/kanata/identity.ts";
 import { ROOT_KANATA_PATH, launchDaemonPlist } from "../firmware/kanata/plist.ts";
 import { type DaemonInstall, rootInstallCommand } from "../firmware/kanata/daemon-install.ts";
-import { recordHandsFreeProof } from "../persistence/syncs.ts";
+import { getBoardSync, recordHandsFreeProof, recordKanataSeen } from "../persistence/syncs.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
@@ -85,9 +85,16 @@ export const readRemapper = (boardId: string, over: RemapperOverrides = {}): Pro
  * so it is "unreadable" (D-497). The app's exit-chord button and `keyloom remap confirm-exit-chord` both ask this first.
  */
 export async function probeRemapper(boardId: string, over: RemapperOverrides = {}): Promise<"running" | "stopped" | "unreadable"> {
+  const look = await lookAtRemapper(boardId, over);
+  return look === "keyloom" || look === "other" ? "running" : look;
+}
+
+/** The probe, telling a kanata running a config keyloom wrote (keyloom.kbd or safe.kbd) from one running someone else's. */
+export async function lookAtRemapper(boardId: string, over: RemapperOverrides = {}): Promise<"keyloom" | "other" | "stopped" | "unreadable"> {
   try {
     const running = await readRemapper(boardId, over);
-    return running.state !== "absent" ? "running" : running.refused ? "stopped" : "unreadable";
+    if (running.state === "absent") return running.refused ? "stopped" : "unreadable";
+    return running.state === "other" ? "other" : "keyloom";
   } catch {
     return "unreadable";
   }
@@ -207,9 +214,31 @@ export async function remapperDoctor(boardId: string, over: RemapperOverrides = 
   return "install" in plan ? { ...read, rootCommand: rootInstallCommand(plan.install), blocked: null } : { ...read, rootCommand: null, blocked: plan.blocked };
 }
 
-/** BK pressed Left Control + Space + Escape and saw kanata stop: auto-apply may turn on (D-235, 17#auto-sync). */
-export function confirmExitChord(app: App, boardId: string): void {
+/**
+ * How long after keyloom last saw kanata running its config a stopped kanata still counts as the chord having stopped it (D-509). Seeing
+ * kanata run takes one 5-second poll; reading the steps, holding the chord and checking that the keyboard types plainly takes a minute or
+ * two. Ten minutes leaves room for that and for an interruption, and still ties the stop to a kanata keyloom saw: one that never started,
+ * or stopped yesterday, doesn't count.
+ */
+export const EXIT_CHORD_WINDOW_MS = 10 * 60_000;
+
+/** Whether a kanata seen at `seenAt` is recent enough for its stop to prove the chord. A time after `now` (a clock moved back) isn't. */
+export const kanataSeenRecently = (seenAt: number | null, now: number): boolean => seenAt !== null && seenAt <= now && now - seenAt <= EXIT_CHORD_WINDOW_MS;
+
+/** keyloom just saw kanata running a config it wrote on this board, which opens the exit-chord window (D-509). */
+export function noteKanataSeen(app: App, boardId: string, now = Date.now()): void {
+  recordKanataSeen(app.db, boardId, now);
+}
+
+/**
+ * BK pressed Left Control + Space + Escape and saw kanata stop: auto-apply may turn on (D-235, 17#auto-sync). The caller has seen kanata
+ * stopped; this records the proof only when keyloom also saw it running keyloom's config within the window (D-509), and otherwise
+ * records nothing and answers "not_seen".
+ */
+export function confirmExitChord(app: App, boardId: string, now = Date.now()): "recorded" | "not_seen" {
   const board = showBoard(boardId);
   if (board.definition.firmware !== "kanata") throw new UsageError(`${board.definition.name} isn't a software-remapper board`);
-  recordHandsFreeProof(app.db, boardId, "exit-chord");
+  if (!kanataSeenRecently(getBoardSync(app.db, boardId).kanataSeenAt, now)) return "not_seen";
+  recordHandsFreeProof(app.db, boardId, "exit-chord", now);
+  return "recorded";
 }

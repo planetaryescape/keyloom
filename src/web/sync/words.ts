@@ -39,6 +39,13 @@ const STEP_WORDS = {
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
+/**
+ * The last sync's build failed because Docker wasn't ready (R3-05). Docker's own sentence is for the build log: it can name an engine's
+ * terminal fix, which the Build and flash dialog turns into a button, so the line and the toast say this instead.
+ */
+const dockerNotReady = (board: BoardSync): boolean => board.last?.failure === "build" && board.last.errorCode === "docker_unavailable";
+const DOCKER_DETAIL = "Docker isn't ready, so keyloom couldn't build the change. Build and flash shows what Docker needs, with a button to fix it.";
+
 /** `selectedLayoutId` is the layout on screen: a keyboard that runs another layout of the same board says so. */
 export function syncLine(board: BoardSync, selectedLayoutId: string | null): SyncLine {
   const name = board.boardName;
@@ -64,7 +71,8 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
     case "behind": {
       const label = s.changes === null || s.changes === 0 ? `Changes not on your ${name}` : `${plural(s.changes, "change", "changes")} not on your ${name}`;
       const detail =
-        s.why === "failed" ? (s.error ?? "The last sync failed.")
+        s.why === "failed" && dockerNotReady(board) ? DOCKER_DETAIL
+        : s.why === "failed" ? (s.error ?? "The last sync failed.")
         : s.why === "waiting" ? (s.error ? `${s.error} Trying again.` : "Syncing in a moment.")
         : s.why === "paused" ? "Auto-sync is paused."
         : s.why === "auto_off" ? "Auto-sync is off for this keyboard."
@@ -137,26 +145,42 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
 
 /**
  * What auto-sync does, for the popover's switch. `name` is what the switch is called: a remapper applies a config, it doesn't sync
- * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11).
+ * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11). `exitChord` says whether the popover offers
+ * "I held it and kanata stopped": only once keyloom has seen kanata run its config recently (D-509), and the note says why it isn't there.
  */
-export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null };
+export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null; exitChord: boolean };
 
 export function autoSyncLine(board: BoardSync): AutoSyncLine {
   const a = board.auto;
+  // The server sends it true only for an unproven remapper (D-509).
+  const exitChord = a.exitChordReady === true;
   return {
     name: board.remapper === true ? "Auto-apply" : "Auto-sync",
     on: a.on,
     canTurnOn: a.proven,
-    note: a.proven ? null : board.remapper === true
-      ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape until your MacBook keyboard types plainly, then press the button below."
-      : "Turns on after keyloom flashes this keyboard by itself once and sees it come back.",
+    note: a.proven ? null : board.remapper !== true ? "Turns on after keyloom flashes this keyboard by itself once and sees it come back."
+      : exitChord ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape until your MacBook keyboard types plainly, then press the button below."
+      : board.state.kind === "not_keyloom" ? "Turns on after you prove kanata's emergency exit once. That step appears when kanata runs a config keyloom wrote, so replace the one it runs first."
+      : "Turns on after you prove kanata's emergency exit once. That step appears when keyloom sees kanata running, so a kanata that never started can't count. Start kanata first.",
+    exitChord,
   };
 }
 
 const seconds = (ms: number | null): string | null => (ms === null ? null : `${Math.max(1, Math.round(ms / 1000))} s`);
 
-/** The toast for a board whose state just changed, or null when nothing needs saying. */
-export function syncNotice(before: BoardSync | undefined, after: BoardSync): { kind: "success" | "error"; message: string; detail?: string } | null {
+/** The toast for a board whose state just changed, or null when nothing needs saying. `action` is the toast's button. */
+export type SyncNotice = { kind: "success" | "error"; message: string; detail?: string; action?: { id: RefusalAction | "open_board"; label: string } };
+
+/**
+ * A notice as the page on screen can act on it. Its button acts on the layout on screen, so a notice about another keyboard (its
+ * auto-sync ran while this page was open) offers to open that keyboard instead, where its sync line has the same button.
+ */
+export function noticeOnPage(notice: SyncNotice, board: Pick<BoardSync, "boardId" | "boardName">, pageBoardId: string | undefined): SyncNotice {
+  if (notice.action === undefined || board.boardId === pageBoardId) return notice;
+  return { ...notice, detail: `${notice.detail ?? ""} Its page has ${notice.action.label.replace(/…$/, "")}.`.trim(), action: { id: "open_board", label: `Open ${board.boardName}` } };
+}
+
+export function syncNotice(before: BoardSync | undefined, after: BoardSync): SyncNotice | null {
   if (before === undefined) return null;
   if (before.state.kind === after.state.kind && !(before.state.kind === "needs_hand" && after.state.kind === "needs_hand" && before.state.instruction !== after.state.instruction)) return null;
   const was = before.state.kind;
@@ -170,6 +194,7 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
     return { kind: "success", message: `On your ${after.boardName}`, ...(took ? { detail: `${took} from your change.` } : {}) };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
+    if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: { id: "open_release", label: "Build and flash…" } };
     return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: now.error ?? "The sync failed." };
   }
   if (now.kind === "needs_hand") return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };
@@ -185,7 +210,14 @@ export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_for
  */
 export type RefusalNotice = { message: string; detail?: string; action?: { id: RefusalAction; label: string } };
 
-export function refusalNotice(code: string | undefined, message: string): RefusalNotice {
+export const refusalNotice = (code: string | undefined, message: string): RefusalNotice =>
+  knownRefusal(code) ?? { message: "keyloom couldn't do that", detail: message };
+
+/**
+ * The words and button for a refusal code, or null for a code that isn't one (R3-01): a put-on refused by the sync engine gets the same
+ * message and button as the toast, and any other failure is the caller's to say.
+ */
+export function knownRefusal(code: string | undefined): RefusalNotice | null {
   switch (code) {
     case "archived": return { message: "This config is archived", detail: "Restore it to put it on the keyboard.", action: { id: "restore", label: "Restore" } };
     case "not_on_keyboard": return { message: "This config isn't the one on the keyboard", detail: "Put it on to make it the config that syncs.", action: { id: "put_on", label: "Put it on…" } };
@@ -194,11 +226,15 @@ export function refusalNotice(code: string | undefined, message: string): Refusa
     case "kanata_foreign": return { message: "kanata runs a config keyloom didn't write", detail: "keyloom never replaces it by itself.", action: { id: "replace_foreign", label: "Replace it…" } };
     case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status lists what is missing, with a button for each.", action: { id: "open_status", label: "Open keyboard status" } };
     case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
-    case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
+    case "busy": return { message: "keyloom is already building or flashing", detail: "Try again when it finishes." };
+    // Sync now asks again by itself while the page is open (R3-18, busy-retry.ts), and says so when it stops asking.
+    case "busy_waiting": return { message: "keyloom is already building or flashing", detail: "keyloom syncs this when that finishes." };
+    case "busy_timed_out": return { message: "keyloom is still building or flashing", detail: "It has been busy for 15 minutes, so keyloom stopped waiting. The keyboard's status shows what is running.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then check again.", action: { id: "check_exit_chord", label: "Check again" } };
+    case "kanata_not_seen": return { message: "keyloom hasn't seen kanata running lately", detail: "A kanata that stopped long ago, or never started, doesn't show the chord worked. Start kanata, then hold Left Control, Space and Escape and press the button again.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status shows what kanata runs now.", action: { id: "open_status", label: "Open keyboard status" } };
     case "keyboard_removed": return { message: "This keyboard was removed from your setup", detail: "Restore it to sync it again. Its configs and history were kept.", action: { id: "restore_keyboard", label: "Restore" } };
-    default: return { message: "keyloom couldn't do that", detail: message };
+    default: return null;
   }
 }
