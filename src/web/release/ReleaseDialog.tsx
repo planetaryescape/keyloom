@@ -298,10 +298,12 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     <p className="muted">Nothing has been written to the keyboard yet.</p>
                   </div>
                 ) : null}
+                {release.cancelNote === null ? null : <p className="muted" role="status">{release.cancelNote}</p>}
               </>
             ) : flash.status === "writing" ? (
               <>
                 <p><strong>Writing the firmware.</strong> Keep the keyboard plugged in.</p>
+                {release.cancelNote === null ? null : <p className="muted" role="status">{release.cancelNote}</p>}
                 <Progress label="Writing firmware" />
                 <LogTail label="Flash log" lines={flash.logTail} />
               </>

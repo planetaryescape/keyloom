@@ -14,6 +14,7 @@ import { registerWorkloadCommands } from "./commands/workload.ts";
 import { type KeyboardCliDeps, registerKeyboardCommands } from "./commands/keyboard.ts";
 import { type LabCliDeps, registerLabCommands } from "./commands/lab.ts";
 import { registerFirmwareCommands, untilInterrupted as abortOnInterrupt } from "./commands/firmware.ts";
+import { catchStopSignals } from "./stop-signals.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
 import { registerVersionCommands } from "./commands/version.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
@@ -308,12 +309,12 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         // The directory lock taken before looking for another server: a racing serve or --replace may look now.
         releaseLock();
         io.err(`keyloom is running at ${running.url}\nPress Ctrl-C to stop.\n`);
+        // Ctrl-C, a closed terminal (the shutdown still stops a Homebrew install in its own process group, R2-08) or a kill. The
+        // handlers stay through the drain, so a second Ctrl-C can't end keyloom while it writes to a keyboard (D-506).
+        let disposeSignals = () => {};
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
-          process.once("SIGINT", stop);
-          process.once("SIGTERM", stop);
-          // A closed terminal: the shutdown still stops a Homebrew install, which runs in its own process group (R2-08).
-          process.once("SIGHUP", stop);
+          disposeSignals = catchStopSignals(stop, (text) => io.err(text));
           if (opts.exitOnStdinClose) {
             // A parent that dies closes the pipe, whatever killed it (D-321). Resuming is what makes the stream report the end.
             process.stdin.once("end", stop);
@@ -324,10 +325,14 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         forget();
         process.stdin.pause();
         running.stop();
-        if (running.drain) {
-          const slow = setTimeout(() => io.err("Finishing a keyboard sync that is writing; don't unplug the keyboard.\n"), 1000);
-          await running.drain();
-          clearTimeout(slow);
+        try {
+          if (running.drain) {
+            const slow = setTimeout(() => io.err("Finishing a keyboard sync that is writing; don't unplug the keyboard.\n"), 1000);
+            await running.drain();
+            clearTimeout(slow);
+          }
+        } finally {
+          disposeSignals();
         }
       };
       if (opts.boardDev === undefined) {

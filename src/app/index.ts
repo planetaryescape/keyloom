@@ -98,6 +98,7 @@ export {
   endRecording, labPassages, realLabDeps, incompleteRecording, sessionAnalysis, sessionContent, sessions as labSessions, labReadout, cannotRecord, fingersLead, type LabReadout,
 } from "./lab.ts";
 export { PlatformUnavailableError, requireCommandSupport, windowsUnavailable } from "../firmware/toolchain/platform-support.ts";
+export { WRITE_IN_PROGRESS_MESSAGE, keyboardWriteInProgress } from "../firmware/toolchain/write-guard.ts";
 export { SchemaTooNewError, assertDataDirOpenable } from "../persistence/schema-guard.ts";
 
 export { sendMessage } from "./send-message.ts";

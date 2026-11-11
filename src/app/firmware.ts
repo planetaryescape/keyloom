@@ -458,11 +458,21 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
   }
 }
 
-/** Refuses new flashes and waits for accepted starts and running flashes, without surfacing task failures. */
+/**
+ * Refuses new flashes, cancels the ones still waiting for the keyboard, and waits for the rest, without surfacing task failures. A
+ * waiting flash would otherwise hold the shutdown with no limit, and the desktop app kills a server that takes over 30 s, leaving
+ * Zapp running with no parent to flash whenever the keyboard next enters its bootloader. The flasher has the last word, as for
+ * the page's Cancel: a keyboard already in its bootloader is written, and that write is waited for (D-506).
+ */
 export async function drainManualFlashTasks(app: App): Promise<void> {
   drainingApps.add(app);
   // Accepted starts can register tasks after their artifact check; settle them before taking the task snapshot.
   await Promise.allSettled([...(pendingFlashStarts.get(app) ?? [])]);
+  for (const control of flashControls.values()) {
+    if (control.committed || control.cancelled) continue;
+    control.cancelled = true;
+    control.abort.abort();
+  }
   await Promise.allSettled([...flashTasks.values()]);
 }
 

@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { afterApply, checkOutcome, failedFlashText, permissionFix, revisionChoices } from "../../src/web/release/flash-words.ts";
+import { afterApply, checkOutcome, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -140,5 +140,18 @@ describe("afterApply", () => {
     // A view from before the Apply (the toast's) is in sync with the old head, which says nothing about this change.
     expect(off({ kind: "in_sync" }, "rev_1").action?.id).toBe("apply_now");
     expect(afterApply(GLOVE, synced({ state: { kind: "in_sync" }, headRevisionId: "rev_2" }, { on: false }), "lay_1", "rev_2").action).toBeNull();
+  });
+});
+
+describe("cancelNote", () => {
+  test("a Cancel refused because the write began says why the flash goes on, from the code and not the server's sentence", () => {
+    expect(cancelNote({ refused: "flash_writing" })).toContain("couldn't stop the flash safely");
+    // A flash that already ended speaks for itself.
+    expect(cancelNote({ refused: "flash_finished" })).toBeNull();
+  });
+
+  test("a Cancel accepted while the flash still waits says keyloom is stopping it, and that a keyboard in its bootloader is written first", () => {
+    expect(cancelNote({ status: "waiting_for_bootloader" })).toContain("Stopping the flash");
+    expect(cancelNote({ status: "failed" })).toBeNull();
   });
 });

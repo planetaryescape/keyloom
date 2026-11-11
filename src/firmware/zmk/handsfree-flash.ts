@@ -152,6 +152,8 @@ export async function restartHalf(opts: {
   log: (line: string) => void;
   announce?: (instruction: string) => void;
   screenLocked?: (() => Promise<boolean>) | undefined;
+  /** The flash's cancel. Checked last thing before the 1200-baud touch, so a cancel during the checks leaves the half typing. */
+  signal?: AbortSignal | undefined;
 }): Promise<EnterResult> {
   const { deps, target: t, log } = opts;
   const label = t.step.label;
@@ -208,6 +210,7 @@ export async function restartHalf(opts: {
         // The outer flash probe logs failures and fails open.
       }
     }
+    if (opts.signal?.aborted) return { ok: false, reason: `the flash was cancelled before keyloom restarted the ${label}` };
     opts.announce?.(`keyloom is restarting the ${label} into its bootloader. Don't touch the keyboard.`);
     await transport.touch(touched.path, touched.baud);
     if (opts.waitForVolume === false) return { ok: true };
@@ -332,14 +335,14 @@ export function zmkHandsFreeHooks(input: {
         return false;
       }
     },
-    enterBootloader: async (step, _index, announce) => {
+    enterBootloader: async (step, _index, announce, signal) => {
       const target = forStep(step);
       if (target) {
         if (!before.has(target)) {
           try { before.set(target, await readHalf(input.deps, target)); } catch { /* Recovery treats an unreadable half as unknown. */ }
         }
       }
-      return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce, screenLocked: input.screenLocked }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
+      return target ? restartHalf({ deps: input.deps, targets, target, findVolume: input.findVolume, log: input.log, announce, screenLocked: input.screenLocked, signal }) : { ok: false, reason: "keyloom has no hands-free recipe for this step" };
     },
   };
 

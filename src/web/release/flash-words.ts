@@ -34,6 +34,18 @@ export function failedFlashText(code: FlashPermissionCode | "cancelled" | null |
   return { lead, detail: error ?? "Flashing failed." };
 }
 
+/**
+ * What a Cancel that didn't stop the flash at once says beside the flash (D-506), from the server's answer and never its sentence:
+ * refused because the write began (`flash_writing`), or accepted while the flash still waits, because keyloom looks at the keyboard
+ * before it stops the flash tool. Null when the flash as it is now says enough.
+ */
+export function cancelNote(answer: { refused: string } | { status: string }): string | null {
+  if ("refused" in answer) {
+    return answer.refused === "flash_writing" ? "The keyboard was already in its bootloader, so keyloom couldn't stop the flash safely. It finishes by itself in a few seconds." : null;
+  }
+  return answer.status === "waiting_for_bootloader" ? "Stopping the flash. If the keyboard has just entered its bootloader, keyloom writes it first." : null;
+}
+
 /** The answers to "Which <board> is this?", from the board's own revisions: their labels and hints, or their IDs (D-506). */
 export function revisionChoices(revisions: ReadonlyArray<{ id: string; label?: string | undefined; hint?: string | undefined }>): Array<{ value: string; label: string; hint?: string }> {
   return revisions.map((r) => ({ value: r.id, label: r.label ?? r.id, ...(r.hint === undefined ? {} : { hint: r.hint }) }));

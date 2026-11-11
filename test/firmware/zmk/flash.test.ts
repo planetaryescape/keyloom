@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { FlashState } from "../../../src/firmware/toolchain/flash-state.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { keyboardWriteInProgress } from "../../../src/firmware/toolchain/write-guard.ts";
 import { zmkRevision } from "../../../src/firmware/zmk/board-config.ts";
 import { flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
 import * as volumes from "../../../src/firmware/zmk/volumes.ts";
@@ -422,6 +423,58 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     setTimeout(() => c.abort(), 400);
     const r = await s.flash({ signal: c.signal, bootloaderWaitMs: 5000 });
     boot.stop();
+    expect(r.error).toContain("The halves flashed so far keep the new firmware");
+  });
+});
+
+describe("a stop never cuts off a half's write (D-506)", () => {
+  test("a cancel while keyloom checks the halves restarts nothing, so the keyboard keeps typing", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    let restarts = 0;
+    const finder = volumes.volumeFinderAt(s.root);
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      // The cancel lands while keyloom is still looking at the drives, before it would restart the half.
+      findVolume: async (label) => {
+        c.abort();
+        return finder(label);
+      },
+      hooks: { enterBootloader: async () => { restarts++; return { ok: true }; } },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(restarts).toBe(0);
+  });
+
+  test("a restart refused because of a cancel ends the flash as cancelled, not with a request to press a key", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      hooks: { enterBootloader: async () => { c.abort(); return { ok: false, reason: "the flash was cancelled before keyloom restarted the right half" }; } },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+  });
+
+  test("a stop during a half's copy lets its drive take the file, then stops before the next half", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root, { delayMs: 100 });
+    mount(s.root, RIGHT, 20);
+    const c = new AbortController();
+    const during: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000, unmountWaitMs: 2000,
+      writeImage: async (path, bytes) => {
+        during.push(keyboardWriteInProgress());
+        await Bun.write(path, bytes);
+        c.abort();
+      },
+    });
+    boot.stop();
+    expect(boot.written).toEqual([RIGHT]);
+    expect(during).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+    expect(r.error).not.toContain("didn't take the file");
     expect(r.error).toContain("The halves flashed so far keep the new firmware");
   });
 });

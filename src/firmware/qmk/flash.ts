@@ -6,6 +6,7 @@
 import { existsSync } from "node:fs";
 import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
+import { holdKeyboardWrite } from "../toolchain/write-guard.ts";
 import { dfuProblem } from "./dfu.ts";
 
 export type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
@@ -45,9 +46,10 @@ export type FlashInput = {
   signal?: AbortSignal;
   /**
    * Called once zapp is waiting for the bootloader. Resolves ok when it put the keyboard there itself (hands-free,
-   * D-070); otherwise `reason` is why the person has to press the reset key as usual.
+   * D-070); otherwise `reason` is why the person has to press the reset key as usual. `leftUsbOnly` means the keyboard left USB
+   * but its bootloader wasn't seen: it may have been unplugged, so only the bootloader on USB, or Zapp's output, starts the write.
    */
-  enterBootloader?: () => Promise<{ ok: true } | { ok: false; reason: string; code?: FlashPermissionCode }>;
+  enterBootloader?: () => Promise<{ ok: true; leftUsbOnly?: true } | { ok: false; reason: string; code?: FlashPermissionCode }>;
   /** Called after zapp exits 0. A failure turns the flash into a failed one, with the keyboard's state in the message. */
   verify?: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
   /**
@@ -86,6 +88,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   let entering: Promise<void> | undefined;
   let rebooted = false;
   let exited = false;
+  // Held while keyloom restarts the keyboard and while Zapp writes, so a Ctrl-C or a shutdown waits for the write (D-506).
+  let releaseWrite: (() => void) | undefined;
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const arm = (ms: number, reason: "bootloader" | "write") => {
@@ -100,6 +104,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   const startWriting = (how: string) => {
     if (writing || controller.signal.aborted) return;
     writing = true;
+    releaseWrite ??= holdKeyboardWrite();
     input.log.line(`keyloom: ${how}; zapp is writing`);
     arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
     input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
@@ -145,6 +150,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     cmd: [zapp, "flash", input.artifactPath],
     log: input.log,
     signal: controller.signal,
+    // Its own process group, so a terminal's Ctrl-C reaches keyloom, which decides, and never Zapp mid-write.
+    processGroup: true,
     onLine: (line) => {
       output.push(line);
       input.onLine?.(line);
@@ -153,13 +160,18 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
         if (LOADED.test(line)) {
           loaded = true;
           // The wait starts again here: loading the file is quick, and the person is only asked to act from now.
+          // A cancel that came before this line was read has stopped Zapp: restarting the keyboard now would strand it in its bootloader.
+          if (controller.signal.aborted) return;
           arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
           // Zapp is now waiting, as it would be for a person pressing the key, so the keyboard can be sent to its bootloader.
           if (input.enterBootloader) {
+            const restarting = holdKeyboardWrite();
             entering = input.enterBootloader().then(
               (r) => {
                 rebooted = r.ok;
-                if (r.ok) startWriting("keyloom restarted the keyboard into its bootloader");
+                // A keyboard that only left USB may have been unplugged; the bootloader showing up (watch) says the write began.
+                if (r.ok && (r.leftUsbOnly !== true || !input.bootloaderPresent)) startWriting("keyloom restarted the keyboard into its bootloader");
+                else if (r.ok) input.log.line("keyloom: the keyboard left USB; waiting for its bootloader to appear");
                 else {
                   input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
                   // A permission has its own words, with no settings path: the page shows a button for it, and the CLI prints the path (D-501).
@@ -171,7 +183,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
                 input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
                 input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs), { needsHand: true });
               },
-            );
+            ).finally(restarting);
           }
           if (input.bootloaderPresent) void watch();
         }
@@ -185,9 +197,16 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   clearTimeout(timer);
   input.signal?.removeEventListener("abort", cancel);
   await entering;
+  releaseWrite?.();
   // A keyboard keyloom restarted counts as being written (D-506), so only the write timeout below can leave it in its bootloader.
-  if (abortedFor === "cancelled") return fail("Cancelled. Nothing was flashed.", output);
-  if (abortedFor === "bootloader") {
+  if (abortedFor === "cancelled" || abortedFor === "bootloader") {
+    // Zapp was stopped after a USB check that saw no bootloader, but a reset pressed in between puts the keyboard there with
+    // nothing to write it, so the result says where the keyboard is rather than "nothing was flashed".
+    if (await present()) {
+      input.log.line("keyloom: zapp was stopped, but the keyboard is in its bootloader now");
+      return fail(`${abortedFor === "cancelled" ? "Cancelled" : "Stopped"} just as the keyboard entered its bootloader. It is still there and won't type until it is flashed: flash again to put the build on it.`, output);
+    }
+    if (abortedFor === "cancelled") return fail("Cancelled. Nothing was flashed.", output);
     return fail("No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.", output);
   }
   if (abortedFor === "write") {

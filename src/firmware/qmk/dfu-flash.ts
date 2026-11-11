@@ -6,6 +6,7 @@ import { accessSync, constants, existsSync } from "node:fs";
 import type { DfuToolFlash } from "../../boards/recipes.ts";
 import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
+import { holdKeyboardWrite } from "../toolchain/write-guard.ts";
 import { type UsbDevice, listUsbDevices } from "../toolchain/usb.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
@@ -109,7 +110,13 @@ export async function flashWithDfuTool(input: DfuFlashInput): Promise<FlashResul
   const stopped: { reason?: "bootloader" | "write" | "cancelled" } = {};
   const controller = new AbortController();
   const stoppedFor = (): typeof stopped.reason => stopped.reason;
+  let writing = false;
   const cancel = () => {
+    // Killing the tool mid-write leaves the board in its bootloader with half an image, so once writing starts it finishes (D-506).
+    if (writing) {
+      input.log.line(`keyloom: not stopping ${recipe.tool}: it is writing to the keyboard, so the flash finishes`);
+      return;
+    }
     stopped.reason ??= "cancelled";
     controller.abort();
   };
@@ -161,37 +168,44 @@ export async function flashWithDfuTool(input: DfuFlashInput): Promise<FlashResul
   }
 
   // --- write ---------------------------------------------------------------------------
+  writing = true;
+  const releaseWrite = holdKeyboardWrite();
   input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
   const timer = setTimeout(() => {
     stopped.reason = "write";
     controller.abort();
   }, input.writeTimeoutMs ?? WRITE_TIMEOUT_MS);
   let failure: string | undefined;
-  for (const cmd of dfuCommands(recipe, tool, input.artifactPath, port)) {
-    input.log.line(`keyloom: ${cmd.join(" ")}`);
-    const lines: string[] = [];
-    const result = await run({
-      cmd,
-      log: input.log,
-      signal: controller.signal,
-      onLine: (line) => {
-        lines.push(line);
-        output.push(line);
-        input.onLine?.(line);
-      },
-    });
-    if (result.exitCode === 0) {
-      input.log.line(`keyloom: ${recipe.tool} exited 0`);
-      continue;
+  try {
+    for (const cmd of dfuCommands(recipe, tool, input.artifactPath, port)) {
+      input.log.line(`keyloom: ${cmd.join(" ")}`);
+      const lines: string[] = [];
+      const result = await run({
+        cmd,
+        log: input.log,
+        signal: controller.signal,
+        // Its own process group, so a terminal's Ctrl-C reaches keyloom, which refuses it, and never the tool mid-write.
+        processGroup: true,
+        onLine: (line) => {
+          lines.push(line);
+          output.push(line);
+          input.onLine?.(line);
+        },
+      });
+      if (result.exitCode === 0) {
+        input.log.line(`keyloom: ${recipe.tool} exited 0`);
+        continue;
+      }
+      const why = result.exitCode === null ? `was stopped by ${result.signalCode}` : `exited with code ${result.exitCode}`;
+      const last = lines.filter((l) => l.trim()).slice(-2).join(" | ");
+      failure = `${recipe.tool} ${why}${last ? `: ${last}` : ""}`;
+      break;
     }
-    const why = result.exitCode === null ? `was stopped by ${result.signalCode}` : `exited with code ${result.exitCode}`;
-    const last = lines.filter((l) => l.trim()).slice(-2).join(" | ");
-    failure = `${recipe.tool} ${why}${last ? `: ${last}` : ""}`;
-    break;
+  } finally {
+    clearTimeout(timer);
+    releaseWrite();
   }
-  clearTimeout(timer);
   cleanup();
-  if (stoppedFor() === "cancelled") return fail("Cancelled while writing. The keyboard may be left in its bootloader: flash again, or flash an earlier build.", output);
   if (stoppedFor() === "write") {
     return fail(`Flashing didn't finish within ${waitText(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS)} and was stopped. The keyboard may be left in its bootloader: flash again, or flash an earlier build.`, output);
   }

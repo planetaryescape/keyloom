@@ -120,6 +120,37 @@ describe("which port is which half", () => {
     expect(touches).toEqual([{ path: "COM12", baud: 1201 }]);
   });
 
+  test("a cancel that came during the checks stops before the 1200-baud touch, so the half keeps typing", async () => {
+    const touches: Array<{ path: string; baud: number }> = [];
+    const c = new AbortController();
+    let cancel = true;
+    const result = await restartHalf({
+      deps: {
+        serial: async () => ({
+          list: async () => {
+            if (cancel) c.abort();
+            return [{ ...port(serialOf(KEY, "L")), path: "/dev/left" }];
+          },
+          touch: async (path, baud) => void touches.push({ path, baud }),
+        }),
+        usb: async () => [],
+      },
+      targets, target: left, signal: c.signal, waitForVolume: false,
+      findVolume: async () => null,
+      log: () => {},
+    });
+    expect(result.ok).toBe(false);
+    expect(touches).toEqual([]);
+    // The same half with no cancel is restarted, so the empty list above is the cancel's doing.
+    cancel = false;
+    const restarted = await restartHalf({
+      deps: { serial: async () => ({ list: async () => [{ ...port(serialOf(KEY, "L")), path: "/dev/left" }], touch: async (path, baud) => void touches.push({ path, baud }) }), usb: async () => [] },
+      targets, target: left, signal: new AbortController().signal, waitForVolume: false, findVolume: async () => null, log: () => {},
+    });
+    expect(restarted).toEqual({ ok: true });
+    expect(touches).toHaveLength(1);
+  });
+
   test("a lock during the hands-free boot-drive wait updates its instruction and timeout reason", async () => {
     const right = targets.find((t) => t.half.marker === "R");
     if (!right) throw new Error("Glove80 right half missing");

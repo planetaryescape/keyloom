@@ -4,6 +4,7 @@ import {
   type App, type BuildView, type FlashView, type HandsFreeOverrides, buildAndWait, checkFlashAgain, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
 } from "../../app/index.ts";
 import { type Format, type Io, columns, print } from "../output.ts";
+import { catchStopSignals } from "../stop-signals.ts";
 
 export type FirmwareCommandDeps = {
   io: Io;
@@ -14,17 +15,17 @@ export type FirmwareCommandDeps = {
   handsFree?: HandsFreeOverrides;
 };
 
-/** Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. */
+/**
+ * Ctrl-C aborts the work instead of killing keyloom and leaving docker or zapp running on its own. SIGHUP too: a closed terminal must
+ * stop what runs in its own process group, such as Homebrew, which never hears the hangup itself. A keyboard write is never cut off.
+ */
 export async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
-  const abort = () => controller.abort();
-  // SIGHUP too: a closed terminal must stop what runs in its own process group, such as Homebrew, which never hears the hangup itself.
-  const signals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
-  for (const signal of signals) process.once(signal, abort);
+  const dispose = catchStopSignals(() => controller.abort());
   try {
     return await fn(controller.signal);
   } finally {
-    for (const signal of signals) process.off(signal, abort);
+    dispose();
   }
 }
 

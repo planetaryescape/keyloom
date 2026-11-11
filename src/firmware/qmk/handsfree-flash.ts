@@ -59,8 +59,11 @@ export async function readRunningFirmware(deps: HandsFreeDeps, target: Pick<Keyb
   return marker ? { state: "keyloom", serial: marker } : { state: "other", serial: device.serial };
 }
 
-/** `code` is set when a permission stopped the restart, so the page can open the pane that grants it (D-501). */
-export type RebootResult = { ok: true } | { ok: false; reason: string; code?: "permission_input_monitoring" };
+/**
+ * `code` is set when a permission stopped the restart, so the page can open the pane that grants it (D-501). `leftUsbOnly` is a
+ * keyboard that left USB without its bootloader being seen: restarted, or unplugged, which only the bootloader appearing tells apart.
+ */
+export type RebootResult = { ok: true; leftUsbOnly?: true } | { ok: false; reason: string; code?: "permission_input_monitoring" };
 
 /** macOS refused the raw HID open: Input Monitoring is missing, whichever transport opened it (the IOKit one or the paired helper). */
 function permissionOf(err: unknown, platform: NodeJS.Platform): "permission_input_monitoring" | undefined {
@@ -150,7 +153,7 @@ export async function rebootToBootloader(
       // keyboard having gone is proof enough that it restarted.
       if (!devices.some((d) => isKeyboard(d, target))) {
         log("keyloom: the keyboard has left USB, so it restarted");
-        return { ok: true };
+        return { ok: true, leftUsbOnly: true };
       }
     }
     if (Date.now() >= deadline) break;

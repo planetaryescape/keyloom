@@ -7,6 +7,7 @@ import { type Docker, useDocker } from "./useDocker.ts";
 import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
+import { cancelNote } from "./flash-words.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is treated as gone, not slow.
@@ -43,6 +44,8 @@ export interface Release {
   /** Stops a flash that is still waiting for the bootloader (D-501); the server refuses once it writes. */
   cancelFlash: () => void;
   cancelling: boolean;
+  /** Why a Cancel didn't stop the flash at once, shown while the flash runs on (D-506). */
+  cancelNote: string | null;
   /** Reads what the keyboard runs now, for a flash keyloom couldn't confirm (D-501). It never builds or flashes. */
   checkKeyboard: () => void;
   check: { running: boolean; found: FlashCheckResponse["found"] | null; problem: string | null };
@@ -67,6 +70,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [needsBoardRevision, setNeeds] = useState(false);
   const [boardRevision, setBoardRevision] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelNoteText, setCancelNote] = useState<string | null>(null);
   const [check, setCheck] = useState<Release["check"]>({ running: false, found: null, problem: null });
   const [settingsProblem, setSettingsProblem] = useState<string | null>(null);
   const docker = useDocker(token);
@@ -120,6 +124,7 @@ export function useRelease(token: string, layoutRef: string): Release {
     setLast({ kind: "flash" });
     setCheck({ running: false, found: null, problem: null });
     setSettingsProblem(null);
+    setCancelNote(null);
     startFlash(token, build.id)
       .then(setFlash)
       .catch((e: unknown) => {
@@ -154,9 +159,15 @@ export function useRelease(token: string, layoutRef: string): Release {
     if (flashId === undefined) return;
     setCancelling(true);
     cancelFlash(token, flashId)
-      .then(setFlash)
-      // Refused because the write began, or it already ended: the flash as it is now says which, and Cancel goes away.
-      .catch(() => fetchFlash(token, flashId, new AbortController().signal).then(setFlash).catch(() => undefined))
+      .then((next) => {
+        setFlash(next);
+        setCancelNote(cancelNote({ status: next.status }));
+      })
+      // Refused because the write began, or it already ended: the note says why, the flash as it is now says where it is, and Cancel goes away.
+      .catch((e: unknown) => {
+        setCancelNote(e instanceof ApiError && e.code !== undefined ? cancelNote({ refused: e.code }) : null);
+        return fetchFlash(token, flashId, new AbortController().signal).then(setFlash).catch(() => undefined);
+      })
       .finally(() => setCancelling(false));
   }, [token, flashId]);
 
@@ -183,7 +194,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   return {
     build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
-    cancelFlash: cancel, cancelling, checkKeyboard, check, openSettings: open, settingsProblem,
+    cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,
   };
 }
 

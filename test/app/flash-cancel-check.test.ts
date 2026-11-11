@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { FlashNotCancellableError, buildAndWait, cancelFlash, checkFlashAgain, getFlash, startFlash } from "../../src/app/index.ts";
+import { FlashNotCancellableError, buildAndWait, cancelFlash, checkFlashAgain, drainManualFlashTasks, getFlash, startFlash } from "../../src/app/index.ts";
 import type { FlashView } from "../../src/app/index.ts";
 import type { KeyboardReading } from "../../src/app/sync-keyboard.ts";
 import { HidError } from "../../src/firmware/toolchain/hid.ts";
@@ -35,6 +35,23 @@ async function built() {
   const build = await e.run(() => buildAndWait(e.app, "synchronized", { boardRevision: "reva" }));
   return { e, flag, build, run: <T>(fn: () => Promise<T>) => e.run(fn, { BOOTLOADER_FLAG: flag }) };
 }
+
+describe("Shutting down with a flash still waiting", () => {
+  // The desktop app kills a server that takes over 30 s to stop, which would leave Zapp with no parent, waiting to flash.
+  test("cancels a flash still waiting for a keypress, so the shutdown ends at once and Zapp never writes", async () => {
+    const s = await built();
+    const keyboard = fakeKeyboard({ usb: () => [runningKeyboard(ORYX)], hid: [] });
+    await s.run(async () => {
+      const started = await startFlash(s.e.app, { buildId: s.build.id, handsFree: keyboard.deps });
+      await until(() => getFlash(s.e.app, started.id), (f) => f.instruction?.includes("reset button") === true);
+      const drained = await Promise.race([drainManualFlashTasks(s.e.app).then(() => "drained"), Bun.sleep(8000).then(() => "still waiting")]);
+      expect(drained).toBe("drained");
+      const done = await getFlash(s.e.app, started.id);
+      expect(done).toMatchObject({ status: "failed", errorCode: "cancelled" });
+      expect(existsSync(s.e.vars.ZAPP_CALLS)).toBe(false);
+    });
+  }, 30_000);
+});
 
 describe("Cancel while waiting for the bootloader", () => {
   test("stops a flash that is waiting for a keypress, says it was cancelled as a code, and never runs the write", async () => {
