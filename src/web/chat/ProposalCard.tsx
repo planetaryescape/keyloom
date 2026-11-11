@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, CircleCheck, CircleSlash, Eye, EyeOff, Hammer, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleSlash, Eye, EyeOff, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -12,6 +12,7 @@ import { Validation } from "../editor/Validation.tsx";
 import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
 import { changeWords, keyLabel, leadSentence, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
+import { AfterApplyNote } from "../release/AfterApply.tsx";
 import "./proposal.css";
 
 interface Props {
@@ -348,13 +349,8 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
 
       {justApplied && proposal.status === "applied" ? (
         <div className="proposal-next" ref={outcome} tabIndex={-1}>
-          <p>
-            <strong>Applied to your layout.</strong> It isn't on your keyboard yet, and Undo above the board takes it back.
-          </p>
-          <button type="button" className="button" onClick={onOpenRelease}>
-            <Hammer size={14} aria-hidden="true" />
-            Build and flash
-          </button>
+          {/* What happens next depends on the keyboard: kanata applies it, auto-sync flashes it, or Build and flash does (R2-01). */}
+          <AfterApplyNote board={board} onOpenRelease={onOpenRelease} />
         </div>
       ) : null}
     </article>

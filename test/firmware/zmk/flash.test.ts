@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { FlashState } from "../../../src/firmware/toolchain/flash-state.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { keyboardWriteInProgress } from "../../../src/firmware/toolchain/write-guard.ts";
 import { zmkRevision } from "../../../src/firmware/zmk/board-config.ts";
 import { flashUf2Drives } from "../../../src/firmware/zmk/flash.ts";
 import * as volumes from "../../../src/firmware/zmk/volumes.ts";
@@ -247,6 +248,30 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     }
   });
 
+  test("on macOS a refused write carries the Files and Folders code, so the page can open that pane (D-501)", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    chmodSync(join(s.root, RIGHT), 0o555);
+    try {
+      const mac = await s.flash({ writeRetryMs: 50, platform: "darwin" });
+      expect(mac).toMatchObject({ state: "failed", errorCode: "permission_files_and_folders" });
+      // Elsewhere there is no such pane to open, so there is no code; the sentence still says what happened.
+      const linux = await s.flash({ writeRetryMs: 50, platform: "linux" });
+      expect(linux.state).toBe("failed");
+      expect(linux.errorCode).toBeUndefined();
+    } finally {
+      chmodSync(join(s.root, RIGHT), 0o755);
+    }
+  });
+
+  test("a copy that fails for another reason carries no permission code", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT, "glove80.uf2"), { recursive: true });
+    const r = await s.flash({ platform: "darwin" });
+    expect(r.state).toBe("failed");
+    expect(r.errorCode).toBeUndefined();
+  });
+
   test("a freshly mounted drive that refuses the write at first is written once it allows it", async () => {
     const s = await setup();
     mkdirSync(join(s.root, RIGHT), { recursive: true });
@@ -452,6 +477,65 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
   });
 
+  test("a stop that comes while keyloom restarts a half is refused: the half is written, and so is the rest (D-506)", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const c = new AbortController();
+    const notes: unknown[] = [];
+    // A Ctrl-C or a sync's stop lands while the restart is under way; the drive then mounts, as a restarted half's does.
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (_state, _instruction, note) => notes.push(note),
+      hooks: {
+        enterBootloader: async (step) => {
+          c.abort();
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(notes).toContainEqual({ inBootloader: true });
+    expect(r.state).toBe("succeeded");
+    expect(boot.written).toEqual([RIGHT, LEFT]);
+  });
+
+  test("a half that was already in its bootloader is not committed: a stop before its drive appears still stops the flash", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const notes: unknown[] = [];
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (_state, _instruction, note) => notes.push(note),
+      hooks: { enterBootloader: async () => { c.abort(); return { ok: true, alreadyThere: true }; } },
+    });
+    expect(notes).not.toContainEqual({ inBootloader: true });
+    expect(r.error).toBe("Cancelled. Nothing was flashed.");
+  });
+
+  test("after a committed half, a stop that comes later while the next half waits for a hand still stops the flash", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      onState: (state) => {
+        // The left half is waiting for its key combo: nothing is being written to it.
+        if (state === "waiting_for_bootloader" && boot.written.includes(RIGHT)) setTimeout(() => c.abort(), 30);
+      },
+      hooks: {
+        enterBootloader: async (step) => {
+          if (step.volume === LEFT) return { ok: false, reason: "no serial port" };
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(boot.written).toEqual([RIGHT]);
+    expect(r.error).toContain("The halves flashed so far keep the new firmware");
+  });
+
   test("cancelling before the left half says the right is already flashed", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);
@@ -460,6 +544,125 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     setTimeout(() => c.abort(), 400);
     const r = await s.flash({ signal: c.signal, bootloaderWaitMs: 5000 });
     boot.stop();
+    expect(r.error).toContain("The halves flashed so far keep the new firmware");
+  });
+});
+
+describe("a stop never cuts off a half's write (D-506)", () => {
+  test("a cancel while keyloom checks the halves restarts nothing, so the keyboard keeps typing", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    let restarts = 0;
+    const finder = volumes.volumeFinderAt(s.root);
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      // The cancel lands while keyloom is still looking at the drives, before it would restart the half.
+      findVolume: async (label) => {
+        c.abort();
+        return finder(label);
+      },
+      hooks: { enterBootloader: async () => { restarts++; return { ok: true }; } },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(restarts).toBe(0);
+  });
+
+  test("a restart refused because of a cancel ends the flash as cancelled, not with a request to press a key", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      hooks: { enterBootloader: async () => { c.abort(); return { ok: false, reason: "the flash was cancelled before keyloom restarted the right half" }; } },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+  });
+
+  test("a stop after keyloom sent the restart, which then failed, says the half may be in its bootloader, not that nothing happened", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      hooks: {
+        enterBootloader: async (_step, _i, announce) => {
+          announce("keyloom is restarting the right half into its bootloader. Don't touch the keyboard.");
+          c.abort();
+          return { ok: false, reason: `${RIGHT} didn't appear within 15 seconds of restarting the right half`, touched: true };
+        },
+      },
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).not.toBe("Cancelled. Nothing was flashed.");
+    expect(r.error).toContain("keyloom had already sent a restart to the right half");
+    expect(r.error).toContain(`${RIGHT} didn't appear within 15 seconds`);
+    expect(r.error).toContain("flash again");
+  });
+
+  test("a stop as the drive mounts says the half is in its bootloader now, not that nothing happened", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const finder = volumes.volumeFinderAt(s.root);
+    let looks = 0;
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      // The person presses the key combo just as the stop lands: the drive mounts after the wait's last look.
+      findVolume: async (label) => {
+        if (++looks === 2) {
+          mkdirSync(join(s.root, RIGHT), { recursive: true });
+          c.abort();
+          return null;
+        }
+        return finder(label);
+      },
+    });
+    expect(r.error).not.toBe("Cancelled. Nothing was flashed.");
+    expect(r.error).toContain("the right half is in its bootloader now");
+    expect(r.error).toContain("flash again");
+  });
+
+  test("keyloom holds the write guard from the moment the hook restarts a half until it returns, so a second Ctrl-C waits", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const seen: boolean[] = [];
+    const r = await s.flash({
+      bootloaderWaitMs: 5000,
+      hooks: {
+        enterBootloader: async (step, _i, announce) => {
+          seen.push(keyboardWriteInProgress());
+          announce(`keyloom is restarting the ${step.label} into its bootloader. Don't touch the keyboard.`);
+          seen.push(keyboardWriteInProgress());
+          await Bun.sleep(20);
+          seen.push(keyboardWriteInProgress());
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(r.state).toBe("succeeded");
+    // Before the announce nothing is restarted, so a second Ctrl-C can still end keyloom.
+    expect(seen).toEqual([false, true, true, false, true, true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
+  test("a stop during a half's copy lets its drive take the file, then stops before the next half", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root, { delayMs: 100 });
+    mount(s.root, RIGHT, 20);
+    const c = new AbortController();
+    const during: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000, unmountWaitMs: 2000,
+      writeImage: async (path, bytes) => {
+        during.push(keyboardWriteInProgress());
+        await Bun.write(path, bytes);
+        c.abort();
+      },
+    });
+    boot.stop();
+    expect(boot.written).toEqual([RIGHT]);
+    expect(during).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+    expect(r.error).not.toContain("didn't take the file");
     expect(r.error).toContain("The halves flashed so far keep the new firmware");
   });
 });

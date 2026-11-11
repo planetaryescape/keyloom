@@ -10,6 +10,8 @@ import {
   BuildSchema,
   CheckRequestSchema,
   CheckResponseSchema,
+  FittingRevisionResponseSchema,
+  FlashCheckResponseSchema,
   FlashSchema,
   ImportResponseSchema,
   LayoutExportDocumentSchema,
@@ -57,6 +59,9 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["flashes/:", { method: "GET", run: (b, id) => found(b.getFlash(id), FlashSchema, "flash") }],
   ["builds/:/artifact", { method: "GET", run: (b, id) => artifact(b, id) }],
   ["builds/:/reveal", { method: "POST", run: (b, id, r) => reveal(b, id, r) }],
+  ["flashes/:/cancel", { method: "POST", run: (b, id, r) => cancelFlash(b, id, r) }],
+  ["flashes/:/check", { method: "POST", run: (b, id, r) => checkFlash(b, id, r) }],
+  ["layouts/:/fitting-revision", { method: "GET", run: (b, ref) => fittingRevision(b, ref) }],
 ];
 
 /** True for paths only the editor serves, so a server without a backend can answer 404 for them. */
@@ -253,4 +258,26 @@ async function found<T>(pending: Promise<T | null>, schema: z.ZodType<T>, what: 
   const value = await pending;
   if (value === null) return fail(404, "not_found", `No such ${what}.`);
   return Response.json(schema.parse(value));
+}
+
+const unsupported = (): Response => fail(404, "not_found", "This keyloom can't do that.");
+
+async function cancelFlash(backend: EditorBackend, flashId: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  if (backend.cancelFlash === undefined) return unsupported();
+  return Response.json(FlashSchema.parse(await backend.cancelFlash(flashId)));
+}
+
+// A POST, though it only reads the keyboard: when the keyboard runs the build, the flash is recorded as verified.
+async function checkFlash(backend: EditorBackend, flashId: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  if (backend.checkFlash === undefined) return unsupported();
+  return Response.json(FlashCheckResponseSchema.parse(await backend.checkFlash(flashId)));
+}
+
+async function fittingRevision(backend: EditorBackend, ref: string): Promise<Response> {
+  if (backend.fittingRevision === undefined) return unsupported();
+  return Response.json(FittingRevisionResponseSchema.parse({ revision: await backend.fittingRevision(ref) }));
 }

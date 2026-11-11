@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, FlashToolMissingError, NotFoundError, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
+  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRevisionNeededError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
@@ -17,6 +17,7 @@ const toBuild = (b: BuildView): Build => ({
 const toFlash = (f: FlashView): Flash => ({
   id: f.id, buildId: f.buildId, status: f.status, error: f.error, startedAt: f.startedAt, finishedAt: f.finishedAt,
   instruction: f.instruction, note: f.note, verified: f.verified, logTail: f.logTail,
+  errorCode: f.errorCode, instructionCode: f.instructionCode, cancellable: f.cancellable, checkable: f.checkable,
 });
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
@@ -32,6 +33,9 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     }
     // Before UsageError, which it extends: the page offers to install the tool rather than showing the sentence (D-489).
     if (err instanceof FlashToolMissingError) throw new EditorError(409, "flash_tool_missing", err.message);
+    // Only this code asks which board revision to build for (R2-01); any other usage error is a sentence the page shows.
+    if (err instanceof BoardRevisionNeededError) throw new EditorError(400, "board_revision_needed", err.message);
+    if (err instanceof FlashNotCancellableError) throw new EditorError(409, err.why === "writing" ? "flash_writing" : "flash_finished", err.message);
     if (err instanceof UsageError) throw new EditorError(400, "usage", err.message);
     throw err;
   }
@@ -92,5 +96,14 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     getFlash: async (id) => orNull(async () => toFlash(await getFlash(app, id))),
     buildArtifact: async (id) => orNull(async () => buildArtifact(app, id)),
     revealBuild: (id) => translate(() => revealBuildArtifact(app, id, reveal)),
+    cancelFlash: (id) => translate(async () => toFlash(await cancelFlash(app, id))),
+    checkFlash: (id) => translate(async () => {
+      const checked = await checkFlashAgain(app, id, flash.handsFree === undefined ? {} : { handsFree: flash.handsFree });
+      return { flash: toFlash(checked.flash), found: checked.found };
+    }),
+    fittingRevision: (ref) => translate(() => {
+      const row = lastFittingRevision(app, ref);
+      return row === null ? null : { id: row.id, summary: row.summary, createdAt: row.createdAt };
+    }),
   };
 }

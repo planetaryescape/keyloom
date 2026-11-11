@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Build, Flash } from "../../api/http.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Build, Flash, FlashCheckResponse } from "../../api/http.ts";
+import type { SettingsPaneName } from "../../api/system-remapper.ts";
 import { ApiError } from "../api.ts";
 import { fetchBuild, fetchFlash, startBuild, startFlash } from "../api-write.ts";
 import { type Docker, useDocker } from "./useDocker.ts";
 import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
+import { cancelShownFlash } from "./cancel-shown-flash.ts";
+import { cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is treated as gone, not slow.
@@ -38,6 +41,17 @@ export interface Release {
   checkBuild: () => void;
   /** Why a download or reveal failed. */
   fileProblem: string | null;
+  /** Stops a flash that is still waiting for the bootloader (D-501); the server refuses once it writes. */
+  cancelFlash: () => void;
+  cancelling: boolean;
+  /** Why a Cancel didn't stop the flash at once, shown while the flash runs on (D-506). */
+  cancelNote: string | null;
+  /** Reads what the keyboard runs now, for a flash keyloom couldn't confirm (D-501). It never builds or flashes. */
+  checkKeyboard: () => void;
+  check: { running: boolean; found: FlashCheckResponse["found"] | null; problem: string | null };
+  /** Opens the System Settings pane a permission code names (D-492, D-501). */
+  openSettings: (pane: SettingsPaneName) => void;
+  settingsProblem: string | null;
 }
 
 // What Try again repeats. A start that failed is sent again; a poll that gave up starts polling again.
@@ -55,6 +69,10 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [fileProblem, setFileProblem] = useState<string | null>(null);
   const [needsBoardRevision, setNeeds] = useState(false);
   const [boardRevision, setBoardRevision] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelNoteText, setCancelNote] = useState<string | null>(null);
+  const [check, setCheck] = useState<Release["check"]>({ running: false, found: null, problem: null });
+  const [settingsProblem, setSettingsProblem] = useState<string | null>(null);
   const docker = useDocker(token);
   const dockerInstall = useInstall(token, "docker", docker.refresh);
 
@@ -90,8 +108,8 @@ export function useRelease(token: string, layoutRef: string): Release {
           setFlash(null);
         })
         .catch((e: unknown) => {
-          // No keyboard to detect: not a failure, a question the panel asks next to the Build button.
-          if (e instanceof ApiError && e.code === "usage") setNeeds(true);
+          // No keyboard to detect: not a failure, a question the panel asks next to the Build button. Only this code asks it (R2-01).
+          if (e instanceof ApiError && e.code === "board_revision_needed") setNeeds(true);
           else setError(e instanceof Error ? e.message : "The build could not start.");
         })
         .finally(() => setStarting(null));
@@ -104,6 +122,11 @@ export function useRelease(token: string, layoutRef: string): Release {
     setStarting("flash");
     setError(null);
     setLast({ kind: "flash" });
+    setCheck({ running: false, found: null, problem: null });
+    setSettingsProblem(null);
+    setCancelNote(null);
+    // A cancel of the flash this one replaces may still be out; its answer is dropped, so it can't leave this one looking busy.
+    setCancelling(false);
     startFlash(token, build.id)
       .then(setFlash)
       .catch((e: unknown) => {
@@ -133,9 +156,57 @@ export function useRelease(token: string, layoutRef: string): Release {
     revealArtifact(token, buildId).catch((e: unknown) => setFileProblem(e instanceof Error ? e.message : "Finder couldn't show the file."));
   }, [token, buildId]);
 
+  const flashId = flash?.id;
+  // The flash on screen now, so a check or a cancel that answers after another flash started can't replace it.
+  const currentFlashId = useRef(flashId);
+  useEffect(() => {
+    currentFlashId.current = flashId;
+  }, [flashId]);
+  const cancel = useCallback(() => {
+    if (flashId === undefined) return;
+    const asked = flashId;
+    setCancelling(true);
+    void cancelShownFlash(asked, {
+      cancel: (id) => cancelFlash(token, id),
+      read: (id) => fetchFlash(token, id, new AbortController().signal),
+      shown: () => currentFlashId.current,
+      setFlash,
+      setNote: setCancelNote,
+    }).finally(() => {
+      if (currentFlashId.current === asked) setCancelling(false);
+    });
+  }, [token, flashId]);
+
+  const checkKeyboard = useCallback(() => {
+    // A flash that is starting replaces this one, so its check would answer for a flash no longer on screen.
+    if (flashId === undefined || starting !== null) return;
+    const asked = flashId;
+    setCheck({ running: true, found: null, problem: null });
+    checkFlash(token, asked)
+      .then((result) => {
+        if (currentFlashId.current !== asked) return;
+        setFlash(result.flash);
+        setCheck({ running: false, found: result.found, problem: null });
+      })
+      .catch((e: unknown) => {
+        if (currentFlashId.current !== asked) return;
+        setCheck({ running: false, found: null, problem: e instanceof Error ? e.message : "keyloom couldn't read the keyboard." });
+      });
+  }, [token, flashId, starting]);
+
+  const open = useCallback((pane: SettingsPaneName) => {
+    setSettingsProblem(null);
+    openSettings(token, pane)
+      .then((result) => {
+        if (!result.ok) setSettingsProblem(result.reason);
+      })
+      .catch((e: unknown) => setSettingsProblem(e instanceof Error ? e.message : "System Settings didn't open."));
+  }, [token]);
+
   return {
     build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
+    cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,
   };
 }
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { dfuProblem, readDfuSuffix } from "../../../src/firmware/qmk/dfu.ts";
 import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp, resetInstruction } from "../../../src/firmware/qmk/flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { keyboardWriteInProgress } from "../../../src/firmware/toolchain/write-guard.ts";
 import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
 import { SLOW_RUNNER_MS } from "../../helpers/timeouts.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -175,12 +176,16 @@ describe("flashWithZapp, hands-free", () => {
     expect(s.states.some(([, i]) => i === RESET_INSTRUCTION)).toBe(true);
   });
 
-  test("a keyboard restarted into its bootloader that zapp never writes to is reported as stranded there", async () => {
+  test("a keyboard keyloom restarted is being written: a zapp that never finishes is stopped only by the write timeout, which says where the keyboard is (D-506)", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
-    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, enterBootloader: async () => ({ ok: true }) });
-    expect(r.state).toBe("failed");
-    expect(r.error).toContain("restarted the keyboard into its bootloader");
-    expect(r.error).toContain("unplugged and plugged in again");
+    const c = new AbortController();
+    const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, writeTimeoutMs: LOADED_WAIT_MS * 2, signal: c.signal, enterBootloader: async () => { setTimeout(() => c.abort(), 20); return { ok: true }; } });
+    expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "writing", "failed"]);
+    expect(r.error).toContain("Flashing didn't finish");
+    expect(r.error).toContain("left in its bootloader");
+    // The cancel came after the restart, so it was refused and only the write timeout stopped zapp.
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("not stopping zapp: it is writing to the keyboard");
   }, SLOW_RUNNER_MS);
 
   test("a failed restart does not add that warning, because the keyboard was never moved", async () => {
@@ -201,8 +206,15 @@ describe("flashWithZapp, hands-free", () => {
   test("a keyboard that doesn't come back as the new build makes the flash fail, with the reason", async () => {
     const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
     const r = await s.flash({ verify: async () => ({ ok: false, error: "zapp finished, but the Moonlander didn't come back" }) });
-    expect(r).toMatchObject({ state: "failed", error: "zapp finished, but the Moonlander didn't come back" });
+    expect(r).toMatchObject({ state: "failed", error: "zapp finished, but the Moonlander didn't come back", errorCode: "not_confirmed" });
     expect(s.states.at(-1)?.[0]).toBe("failed");
+  });
+
+  test("only a failed confirmation after a finished write is not_confirmed: a failure before or during the write is not", async () => {
+    const failing = await setup('echo "Firmware loaded: x"; exit 2');
+    expect((await failing.flash({ verify: async () => ({ ok: true, message: "never asked" }) })).errorCode).toBeUndefined();
+    const missing = await setup(undefined);
+    expect((await missing.flash()).errorCode).toBeUndefined();
   });
 
   test("a flash zapp reports as failed is not verified", async () => {
@@ -212,6 +224,217 @@ describe("flashWithZapp, hands-free", () => {
     expect(r.state).toBe("failed");
     expect(verified).toBe(false);
   });
+});
+
+/** The process group a pid is in, read with ps, as a terminal sees it: the group its Ctrl-C goes to. */
+async function groupOf(pid: number): Promise<number> {
+  const ps = Bun.spawn(["ps", "-o", "pgid=", "-p", String(pid)], { stdout: "pipe" });
+  return Number((await new Response(ps.stdout).text()).trim());
+}
+
+describe("flashWithZapp never lets a stop cut off a write (D-506)", () => {
+  test("zapp runs in its own process group, so a terminal's Ctrl-C reaches keyloom and not zapp mid-write", async () => {
+    const s = await setup('ps -o pgid= -p $$ > "$0.pgid"; echo "Firmware loaded: x"; echo "Flashing"; exit 0');
+    expect((await s.flash()).state).toBe("succeeded");
+    const zappGroup = Number((await Bun.file(join(s.bin as string, "zapp.pgid")).text()).trim());
+    expect(zappGroup).toBeGreaterThan(0);
+    expect(zappGroup).not.toBe(await groupOf(process.pid));
+  });
+
+  test("a write is marked in progress while zapp writes, and not after", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 0.2; echo "Flashing"; sleep 0.3; exit 0');
+    const during: boolean[] = [];
+    expect(keyboardWriteInProgress()).toBe(false);
+    const r = await s.flash({ onState: (state) => void (state === "writing" && during.push(keyboardWriteInProgress())) });
+    expect(r.state).toBe("succeeded");
+    expect(during).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
+  test("a keyboard that only left USB is not taken as being written: a cancel still stops zapp when no bootloader appears", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: LOADED_WAIT_MS * 4, writeTimeoutMs: LOADED_WAIT_MS, pollMs: 20,
+      // Unplugged, or restarted into its own firmware: it left USB, and no bootloader ever shows.
+      bootloaderPresent: async () => false,
+      enterBootloader: async () => {
+        setTimeout(() => c.abort(), 50);
+        return { ok: true, leftUsbOnly: true };
+      },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(s.states.map(([st]) => st)).not.toContain("writing");
+  }, SLOW_RUNNER_MS);
+
+  test("a keyboard that left USB and then shows its bootloader is being written, and a cancel is refused", async () => {
+    const dir = tempDir();
+    const flag = join(dir, "in-bootloader");
+    const s = await setup(`echo "Firmware loaded: x"; while [ ! -f "${flag}" ]; do sleep 0.05; done; sleep 0.3; exit 0`);
+    const c = new AbortController();
+    let shown = false;
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      bootloaderPresent: async () => shown,
+      onState: (state) => {
+        s.states.push([state, null]);
+        if (state === "writing") c.abort();
+      },
+      enterBootloader: async () => {
+        setTimeout(() => {
+          shown = true;
+          void Bun.write(flag, "");
+        }, 100);
+        return { ok: true, leftUsbOnly: true };
+      },
+    });
+    expect(r.state).toBe("succeeded");
+  });
+
+  test("a cancel that lands before zapp's \"Firmware loaded\" line is read never restarts the keyboard", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    let restarted = false;
+    const r = await s.flash({
+      signal: c.signal,
+      // The cancel arrives while the line is on its way: keyloom has stopped zapp, so the keyboard must stay where it is.
+      onLine: (line) => void (line.includes("Firmware loaded") && c.abort()),
+      enterBootloader: async () => {
+        restarted = true;
+        return { ok: true };
+      },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(restarted).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("a USB read that fails is not taken as no bootloader: a cancel leaves zapp running, and the flash finishes", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 1; echo "Flashing"; exit 0');
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      bootloaderPresent: async () => {
+        throw new Error("system_profiler failed");
+      },
+      onLine: (line) => void (line.includes("Firmware loaded") && setTimeout(() => c.abort(), 100)),
+    });
+    expect(r.state).toBe("succeeded");
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("couldn't read USB, so zapp may be writing");
+  }, SLOW_RUNNER_MS);
+
+  test("a cancel that can't read USB holds the write guard while zapp may be writing, so a second Ctrl-C can't orphan it", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 1; exit 0');
+    const c = new AbortController();
+    const held: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      bootloaderPresent: async () => {
+        throw new Error("system_profiler failed");
+      },
+      onLine: (line) => {
+        if (!line.includes("Firmware loaded")) return;
+        setTimeout(() => c.abort(), 100);
+        setTimeout(() => held.push(keyboardWriteInProgress()), 600);
+      },
+    });
+    expect(r.state).toBe("succeeded");
+    expect(held).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("a cancel holds the write guard while it looks at USB, and lets it go once zapp has stopped", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    const held: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      // A slow USB read: zapp may start writing while keyloom waits for it, so a second Ctrl-C then must not end keyloom.
+      bootloaderPresent: async () => {
+        await Bun.sleep(400);
+        return false;
+      },
+      onLine: (line) => {
+        if (!line.includes("Firmware loaded")) return;
+        setTimeout(() => c.abort(), 100);
+        setTimeout(() => held.push(keyboardWriteInProgress()), 300);
+      },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(held).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("a USB read still pending when zapp exits changes nothing after it: no write starts and no guard is left held", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 0.2; exit 0');
+    const late = Promise.withResolvers<boolean>();
+    const r = await s.flash({ pollMs: 20, writeTimeoutMs: 200, bootloaderPresent: () => late.promise });
+    expect(r.state).toBe("succeeded");
+    const statesAtExit = s.states.length;
+    late.resolve(true);
+    await Bun.sleep(50);
+    expect(s.states.length).toBe(statesAtExit);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("the write guard is released when the flash throws mid-write, so serve still answers Ctrl-C", async () => {
+    const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
+    const thrown = await s.flash({
+      onState: (state) => {
+        if (state === "writing") throw new Error("the state listener broke");
+      },
+    }).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(Error);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
+  test("the write guard is released when the hands-free restart's own writing step throws", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 0.2; exit 0');
+    const thrown = await s.flash({
+      enterBootloader: async () => ({ ok: true }),
+      onState: (state) => {
+        if (state === "writing") throw new Error("the state listener broke");
+      },
+    }).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(Error);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
+  test("after a stop, a USB read that fails says keyloom couldn't check, not that nothing was flashed", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    let afterCancel = 0;
+    const r = await s.flash({
+      signal: c.signal,
+      pollMs: 60_000,
+      // keyloom's own look before stopping zapp sees no bootloader; the look after zapp stops can't read USB.
+      bootloaderPresent: async () => {
+        if (c.signal.aborted && ++afterCancel > 1) throw new Error("system_profiler failed");
+        return false;
+      },
+      onLine: (line) => void (line.includes("Firmware loaded") && setTimeout(() => c.abort(), 100)),
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("couldn't read USB to check the keyboard");
+    expect(r.error).not.toContain("Nothing was flashed");
+  }, SLOW_RUNNER_MS);
+
+  test("a reset pressed between the USB check and stopping zapp is reported: the keyboard is in its bootloader, not untouched", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    let afterCancel = 0;
+    const r = await s.flash({
+      signal: c.signal,
+      // The watch looks once, then sleeps past the cancel, so the only looks after it are keyloom's check and the one after zapp stops.
+      pollMs: 60_000,
+      bootloaderPresent: async () => (c.signal.aborted ? ++afterCancel > 1 : false),
+      onLine: (line) => void (line.includes("Firmware loaded") && setTimeout(() => c.abort(), 100)),
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("entered its bootloader");
+    expect(r.error).toContain("flash again");
+    expect(r.error).not.toContain("Nothing was flashed");
+  }, SLOW_RUNNER_MS);
 });
 
 describe("resetInstruction", () => {

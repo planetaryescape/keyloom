@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { zipSync } from "fflate";
 import {
-  type App, NotFoundError, StaleBaseError, UsageError, applyOps, closeApp, getLayout, importLayout, listLayouts, listRevisions, openApp, undo,
+  type App, NotFoundError, StaleBaseError, UsageError, applyOps, closeApp, getLayout, importLayout, lastFittingRevision, listLayouts, listRevisions, openApp, undo,
 } from "../../src/app/index.ts";
 import { importUpload } from "../../src/app/import-upload.ts";
 import { ValidationFailedError } from "../../src/app/index.ts";
@@ -24,6 +24,38 @@ async function setup(): Promise<{ app: App; ref: string; revisions: string[] }> 
   return { app, ref: out.layoutId, revisions };
 }
 const key6 = (app: App, ref: string) => getLayout(app, ref).document.layers[0]?.bindings[6];
+
+describe("lastFittingRevision (D-502)", () => {
+  // A head whose layer lost a key can't be drawn on the board; the page offers the newest revision before it that can.
+  function breakHead(app: App, ref: string): string {
+    const view = getLayout(app, ref);
+    const broken = structuredClone(view.document);
+    broken.layers[0]?.bindings.pop();
+    return appendRevision(app.db, { layoutId: view.layout.id, expectedHeadId: view.revision.id, layout: broken, origin: "editor", summary: "Broken" }).id;
+  }
+
+  test("is the newest earlier revision whose layers fit the board, never the head", async () => {
+    const { app, ref, revisions } = await setup();
+    // A head that fits still names the revision before it: the page asks only when the head can't be drawn.
+    expect(lastFittingRevision(app, ref)?.id).toBe(revisions.at(-2));
+    breakHead(app, ref);
+    expect(lastFittingRevision(app, ref)?.id).toBe(revisions.at(-1));
+    closeApp(app);
+  });
+
+  test("is null when no earlier revision fits", async () => {
+    const { app, ref } = await setup();
+    for (const id of listRevisions(app, ref).map((r) => r.id)) {
+      const row = app.db.query("SELECT document FROM revisions WHERE id = ?").get(id) as { document: string };
+      const doc = JSON.parse(row.document);
+      doc.layers[0].bindings.pop();
+      app.db.query("UPDATE revisions SET document = ? WHERE id = ?").run(JSON.stringify(doc), id);
+    }
+    expect(lastFittingRevision(app, ref)).toBeNull();
+    expect(() => lastFittingRevision(app, "nope")).toThrow(NotFoundError);
+    closeApp(app);
+  });
+});
 
 describe("listRevisions", () => {
   test("lists the head first and the import last, whatever the timestamps say", async () => {

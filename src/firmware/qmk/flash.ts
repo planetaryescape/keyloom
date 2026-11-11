@@ -1,11 +1,12 @@
 // Flashing with ZSA's Zapp (05#flash-uses-zsas-zapp-cli, S11). Zapp's whole CLI is `zapp flash
 // <file>`: it validates the file, prints "Firmware loaded", then waits for the keyboard to appear in
-// bootloader mode, without any timeout of its own. What it prints on success or failure is not known
-// until it has flashed a real board, so this reads its exit code first and everything else loosely,
-// and keeps the raw output in the log.
+// bootloader mode, without any timeout of its own. It prints nothing more until it exits: BK's three
+// hands-free flashes (2026-10-22) each logged "Firmware loaded", then the bootloader, then the exit. So the
+// write starts the moment the bootloader is on USB, and from then on nothing may stop Zapp (D-506).
 import { existsSync } from "node:fs";
-import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
+import { holdKeyboardWrite } from "../toolchain/write-guard.ts";
 import { dfuProblem } from "./dfu.ts";
 
 export type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
@@ -45,12 +46,24 @@ export type FlashInput = {
   signal?: AbortSignal;
   /**
    * Called once zapp is waiting for the bootloader. Resolves ok when it put the keyboard there itself (hands-free,
-   * D-070); otherwise `reason` is why the person has to press the reset key as usual.
+   * D-070); otherwise `reason` is why the person has to press the reset key as usual. `leftUsbOnly` means the keyboard left USB
+   * but its bootloader wasn't seen: it may have been unplugged, so only the bootloader on USB, or Zapp's output, starts the write.
    */
-  enterBootloader?: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+  enterBootloader?: () => Promise<{ ok: true; leftUsbOnly?: true } | { ok: false; reason: string; code?: FlashPermissionCode }>;
   /** Called after zapp exits 0. A failure turns the flash into a failed one, with the keyboard's state in the message. */
   verify?: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
+  /**
+   * Whether the board's bootloader is on USB now. Zapp writes as soon as it is, without a word, so this is how keyloom knows the
+   * write has begun when the person pressed the reset key, and why a cancel that comes after it is refused (D-506).
+   */
+  bootloaderPresent?: () => Promise<boolean>;
+  /** How often the bootloader is looked for while the person is asked to press reset; tests pass a short one. */
+  pollMs?: number;
 };
+
+const BOOTLOADER_POLL_MS = 250;
+/** How many times a failed USB read is tried before keyloom gives up on knowing whether Zapp writes. */
+const USB_READ_TRIES = 3;
 
 const LOADED = /firmware loaded/i;
 
@@ -75,78 +88,167 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   let writing = false;
   let abortedFor: "bootloader" | "write" | "cancelled" | undefined;
   let entering: Promise<void> | undefined;
+  // A state listener that throws inside the restart's callback: kept, so the restart never rejects unhandled, and thrown once Zapp is done.
+  let enteringFailure: unknown;
   let rebooted = false;
+  let exited = false;
+  // Held while keyloom restarts the keyboard and while Zapp writes, so a Ctrl-C or a shutdown waits for the write (D-506).
+  let releaseWrite: (() => void) | undefined;
   const controller = new AbortController();
-  const cancel = () => {
-    abortedFor ??= "cancelled";
-    controller.abort();
-  };
-  if (input.signal?.aborted) cancel();
-  else input.signal?.addEventListener("abort", cancel, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const arm = (ms: number, reason: "bootloader" | "write") => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      abortedFor = reason;
-      controller.abort();
-    }, ms);
+    timer = setTimeout(() => (reason === "write" ? stop("write") : void stopUnlessWriting("bootloader")), ms);
+  };
+  const stop = (reason: "bootloader" | "write" | "cancelled") => {
+    abortedFor ??= reason;
+    controller.abort();
+  };
+  // Zapp writes the moment the bootloader appears, and says nothing while it does, so this is the write starting. A USB read that
+  // returns after Zapp has exited says nothing about this flash: it must not take a hold that nothing would release.
+  const startWriting = (how: string) => {
+    if (writing || exited || controller.signal.aborted) return;
+    writing = true;
+    releaseWrite ??= holdKeyboardWrite();
+    input.log.line(`keyloom: ${how}; zapp is writing`);
+    arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
+    input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
+  };
+  // Undefined when USB couldn't be read, which says nothing either way: Zapp may be writing to a keyboard keyloom can't see.
+  const present = async (): Promise<boolean | undefined> => {
+    if (!input.bootloaderPresent) return false;
+    try {
+      return await input.bootloaderPresent();
+    } catch {
+      return undefined;
+    }
+  };
+  // A cancel or a timeout stops Zapp only while nothing can have been written. Killing it mid-write leaves the keyboard in its
+  // bootloader with half an image, so once the bootloader is there the flash finishes, whoever asked to stop it.
+  const stopUnlessWriting = async (reason: "bootloader" | "cancelled") => {
+    if (writing || exited) return refused(reason);
+    // Zapp may write while keyloom looks at USB, so the write guard is held from here until Zapp stops or finishes: a second Ctrl-C
+    // during the check would otherwise end keyloom and orphan Zapp in its own process group, to flash whenever the keyboard next
+    // enters its bootloader. Cleanup after Zapp exits releases it.
+    releaseWrite ??= holdKeyboardWrite();
+    // keyloom has sent the restart command: the bootloader is moments away, and only the result says whether Zapp got it.
+    if (entering !== undefined) await entering;
+    if (!writing && loaded) {
+      let seen = await present();
+      for (let i = 1; seen === undefined && i < USB_READ_TRIES && !writing && !exited; i++) {
+        await Bun.sleep(input.pollMs ?? BOOTLOADER_POLL_MS);
+        seen = await present();
+      }
+      if (seen === true) startWriting("the keyboard is in its bootloader");
+      else if (seen === undefined && !writing && !exited) {
+        // Not stopped on a guess. A timeout gives Zapp a write's time instead, and then its message says where the keyboard may be.
+        // The write guard stays held until Zapp exits; the timers still end Zapp in a fixed time.
+        input.log.line("keyloom: couldn't read USB, so zapp may be writing; not stopping it");
+        if (reason === "bootloader") arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
+        return;
+      }
+    }
+    if (writing || exited) return refused(reason);
+    stop(reason);
+  };
+  const refused = (reason: "bootloader" | "cancelled") => {
+    if (reason === "cancelled") input.log.line("keyloom: not stopping zapp: it is writing to the keyboard, so the flash finishes");
+  };
+  const cancel = () => void stopUnlessWriting("cancelled");
+  if (input.signal?.aborted) stop("cancelled");
+  else input.signal?.addEventListener("abort", cancel, { once: true });
+  // On the manual path nothing else says the person pressed reset: look for the bootloader on USB until it is there.
+  const watch = async () => {
+    const pollMs = input.pollMs ?? BOOTLOADER_POLL_MS;
+    while (!writing && !exited && !controller.signal.aborted) {
+      if ((await present()) === true) startWriting("the keyboard is in its bootloader");
+      else await Bun.sleep(pollMs);
+    }
   };
 
   input.log.line(`keyloom: ${zapp} flash ${input.artifactPath}`);
   input.onState("waiting_for_bootloader", input.enterBootloader ? HANDS_FREE_INSTRUCTION : resetInstruction(input.bootloaderWaitMs), input.enterBootloader ? undefined : { needsHand: true });
   arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
 
-  const result = await run({
-    cmd: [zapp, "flash", input.artifactPath],
-    log: input.log,
-    signal: controller.signal,
-    onLine: (line) => {
-      output.push(line);
-      input.onLine?.(line);
-      if (line.trim() === "") return;
-      if (!loaded) {
-        if (LOADED.test(line)) {
-          loaded = true;
-          // The wait starts again here: loading the file is quick, and the person is only asked to act from now.
-          arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
-          // Zapp is now waiting, as it would be for a person pressing the key, so the keyboard can be sent to its bootloader.
-          if (input.enterBootloader) {
-            entering = input.enterBootloader().then(
-              (r) => {
-                rebooted = r.ok;
-                if (!r.ok) {
-                  input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
-                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${resetInstruction(input.bootloaderWaitMs)}`, { needsHand: true });
-                }
-              },
-              (err: unknown) => {
-                input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
-                input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs), { needsHand: true });
-              },
-            );
+  let result: Awaited<ReturnType<typeof run>>;
+  try {
+    result = await run({
+      cmd: [zapp, "flash", input.artifactPath],
+      log: input.log,
+      signal: controller.signal,
+      // Its own process group, so a terminal's Ctrl-C reaches keyloom, which decides, and never Zapp mid-write.
+      processGroup: true,
+      onLine: (line) => {
+        output.push(line);
+        input.onLine?.(line);
+        if (line.trim() === "") return;
+        if (!loaded) {
+          if (LOADED.test(line)) {
+            loaded = true;
+            // The wait starts again here: loading the file is quick, and the person is only asked to act from now.
+            // A cancel that came before this line was read has stopped Zapp: restarting the keyboard now would strand it in its bootloader.
+            if (controller.signal.aborted) return;
+            arm(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS, "bootloader");
+            // Zapp is now waiting, as it would be for a person pressing the key, so the keyboard can be sent to its bootloader.
+            if (input.enterBootloader) {
+              const restarting = holdKeyboardWrite();
+              entering = input.enterBootloader().then(
+                (r) => {
+                  rebooted = r.ok;
+                  // A keyboard that only left USB may have been unplugged; the bootloader showing up (watch) says the write began.
+                  if (r.ok && (r.leftUsbOnly !== true || !input.bootloaderPresent)) startWriting("keyloom restarted the keyboard into its bootloader");
+                  else if (r.ok) input.log.line("keyloom: the keyboard left USB; waiting for its bootloader to appear");
+                  else {
+                    input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
+                    // A permission has its own words, with no settings path: the page shows a button for it, and the CLI prints the path (D-501).
+                    const why = r.code === "permission_input_monitoring" ? "macOS didn't let keyloom restart the keyboard by itself." : `keyloom couldn't restart the keyboard by itself (${r.reason}).`;
+                    input.onState("waiting_for_bootloader", `${why} ${resetInstruction(input.bootloaderWaitMs)}`, { needsHand: true, ...(r.code === undefined ? {} : { problem: r.code }) });
+                  }
+                },
+                (err: unknown) => {
+                  input.log.line(`keyloom: couldn't restart the keyboard itself: ${err instanceof Error ? err.message : String(err)}`);
+                  input.onState("waiting_for_bootloader", resetInstruction(input.bootloaderWaitMs), { needsHand: true });
+                },
+              ).finally(restarting).catch((err: unknown) => {
+                enteringFailure ??= err;
+              });
+            }
+            if (input.bootloaderPresent) void watch();
           }
+          return;
         }
-        return;
-      }
-      // Zapp is silent until it finds the board (S11), so output after "Firmware loaded" means it did.
-      if (!writing) {
-        writing = true;
-        arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
-        input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
-      }
-    },
-  });
-  clearTimeout(timer);
-  input.signal?.removeEventListener("abort", cancel);
-  await entering;
-  // A keyboard keyloom sent to its bootloader stays there when nothing is written, so the person must be told.
-  const stranded = rebooted ? " keyloom restarted the keyboard into its bootloader, so it won't type until it is unplugged and plugged in again, or flashed." : "";
-
-  if (abortedFor === "cancelled") {
-    return fail(writing ? "Cancelled while writing. The keyboard may be left in its bootloader: flash again, or flash an earlier build." : `Cancelled. Nothing was flashed.${stranded}`, output);
+        // Zapp is silent until it finds the board (S11), so any output after "Firmware loaded" means it did.
+        startWriting("zapp found the keyboard");
+      },
+    });
+  } finally {
+    exited = true;
+    clearTimeout(timer);
+    input.signal?.removeEventListener("abort", cancel);
+    // A rejected run or restart must not leave the guard held, or serve would ignore Ctrl-C for good.
+    try {
+      await entering;
+    } finally {
+      releaseWrite?.();
+    }
   }
-  if (abortedFor === "bootloader") {
-    return fail(`No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.${stranded}`, output);
+  if (enteringFailure !== undefined) throw enteringFailure;
+  // A keyboard keyloom restarted counts as being written (D-506), so only the write timeout below can leave it in its bootloader.
+  if (abortedFor === "cancelled" || abortedFor === "bootloader") {
+    // Zapp was stopped after a USB check that saw no bootloader, but a reset pressed in between puts the keyboard there with
+    // nothing to write it, so the result says where the keyboard is rather than "nothing was flashed".
+    const there = await present();
+    if (there === true) {
+      input.log.line("keyloom: zapp was stopped, but the keyboard is in its bootloader now");
+      return fail(`${abortedFor === "cancelled" ? "Cancelled" : "Stopped"} just as the keyboard entered its bootloader. It is still there and won't type until it is flashed: flash again to put the build on it.`, output);
+    }
+    // An unreadable USB says nothing about where the keyboard is, so the result doesn't claim it.
+    if (there === undefined) {
+      input.log.line("keyloom: zapp was stopped, and keyloom couldn't read USB to see where the keyboard is");
+      return fail(`${abortedFor === "cancelled" ? "Cancelled" : "Stopped"}, and keyloom couldn't read USB to check the keyboard afterwards. If it doesn't type, it is in its bootloader: flash again to put the build on it.`, output);
+    }
+    if (abortedFor === "cancelled") return fail("Cancelled. Nothing was flashed.", output);
+    return fail("No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.", output);
   }
   if (abortedFor === "write") {
     return fail(
@@ -159,7 +261,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     if (input.verify) {
       input.onState("writing", "Written. Waiting for the keyboard to restart so keyloom can confirm it.", { verifying: true });
       const verified = await input.verify();
-      if (!verified.ok) return fail(verified.error, output);
+      // Zapp finished the write; only the confirmation failed, so the keyboard can be read again rather than flashed again.
+      if (!verified.ok) return { ...fail(verified.error, output), errorCode: "not_confirmed" };
       input.log.line(`keyloom: ${verified.message}`);
     }
     input.onState("succeeded", null);

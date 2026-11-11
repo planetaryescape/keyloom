@@ -8,6 +8,9 @@
 // KEYLOOM_FAKE_NO_KEYBOARD=0 makes the fake detect a keyboard (the default asks for Rev A or B);
 // KEYLOOM_FAKE_BUILD_MS and KEYLOOM_FAKE_FLASH_STEP_MS change how long they take.
 // KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488).
+// KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
+// KEYLOOM_FAKE_INPUT_MONITORING=1 makes the flash wait for the reset key because Input Monitoring was refused; KEYLOOM_FAKE_CHECK_FINDS
+// sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
 // KEYLOOM_FAKE_DOCKER=no-access-linux|no-access-mac makes Docker refuse this account (D-497).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
@@ -21,7 +24,7 @@ import { FakeEditor } from "../test/helpers/fake-editor-backend.ts";
 import { devSample } from "../test/helpers/dev-sample.ts";
 import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
-import type { FlashPlan } from "../src/api/http.ts";
+import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
 import { dockerAccessFix } from "../src/app/toolchain.ts";
 
@@ -37,6 +40,9 @@ const fake = new FakeEditor(fixture, {
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
+  flashResult: process.env.KEYLOOM_FAKE_FLASH_RESULT === "unverified" ? "unverified" : process.env.KEYLOOM_FAKE_FLASH_RESULT === "files_and_folders" ? "permission_files_and_folders" : "verified",
+  flashInputMonitoring: process.env.KEYLOOM_FAKE_INPUT_MONITORING === "1",
+  checkFinds: FlashCheckResponseSchema.shape.found.parse(process.env.KEYLOOM_FAKE_CHECK_FINDS ?? "this_build"),
   needsBoardRevision: process.env.KEYLOOM_FAKE_NO_KEYBOARD !== "0",
   buildMs: Number(process.env.KEYLOOM_FAKE_BUILD_MS ?? 10_000),
   flashStepMs: Number(process.env.KEYLOOM_FAKE_FLASH_STEP_MS ?? 5_000),

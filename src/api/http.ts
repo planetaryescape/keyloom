@@ -60,10 +60,13 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   POST /api/layouts/:ref/parse-binding ParseBindingRequest -> ParseBindingResponse (reads a typed QMK or ZMK expression; writes nothing)
 //   POST /api/layouts/:ref/apply        ApplyRequest  -> ApplyResponse     (409 on stale_base or invalid ops)
 //   POST /api/layouts/:ref/undo         UndoRequest   -> UndoResponse      (409 when the head moved)
-//   POST /api/layouts/:ref/builds       BuildRequest  -> Build             (202; poll GET /api/builds/:id)
+//   POST /api/layouts/:ref/builds       BuildRequest  -> Build             (202; poll GET /api/builds/:id; 400 board_revision_needed when no keyboard says which revision)
 //   GET  /api/builds/:id                              -> Build
 //   POST /api/builds/:id/flashes        {}            -> Flash             (202; poll GET /api/flashes/:id)
 //   GET  /api/flashes/:id                             -> Flash
+//   POST /api/flashes/:id/cancel        {}            -> Flash             (D-501; 409 flash_writing once a write began, flash_finished when it isn't waiting)
+//   POST /api/flashes/:id/check         {}            -> FlashCheckResponse (D-501; reads what the keyboard runs, never builds or flashes; 400 usage when it can't be read)
+//   GET  /api/layouts/:ref/fitting-revision           -> FittingRevisionResponse (D-502; the newest earlier revision whose layers fit the board)
 //   GET  /api/builds/:id/artifact                     -> the firmware file   (D-490; 404 unless the build succeeded)
 //   POST /api/builds/:id/reveal         {}            -> {}                  (D-490; shows the file in Finder, macOS only)
 
@@ -191,6 +194,12 @@ export const BuildSchema = z.object({
 });
 export type Build = z.infer<typeof BuildSchema>;
 
+export const FlashPermissionCodeSchema = z.enum(["permission_files_and_folders", "permission_input_monitoring"]);
+export type FlashPermissionCode = z.infer<typeof FlashPermissionCodeSchema>;
+// `not_confirmed`: the write finished, but keyloom couldn't confirm the keyboard came back as this build, so it can be checked again.
+export const FlashErrorCodeSchema = z.enum(["cancelled", "not_confirmed", "permission_files_and_folders", "permission_input_monitoring"]);
+export type FlashErrorCode = z.infer<typeof FlashErrorCodeSchema>;
+
 export const FlashSchema = z.object({
   id: z.string().min(1),
   buildId: z.string().min(1),
@@ -204,8 +213,31 @@ export const FlashSchema = z.object({
   note: z.string().nullable(),
   verified: z.boolean(),
   logTail: z.array(z.string()),
+  // Why it failed as a code the page acts on (D-501): a permission opens its System Settings pane, a cancel offers the flash again.
+  // These four are optional so an older server's flash still reads.
+  errorCode: FlashErrorCodeSchema.nullable().optional(),
+  // While it waits: the permission that kept keyloom from restarting the keyboard itself.
+  instructionCode: FlashPermissionCodeSchema.nullable().optional(),
+  // Cancel is offered only while this is true: waiting for the bootloader, nothing written yet.
+  cancellable: z.boolean().optional(),
+  // Check the keyboard again is offered only while this is true: written, not verified, on a board whose running build keyloom can read.
+  checkable: z.boolean().optional(),
 });
 export type Flash = z.infer<typeof FlashSchema>;
+
+// What Check the keyboard again found (R1-15): `this_build` means the flash is now verified. `later_build`: a newer keyloom build has
+// replaced it since, so flashing this one again would be a rollback (D-506).
+export const FlashCheckResponseSchema = z.object({
+  flash: FlashSchema,
+  found: z.enum(["this_build", "later_build", "other_build", "missing_halves", "absent", "bootloader", "other_firmware"]),
+});
+export type FlashCheckResponse = z.infer<typeof FlashCheckResponseSchema>;
+
+// The newest earlier revision the board can draw (R1-20), for a layout that no longer matches its board.
+export const FittingRevisionResponseSchema = z.object({
+  revision: z.object({ id: z.string().min(1), summary: z.string(), createdAt: z.number().finite() }).nullable(),
+});
+export type FittingRevisionResponse = z.infer<typeof FittingRevisionResponseSchema>;
 
 // Chat (rung 3). Same token and error conventions as above.
 //   POST /api/layouts/:ref/chat           ChatRequest -> text/event-stream of ChatEvent

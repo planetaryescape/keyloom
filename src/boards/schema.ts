@@ -43,6 +43,9 @@ const positions = z.array(z.number().int().nonnegative());
 
 export const RevisionSchema = z.strictObject({
   id: z.string().min(1),
+  // How Build and flash names this revision when it has to ask which one the keyboard is, and how to tell (D-506). The ID otherwise.
+  label: z.string().min(1).optional(),
+  hint: z.string().min(1).optional(),
   source: z.strictObject({
     repo: z.string().url(),
     ref: z.string().min(1),

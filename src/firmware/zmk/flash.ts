@@ -8,11 +8,12 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import type { FlashStep } from "../../boards/recipes.ts";
-import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import type { LogSink } from "../toolchain/run.ts";
 import { type Uf2Shape, describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import type { VolumeFinder } from "./volumes.ts";
 import { SCREEN_LOCK_MESSAGE } from "../toolchain/screen-lock.ts";
+import { holdKeyboardWrite } from "../toolchain/write-guard.ts";
 
 export const BOOTLOADER_WAIT_MS = 120_000;
 export const UNMOUNT_WAIT_MS = 30_000;
@@ -35,8 +36,10 @@ export type { FlashStep } from "../../boards/recipes.ts";
  * `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it.
  * `attributed`: its drive was already mounted under a label both halves share, and every other half is on USB running
  * firmware, so the drive can only be this half's.
+ * `touched` on a failure: keyloom sent the restart before it failed, so the half may be in its bootloader. A stop then can't say
+ * nothing happened to the keyboard.
  */
-export type EnterResult = { ok: true; alreadyThere?: true; attributed?: true } | { ok: false; reason: string; retry?: boolean };
+export type EnterResult = { ok: true; alreadyThere?: true; attributed?: true } | { ok: false; reason: string; retry?: boolean; touched?: true };
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
@@ -45,9 +48,11 @@ export type RestoreStep = (index: number, image: Uint8Array, verify: () => Promi
 export type StepHooks = {
   /**
    * Gets the half into its bootloader without a keypress. `announce` says what the person should know once a restart is under way.
-   * A failure is a reason, and the flash goes on by asking for the key combo.
+   * A failure is a reason, and the flash goes on by asking for the key combo. `signal` is the flash's cancel: the hook checks it
+   * before it restarts the half, so a cancel during the check leaves the half typing. The hook calls `announce` just before it
+   * restarts the half, and from then until it returns keyloom holds the write guard (D-506).
    */
-  enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void) => Promise<EnterResult>;
+  enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void, signal?: AbortSignal) => Promise<EnterResult>;
   /**
    * Confirm every peer sharing this boot-drive label is visibly running firmware before a write. `strict` also refuses a peer
    * that is not on USB: a drive keyloom did not see appear for this half could be that peer in its bootloader.
@@ -89,6 +94,8 @@ export type Uf2FlashInput = {
   unmountWaitMs?: number;
   pollMs?: number;
   signal?: AbortSignal;
+  /** Which system's permission a refused write points at; this machine's by default. Tests pass "darwin". */
+  platform?: NodeJS.Platform;
 };
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
@@ -160,10 +167,12 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     input.log.line(line);
     input.onLine?.(line);
   };
+  // Set when macOS refused a write to a boot drive, so the page can open the Files and Folders pane instead of naming it (D-501).
+  let permission: FlashPermissionCode | undefined;
   const fail = (error: string): FlashResult => {
     say(`keyloom: ${error}`);
     input.onState("failed", null);
-    return { state: "failed", error, output };
+    return { state: "failed", error, output, ...(permission === undefined ? {} : { errorCode: permission }) };
   };
   const poll = input.pollMs ?? POLL_MS;
   const waitMs = input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS;
@@ -181,11 +190,34 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
   const verified: string[] = [];
   let allRestarted = true;
+  // Set while a half keyloom restarted is being written; an abort then is refused, and stays refused (D-506).
+  let committing = false;
+  let refused = false;
+  input.signal?.addEventListener("abort", () => {
+    if (committing) refused = true;
+  }, { once: true });
+  // Held from keyloom restarting a half, or the copy starting, until its drive unmounts, so a Ctrl-C or a shutdown waits (D-506).
+  let releaseWrite: (() => void) | undefined;
+  const holdWrite = () => {
+    releaseWrite ??= holdKeyboardWrite();
+  };
+  const endWrite = () => {
+    releaseWrite?.();
+    releaseWrite = undefined;
+  };
   const attempt = async (i: number, image: Uint8Array, recovery?: { verify: () => Promise<VerifyResult>; instruction?: string }): Promise<VerifyResult> => {
+    try {
+      return await attemptStep(i, image, recovery);
+    } finally {
+      endWrite();
+    }
+  };
+  const attemptStep = async (i: number, image: Uint8Array, recovery?: { verify: () => Promise<VerifyResult>; instruction?: string }): Promise<VerifyResult> => {
     const step = input.steps[i] as FlashStep;
     const shared = input.steps.some((s) => s !== step && s.volume === step.volume);
     // Cancelling the new build must not cancel restoring the previous one.
-    const signal = recovery ? undefined : input.signal;
+    committing = false;
+    let signal = recovery || refused ? undefined : input.signal;
     const failed = (error: string): VerifyResult => ({ ok: false, error });
     let instruction = recovery?.instruction ?? instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
@@ -193,6 +225,39 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let attributed = false;
     let retryRestart = false;
     let restartReason: string | undefined;
+    // Why keyloom's restart of this half failed after it was sent: the half may be in its bootloader anyway.
+    let touchedReason: string | undefined;
+    // A stop says where the half is. A drive that mounted as the stop landed, or a restart keyloom sent, can leave it in its
+    // bootloader with nothing written, and then it won't type until it is flashed.
+    const cancelled = async (): Promise<string> => {
+      const head = i === 0 ? "Cancelled. Nothing was flashed" : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old";
+      const mounted = await input.findVolume(step.volume).catch(() => null);
+      if (mounted) return `${head}, but ${shared ? `${step.volume} is mounted, so a half is` : `the ${step.label} is`} in its bootloader now and won't type until it is flashed: flash again to put the build on it.`;
+      if (touchedReason !== undefined) return `${head}, but keyloom had already sent a restart to the ${step.label} (${touchedReason.replace(/\.$/, "")}). If it doesn't type, it is in its bootloader: flash again to put the build on it.`;
+      return i === 0 ? `${head}.` : `${head}; flash again to finish.`;
+    };
+    // From the moment the hook says it is restarting the half until it returns, a stop would strand the half in its bootloader
+    // (D-506), so keyloom holds the write guard: a second Ctrl-C then waits instead of ending keyloom.
+    const enterHolding = async (announce: (text: string) => void): Promise<EnterResult> => {
+      let release: (() => void) | undefined;
+      try {
+        return await input.hooks!.enterBootloader!(step, i, (text) => {
+          release ??= holdKeyboardWrite();
+          announce(text);
+        }, signal);
+      } finally {
+        release?.();
+      }
+    };
+    // A half keyloom restarted sits in its bootloader and won't type until it is written, so from here this half is written whoever
+    // asks to stop, and the app refuses a cancel (D-506). A stop that came during the restart stays refused for the rest of the flash.
+    const commit = () => {
+      committing = true;
+      holdWrite();
+      if (input.signal?.aborted) refused = true;
+      signal = undefined;
+      input.onState("waiting_for_bootloader", `keyloom restarted the ${step.label} into its bootloader. Writing starts in a moment; don't unplug it.`, { inBootloader: true });
+    };
     // A mounted drive can be written while the Mac is locked. Otherwise refuse before any hands-free
     // trigger, which would strand the half in its bootloader without a mountable drive.
     let mount: string | null = await input.findVolume(step.volume);
@@ -205,8 +270,12 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
     }
     if (input.hooks?.enterBootloader && (recovery?.instruction === undefined || shared)) {
+      // A cancel while keyloom was checking the halves: nothing is restarted, so the half keeps typing.
+      if (signal?.aborted) return failed(await cancelled());
       // The unlock message asks something of the person, so it is marked as needing a hand like any other instruction to act.
-      const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined));
+      const entered = await enterHolding((text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined));
+      if (!entered.ok && entered.touched) touchedReason = entered.reason;
+      if (!entered.ok && signal?.aborted) return failed(await cancelled());
       if (!entered.ok) {
         restartReason = entered.reason;
         retryRestart = entered.retry === true;
@@ -217,6 +286,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       restarted = entered.ok;
       byKeyloom = entered.ok && entered.alreadyThere !== true;
+      if (byKeyloom) commit();
       attributed = entered.ok && entered.attributed === true;
     }
     // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
@@ -237,7 +307,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let lockWasReported = false;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
       if (signal?.aborted) {
-        return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+        return failed(await cancelled());
       }
       mount = await input.findVolume(step.volume);
       if (mount) {
@@ -246,15 +316,18 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       if (retryRestart && input.hooks?.enterBootloader) {
         if (signal?.aborted) {
-          return failed(i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+          return failed(await cancelled());
         }
-        const entered = await input.hooks.enterBootloader(step, i, (text) => {
+        const entered = await enterHolding((text) => {
           instruction = text;
           input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined);
         });
+        if (!entered.ok && entered.touched) touchedReason = entered.reason;
+        if (!entered.ok && signal?.aborted) return failed(await cancelled());
         if (entered.ok) {
           restarted = true;
           byKeyloom = entered.alreadyThere !== true;
+          if (byKeyloom) commit();
           retryRestart = false;
           mount = await input.findVolume(step.volume);
           if (mount) {
@@ -325,6 +398,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     };
 
     say(`keyloom: ${step.volume} is mounted at ${mount}; writing`);
+    // From here the copy and the bootloader taking it finish whoever asks to stop: a stop now ends the flash after this half (D-506).
+    holdWrite();
+    signal = undefined;
     input.onState("writing", WRITING_INSTRUCTION);
     const fileOn = (at: string): string => join(at, input.driveFileName ?? "glove80.uf2");
     let target = fileOn(mount);
@@ -398,7 +474,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       if (await input.findVolume(step.volume)) {
         // macOS refuses a write to a removable drive from an app without Removable Volumes access, and the raw EACCES doesn't say so.
-        const denied = code === "EACCES" || code === "EPERM" ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
+        const refused = code === "EACCES" || code === "EPERM";
+        if (refused && (input.platform ?? process.platform) === "darwin") permission = "permission_files_and_folders";
+        const denied = refused ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
         return failed(`Copying to ${target} failed: ${(err as Error).message}. The ${step.label} was not flashed.${denied}`);
       }
       say(`keyloom: copy ended with "${(err as Error).message}", and ${step.volume} has unmounted, so the write is taken as done`);
@@ -406,12 +484,13 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
     const unmountBy = Date.now() + (input.unmountWaitMs ?? UNMOUNT_WAIT_MS);
     while (await input.findVolume(step.volume)) {
-      if (Date.now() >= unmountBy || signal?.aborted) {
+      if (Date.now() >= unmountBy) {
         return failed(`${step.volume} was still mounted ${Math.round((input.unmountWaitMs ?? UNMOUNT_WAIT_MS) / 1000)} s after the copy, so the bootloader didn't take the file. The ${step.label} was not flashed; try again.`);
       }
       await sleep(poll, signal);
     }
     say(`keyloom: ${step.volume} unmounted; the ${step.label} is flashed`);
+    endWrite();
 
     if (recovery || input.hooks?.verify) {
       say(`keyloom: waiting for the ${step.label} to come back`);

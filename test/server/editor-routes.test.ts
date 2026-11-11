@@ -7,6 +7,8 @@ import {
   RevisionListResponseSchema,
   BuildSchema,
   CheckResponseSchema,
+  FittingRevisionResponseSchema,
+  FlashCheckResponseSchema,
   FlashSchema,
   LayoutExportDocumentSchema,
   ParseBindingResponseSchema,
@@ -246,11 +248,11 @@ describe("build and flash", () => {
     expect(finished.status).toBe("succeeded");
   });
 
-  test("a build with no board revision can be refused 400 usage, and succeeds once one is sent", async () => {
+  test("a build with no board revision is refused 400 board_revision_needed, and succeeds once one is sent", async () => {
     const { call } = start(new FakeEditor(fixture, { buildMs: 200, needsBoardRevision: true }));
     const refused = await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id });
     expect(refused.status).toBe(400);
-    expect(ApiErrorBodySchema.parse(await refused.json()).error.code).toBe("usage");
+    expect(ApiErrorBodySchema.parse(await refused.json()).error.code).toBe("board_revision_needed");
     const accepted = await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id, boardRevision: "revb" });
     expect(accepted.status).toBe(202);
   });
@@ -279,6 +281,58 @@ describe("build and flash", () => {
     await Bun.sleep(150);
     const failed = BuildSchema.parse(await (await call("GET", `/api/builds/${build.id}`)).json());
     expect(failed).toMatchObject({ status: "failed", errorCode: "docker_unavailable" });
+  });
+
+  test("a waiting flash can be cancelled, a writing one can't, and the cancel says so as a code (D-501)", async () => {
+    const { call } = start(new FakeEditor(fixture, { buildMs: 50, flashStepMs: 400 }));
+    const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    await Bun.sleep(80);
+    const first = FlashSchema.parse(await (await call("POST", `/api/builds/${build.id}/flashes`, {})).json());
+    expect(first.cancellable).toBe(true);
+    const cancelled = await call("POST", `/api/flashes/${first.id}/cancel`, {});
+    expect(cancelled.status).toBe(200);
+    expect(FlashSchema.parse(await cancelled.json())).toMatchObject({ status: "failed", errorCode: "cancelled", cancellable: false });
+    const again = await call("POST", `/api/flashes/${first.id}/cancel`, {});
+    expect(again.status).toBe(409);
+    expect(ApiErrorBodySchema.parse(await again.json()).error.code).toBe("flash_finished");
+
+    const second = FlashSchema.parse(await (await call("POST", `/api/builds/${build.id}/flashes`, {})).json());
+    await Bun.sleep(450);
+    const writing = await call("POST", `/api/flashes/${second.id}/cancel`, {});
+    expect(writing.status).toBe(409);
+    expect(ApiErrorBodySchema.parse(await writing.json()).error.code).toBe("flash_writing");
+    expect((await call("POST", `/api/flashes/${second.id}/cancel`, { extra: 1 })).status).toBe(400);
+    expect((await call("POST", "/api/flashes/nope/cancel", {})).status).toBe(404);
+  });
+
+  test("an unconfirmed flash can be checked again: it reads, and starts no build or flash (D-501)", async () => {
+    const fake = new FakeEditor(fixture, { buildMs: 50, flashStepMs: 50, flashResult: "unverified" });
+    const { call } = start(fake);
+    const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    await Bun.sleep(80);
+    const flash = FlashSchema.parse(await (await call("POST", `/api/builds/${build.id}/flashes`, {})).json());
+    await Bun.sleep(130);
+    expect(FlashSchema.parse(await (await call("GET", `/api/flashes/${flash.id}`)).json())).toMatchObject({ status: "succeeded", verified: false, checkable: true });
+    const counts = () => [fake.buildCount(), fake.flashCount()];
+    const before = counts();
+    const checked = await call("POST", `/api/flashes/${flash.id}/check`, {});
+    expect(checked.status).toBe(200);
+    const body = FlashCheckResponseSchema.parse(await checked.json());
+    expect(body.found).toBe("this_build");
+    expect(body.flash).toMatchObject({ verified: true, checkable: false });
+    expect(counts()).toEqual(before);
+    expect(fake.checks).toBe(1);
+    expect((await call("GET", `/api/flashes/${flash.id}/check`)).status).toBe(405);
+  });
+
+  test("the fitting revision is the one before the head, or null with no history (D-502)", async () => {
+    const { call } = start(quick());
+    const none = FittingRevisionResponseSchema.parse(await (await call("GET", "/api/layouts/moonlander-daily/fitting-revision")).json());
+    expect(none.revision).toBeNull();
+    const applied = ApplyResponseSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/apply", { baseRevisionId: fixture.revision.id, ops: OPS, summary: "F17" })).json());
+    expect(applied.revisionId).not.toBe(fixture.revision.id);
+    const one = FittingRevisionResponseSchema.parse(await (await call("GET", "/api/layouts/moonlander-daily/fitting-revision")).json());
+    expect(one.revision?.id).toBe(fixture.revision.id);
   });
 
   test("unknown build and flash ids are 404 with ApiErrorBody", async () => {

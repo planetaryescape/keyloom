@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { DfuToolFlash } from "../../../src/boards/recipes.ts";
 import { dfuCommands, flashWithDfuTool, installHint } from "../../../src/firmware/qmk/dfu-flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { keyboardWriteInProgress } from "../../../src/firmware/toolchain/write-guard.ts";
 import type { UsbDevice } from "../../../src/firmware/toolchain/usb.ts";
 import type { FlashState } from "../../../src/firmware/toolchain/flash-state.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
@@ -148,6 +149,20 @@ describe("atmel-dfu with a fake dfu-programmer", () => {
     expect(await s.called()).toEqual([]);
   });
 
+  test("a cancel as the bootloader appears says the board is in its bootloader, not that nothing happened", async () => {
+    const s = await setup({ "dfu-programmer": recorder("$CALLS") });
+    const w = world({ bootloaderAfterMs: null });
+    const abort = new AbortController();
+    setTimeout(() => abort.abort(), 100);
+    // The reset is pressed as the cancel lands, after the wait's last look at USB.
+    const usb = async () => (abort.signal.aborted ? [dev("0x03eb", "0x2ff4")] : []);
+    const r = await flashWithDfuTool({ artifactPath: s.artifact, recipe: ATMEL, log: s.log, usb, onState: w.onState, tools: s.paths, signal: abort.signal, pollMs: 20 });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("entered its bootloader");
+    expect(r.error).not.toContain("Nothing was flashed");
+    expect(await s.called()).toEqual([]);
+  });
+
   test("a tool that hangs while writing is stopped at the write timeout", async () => {
     const s = await setup({ "dfu-programmer": `echo "$@" >> "$CALLS"; exec sleep 600` });
     const w = world();
@@ -155,6 +170,59 @@ describe("atmel-dfu with a fake dfu-programmer", () => {
     expect(r.state).toBe("failed");
     expect(r.error).toContain("didn't finish");
     expect(await s.called()).toEqual(["atmega32u4 erase --force"]);
+  }, SLOW_RUNNER_MS);
+});
+
+describe("a stop never cuts off a dfu tool's write (D-506)", () => {
+  test("a cancel once the write has begun is refused, every command runs, and the flash succeeds", async () => {
+    const s = await setup({ "dfu-programmer": `echo "$@" >> "$CALLS"; sleep 0.2; exit 0` });
+    const w = world();
+    const abort = new AbortController();
+    const during: boolean[] = [];
+    const r = await flashWithDfuTool({
+      artifactPath: s.artifact, recipe: ATMEL, running: { vendorId: "0xcb10", productId: "0x6456" }, log: s.log, usb: w.usb, tools: s.paths, signal: abort.signal, pollMs: 20,
+      onState: (state, instruction, note) => {
+        w.onState(state, instruction, note);
+        if (state === "writing" && note?.verifying !== true) {
+          during.push(keyboardWriteInProgress());
+          setTimeout(() => abort.abort(), 50);
+        }
+      },
+    });
+    expect(r.state).toBe("succeeded");
+    expect(await s.called()).toEqual(["atmega32u4 erase --force", `atmega32u4 flash --force ${s.artifact}`, "atmega32u4 reset"]);
+    expect(during).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+    s.log.close();
+    expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("not stopping dfu-programmer");
+  }, SLOW_RUNNER_MS);
+
+  test("a state listener that throws as the write begins still releases the write guard, and runs no tool", async () => {
+    const s = await setup({ "dfu-programmer": recorder("$CALLS") });
+    const w = world();
+    const thrown = new Error("synthetic listener failure");
+    const flashing = flashWithDfuTool({
+      artifactPath: s.artifact, recipe: ATMEL, log: s.log, usb: w.usb, tools: s.paths, pollMs: 20,
+      onState: (state) => {
+        if (state === "writing") throw thrown;
+      },
+    });
+    await expect(flashing).rejects.toBe(thrown);
+    expect(keyboardWriteInProgress()).toBe(false);
+    expect(await s.called()).toEqual([]);
+    s.log.close();
+  }, SLOW_RUNNER_MS);
+
+  test("the tool runs in its own process group, so a terminal's Ctrl-C reaches keyloom and not the tool", async () => {
+    const s = await setup({ "dfu-util": `ps -o pgid= -p $$ > "$CALLS"; exit 0` });
+    const bin = join(s.dir, "build.bin");
+    await Bun.write(bin, new Uint8Array(64));
+    const w = world({ bootloader: "0483:df11" });
+    expect((await flashWithDfuTool({ artifactPath: bin, recipe: STM32, log: s.log, usb: w.usb, onState: w.onState, tools: s.paths, pollMs: 20 })).state).toBe("succeeded");
+    const toolGroup = Number((await Bun.file(s.calls).text()).trim());
+    const ps = Bun.spawn(["ps", "-o", "pgid=", "-p", String(process.pid)], { stdout: "pipe" });
+    expect(toolGroup).toBeGreaterThan(0);
+    expect(toolGroup).not.toBe(Number((await new Response(ps.stdout).text()).trim()));
   }, SLOW_RUNNER_MS);
 });
 

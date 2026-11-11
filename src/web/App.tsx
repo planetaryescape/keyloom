@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import type { BoardChoice, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
+import type { BoardChoice, FittingRevisionResponse, ImportResponse, LayoutDetail, LayoutSummary } from "../api/http.ts";
 import { ApiError, TOKEN_REJECTED, fetchLayout, fetchLayouts } from "./api.ts";
 import { applyDisplayRotation } from "./keyboard/geometry.ts";
 import { Header } from "./shell/Header.tsx";
@@ -10,17 +10,18 @@ import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
 import { rememberShape } from "./shell/shape.ts";
 import { ErrorState } from "./shell/States.tsx";
 import { RestartAdvice, ServerGoneBanner, useServerGone } from "./shell/ServerGone.tsx";
-import { ReleaseDialog } from "./release/ReleaseDialog.tsx";
-import { releaseStatus, type ReleaseStatus } from "./release/status.ts";
-import { useNow } from "./release/useNow.ts";
-import { useRelease } from "./release/useRelease.ts";
+import { ReleaseHost, type ReleaseHandle } from "./release/ReleaseHost.tsx";
+import type { ReleaseStatus } from "./release/status.ts";
 import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
 import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
 import { Pegboard } from "./home/Pegboard.tsx";
-import { markOpened } from "./api-write.ts";
+import { markOpened, undoChange } from "./api-write.ts";
+import { fetchFittingRevision } from "./release/flash-api.ts";
+import { headline } from "../layout/history-summary.ts";
 import { archiveConfig } from "./configs/api-configs.ts";
+import { type GoBackRefusal, goBackRefusal } from "./shell/mismatch-words.ts";
 import type { FindingRepairDraft } from "../api/review.ts";
 
 // `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
@@ -340,17 +341,6 @@ function LayoutPage({
   onCarry: (id: string, carry: Arrival) => void;
 }) {
   const { document: layout, board, geometry } = detail;
-  const release = useRelease(token, summary.id);
-  const [releaseOpen, setReleaseOpen] = useState(false);
-  // History's "Flash this revision" builds an earlier revision instead of the head; null is the head.
-  const [releaseTarget, setReleaseTarget] = useState<{ id: string; summary: string } | null>(null);
-  const openRelease = (revision?: { id: string; summary: string }) => {
-    setReleaseTarget(revision === undefined || revision.id === detail.revision.id ? null : revision);
-    setReleaseOpen(true);
-  };
-  const releasing = release.build?.status === "running" || release.flash?.status === "waiting_for_bootloader" || release.flash?.status === "writing";
-  const now = useNow(releasing);
-  const status = releaseStatus(release.build, release.flash, detail.revision.id, now);
   const problem = findProblem(detail);
   const rotated = useMemo(() => {
     try {
@@ -368,10 +358,10 @@ function LayoutPage({
   }, [summary.boardId, rotated, board.hands.left]);
 
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
-  return (
+  const page = (release: ReleaseHandle | null, dialog: ReactNode) => (
     <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
-        <MismatchState token={token} summary={summary} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
+        <MismatchState token={token} summary={summary} fixable={problem !== null && board.keyCount === geometry.keys.length} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
       ) : (
         <Viewer
           detail={detail}
@@ -381,26 +371,26 @@ function LayoutPage({
           layoutRef={summary.id}
           sync={sync}
           onChanged={onChanged}
-          onOpenRelease={openRelease}
+          onOpenRelease={release?.open ?? noRelease}
           repairDraft={repairDraft}
           onRepairDraft={onRepairDraft}
-          chrome={{ ...menu, onHome, boardChoices, release: { status, onOpen: () => openRelease() }, arrival, onCarry }}
+          chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry }}
         />
       )}
-      <ReleaseDialog
-        open={releaseOpen}
-        onClose={() => setReleaseOpen(false)}
-        release={release}
-        head={releaseTarget ?? detail.revision}
-        earlierRevision={releaseTarget !== null}
-        autoSync={autoSync}
-        boardName={board.name}
-        status={status}
-        now={now}
-      />
+      {dialog}
     </Shell>
   );
+  // The MacBook keyboard is applied by kanata, never built or flashed (R2-01): no dialog, no header button, no Docker check.
+  if (board.firmware === "kanata") return page(null, null);
+  return (
+    <ReleaseHost token={token} layoutId={summary.id} head={detail.revision} boardName={board.name} boardRevisions={board.revisions} autoSync={autoSync}>
+      {page}
+    </ReleaseHost>
+  );
 }
+
+// A board with no Build and flash ignores a request to open it; nothing on its page offers one.
+const noRelease = (): void => undefined;
 
 // Each check names the mismatch in plain words. Drawing a layer whose bindings don't line
 // up with the keys would put labels on the wrong keys without any visible sign.
@@ -416,38 +406,97 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
 }
 
 /**
- * A layout keyloom can't draw on its board (R1-20). Trying again can't change that, so it offers the ways on: another layout, from the
- * wall or the board switcher in the header, or archiving this one, which keeps its history.
+ * A layout keyloom can't draw on its board (R1-20). Trying again can't change that. When an earlier revision fits, the way back is one
+ * button: History lives in the editor, which can't draw this layout, so the page offers that revision itself (D-502). Otherwise it
+ * offers another layout, from the wall or the board switcher in the header, or archiving this one, which keeps its history.
  */
-function MismatchState({ token, summary, problem, onHome, onReload }: { token: string; summary: LayoutSummary; problem: string; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
+function MismatchState({ token, summary, problem, fixable, onHome, onReload }: { token: string; summary: LayoutSummary; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
-  const archive = async () => {
+  const [fitting, setFitting] = useState<FittingRevision>(null);
+  // A lookup that failed is not "none fits": the page says so and offers to look again.
+  const [lookupFailed, setLookupFailed] = useState(false);
+  const [lookups, setLookups] = useState(0);
+  // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-506).
+  const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
+  useEffect(() => {
+    setGoBackRefused(null);
+    setRefused(null);
+  }, [summary.revisionId]);
+  useEffect(() => {
+    if (!fixable) return;
+    const controller = new AbortController();
+    // The answer belongs to the head it was asked for: a new head clears the old one's target until its own answer comes.
+    setFitting(null);
+    setLookupFailed(false);
+    fetchFittingRevision(token, summary.id, controller.signal)
+      .then((found) => {
+        if (!controller.signal.aborted) setFitting(found);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLookupFailed(true);
+      });
+    return () => controller.abort();
+  }, [token, summary.id, summary.revisionId, fixable, lookups]);
+  // Going back keeps this layout on screen; an archived one leaves it, so the reload selects nothing.
+  const act = async (run: () => Promise<unknown>, failed: string, stay: boolean) => {
     setBusy(true);
     setRefused(null);
     try {
-      await archiveConfig(token, summary.id);
-      onReload?.();
+      await run();
+      if (stay) onReload?.(summary.id);
+      else onReload?.();
     } catch (error) {
-      setRefused(error instanceof Error ? error.message : "keyloom couldn't archive it.");
+      setRefused(error instanceof Error ? error.message : failed);
       setBusy(false);
     }
   };
+  const goBack = (to: string) =>
+    act(async () => {
+      try {
+        await undoChange(token, summary.id, { revisionId: summary.revisionId, to });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) setGoBackRefused(goBackRefusal(error.code, error.message));
+        throw error;
+      }
+    }, "keyloom couldn't go back to that revision.", true);
+  const archive = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
   return (
     <ErrorState
       title="This layout doesn't match its board"
       actions={
         <>
-          {onHome === undefined ? null : <button type="button" className="button button-primary" onClick={onHome}>Show your other layouts</button>}
+          {fitting === null ? null : goBackRefused === null ? (
+            <button type="button" className="button button-primary" disabled={busy} onClick={() => void goBack(fitting.id)}>
+              Go back to the last revision that matched
+            </button>
+          ) : goBackRefused.next === "reload" && onReload !== undefined ? (
+            <button type="button" className="button button-primary" disabled={busy} onClick={() => onReload(summary.id)}>
+              Reload this layout
+            </button>
+          ) : null}
+          {lookupFailed ? (
+            <button type="button" className="button button-primary" disabled={busy} onClick={() => setLookups((n) => n + 1)}>
+              Look again
+            </button>
+          ) : null}
+          {onHome === undefined ? null : <button type="button" className={fitting === null && !lookupFailed ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
           <button type="button" className="button" disabled={busy} onClick={() => void archive()}>Archive this config</button>
         </>
       }
     >
-      {problem} Pick another layout, or archive this one; it keeps its history.
-      {refused === null ? null : <span className="state-refused" role="alert"> {refused}</span>}
+      {problem}{" "}
+      {lookupFailed
+        ? "keyloom couldn't look for an earlier revision that matched. Look again, pick another layout, or archive this one; it keeps its history."
+        : fitting === null
+        ? "Pick another layout, or archive this one; it keeps its history."
+        : <>The last revision that matched is “{headline(fitting.summary)}”. Going back adds a new revision, so this one stays in History.</>}
+      {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused}</span>}
     </ErrorState>
   );
 }
+
+type FittingRevision = FittingRevisionResponse["revision"];
 
 export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[]; onManageKeyboards?: () => void; onAddKeyboard?: () => void };
 

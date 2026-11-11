@@ -3,7 +3,8 @@
 // keyboard came back running the new build. USB and HID are parameters, so tests use fakes and never
 // touch a keyboard.
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { type HidTransport, type RawHidInterface } from "../toolchain/hid.ts";
+import { HidError, type HidTransport, type RawHidInterface } from "../toolchain/hid.ts";
+import { DeviceTransportError } from "../toolchain/device-helper/transport-client.ts";
 import { defaultHidTransport } from "../toolchain/hid-default.ts";
 import type { LogSink } from "../toolchain/run.ts";
 import { type UsbDevice, listUsbDevices } from "../toolchain/usb.ts";
@@ -16,6 +17,8 @@ export type HandsFreeDeps = {
   hid: () => Promise<HidTransport>;
   /** Polling pause; tests pass a short one. */
   pollMs?: number;
+  /** Which system's permissions a refusal points at; this machine's by default. Tests pass "darwin". */
+  platform?: NodeJS.Platform;
 };
 
 /** The keyboard being flashed, as USB sees it while its firmware runs and while its bootloader does. */
@@ -41,7 +44,7 @@ export type KeyboardIdentity = Required<Pick<KeyboardTarget, "vendorId">> & Pick
 
 const isKeyboard = (d: UsbDevice, t: Pick<KeyboardTarget, "vendorId" | "productId">): boolean => d.vendorId === (t.vendorId ?? hexId(ZSA_VENDOR_ID)) && d.productId === t.productId;
 
-export const inBootloader = (devices: UsbDevice[], t: KeyboardTarget): boolean => {
+export const inBootloader = (devices: UsbDevice[], t: Pick<KeyboardTarget, "bootloader">): boolean => {
   const [vendor, product] = t.bootloader.split(":");
   return devices.some((d) => d.vendorId === `0x${vendor}` && d.productId === `0x${product}`);
 };
@@ -56,7 +59,18 @@ export async function readRunningFirmware(deps: HandsFreeDeps, target: Pick<Keyb
   return marker ? { state: "keyloom", serial: marker } : { state: "other", serial: device.serial };
 }
 
-export type RebootResult = { ok: true } | { ok: false; reason: string };
+/**
+ * `code` is set when a permission stopped the restart, so the page can open the pane that grants it (D-501). `leftUsbOnly` is a
+ * keyboard that left USB without its bootloader being seen: restarted, or unplugged, which only the bootloader appearing tells apart.
+ */
+export type RebootResult = { ok: true; leftUsbOnly?: true } | { ok: false; reason: string; code?: "permission_input_monitoring" };
+
+/** macOS refused the raw HID open: Input Monitoring is missing, whichever transport opened it (the IOKit one or the paired helper). */
+function permissionOf(err: unknown, platform: NodeJS.Platform): "permission_input_monitoring" | undefined {
+  if (err instanceof HidError) return err.code;
+  if (err instanceof DeviceTransportError && err.detail.code === "permission_denied" && platform === "darwin") return "permission_input_monitoring";
+  return undefined;
+}
 
 export const REBOOT_WAIT_MS = 15_000;
 const WRITE_ERROR_WAIT_MS = 4_000;
@@ -110,11 +124,13 @@ export async function rebootToBootloader(
   }
 
   let writeError: string | undefined;
+  let permission: "permission_input_monitoring" | undefined;
   log(`keyloom: sending the bootloader command to the ${target.name} (running ${firmware.serial})`);
   try {
     await transport.write(iface, bootloaderPacket());
   } catch (err) {
     writeError = (err as Error).message;
+    permission = permissionOf(err, deps.platform ?? process.platform);
     log(`keyloom: the write reported an error, checking whether the keyboard restarted anyway: ${writeError}`);
   }
 
@@ -137,13 +153,13 @@ export async function rebootToBootloader(
       // keyboard having gone is proof enough that it restarted.
       if (!devices.some((d) => isKeyboard(d, target))) {
         log("keyloom: the keyboard has left USB, so it restarted");
-        return { ok: true };
+        return { ok: true, leftUsbOnly: true };
       }
     }
     if (Date.now() >= deadline) break;
     await sleep(pollMs);
   }
-  return { ok: false, reason: writeError ?? `the command was sent, but the ${target.name} didn't enter its bootloader within ${Math.round(waitMs / 1000)} seconds` };
+  return { ok: false, reason: writeError ?? `the command was sent, but the ${target.name} didn't enter its bootloader within ${Math.round(waitMs / 1000)} seconds`, ...(permission === undefined ? {} : { code: permission }) };
 }
 
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
@@ -204,11 +220,14 @@ export async function handsFreeHooks(input: {
   artifact: Uint8Array;
   buildId: string;
   log: LogSink;
-}): Promise<Pick<FlashInput, "enterBootloader" | "verify">> {
+}): Promise<Pick<FlashInput, "enterBootloader" | "verify" | "bootloaderPresent">> {
+  // Any Zapp board: its bootloader on USB is when Zapp starts writing, which a cancel must not cut off (D-506).
+  const flash = input.rev.flash;
+  const present: Pick<FlashInput, "bootloaderPresent"> = flash.kind === "zapp" ? { bootloaderPresent: async () => inBootloader(await input.deps.usb(), flash) } : {};
   const target = keyboardTarget(input.board, input.rev);
-  if (!target) return {};
+  if (!target) return present;
   const say = (line: string) => input.log.line(line);
-  const hooks: Pick<FlashInput, "enterBootloader" | "verify"> = {};
+  const hooks: Pick<FlashInput, "enterBootloader" | "verify" | "bootloaderPresent"> = { ...present };
 
   let running: RunningFirmware | undefined;
   try {

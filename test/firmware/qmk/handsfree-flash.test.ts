@@ -4,6 +4,8 @@ import { qmkRevision } from "../../../src/firmware/qmk/board-config.ts";
 import { bootloaderPacket, buildMarker } from "../../../src/firmware/qmk/handsfree.ts";
 import { handsFreeHooks, keyboardTarget, readRunningFirmware, rebootToBootloader, verifyBuild } from "../../../src/firmware/qmk/handsfree-flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { HidError } from "../../../src/firmware/toolchain/hid.ts";
+import { DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { moonlander } from "../../helpers/board.ts";
 import { MOONLANDER_REVA, dfuBootloader, fakeKeyboard, rawHidOf, runningKeyboard } from "../../helpers/fake-hid.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -32,6 +34,22 @@ describe("rebootToBootloader", () => {
   const lines: string[] = [];
   const say = (l: string) => lines.push(l);
 
+  test("a write macOS refuses for Input Monitoring says so as a code, from either transport (D-501)", async () => {
+    const refusals: Array<[Error, NodeJS.Platform, "permission_input_monitoring" | undefined]> = [
+      [new HidError("macOS refused to open the keyboard's raw HID interface", "permission_input_monitoring"), "darwin", "permission_input_monitoring"],
+      [new DeviceTransportError({ code: "permission_denied", effect: "none", retry: "after_user_action" }), "darwin", "permission_input_monitoring"],
+      // On Linux the helper's refusal is a udev rule, not a System Settings pane.
+      [new DeviceTransportError({ code: "permission_denied", effect: "none", retry: "after_user_action" }), "linux", undefined],
+      [new HidError("macOS could not write to the keyboard"), "darwin", undefined],
+    ];
+    for (const [error, platform, code] of refusals) {
+      const k = fakeKeyboard({ usb: () => [runningKeyboard(OLD)], hid: [rawHidOf(OLD)], onWrite: () => { throw error; } });
+      const result = await rebootToBootloader({ ...k.deps, platform }, MOONLANDER_REVA, say, 50);
+      expect(result.ok).toBe(false);
+      expect(result.ok ? undefined : result.code).toBe(code);
+    }
+  });
+
   test("sends the bootloader packet to the raw HID interface and succeeds when the bootloader appears", async () => {
     const k = fakeKeyboard({ usb: (n) => (n < 2 ? [runningKeyboard(OLD)] : [dfuBootloader()]), hid: [rawHidOf(OLD)] });
     expect(await rebootToBootloader(k.deps, MOONLANDER_REVA, say)).toEqual({ ok: true });
@@ -39,9 +57,9 @@ describe("rebootToBootloader", () => {
     expect([...(k.writes[0] as Uint8Array)]).toEqual([...bootloaderPacket()]);
   });
 
-  test("a keyboard that left USB before the next poll counts as restarted: zapp may already be writing", async () => {
+  test("a keyboard that left USB before the next poll counts as restarted, but says its bootloader wasn't seen: it may have been unplugged", async () => {
     const k = fakeKeyboard({ usb: (n) => (n < 1 ? [runningKeyboard(OLD)] : []), hid: [rawHidOf(OLD)] });
-    expect(await rebootToBootloader(k.deps, MOONLANDER_REVA, say)).toEqual({ ok: true });
+    expect(await rebootToBootloader(k.deps, MOONLANDER_REVA, say)).toEqual({ ok: true, leftUsbOnly: true });
   });
 
   test("a write error is not fatal when the keyboard restarted anyway", async () => {
@@ -187,10 +205,12 @@ describe("handsFreeHooks", () => {
     expect((await hooks(k, new Uint8Array())).enterBootloader).toBeUndefined();
   });
 
-  test("a board that isn't ZSA's gets nothing", async () => {
+  test("a board that isn't ZSA's gets no restart and no verify, only the look for its bootloader that tells when Zapp writes (D-506)", async () => {
     const other = { ...web.definition, vendor: "Other" };
     expect(keyboardTarget(other, rev)).toBeUndefined();
-    expect(await handsFreeHooks({ deps: fakeKeyboard({ usb: () => [] }).deps, board: other, rev, artifact: new Uint8Array(), buildId: BUILD, log })).toEqual({});
+    const hooks = await handsFreeHooks({ deps: fakeKeyboard({ usb: () => [dfuBootloader()] }).deps, board: other, rev, artifact: new Uint8Array(), buildId: BUILD, log });
+    expect(Object.keys(hooks)).toEqual(["bootloaderPresent"]);
+    expect(await hooks.bootloaderPresent?.()).toBe(true);
   });
 });
 

@@ -90,6 +90,8 @@ import { boardDisplayName, boardEntries } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
+import { AfterApplyContext, type AfterApplyKeyboard } from "./release/AfterApply.tsx";
+import { afterApply } from "./release/flash-words.ts";
 import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
 import { sheetHeight, type SheetSize } from "./shell/sheet.ts";
@@ -134,7 +136,8 @@ interface ViewerProps {
     /** Fetches the layout list again after a config is made, renamed or restored; with an ID, opens that config. */
     onReload?: (selectId?: string) => void;
     boardChoices: readonly BoardChoice[];
-    release: { status: ReleaseStatus; onOpen: () => void };
+    /** Absent for a board that is never built or flashed (the MacBook keyboard). */
+    release?: { status: ReleaseStatus; onOpen: () => void };
   };
 }
 
@@ -221,6 +224,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
   const boardSync = sync.boards.find((b) => b.boardId === summary.boardId);
+  // The line a proposal card shows after Apply depends on this keyboard (R2-01): kanata applies it, auto-sync flashes it, or Build and flash does.
+  const afterApplyKeyboard: AfterApplyKeyboard = {
+    board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, revisionId: revision.id, sync: boardSync,
+    onApplyNow: () => void sync.syncNow(summary.id),
+    onPutOn: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
+  };
   const synced = boardSync !== undefined && boardSync.layoutId === summary.id && boardSync.state.kind === "in_sync";
   useEffect(() => {
     if (synced) setUnsynced([]);
@@ -1280,7 +1289,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   // A proposal was applied on the server: show the new layout, on the layer where it changed.
-  async function onProposalApplied(card: ProposalCard, _result: ApplyResponse) {
+  async function onProposalApplied(card: ProposalCard, result: ApplyResponse) {
     setHoveredProposal(null);
     setPinnedProposal(null);
     // The apply lands on the board, not in the bar: the bar closes and the changed caps press (P3 review).
@@ -1293,7 +1302,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       setAppliedKeys({ layerId: here.layerId, positions: changed.filter((slot) => slot.layerId === here.layerId).map((slot) => slot.position) });
     }
     setUnsynced((current) => [...current, ...changed.filter((slot) => !current.some((c) => c.layerId === slot.layerId && c.position === slot.position))]);
-    toasts.show({ kind: "success", message: "Applied", detail: card.title });
+    // The bar has closed, so the toast says what happens next on this keyboard, with its one button (R2-01).
+    const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
+    const run = next.action === null ? null : next.action.id === "apply_now" ? afterApplyKeyboard.onApplyNow : next.action.id === "put_on" ? afterApplyKeyboard.onPutOn : () => onOpenRelease();
+    toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
   }
 
   // The panel stays on the key after an apply, so the next slot can be filled straight away (16#the-key-panel).
@@ -1761,6 +1773,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   );
 
   return (
+    <AfterApplyContext.Provider value={afterApplyKeyboard}>
     <div className="workspace">
       <TopBar
         onHome={chrome.onHome}
@@ -1831,7 +1844,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           },
           select: { on: selectMode, onToggle: () => setSelectMode(!selectMode) },
           onShortcuts: () => setShortcutsOpen(true),
-          release: chrome.release,
+          ...(chrome.release === undefined ? {} : { release: chrome.release }),
         }}
       />
       <div ref={workbenchRef} className="workbench" data-newboard={newBoardDrawn !== null || undefined} data-lab={labOpen ? lab.phase.kind : undefined} data-side={labPanelShown || (newBoardPanel && !narrow) || (proposalsShown && !narrow) || (reviewShown && !narrow) ? "chat" : chatPanel && !keyOverChat ? "chat" : keyOverChat ? "open" : mode === "summary" || (!narrow && (mode === "key" || mode === "chat")) ? "closed" : "open"} data-sheet={narrow && mode !== "summary" ? sheet : undefined} data-over-chat={keyOverChat || undefined} style={workbenchStyle}>
@@ -2231,7 +2244,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               layout={layout}
               board={board}
               configName={summary.name}
-              firstFlash={boardSync === undefined || boardSync.state.kind === "not_connected" || boardSync.last === null}
+              firstFlash={board.firmware !== "kanata" && (boardSync === undefined || boardSync.state.kind === "not_connected" || boardSync.last === null)}
               pinnedId={pinnedProposal?.changeSetId ?? null}
               onPin={pinProposal}
               onPreview={setHoveredProposal}
@@ -2352,5 +2365,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       )}
     </div>
+    </AfterApplyContext.Provider>
   );
 }
+
+// A proposal title is a phrase; the toast puts a sentence after it.
+const withStop = (text: string): string => (/[.!?]$/.test(text.trim()) ? text : `${text}.`);

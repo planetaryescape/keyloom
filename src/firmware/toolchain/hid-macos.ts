@@ -142,7 +142,7 @@ export function macosHid(): HidTransport {
       const opened = lib.io.IOHIDDeviceOpen(device, 0);
       if (opened !== kIOReturnSuccess) {
         lib.cf.CFRelease(device);
-        throw new HidError(`macOS refused to open the keyboard's raw HID interface (IOReturn 0x${(opened >>> 0).toString(16)}). Allow your terminal under System Settings > Privacy & Security > Input Monitoring, then try again`);
+        throw inputMonitoringRefused(opened);
       }
       // IOKit writes each report into this buffer before calling back, so it must outlive the registration.
       const buffer = new Uint8Array(64);
@@ -196,7 +196,7 @@ export function macosHid(): HidTransport {
           if (device === 0n) throw new HidError("macOS would not open the keyboard's raw HID interface");
           try {
             const opened = lib.io.IOHIDDeviceOpen(device, 0);
-            if (opened !== kIOReturnSuccess) throw new HidError(`macOS refused to open the keyboard's raw HID interface (IOReturn 0x${(opened >>> 0).toString(16)}). Allow your terminal under System Settings > Privacy & Security > Input Monitoring, then try again`);
+            if (opened !== kIOReturnSuccess) throw inputMonitoringRefused(opened);
             try {
               const sent = lib.io.IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0, ptr(report), report.length);
               if (sent !== kIOReturnSuccess) throw new HidError(`macOS could not write to the keyboard (IOReturn 0x${(sent >>> 0).toString(16)})`);
@@ -214,4 +214,12 @@ export function macosHid(): HidTransport {
       }
     },
   };
+}
+
+// The app that runs keyloom is the one macOS asks about: the keyloom app, or the terminal for the CLI. The page shows a button instead.
+function inputMonitoringRefused(opened: number): HidError {
+  return new HidError(
+    `macOS refused to open the keyboard's raw HID interface (IOReturn 0x${(opened >>> 0).toString(16)}). Allow the app running keyloom under System Settings > Privacy & Security > Input Monitoring, then try again`,
+    "permission_input_monitoring",
+  );
 }
