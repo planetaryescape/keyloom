@@ -1,16 +1,24 @@
 // One install from a button (D-488, D-489): starts it, follows its output once a second until it finishes, and calls
-// `onDone` when it succeeded so the dialog re-reads what is now on the computer.
+// `onDone` when it ends so the dialog re-reads what is now on the computer. It can be cancelled (R2-08).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InstallState, InstallableTool } from "../../api/tool-install.ts";
-import { fetchInstall, startInstall } from "./install-api.ts";
+import { cancelInstall, fetchInstall, startInstall } from "./install-api.ts";
 
 const POLL_MS = 1000;
 
+/**
+ * Whether an install has ended, so the page re-reads what is on the computer. Not only a success: a start that failed after the install, or
+ * a cancel that came after Homebrew finished, still left the tool there.
+ */
+export const installEnded = (state: InstallState): boolean => state.status === "succeeded" || state.status === "failed" || state.status === "cancelled";
+
 export type Install = {
   state: InstallState | null;
-  /** Why the page couldn't start or follow the install; the install itself may still be running. */
+  /** Why the page couldn't start or stop the install; the install itself may still be running. */
   problem: string | null;
   start: () => void;
+  /** Stops the running install; it ends `cancelled` once Homebrew has exited. */
+  cancel: () => void;
 };
 
 export function useInstall(token: string, tool: InstallableTool, onDone: () => void): Install {
@@ -23,19 +31,14 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   useEffect(() => {
     if (!running) return;
     const controller = new AbortController();
-    let misses = 0;
     const timer = window.setInterval(() => {
       fetchInstall(token, tool, controller.signal)
         .then((next) => {
-          misses = 0;
           setState(next);
-          if (next.status === "succeeded") done.current();
+          if (installEnded(next)) done.current();
         })
-        .catch(() => {
-          if (controller.signal.aborted) return;
-          misses += 1;
-          if (misses === 3) setProblem("keyloom stopped answering while it installed. Check that it is still running.");
-        });
+        // A missed poll says nothing of its own: a server that stopped answering gets the page's own banner (R2-13), and the next poll carries on.
+        .catch(() => undefined);
     }, POLL_MS);
     return () => {
       controller.abort();
@@ -50,5 +53,12 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "The install could not start."));
   }, [token, tool]);
 
-  return { state, problem, start };
+  const cancel = useCallback(() => {
+    setProblem(null);
+    cancelInstall(token, tool)
+      .then(setState)
+      .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "The install could not be stopped."));
+  }, [token, tool]);
+
+  return { state, problem, start, cancel };
 }

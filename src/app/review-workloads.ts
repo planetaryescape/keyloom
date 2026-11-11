@@ -59,8 +59,11 @@ const taskSummary = (task: WorkloadTaskResult) => {
   };
 };
 
+/** What a review's tests need besides the replay; a test passes its own Docker check so none asks a daemon. */
+export type ReviewWorkloadDeps = WorkloadDeps & { ensureDocker?: () => Promise<{ ok: true } | { ok: false; reason: string }> };
+
 /** Returns a process-local baseline for this one review, never a persisted replay cache. */
-export async function measureReviewBaseline(app: App, row: BoardReviewRow, signal: AbortSignal, deps: WorkloadDeps): Promise<WorkloadReport | undefined> {
+export async function measureReviewBaseline(app: App, row: BoardReviewRow, signal: AbortSignal, deps: ReviewWorkloadDeps): Promise<WorkloadReport | undefined> {
   const activities = reviewActivities(app.db, row.layoutId);
   if (activities.length === 0) { clearReviewWorkload(app.db, row.id); return; }
   const evidence = pendingReviewWorkload(activities);
@@ -70,8 +73,11 @@ export async function measureReviewBaseline(app: App, row: BoardReviewRow, signa
     requirePlatformSupport("keyloom workload evaluate");
     if (getLayout(app, row.layoutId, row.revisionId).document.firmware === "kanata") throw new UsageError("Kanata workload replay is not available yet.");
     if (!deps.replay) {
-      const docker = await ensureDocker();
-      if (!docker.ok) throw new UsageError(`Workload tests need Docker: ${docker.reason}`);
+      const docker = await (deps.ensureDocker ?? ensureDocker)();
+      if (!docker.ok) {
+        evidence.reasonCode = "docker";
+        throw new UsageError(`Workload tests need Docker: ${docker.reason}`);
+      }
     }
     const report = await evaluateStoredWorkload(app, row.layoutId, { revisionId: row.revisionId, suite: selectedReviewSuite(activities), signal }, deps);
     if (!current(app, row)) return;

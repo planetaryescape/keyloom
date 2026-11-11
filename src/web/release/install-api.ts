@@ -8,6 +8,11 @@ export function startInstall(token: string, tool: InstallableTool): Promise<Inst
   return request("POST", "/api/system/install", token, InstallStateSchema, undefined, { tool });
 }
 
+/** Stops a running install (R2-08); the state comes back in phase `stopping` until Homebrew has exited. */
+export function cancelInstall(token: string, tool: InstallableTool): Promise<InstallState> {
+  return request("DELETE", `/api/system/install?tool=${encodeURIComponent(tool)}`, token, InstallStateSchema);
+}
+
 export function fetchInstall(token: string, tool: InstallableTool, signal?: AbortSignal): Promise<InstallState> {
   return request("GET", `/api/system/install?tool=${encodeURIComponent(tool)}`, token, InstallStateSchema, signal);
 }

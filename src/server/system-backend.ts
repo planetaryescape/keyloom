@@ -15,4 +15,8 @@ export interface SystemBackend {
   installState: (tool: InstallableTool) => Promise<InstallState>;
   /** Karabiner-Elements' config from its fixed place, for the MacBook's import card. Absent where the server can't read it. */
   karabinerConfig?: () => Promise<KarabinerConfig>;
+  /** Stops a running install of the tool (R2-08); returns where it has got to. */
+  cancelInstall: (tool: InstallableTool) => Promise<InstallState>;
+  /** Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07). Repeated calls share one attempt. */
+  restartDocker: () => Promise<DockerStartResponse>;
 }

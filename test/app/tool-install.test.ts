@@ -101,4 +101,61 @@ describe("installJobs", () => {
     await Bun.sleep(5);
     expect(jobs.get("dfu-util").status).toBe("succeeded");
   });
+
+  test("Cancel stops Homebrew through its signal, says it is stopping, and ends cancelled (R2-08)", async () => {
+    let seen: AbortSignal | undefined;
+    const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => {
+      seen = opts.signal;
+      opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true });
+    });
+    const jobs = installJobs({ ...mac, runner });
+    jobs.start("docker");
+    await Bun.sleep(5);
+    expect(seen?.aborted).toBe(false);
+    const stopping = jobs.cancel("docker");
+    expect(stopping).toMatchObject({ status: "running", phase: "stopping" });
+    expect(stopping.logTail.at(-1)).toBe("keyloom: stopping the install");
+    expect(seen?.aborted).toBe(true);
+    // A second start while it stops joins it rather than starting another brew.
+    expect(jobs.start("docker").phase).toBe("stopping");
+    await Bun.sleep(5);
+    expect(jobs.get("docker")).toMatchObject({ status: "cancelled", phase: null, error: null, errorCode: null });
+    // Cancel on an install that isn't running changes nothing.
+    expect(jobs.cancel("docker").status).toBe("cancelled");
+    expect(jobs.cancel("zapp").status).toBe("idle");
+  });
+
+  test("cancelAll, which serve's shutdown runs, stops every running install and waits for Homebrew to exit (#277 review)", async () => {
+    const signals: AbortSignal[] = [];
+    const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => {
+      if (opts.signal) signals.push(opts.signal);
+      opts.signal?.addEventListener("abort", () => setTimeout(() => resolve({ exitCode: null, timedOut: false }), 5), { once: true });
+    });
+    const jobs = installJobs({ ...mac, runner });
+    jobs.start("zapp");
+    jobs.start("dfu-util");
+    await Bun.sleep(5);
+    await jobs.cancelAll();
+    expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+    expect(jobs.get("zapp").status).toBe("cancelled");
+    expect(jobs.get("dfu-util").status).toBe("cancelled");
+    // Nothing running: it returns at once.
+    await jobs.cancelAll();
+  });
+
+  test("Cancel while Docker starts stops the start too, and no Try again state follows", async () => {
+    let startSignal: AbortSignal | undefined;
+    const { runner } = recorder();
+    const jobs = installJobs({ ...mac, runner, startDocker: (_say, signal) => new Promise((resolve) => {
+      startSignal = signal;
+      signal?.addEventListener("abort", () => resolve({ ok: false, engine: "Colima", reason: "Stopped starting Colima." }), { once: true });
+    }) });
+    jobs.start("docker");
+    await Bun.sleep(5);
+    expect(jobs.get("docker").phase).toBe("starting");
+    jobs.cancel("docker");
+    await Bun.sleep(5);
+    expect(startSignal?.aborted).toBe(true);
+    expect(jobs.get("docker")).toMatchObject({ status: "cancelled", errorCode: null });
+  });
 });

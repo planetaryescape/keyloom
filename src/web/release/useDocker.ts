@@ -2,21 +2,28 @@
 // itself, so this only ever says what is happening or what is missing, and offers the click when it can't.
 import { useCallback, useEffect, useState } from "react";
 import type { DockerReadinessResponse } from "../../api/system.ts";
-import { fetchDockerReadiness, startDockerEngine } from "../system.ts";
+import type { DockerStartResponse } from "../../api/system.ts";
+import { fetchDockerReadiness, restartDockerApp, startDockerEngine } from "../system.ts";
 
 export type Docker = {
   /** Null when the server offers no system routes, or the page hasn't asked yet. */
   readiness: DockerReadinessResponse | null;
-  /** A start from this page is running. */
+  /** The last readiness request failed, so `readiness` is null because the page couldn't ask, not because it hasn't yet. */
+  unanswered: boolean;
+  /** A start or restart from this page is running. */
   starting: boolean;
-  /** Why a start from this page failed. */
+  /** Why a start or restart from this page failed. */
   problem: string | null;
+  /** Starts the engine; for `cli-missing` the server opens the app instead (R2-07). */
   start: () => void;
+  /** Quits and reopens the Mac app, for `no-access` (R2-07). */
+  restart: () => void;
   refresh: () => void;
 };
 
 export function useDocker(token: string): Docker {
   const [readiness, setReadiness] = useState<DockerReadinessResponse | null>(null);
+  const [unanswered, setUnanswered] = useState(false);
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asks, setAsks] = useState(0);
@@ -24,16 +31,25 @@ export function useDocker(token: string): Docker {
   useEffect(() => {
     const controller = new AbortController();
     fetchDockerReadiness(token, controller.signal)
-      .then(setReadiness)
+      .then((next) => {
+        setReadiness(next);
+        setUnanswered(false);
+        // A failed start no longer says anything once Docker answers.
+        if (next?.ok === true) setProblem(null);
+      })
       // A server without the route, or one that can't answer, leaves the dialog without this line rather than failing it.
-      .catch(() => setReadiness(null));
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setReadiness(null);
+        setUnanswered(true);
+      });
     return () => controller.abort();
   }, [token, asks]);
 
-  const start = useCallback(() => {
+  const run = useCallback((ask: (token: string) => Promise<DockerStartResponse>) => {
     setStarting(true);
     setProblem(null);
-    startDockerEngine(token)
+    ask(token)
       .then((result) => {
         if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
         else setProblem(result.reason);
@@ -41,9 +57,11 @@ export function useDocker(token: string): Docker {
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
       .finally(() => setStarting(false));
   }, [token]);
+  const start = useCallback(() => run(startDockerEngine), [run]);
+  const restart = useCallback(() => run(restartDockerApp), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
-  return { readiness, starting, problem, start, refresh };
+  return { readiness, unanswered, starting, problem, start, restart, refresh };
 }
 
 const RECHECK_MS = 4000;

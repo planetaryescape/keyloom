@@ -11,13 +11,15 @@ const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "docker" | "startDocker" | "install" | "installState" | "karabinerConfig";
-const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; path: string; action: Action }> = [
+type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "karabinerConfig";
+const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/docker", action: "docker" },
   { method: "POST", path: "/api/system/docker/start", action: "startDocker" },
   { method: "POST", path: "/api/system/install", action: "install" },
   { method: "GET", path: "/api/system/install", action: "installState" },
   { method: "GET", path: "/api/system/karabiner-config", action: "karabinerConfig" },
+  { method: "DELETE", path: "/api/system/install", action: "cancelInstall" },
+  { method: "POST", path: "/api/system/docker/restart", action: "restartDocker" },
 ];
 
 /** Null when the request is not a system route, so startServer carries on with its own. */
@@ -40,10 +42,11 @@ export async function handleSystemRoute(request: Request, pathname: string, back
       if (read.status === "not_a_file") return errorResponse(422, "karabiner_not_a_file", "~/.config/karabiner/karabiner.json on this Mac isn't a file keyloom can read. Drop a copy of karabiner.json here instead.");
       return Response.json(KarabinerConfigResponseSchema.parse({ filename: read.filename, content: read.content }));
     }
-    if (route.action === "installState") {
+    if (route.action === "installState" || route.action === "cancelInstall") {
       const tool = InstallableToolSchema.safeParse(new URL(request.url).searchParams.get("tool"));
       if (!tool.success) return errorResponse(400, "schema", "Name the tool: ?tool=docker, zapp, dfu-util, dfu-programmer or avrdude.");
-      return Response.json(InstallStateSchema.parse(await backend.installState(tool.data)));
+      const state = route.action === "installState" ? await backend.installState(tool.data) : await backend.cancelInstall(tool.data);
+      return Response.json(InstallStateSchema.parse(state));
     }
     // Reading `{}` keeps the content-type rule the same on every POST.
     const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
@@ -55,6 +58,7 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     }
     const parsed = EmptyBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return errorResponse(400, "schema", "The request body must be an empty object.");
+    if (route.action === "restartDocker") return Response.json(DockerStartResponseSchema.parse(await backend.restartDocker()));
     return Response.json(DockerStartResponseSchema.parse(await backend.startDocker()));
   } catch (err) {
     console.error("keyloom: system request failed", err);
