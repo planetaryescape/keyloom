@@ -285,7 +285,7 @@ export async function verifyHalf(opts: { deps: ZmkHandsFreeDeps; target: HalfTar
       ? sharedDriveRemedy(t.step, opts.steps)
       : opts.steps ? `${retryRemedy(opts.steps)} To recover the ${label} on its own, connect only that half and put it in its bootloader: ${t.step.enter}`
       : `Put it in its bootloader and flash again: ${t.step.enter}`;
-    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. ${remedy} If it doesn't appear even then, check its USB cable and run \`keyloom doctor\`.` };
+    return { ok: false, error: `the ${label} was written, but it didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Its firmware may be incomplete. ${remedy} If it doesn't appear even then, try another USB cable or port.` };
   }
   if (seen.state === "keyloom") {
     return { ok: false, error: `the ${label} was written, but it is running build ${seen.key} and not ${build} (${expected}). The flash may not have been written; flash again.` };

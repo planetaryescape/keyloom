@@ -165,3 +165,93 @@
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
+
+/* What kanata still needs (D-493): one step per line, with its button under it. */
+.sync-setup {
+  display: flex;
+  max-width: 300px;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.sync-setup-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.sync-setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sync-setup-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.sync-setup-step > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ink-3);
+}
+
+.sync-setup-step[data-state="done"] > svg {
+  color: var(--ok);
+}
+
+.sync-setup-step[data-state="done"] .sync-setup-title {
+  color: var(--ink-2);
+}
+
+.sync-setup-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sync-setup-title {
+  font-weight: var(--weight-medium);
+}
+
+.sync-setup-detail {
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.sync-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.sync-setup-actions .button {
+  color: var(--ink);
+  white-space: normal;
+  text-decoration: none;
+}
+
+.sync-setup-problem {
+  margin: 0;
+  color: var(--bad-ink);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.sync-setup-recheck {
+  align-self: flex-start;
+}

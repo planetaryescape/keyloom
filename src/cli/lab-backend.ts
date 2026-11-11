@@ -1,7 +1,7 @@
 // The server's typing lab over the app (rung 22, D-314): it holds the one recording in progress, so the browser starts and stops it
 // and the keyboard's stream lives in this process. The keyboard and the emulator come from LabDeps, so tests run on a fake keyboard.
 import {
-  LabCaptureError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, labPassages, labReadout, labSessions,
+  LabCaptureError, LabStartError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, labPassages, labReadout, labSessions,
   type App, type LabDeps, type RecordingInProgress,
 } from "../app/index.ts";
 import { LabError, type LabBackend } from "../server/lab-backend.ts";
@@ -12,6 +12,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   } catch (err) {
     if (err instanceof LabCaptureError) throw new LabError(409, err.code, err.message);
     if (err instanceof NotFoundError) throw new LabError(404, "not_found", err.message);
+    // Before UsageError, which it extends: the code puts Sync now beside the problem (R1-19).
+    if (err instanceof LabStartError) throw new LabError(400, err.code, err.message);
     if (err instanceof UsageError) throw new LabError(400, "usage", err.message);
     throw err;
   }

@@ -60,6 +60,14 @@ export function linuxDevicePermissionRemedy(transport: "hid" | "serial", platfor
     : "Keyboard ttyACM access was denied. Join the group owning the port (usually dialout or uucp), log out and back in, then try again.";
 }
 
+/** A capture could not begin for a reason the page can act on (R1-19): `needs_sync` offers Sync now and Build and flash. */
+export class LabStartError extends UsageError {
+  override name = "LabStartError";
+  constructor(readonly code: "needs_sync" | "not_connected", message: string) {
+    super(message);
+  }
+}
+
 /** A capture could not begin because the operating system or another client refused keyboard access. */
 export class LabCaptureError extends Error {
   override name = "LabCaptureError";

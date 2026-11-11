@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
+  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, FlashToolMissingError, NotFoundError, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
@@ -11,7 +11,7 @@ type Build = Awaited<ReturnType<EditorBackend["startBuild"]>>;
 type Flash = Awaited<ReturnType<EditorBackend["startFlash"]>>;
 
 const toBuild = (b: BuildView): Build => ({
-  id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
+  id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, errorCode: b.errorCode, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
 });
 
 const toFlash = (f: FlashView): Flash => ({
@@ -30,6 +30,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
       const parsed = ValidationResultSchema.safeParse(err.details);
       throw new EditorError(409, "validation_failed", err.message, parsed.success ? parsed.data : undefined);
     }
+    // Before UsageError, which it extends: the page offers to install the tool rather than showing the sentence (D-489).
+    if (err instanceof FlashToolMissingError) throw new EditorError(409, "flash_tool_missing", err.message);
     if (err instanceof UsageError) throw new EditorError(400, "usage", err.message);
     throw err;
   }
@@ -46,7 +48,7 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
 }
 
 /** `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait. */
-export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs" | "handsFree"> = {}, onApplied?: () => void): EditorBackend {
+export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs" | "handsFree"> = {}, onApplied?: () => void, reveal: RevealDeps = {}): EditorBackend {
   // Keyboard sync wakes at once on an Apply instead of at its next look; it would see the new head either way (it reads the database).
   const applied = <T>(value: T): T => {
     onApplied?.();
@@ -88,5 +90,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     getBuild: async (id) => orNull(async () => toBuild(await getBuild(app, id))),
     startFlash: (buildId) => translate(async () => toFlash(await startFlash(app, { buildId, ...flash }))),
     getFlash: async (id) => orNull(async () => toFlash(await getFlash(app, id))),
+    buildArtifact: async (id) => orNull(async () => buildArtifact(app, id)),
+    revealBuild: (id) => translate(() => revealBuildArtifact(app, id, reveal)),
   };
 }

@@ -172,7 +172,7 @@ export async function verifyBuild(deps: HandsFreeDeps, target: KeyboardTarget, b
   }
   log(`keyloom: after the flash the keyboard reports ${seen.state === "absent" ? "nothing" : `serial ${seen.serial ?? "(none)"}`}; expected ${expected}`);
   if (seen.state === "absent") {
-    return { ok: false, error: `zapp finished, but the ${target.name} didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Unplug it, plug it in again and run \`keyloom doctor\` to see what it is running.` };
+    return { ok: false, error: `zapp finished, but the ${target.name} didn't come back within ${Math.round(waitMs / 1000)} seconds, so keyloom couldn't confirm the flash. Unplug it and plug it in again: keyloom reads which build it runs when it comes back, and the sync status shows it.` };
   }
   return { ok: false, error: `zapp finished, but the ${target.name} is running ${seen.serial ?? "firmware with no serial"} and not build ${buildId} (${expected}). The flash may not have been written; flash again.` };
 }

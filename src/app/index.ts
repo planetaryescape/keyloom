@@ -3,7 +3,7 @@ export { type App, closeApp, openApp } from "./context.ts";
 export { type CollectionKeyboard, listKeyboardCollection, listSetupLayouts, removeKeyboard, restoreKeyboard } from "./keyboard-collection.ts";
 export { prepareBoardContribution, exportBoardContribution } from "./board-contribution.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, CredentialError, IncompatibleError, LabCaptureError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, CredentialError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -45,7 +45,9 @@ export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
-export { BuildFailedError, EmulateFailedError, FlashFailedError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export { BuildFailedError, EmulateFailedError, FlashFailedError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export { type BuildArtifact, type RevealDeps, buildArtifact, revealBuildArtifact } from "./firmware-artifact.ts";
+export type { FlashPlan, FlashTool } from "./firmware-flash-plan.ts";
 export { type AgentConfig, CONFIG_FILE, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
 export { type EmulateOptions, type EmulateOutcome, emulateLayout } from "./emulate.ts";
 export {

@@ -24,8 +24,9 @@ import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
-import { BuildFailedError, FlashFailedError } from "./firmware-errors.ts";
+import { BuildFailedError, FlashFailedError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
+import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
 import { ensureDocker } from "./toolchain.ts";
 
 // These are the shapes of Build and Flash in src/api/http.ts (a superset: the extra fields are for
@@ -37,6 +38,10 @@ export type BuildView = {
   boardRevision: string;
   status: "running" | "succeeded" | "failed";
   error: string | null;
+  /** Why it failed as a code the UI acts on: "docker_unavailable" shows the Docker callout (D-488). */
+  errorCode: "docker_unavailable" | null;
+  /** What flashing this build will need, so the dialog knows before anyone clicks (D-489, D-490). */
+  flashPlan: FlashPlan;
   startedAt: number;
   finishedAt: number | null;
   /** The last lines of the build log, oldest first. */
@@ -147,11 +152,26 @@ export async function generateFirmware(
 
 async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
   const logPath = absolute(app, row.logPath);
+  const board = boardOf(app, row.layoutId);
   return {
     id: row.id, revisionId: row.revisionId, layoutId: row.layoutId, boardRevision: row.boardRevision, status: row.status, error: row.error,
+    errorCode: row.errorCode === "docker_unavailable" ? "docker_unavailable" : null,
+    flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
   };
+}
+
+/** The board a build's layout is for, or undefined when the layout or its board has gone. */
+function boardOf(app: App, layoutId: string): Board | undefined {
+  const boardId = findLayoutRow(app.db, layoutId)?.boardId;
+  if (boardId === undefined) return undefined;
+  try {
+    return showBoard(boardId);
+  } catch (err) {
+    if (err instanceof NotFoundError) return undefined;
+    throw err;
+  }
 }
 
 /** A row still marked running whose process has died (a crash, a closed terminal) will never finish; say so. */
@@ -201,7 +221,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte clone, and should not be
     // the person's job to fix: keyloom starts the engine it finds and says so in this log (D-486).
     const docker = await ensureDocker({ onProgress: say, ...(signal === undefined ? {} : { signal }) });
-    if (!docker.ok) throw new BuildFailure(docker.reason);
+    if (!docker.ok) throw new BuildFailure(docker.reason, "docker_unavailable");
     const driver = driverFor(view.board);
     let source: GeneratedSource;
     try {
@@ -232,7 +252,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     if (!known) log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     const message = known ? (err as Error).message : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
     log.line(`keyloom: build failed: ${message}`);
-    finishBuild(app.db, row.id, { error: message });
+    finishBuild(app.db, row.id, { error: message, errorCode: err instanceof BuildFailure ? err.code : null });
     appendLog(app.dataDir, {
       event: "build",
       buildId: row.id,
@@ -270,7 +290,7 @@ export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {
   const started = await startBuild(app, ref, opts);
   await buildTasks.get(started.id);
   const done = await getBuild(app, started.id);
-  if (done.status !== "succeeded") throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})`, done.id, done.logPath);
+  if (done.status !== "succeeded") throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})`, done.id, done.logPath, done.errorCode);
   return done;
 }
 
@@ -375,6 +395,9 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
     const layout = findLayoutRow(app.db, build.layoutId);
     const board = showBoard(layout?.boardId ?? "");
+    // Checked before a flash row exists, so a missing Zapp is an install to do, not a flash that failed (D-489).
+    const tool = board ? flashPlanFor(board, build.boardRevision, { ...(opts.handsFree?.dfu?.tools ? { dfuTools: opts.handsFree.dfu.tools } : {}) }).tool : null;
+    if (tool !== null && !tool.installed) throw new FlashToolMissingError(tool.name);
 
     const id = newFlashId();
     const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });

@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { BoardDevViewSchema, type BoardDevView } from "../boards/dev.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import {
+  ApiErrorBodySchema,
   LayoutDetailSchema,
   LayoutListResponseSchema,
   type LayoutDetail,
@@ -24,6 +25,11 @@ export class ApiError extends Error {
   }
 }
 
+/** A request that never reached keyloom (D-494). The page reconnects by itself, so the sentence names no terminal. */
+export const UNREACHABLE = "keyloom stopped answering. This page reconnects by itself when it is back.";
+/** keyloom answered 401: it restarted with a new link, so this page's token is no longer its. */
+export const TOKEN_REJECTED = "keyloom restarted, so this page's link no longer works. Open keyloom again from its app, or open the new link it printed.";
+
 // The token lives in memory only: it's read from the launch URL and passed to each request.
 export function tokenFromSearch(search: string): string | null {
   return new URLSearchParams(search).get("t") || null;
@@ -35,9 +41,19 @@ async function getJson<T>(
   schema: z.ZodType<T>,
   signal: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(path, { headers: { "x-keyloom-token": token }, signal });
+  let response: Response;
+  try {
+    response = await fetch(path, { headers: { "x-keyloom-token": token }, signal });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
+  }
+  // Codes, not the server's words, so the page offers the way out that fits (R1-08).
+  if (response.status === 401) throw new ApiError(401, TOKEN_REJECTED, { code: "token" });
+  if (response.status === 404) throw new ApiError(404, "keyloom has no layout here. It was deleted, or the link is old.", { code: "not_found" });
   if (!response.ok) {
-    throw new ApiError(response.status, `keyloom server returned ${response.status} for ${path}`);
+    const body = ApiErrorBodySchema.safeParse(await response.json().catch(() => null));
+    throw new ApiError(response.status, body.success ? body.data.error.message : `keyloom answered ${response.status}.`, body.success ? { code: body.data.error.code } : {});
   }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {

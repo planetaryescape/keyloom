@@ -45,3 +45,18 @@ export function useDocker(token: string): Docker {
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
   return { readiness, starting, problem, start, refresh };
 }
+
+const RECHECK_MS = 4000;
+
+/**
+ * While the dialog is open and Docker is missing, asks again every few seconds, so a Docker installed some other way
+ * (Docker Desktop's installer, a terminal) shows as ready without the person pressing Check again (D-488).
+ */
+export function useDockerRecheck(docker: Docker, active: boolean): void {
+  const { refresh } = docker;
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(refresh, RECHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh, active]);
+}

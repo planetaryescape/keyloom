@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { BuildSchema, FlashSchema } from "../../src/api/http.ts";
 import {
-  BuildFailedError, FlashFailedError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait,
+  BuildFailedError, FlashFailedError, FlashToolMissingError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait,
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
@@ -140,6 +140,11 @@ describe("startBuild / getBuild / buildAndWait", () => {
     await e.run(async () => {
       const err = (await buildAndWait(e.app, "synchronized", { boardRevision: "revb" }).catch((x) => x)) as BuildFailedError;
       expect(err.message).toContain("daemon isn't running");
+      // The code is what the page and the sync pill act on, so neither reads the sentence (D-488).
+      expect(err.code).toBe("docker_unavailable");
+      const view = await getBuild(e.app, err.buildId);
+      expect(view.errorCode).toBe("docker_unavailable");
+      expect(() => BuildSchema.parse(view)).not.toThrow();
     }, { FAKE_MODE: "nodaemon" });
     // The CLI is asked which context points at the daemon (D-487); nothing is built or run in a container.
     const calls = (await Bun.file(e.vars.FAKE_DOCKER_LOG).exists()) ? await Bun.file(e.vars.FAKE_DOCKER_LOG).text() : "";
@@ -217,6 +222,26 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
       await expect(startFlash(e.app, { layout: "nope" })).rejects.toThrow(NotFoundError);
     });
     expect(await Bun.file(e.vars.ZAPP_CALLS).exists()).toBe(false);
+  });
+
+  test("no zapp: the build says so before anyone flashes, and a flash is refused before it starts (D-489)", async () => {
+    const e = await toolchainEnv();
+    const b = await built(e);
+    // A PATH with the fake docker and git, and no zapp: the bin folder holds a zapp, so a copy without one stands in.
+    const { fakeBinDir } = await import("../helpers/fake-bin.ts");
+    const noZapp = fakeBinDir({ "system_profiler": 'echo "$FAKE_USB"' });
+    await e.run(async () => {
+      const view = await getBuild(e.app, b.id);
+      expect(view.flashPlan.tool).toMatchObject({ name: "zapp", installed: false });
+      const err = await startFlash(e.app, { buildId: b.id }).catch((x) => x);
+      expect(err).toBeInstanceOf(FlashToolMissingError);
+      expect(err.tool).toBe("zapp");
+      expect(err.message).toContain("brew install zapp");
+    }, { PATH: `${noZapp}:/usr/bin:/bin` });
+    expect(e.app.db.query("SELECT COUNT(*) AS n FROM flashes").get()).toEqual({ n: 0 });
+    await e.run(async () => {
+      expect((await getBuild(e.app, b.id)).flashPlan.tool).toMatchObject({ name: "zapp", installed: true });
+    });
   });
 
   test("with one layout saved, neither flag is needed; with none to choose, it asks", async () => {

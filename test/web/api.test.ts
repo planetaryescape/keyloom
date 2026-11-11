@@ -48,3 +48,30 @@ describe("fetchLayouts", () => {
     }
   });
 });
+
+describe("why a layout read failed, as a code the page acts on (R1-08)", () => {
+  const read = async (answer: Response | Error) => {
+    mock = answer instanceof Error ? spyOn(globalThis, "fetch").mockRejectedValue(answer) : spyOn(globalThis, "fetch").mockResolvedValue(answer);
+    return fetchLayouts("tok", controller.signal).then(() => null, (e: unknown) => e as { status: number; code?: string; message: string });
+  };
+
+  test("404 is a layout that is gone, said in words, never the path", async () => {
+    const e = await read(new Response(JSON.stringify({ error: "not found" }), { status: 404 }));
+    expect(e).toMatchObject({ status: 404, code: "not_found" });
+    expect(e?.message).not.toContain("/api/");
+  });
+
+  test("no answer at all is keyloom gone, with no terminal in the sentence", async () => {
+    const e = await read(new TypeError("Failed to fetch"));
+    expect(e).toMatchObject({ status: 0, code: "unreachable" });
+    expect(e?.message).not.toMatch(/terminal|Failed to fetch/);
+  });
+
+  test("401 says keyloom restarted", async () => {
+    expect(await read(new Response("", { status: 401 }))).toMatchObject({ status: 401, code: "token", message: expect.stringContaining("restarted") });
+  });
+
+  test("any other failure carries the server's own sentence when it sent one", async () => {
+    expect(await read(new Response(JSON.stringify({ error: { code: "internal", message: "internal error" } }), { status: 500 }))).toMatchObject({ status: 500, message: "internal error" });
+  });
+});

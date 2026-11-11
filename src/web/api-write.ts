@@ -23,7 +23,7 @@ import {
   type UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
-import { ApiError } from "./api.ts";
+import { ApiError, TOKEN_REJECTED, UNREACHABLE } from "./api.ts";
 
 export async function request<T>(
   method: "GET" | "POST" | "PATCH",
@@ -46,7 +46,7 @@ export async function request<T>(
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
   if (!response.ok) throw await failure(response);
   const parsed = schema.safeParse(await response.json());
@@ -59,7 +59,7 @@ export async function request<T>(
 
 export async function failure(response: Response): Promise<ApiError> {
   if (response.status === 401) {
-    return new ApiError(401, "keyloom rejected this page's token. Open the link keyloom printed again.");
+    return new ApiError(401, TOKEN_REJECTED, { code: "token" });
   }
   try {
     const parsed = ApiErrorBodySchema.safeParse(await response.json());

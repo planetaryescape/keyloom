@@ -11,7 +11,7 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
-## 2026-11-11 follow-up
+## 2026-11-11 follow-up: build and flash never strand anyone
 
 ### D-496: A pasted API key is kept in the macOS Keychain and used at once. Replaces "keyloom never stores your key" (19, 03) and answers Q21. (BK, 2026-11-11, asked "Keychain, Sign in with Codex, or memory only?", chose Keychain.)
 
@@ -28,6 +28,57 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 - **CLI.** `keyloom provider` shows each credential's source and last four characters. `keyloom provider key set <anthropic|openrouter>` reads the key from piped stdin (a terminal gets a usage error, so the key is never echoed) and `keyloom provider key forget <provider>` removes it.
 - **Tests never touch a real Keychain.** The test preload sets `KEYLOOM_CREDENTIAL_STORE=none`; tests inject a store or a stand-in `security`. The CLI test checks a key against a local stand-in for Anthropic's models endpoint through `ANTHROPIC_BASE_URL`.
 - **Known weakness.** An item created by `/usr/bin/security` trusts that binary, so any process of the same user can read it with `security find-generic-password -w` without a prompt. That is the same exposure as a key in a shell profile, and less than a key in the environment of every process. A signed helper with its own access list would close it; not this round.
+
+### D-495: Refusals and failures carry codes the web app turns into the action that fixes them; the CLI keeps its own words. (Claude, in the dead-ends round, from BK: "I don't want dead ends in the app, or places where a user is just told that something is wrong without being offered a way out")
+
+- **Sync refusals.** `SyncRefusal` (a `UsageError`, so CLI exit codes are unchanged) carries `archived`, `not_on_keyboard`, `cant_sync`, `not_connected`, `kanata_not_running`, `kanata_foreign`, `foreign_firmware`, `busy`, `unproven`, `keyboard_removed` or `kanata_still_running`; `/api/sync` answers 400 with that code. The toast maps it (`refusalNotice` in `src/web/sync/words.ts`) to Restore, Put it on…, Build and flash… or Replace it…, and never shows the server's sentence, which names CLI commands. Toasts gained an optional action button.
+- **The sync pill.** "Put this layout on it" and `behind/other_config` open the put-on confirm (D-300) instead of a Sync now the engine refuses. A sync whose last failure was a build opens Build and flash, where Docker's callout and the log are; R1-A's Docker code can replace that test later. kanata running a config keyloom didn't write offers **Replace it…**, which applies the head with `overwriteForeign` through `POST /api/sync/replace-foreign`: a keyloom.kbd keyloom didn't write is kept as `keyloom.kbd.before-keyloom`, and a file kanata was started with elsewhere is untouched. Only the button does it; auto-apply still never replaces a foreign config (21).
+- **The exit chord.** "I held it and kanata stopped" calls `POST /api/sync/confirm-exit-chord`, which records the proof only while kanata doesn't answer, so the button can't stand in for the chord (D-235 unchanged).
+- **Typing lab.** A capture refused because the firmware can't stream carries `needs_sync`; the lab shows Sync now and Build and flash… beside it. A lab that fails to load says so with Try again. The MacBook keyboard no longer offers the lab (its remapper has no key stream).
+- **Loads.** Layout reads give codes: `not_found` ("This layout is gone", with Show your other layouts and no Try again), `unreachable` and `token`. A layout keyloom can't draw offers Show your other layouts and Archive this config, and no longer asks to regenerate geometry. Version compare and a failed wall tile get Try again; a failed tile can still open its layout.
+- **Unknown addresses.** A path that isn't an asset gets an HTML 404 with Open keyloom, carrying the session token only when the request had this session's own. `/api/` paths keep JSON.
+
+### D-494: keyloom stopping is said once, app-wide, and the page recovers by itself. (Claude, in the dead-ends round)
+
+- After about three seconds without the events stream, and only once the page has been connected, a slim banner says "keyloom stopped answering. Reconnecting…". In a browser it adds what to do in the app and in a terminal, with Copy for `keyloom serve`; inside the desktop app (Tauri's internals are on the page) it says only the app's line. When the stream returns the banner goes and the page reads its layouts again.
+- A stream refused with 401 means keyloom restarted with a new link; the banner says so instead of reconnecting forever.
+- Per-request failures no longer ask whether keyloom is "still running in your terminal", which was wrong in the desktop app.
+
+### D-493: The MacBook remapper is set up from the app, through macOS's own password dialog. Replaces the "keyloom never installs it" part of D-231's cost line. (BK's brief for the dead-ends round)
+
+- `GET /api/system/remapper?board=` returns the doctor's findings, each with a code. The sync popover, while kanata isn't running, shows them as steps with one button each: **Install kanata** (`brew install kanata`, one shared run, followed while it lasts), **Open Input Monitoring settings** and **Open Accessibility settings** (D-492), and **Set up and start kanata**.
+- **Set up and start kanata** writes the plist into keyloom's folder (`setupRemapper`, which never replaces a keyloom.kbd it didn't write), then runs the install through `osascript … with administrator privileges`, whose prompt names what it does. It is the root command the CLI prints, without `sudo`, plus a bootout first so a daemon stopped by the exit chord starts again. keyloom never sees the password; it is the same trust as the printed `sudo` line, with no terminal. Every path is single-quoted for the shell and the whole command escaped for AppleScript; both are unit-tested, the shell side against a real `/bin/sh`.
+- The steps re-read the machine after each action, and the pill says kanata is running only when the sync engine sees it answer. The driver has no installer keyloom can run, so its step links the pinned release page. The doctor now asks kanata on the port Apply uses (`KEYLOOM_KANATA_PORT`), not only the board's.
+- The CLI is unchanged: `keyloom remap setup` still prints the command and runs nothing.
+
+### D-492: keyloom opens System Settings at the right pane itself. (BK's brief for the dead-ends round)
+
+- `POST /api/system/open-settings {pane}` takes a name from an allowlist (`input_monitoring`, `accessibility`, `files_and_folders`, `full_disk_access`, `login_items`), never a URL, and runs `open x-apple.systempreferences:…` on macOS only. Anything else is a 400 before the computer is asked. The UI shows these buttons only on macOS. R1-A's next round can use it for Files and Folders.
+
+### D-491: A build failure says why as a code, and the page never shows a terminal command as the fix. Claude, in the blueprint; from BK's dead-ends request ("I don't want dead ends in the app… Like saying Docker is not installed without offering a way or a button to install it.")
+
+- **Codes, not sentences.** A build that stops at Docker finishes with `errorCode: "docker_unavailable"` (stored in `builds.error_code`, migration 0019) as well as its sentence. The release dialog maps the code to the Docker callout, so it never parses the sentence, and `BuildFailedError.code` carries the same code to the sync engine for the pill. A flash refused because its tool is missing answers 409 `flash_tool_missing`.
+- **Try again repeats what failed.** The release dialog remembers its last action: a build or flash that failed to start is sent again, and only a poll that gave up polls again (R1-10).
+- **A bundled docker CLI is adopted, not linked.** When `docker` is missing from the PATH but an installed Docker Desktop, OrbStack or Rancher Desktop bundles one, keyloom puts that folder on its own PATH and carries on. This replaces D-487's `sudo ln -sf` line, which asked for an admin password to fix something keyloom already knew how to find.
+- **Backticks stay in the terminal.** Server sentences keep their `code` spans for the CLI; the page strips them.
+
+### D-490: A board keyloom can't flash gets its file, not a Flash button that always fails. Claude, in the blueprint.
+
+Every build now carries a `flashPlan`: the board's manual steps when its recipe is `manual`, the tool a flash runs (`zapp`, `dfu-util`, `dfu-programmer`, `avrdude`) and whether it is installed, and whether the file can be shown in Finder. For a manual board the flash step shows the board's steps with **Download firmware** (`GET /api/builds/:id/artifact`) and, on macOS, **Show in Finder** (`POST /api/builds/:id/reveal`, which runs `open -R`). Only the file a successful build row names, inside the data directory's `artifacts/` folder, is served or revealed; a row edited to point elsewhere is a 404. The CLI keeps its sentence with the file path.
+
+### D-489: Flash tools are checked before the flash, and installed with a button. Claude, in the blueprint.
+
+The build's flash plan says whether Zapp (or the board's DFU tool) is on this computer before anyone clicks Flash. If it isn't, the flash step shows **Install Zapp**, which runs `brew install zapp` through the same install job as Docker, follows its output, and re-reads the build when it finishes, so the Flash button appears without another click. `zapp` is in homebrew-core (`brew info --json=v2 zapp`: tap `homebrew/core`, 1.0.2, checked 2026-11-11), so the command the code already printed was right. `startFlash` refuses before it creates a flash row (`FlashToolMissingError`), so a missing tool is an install to do, not a failed flash. Without Homebrew the button is **Get Zapp**, linking the tool's page.
+
+### D-488: Install Docker is a button: Homebrew installs Colima, and keyloom starts it. Extends D-486 and D-487. BK's call, through the dead-ends brief.
+
+On a Mac with Homebrew, **Install Docker** runs `brew install colima docker`, then starts Colima on the D-486 path (`startDockerEngine`, with Colima named as the engine because a fresh docker CLI points at no known socket) and waits for `docker version` to answer. Colima is headless, open source, needs no admin password and no app to click through, and keyloom already starts and restarts it. Docker Desktop's cask can ask for `sudo`, which a server can't answer, so it stays a link: the callout ends "Prefer an app? Docker Desktop · OrbStack". The install runs as one in-memory job per tool (`POST /api/system/install`, polled with `GET /api/system/install?tool=`), streams Homebrew's last lines in place, and ends in "Docker is installed and running" or in the failure with Homebrew's output and Try again. Without Homebrew, or on Linux and Windows, the primary button is **Download Docker Desktop** (or the engine docs page). While the dialog is open and Docker is missing, it asks again every four seconds, so a Docker installed some other way shows up without a click; Check again stays as a secondary button. **Build firmware** is disabled with "Install Docker first." beside it while there is no Docker.
+
+- **No buildx.** keyloom's only `docker build` is the Glove80 image (`src/firmware/zmk/image.ts`), whose Dockerfile uses no BuildKit-only syntax. Without the buildx plugin the docker CLI falls back to the legacy builder with a deprecation warning, and errors only when `DOCKER_BUILDKIT=1` is set (docker/cli `cmd/docker/builder.go`), which keyloom never sets. So `docker-buildx` is not installed, and `~/.docker/config.json` is not touched. Revisit when the legacy builder is removed.
+- **Safety.** No test runs Homebrew or opens Finder: every runner is injected, and the test preload sets `KEYLOOM_REFUSE_SYSTEM_ACTIONS=1`, which makes the real runner refuse.
+- **Not done yet:** a CLI command for the install (D-030). `keyloom doctor` still prints the command.
+
+## 2026-11-11 follow-up
 
 ### D-487: Start the engine the person actually runs, and say plainly when it is not one keyloom can start. Extends D-486. (BK: "what if a user doesn't have colima but is using another docker engine? what happens if a user installs and they don't have docker at all on their computer?")
 

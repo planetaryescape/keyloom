@@ -5,6 +5,7 @@ import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
 import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
 import { BindingSchema, LayerSchema, LayoutSchema } from "../layout/schema.ts";
 import { DetectedKeyboardSchema } from "./detected-keyboards.ts";
+import { InstallableToolSchema } from "./tool-install.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
 export const LayoutSummarySchema = z.object({
@@ -63,6 +64,8 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   GET  /api/builds/:id                              -> Build
 //   POST /api/builds/:id/flashes        {}            -> Flash             (202; poll GET /api/flashes/:id)
 //   GET  /api/flashes/:id                             -> Flash
+//   GET  /api/builds/:id/artifact                     -> the firmware file   (D-490; 404 unless the build succeeded)
+//   POST /api/builds/:id/reveal         {}            -> {}                  (D-490; shows the file in Finder, macOS only)
 
 export const ApiErrorBodySchema = z.object({
   error: z.object({ code: z.string().min(1), message: z.string().min(1) }),
@@ -164,11 +167,23 @@ export const BuildRequestSchema = z.object({
 });
 export type BuildRequest = z.infer<typeof BuildRequestSchema>;
 
+// What flashing a build will need, known before anyone clicks Flash (D-489, D-490). `manual` holds the board's own steps
+// when keyloom can't flash it; `tool` is the program the flash runs and whether it is here.
+export const FlashPlanSchema = z.object({
+  manual: z.string().nullable(),
+  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), url: z.string().min(1) }).nullable(),
+  canReveal: z.boolean(),
+});
+export type FlashPlan = z.infer<typeof FlashPlanSchema>;
+
 export const BuildSchema = z.object({
   id: z.string().min(1),
   revisionId: z.string().min(1),
   status: z.enum(["running", "succeeded", "failed"]),
   error: z.string().nullable(),
+  // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488).
+  errorCode: z.enum(["docker_unavailable"]).nullable(),
+  flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
   // The last lines of the build log, oldest first, for a progress view.
@@ -547,6 +562,10 @@ export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
 //   POST /api/sync/auto   AutoSyncRequest -> SyncStatusResponse (400 usage when auto-sync can't be on yet)
 //   POST /api/sync/pause  PauseRequest   -> SyncStatusResponse
 //   POST /api/sync/disable-remapping DisableRemappingRequest -> SyncStatusResponse (400 usage when the board is not a software remapper or kanata is not running)
+//   POST /api/sync/replace-foreign  SyncNowRequest -> SyncStatusResponse  (MacBook: replaces a kanata config keyloom didn't write, keeping a copy; R1-17)
+//   POST /api/sync/confirm-exit-chord DisableRemappingRequest -> SyncStatusResponse (400 kanata_still_running while kanata answers; R1-18)
+// A refused sync answers 400 with a code the page maps to an action (R1-16): archived, not_on_keyboard, cant_sync, not_connected,
+// kanata_not_running, kanata_foreign, foreign_firmware, busy, unproven, keyboard_removed, kanata_still_running; "usage" otherwise.
 //   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
 // A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
 export const SyncStateSchema = z.discriminatedUnion("kind", [

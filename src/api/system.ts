@@ -8,11 +8,14 @@ export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daem
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
 
 // What to install where there is no Docker: a command when one is known here, and the page to read otherwise.
+// `canInstall` is true where keyloom can run the install itself (Homebrew on a Mac, D-488); `alternatives` are other engines to link.
 export const DockerInstallSchema = z.object({
   engine: z.string().min(1),
   command: z.string().min(1).nullable(),
   url: z.string().min(1),
   note: z.string(),
+  canInstall: z.boolean(),
+  alternatives: z.array(z.object({ name: z.string().min(1), url: z.string().min(1) })),
 });
 export type DockerInstall = z.infer<typeof DockerInstallSchema>;
 

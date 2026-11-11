@@ -28,7 +28,7 @@ test("lost accepted POST acknowledgement is recovered only by GET with no second
   };
   const mock = spyOn(globalThis, "fetch").mockImplementation(Object.assign(route, { preconnect: globalThis.fetch.preconnect }));
   try {
-    await expect(startSavedChat("synthetic", layoutId, "recover-ack", { message: "Prepare once" }, new AbortController().signal)).rejects.toThrow(/reach keyloom/);
+    await expect(startSavedChat("synthetic", layoutId, "recover-ack", { message: "Prepare once" }, new AbortController().signal)).rejects.toThrow(/stopped answering/);
     const observed: string[] = [];
     await observeSavedRun("synthetic", "recover-ack", new AbortController().signal, (snapshot, detail) => {
       observed.push(snapshot.status);
