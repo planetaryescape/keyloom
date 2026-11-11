@@ -6,6 +6,7 @@ import {
 import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
+import type { RestartBackend } from "../server/restart-routes.ts";
 import { appChatBackend } from "./chat-backend.ts";
 import { appConfigsBackend } from "./configs-backend.ts";
 import { appKeyboardsBackend } from "./keyboards-backend.ts";
@@ -81,7 +82,23 @@ export type ServeOptions = {
   review?: ReviewOptions & { model?: () => Promise<AgentModel> };
   /** Where a new keyboard's layout is read from (the pinned firmware trees) and which boards count as known; GitHub and every board when omitted. Tests pass fixtures. */
   keyboards?: AddDeps;
+  /** Restarting keyloom from the page and the menu bar (R5-15); `keyloom serve` passes it. */
+  restart?: RestartBackend;
 };
+
+// A path with anything but these characters is quoted for a POSIX shell. The CLI may not import the firmware's shellQuote (module table).
+const shellWord = (word: string): string => (/^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`);
+
+/** The line that starts this server again in a terminal: `keyloom serve` with the data directory, port and provider it was started with. */
+export function restartCommand(opts: { dataDir?: string | undefined; port: string; provider?: ProviderId | undefined }): string {
+  return [
+    "keyloom",
+    ...(opts.dataDir === undefined ? [] : ["--data-dir", shellWord(opts.dataDir)]),
+    "serve",
+    ...(opts.port === String(DEFAULT_PORT) ? [] : ["--port", shellWord(opts.port)]),
+    ...(opts.provider === undefined ? [] : ["--provider", opts.provider]),
+  ].join(" ");
+}
 
 export function serve(app: App, opts: ServeOptions): RunningServer {
   reconcileAgentRuns(app);
@@ -99,6 +116,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
     chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, system, remapperSetup: appRemapperSetupBackend(realSetupDeps(opts.handsFree?.remapper ?? {})), open: opts.open,
+    ...(opts.restart ? { restart: opts.restart } : {}),
   });
   let drained: Promise<void> | undefined;
   return {

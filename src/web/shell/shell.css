@@ -1658,3 +1658,11 @@ a.menu-item {
   padding-top: var(--space-1);
   padding-bottom: var(--space-1);
 }
+
+/* Restart keyloom: the button, or in a terminal the line to run, beside the problem it clears (R5-15). */
+.restart-keyloom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

@@ -22,7 +22,8 @@ import { registerReviewCommand } from "./commands/review.ts";
 import { registerProviderCommands } from "./commands/provider.ts";
 import { installDockerWithProgress } from "./install-docker.ts";
 import { EXIT, classify } from "./errors.ts";
-import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
+import { DEFAULT_PORT, restartCommand, serve, serveBoardDev } from "./serve.ts";
+import { RESTART_EXIT_CODE } from "../api/restart.ts";
 import { announceServer } from "../server/running-server.ts";
 import { resolveExistingServer } from "./serve-existing.ts";
 import { DESKTOP_PROTOCOL } from "../server/server-compat.ts";
@@ -286,9 +287,21 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           throw new IncompatibleError("client_protocol_mismatch", `the desktop app was built for keyloom desktop protocol ${clientProtocol}, but this keyloom ${pkg.version} speaks protocol ${DESKTOP_PROTOCOL}. The app and its keyloom are from different releases; reinstall the app (or install the matching keyloom).`);
         }
       }
+      // Restart from the page or the menu bar (R5-15, D-521): it stops the server the way Ctrl-C does and exits RESTART_EXIT_CODE. Only the
+      // desktop app passes --client-protocol, and only it starts the server again; a terminal gets the line to run instead.
+      let stopServing = () => {};
+      let restartAsked = false;
+      const restart = {
+        canRestart: clientProtocol !== undefined,
+        command: restartCommand({ dataDir: globals().dataDir, port: opts.port, provider }),
+        restart: () => {
+          restartAsked = true;
+          stopServing();
+        },
+      };
       const start = (app: App | undefined) => {
         try {
-          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
+          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, restart, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
         } catch (err) {
           if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
           throw err;
@@ -314,6 +327,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         let disposeSignals = () => {};
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
+          stopServing = stop;
           disposeSignals = catchStopSignals(stop, (text) => io.err(text));
           if (opts.exitOnStdinClose) {
             // A parent that dies closes the pipe, whatever killed it (D-321). Resuming is what makes the stream report the end.
@@ -334,6 +348,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         } finally {
           disposeSignals();
         }
+        if (restartAsked) state.exitCode = RESTART_EXIT_CODE;
       };
       if (opts.boardDev === undefined) {
         // Before the database opens: a second server would also run the migrations and a second sync engine (D-323).

@@ -4,6 +4,7 @@ import { Database } from "bun:sqlite";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DESKTOP_PROTOCOL } from "../../src/api/desktop-protocol.ts";
+import { RESTART_EXIT_CODE } from "../../src/api/restart.ts";
 import { databasePath } from "../../src/persistence/paths.ts";
 import { tempDir } from "../helpers/tmp.ts";
 import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
@@ -70,6 +71,43 @@ describe("keyloom serve for the desktop app", () => {
       } finally {
         first.kill("SIGTERM");
         await first.exited;
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "the desktop app's server restarts on request: it answers, then exits with the restart code (R5-15)",
+    async () => {
+      const dir = tempDir();
+      const proc = spawnServe(dir, "--port", "0", "--exit-on-stdin-close", "--client-protocol", String(DESKTOP_PROTOCOL));
+      const url = new URL(await firstLine(proc, /http:\/\/127\.0\.0\.1:\d+\/\?t=\S+/));
+      const token = url.searchParams.get("t") ?? "";
+      const info = await fetch(new URL("/api/restart", url), { headers: { "x-keyloom-token": token } });
+      expect(await info.json()).toMatchObject({ canRestart: true });
+      const asked = await fetch(new URL("/api/restart", url), { method: "POST", body: "{}", headers: { "x-keyloom-token": token, "content-type": "application/json" } });
+      expect(asked.status).toBe(202);
+      expect(await proc.exited).toBe(RESTART_EXIT_CODE);
+      expect(existsSync(join(dir, "serve.json"))).toBe(false);
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "a server started in a terminal refuses a restart and keeps running (R5-15)",
+    async () => {
+      const dir = tempDir();
+      const proc = spawnServe(dir, "--port", "0");
+      const url = new URL(await firstLine(proc, /http:\/\/127\.0\.0\.1:\d+\/\?t=\S+/));
+      const token = url.searchParams.get("t") ?? "";
+      try {
+        const asked = await fetch(new URL("/api/restart", url), { method: "POST", body: "{}", headers: { "x-keyloom-token": token, "content-type": "application/json" } });
+        expect(asked.status).toBe(409);
+        expect(((await asked.json()) as { error: { code: string } }).error.code).toBe("restart_unsupervised");
+        expect(proc.exitCode).toBeNull();
+      } finally {
+        proc.kill("SIGTERM");
+        expect(await proc.exited).toBe(0);
       }
     },
     SLOW_RUNNER_MS,

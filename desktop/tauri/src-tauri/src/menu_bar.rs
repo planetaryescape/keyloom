@@ -42,7 +42,23 @@ pub struct Items {
     pub menu: Menu<Wry>,
     pub summary: MenuItem<Wry>,
     pub sync_now: MenuItem<Wry>,
+    pub restart: MenuItem<Wry>,
     pub lines: std::sync::Mutex<Vec<MenuItem<Wry>>>,
+}
+
+pub const RESTART: &str = "restart";
+pub const RESTART_LABEL: &str = "Restart keyloom";
+// A server started in a terminal has nobody to start it again, so the item says why it is off.
+const RESTART_ATTACHED_LABEL: &str = "Restart keyloom (it runs in a terminal)";
+
+/// Restart keyloom works only on a server this shell started; one it attached to belongs to a terminal, and with none it is off.
+pub fn offer_restart(items: &Items, owned: bool) {
+    let _ = items.restart.set_text(restart_label(owned));
+    let _ = items.restart.set_enabled(owned);
+}
+
+fn restart_label(owned: bool) -> &'static str {
+    if owned { RESTART_LABEL } else { RESTART_ATTACHED_LABEL }
 }
 
 /// One SSE frame's `data:` payload, or None for a comment or an incomplete frame.
@@ -261,6 +277,40 @@ async fn post_sync(app: &AppHandle, client: &reqwest::Client, origin: &str, toke
     }
 }
 
+/// Asks keyloom's server to restart through POST /api/restart, the route the page's Restart keyloom uses (R5-15). The server answers, lets
+/// a keyboard write finish, and exits with RESTART_EXIT_CODE; the supervisor (lib.rs) then starts it again and the window follows it.
+pub fn restart(app: &AppHandle) {
+    let Some((origin, token)) = server(app) else { return };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let res = reqwest::Client::new()
+            .post(format!("{origin}/api/restart"))
+            .header("x-keyloom-token", &token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await;
+        match res {
+            Ok(resp) if resp.status().is_success() => log::say(&app, "restart asked for from the menu bar"),
+            Ok(resp) => {
+                let status = resp.status();
+                let code = resp.json::<serde_json::Value>().await.ok().and_then(|body| body["error"]["code"].as_str().map(str::to_string));
+                log::say(&app, &format!("restart -> {status} {}", code.as_deref().unwrap_or("")));
+                let (title, body) = restart_refused_notice(code.as_deref());
+                notify(&app, title, body);
+            }
+            // The server stops right after it answers, so a lost answer is not a failure: the supervisor sees the exit either way.
+            Err(err) => log::say(&app, &format!("restart -> {err}")),
+        }
+    });
+}
+
+fn restart_refused_notice(code: Option<&str>) -> (&'static str, &'static str) {
+    match code {
+        Some("restart_unsupervised") => ("keyloom didn't restart", "keyloom runs in a terminal, so restart it there: press Ctrl-C, then run it again."),
+        _ => ("keyloom didn't restart", "keyloom's server turned the restart down. Quit keyloom and open it again to restart it."),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SyncNow {
     Synced,
@@ -353,6 +403,17 @@ data: {"type":"sync","boards":[],"menuBar":{"summary":"2 changes not on your Moo
             assert!(body.contains("keyloom is open"), "{body}");
             assert!(!body.contains('`') && !body.contains("keyloom sync"), "{body}");
         }
+    }
+
+    #[test]
+    fn restart_is_offered_only_for_a_server_this_shell_started_and_says_why_otherwise() {
+        assert_eq!(restart_label(true), "Restart keyloom");
+        assert!(restart_label(false).contains("runs in a terminal"), "{}", restart_label(false));
+        let (title, body) = restart_refused_notice(Some("restart_unsupervised"));
+        assert_eq!(title, "keyloom didn't restart");
+        assert!(body.contains("Ctrl-C"), "{body}");
+        let (_, body) = restart_refused_notice(None);
+        assert!(body.contains("Quit keyloom and open it again"), "{body}");
     }
 
     #[test]

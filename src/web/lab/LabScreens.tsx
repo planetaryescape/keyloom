@@ -6,6 +6,7 @@ import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
 import { labApplyFailure, labFixClosed, labFixes, labProblemText } from "./lab-words.ts";
 import { ApiError } from "../api.ts";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import "./lab.css";
 
 const FINGER_ORDER = ["left-pinky", "left-ring", "left-middle", "left-index", "left-thumb", "right-thumb", "right-index", "right-middle", "right-ring", "right-pinky"];
@@ -89,9 +90,10 @@ function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardN
         const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload, open_input_monitoring: fixes.onOpenInputMonitoring, retry: () => void lab.retry() };
         return (
           <div className="lab-fixes">
-            {shown.map((fix, i) => (
-              <button key={fix.id} type="button" className={i === 0 ? "button button-primary" : "button"} onClick={run[fix.id]}>{fix.label}</button>
-            ))}
+            {shown.map((fix, i) => fix.id === "restart"
+              // The app restarts keyloom itself; a terminal gets the line to run there (R5-15).
+              ? <RestartKeyloom key={fix.id} token={lab.token} primary={i === 0} />
+              : <button key={fix.id} type="button" className={i === 0 ? "button button-primary" : "button"} onClick={run[fix.id]}>{fix.label}</button>)}
           </div>
         );
       })()}

@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { DESKTOP_PROTOCOL } from "../../src/api/desktop-protocol.ts";
+import { RESTART_EXIT_CODE } from "../../src/api/restart.ts";
+import { EXIT } from "../../src/cli/errors.ts";
 import { TAKEOVER_TIMEOUT_MS } from "../../src/server/replace-server.ts";
 import { MenuBarSchema, SyncEventSchema } from "../../src/api/http.ts";
 
@@ -22,6 +24,13 @@ describe("desktop protocol", () => {
   test("the shell waits for the sidecar's URL longer than the CLI may wait in any mode", () => {
     const seconds = Number(readFileSync(join(SHELL, "sidecar.rs"), "utf8").match(/const\s+URL_WAIT_SECS\s*:\s*u64\s*=\s*(\d+)\s*;/)?.[1]);
     expect(seconds * 1000).toBeGreaterThan(TAKEOVER_TIMEOUT_MS);
+  });
+
+  test("the shell restarts on the exit code serve uses for an asked-for restart (R5-15)", () => {
+    const code = Number(readFileSync(join(SHELL, "sidecar.rs"), "utf8").match(/const\s+RESTART_EXIT_CODE\s*:\s*i32\s*=\s*(\d+)\s*;/)?.[1]);
+    expect(code).toBe(RESTART_EXIT_CODE);
+    // Distinct from every error exit the CLI uses, so a crash never reads as a restart.
+    expect(Object.values(EXIT)).not.toContain(RESTART_EXIT_CODE);
   });
 
   test("the shell passes the number to serve as --client-protocol", () => {
