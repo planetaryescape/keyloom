@@ -87,6 +87,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
                 ) : (
                   <WallBoard
                     detail={detail}
+                    name={layout.name}
                     flying={flying === layout.id}
                     onOpen={(element) => onOpen(layout, detail, element)}
                   />
@@ -110,7 +111,7 @@ export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
   );
 }
 
-function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: boolean; onOpen: (element: HTMLElement | null) => void }) {
+function WallBoard({ detail, name, flying, onOpen }: { detail: LayoutDetail; name: string; flying?: boolean; onOpen: (element: HTMLElement | null) => void }) {
   const { document: layout, board, geometry } = detail;
   const keys = useMemo<readonly GeometryKey[] | null>(() => {
     try {
@@ -167,7 +168,8 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
         <span className="peg-missing">
           Can't draw this board
           <span className="peg-missing-actions">
-            <button type="button" className="button" onClick={() => onOpen(null)}>Open {boardDisplayName(board.name)}</button>
+            {/* The layout's name, as on the tile that failed to load: two configs on one board would otherwise read the same. */}
+            <button type="button" className="button" onClick={() => onOpen(null)}>Open {name}</button>
           </span>
         </span>
       </div>

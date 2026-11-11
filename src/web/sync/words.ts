@@ -169,7 +169,16 @@ export function autoSyncLine(board: BoardSync): AutoSyncLine {
 const seconds = (ms: number | null): string | null => (ms === null ? null : `${Math.max(1, Math.round(ms / 1000))} s`);
 
 /** The toast for a board whose state just changed, or null when nothing needs saying. `action` is the toast's button. */
-export type SyncNotice = { kind: "success" | "error"; message: string; detail?: string; action?: { id: RefusalAction; label: string } };
+export type SyncNotice = { kind: "success" | "error"; message: string; detail?: string; action?: { id: RefusalAction | "open_board"; label: string } };
+
+/**
+ * A notice as the page on screen can act on it. Its button acts on the layout on screen, so a notice about another keyboard (its
+ * auto-sync ran while this page was open) offers to open that keyboard instead, where its sync line has the same button.
+ */
+export function noticeOnPage(notice: SyncNotice, board: Pick<BoardSync, "boardId" | "boardName">, pageBoardId: string | undefined): SyncNotice {
+  if (notice.action === undefined || board.boardId === pageBoardId) return notice;
+  return { ...notice, detail: `${notice.detail ?? ""} Its page has ${notice.action.label.replace(/…$/, "")}.`.trim(), action: { id: "open_board", label: `Open ${board.boardName}` } };
+}
 
 export function syncNotice(before: BoardSync | undefined, after: BoardSync): SyncNotice | null {
   if (before === undefined) return null;

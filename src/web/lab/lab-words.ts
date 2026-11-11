@@ -26,5 +26,20 @@ export function labProblemText(code: string | null, message: string): string {
 export function labApplyFailure(error: { code?: string | undefined; message: string }): { text: string; next: "again" | "retry" } {
   if (error.code === "stale_base") return { text: "The layout changed since this recording, so this fix no longer applies as it was tried. Type again to try fixes on the layout as it is now.", next: "again" };
   if (error.code === "validation_failed") return { text: "The layout's checks refused this fix as the layout is now. Type again to try fixes on the layout as it is now.", next: "again" };
+  // The apply route answers `usage` for a fix that is no longer proposed; a second try is refused the same way.
+  if (error.code === "usage") return { text: "This fix can't be applied any more. Type again to try fixes on the layout as it is now.", next: "again" };
   return { text: `keyloom couldn't apply this fix. ${error.message}`, next: "retry" };
+}
+
+/**
+ * Why a fix from a past recording can't be applied, or null while it can. A read-out keeps every fix it tried, but only a proposed one can
+ * be applied: the server refuses the rest every time, so the card says why and offers Type again instead of Apply.
+ */
+export function labFixClosed(status: "proposed" | "applied" | "rejected" | "superseded"): string | null {
+  switch (status) {
+    case "proposed": return null;
+    case "applied": return "This fix was applied already. Type again to see how your typing does now.";
+    case "superseded": return "A later change replaced this fix. Type again to try fixes on the layout as it is now.";
+    case "rejected": return "This fix was turned down. Type again to try fixes on the layout as it is now.";
+  }
 }

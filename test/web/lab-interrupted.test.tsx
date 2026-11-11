@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LabStage } from "../../src/web/lab/LabScreens.tsx";
 import type { Lab } from "../../src/web/lab/useLab.ts";
-import { labApplyFailure, labFixes } from "../../src/web/lab/lab-words.ts";
+import { labApplyFailure, labFixClosed, labFixes } from "../../src/web/lab/lab-words.ts";
 
 const fixes = { onSync: () => {}, onOpenRelease: () => {}, onOpenInputMonitoring: () => {} };
 const baseLab = (over: Partial<Lab>): Lab => ({
@@ -56,4 +56,14 @@ test("a failed Apply of a lab fix says why and how to go on (R3-02)", () => {
   expect(labApplyFailure({ code: "stale_base", message: "x" }).next).toBe("again");
   expect(labApplyFailure({ code: "validation_failed", message: "x" }).next).toBe("again");
   expect(labApplyFailure({ message: "Failed to fetch" })).toEqual({ text: "keyloom couldn't apply this fix. Failed to fetch", next: "retry" });
+  // The server's sentence names a change-set ID; a fix that is no longer proposed fails the same way every time, so the way on is Type again.
+  const closed = labApplyFailure({ code: "usage", message: "change set cs_1 is applied, not proposed" });
+  expect(closed.next).toBe("again");
+  expect(closed.text).not.toContain("cs_1");
+});
+
+test("a past session's fix that is no longer proposed says why instead of offering Apply", () => {
+  expect(labFixClosed("proposed")).toBeNull();
+  for (const status of ["applied", "superseded", "rejected"] as const) expect(labFixClosed(status)).toContain("Type again");
+  expect(labFixClosed("applied")).toContain("applied already");
 });

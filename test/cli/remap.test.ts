@@ -150,10 +150,10 @@ describe("keyloom remap", () => {
   test("confirm-exit-chord is what lets auto-apply turn on", async () => {
     const world = (w = remapperWorld());
     expect((await cli(world, ["autosync", "on", MAC])).code).not.toBe(0);
-    // kanata still answers, so the chord didn't stop it: nothing is recorded (D-497).
-    const early = await cli(world, ["remap", "confirm-exit-chord"]);
-    expect(early.code).not.toBe(0);
-    expect(early.err).toContain("still running");
+    // kanata still answers, so the chord didn't stop it: nothing is recorded (D-497). The run is the first step, not a failure.
+    const early = await cli(world, ["remap", "confirm-exit-chord", "--format", "json"]);
+    expect(early.code).toBe(0);
+    expect(JSON.parse(early.out)).toMatchObject({ ok: true, recorded: false, next: "hold_exit_chord" });
     expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
     world.fake.stop();
     expect((await cli(world, ["remap", "confirm-exit-chord"])).code).toBe(0);

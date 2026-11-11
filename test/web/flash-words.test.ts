@@ -135,7 +135,7 @@ describe("afterApply", () => {
   test("auto-apply is promised only while kanata can take it; Apply now only where it can work (R3-03)", () => {
     // Not running: Apply now would be refused, so the card opens kanata's setup checklist instead.
     expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_connected" } }), "lay_1")).toMatchObject({
-      text: "kanata isn't running, so it isn't on your MacBook keyboard yet. Undo above the board takes it back.", action: { id: "open_status", label: "Set up kanata" },
+      text: "kanata isn't running, so it isn't on your MacBook keyboard yet. Undo above the board takes it back.", action: { id: "open_status", label: "Open keyboard status" },
     });
     expect(afterApply(MACBOOK, macSync({ on: false }, { state: { kind: "not_connected" } }), "lay_1").action?.id).toBe("open_status");
     // Someone else's config: keyloom never replaces it by itself, so the card offers the confirm that does.

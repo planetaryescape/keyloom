@@ -4,7 +4,7 @@ import type { FingerReadout, LabReadout } from "../../api/lab.ts";
 import type { ProposalCard } from "../../api/http.ts";
 import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
-import { labApplyFailure, labFixes, labProblemText } from "./lab-words.ts";
+import { labApplyFailure, labFixClosed, labFixes, labProblemText } from "./lab-words.ts";
 import { ApiError } from "../api.ts";
 import "./lab.css";
 
@@ -321,6 +321,9 @@ function TryFix({ suggestion: s, onBack, onAgain, onApply }: { suggestion: LabRe
       .finally(() => setApplying(false));
   };
   const e = s.example;
+  const closed = s.proposal === null ? null : labFixClosed(s.proposal.status);
+  // A fix already applied, replaced or turned down can't be applied again, so it says why and offers Type again (review of #283).
+  const shown = failed ?? (closed === null ? null : { text: closed, next: "again" as const });
   return (
     <section className="lab-panel" aria-label={s.title}>
       <header className="lab-head">
@@ -347,11 +350,11 @@ function TryFix({ suggestion: s, onBack, onAgain, onApply }: { suggestion: LabRe
         </div>
         {e === null ? null : <Timeline example={e} />}
         {s.proposal === null ? null : <p className="lab-explain">{s.proposal.explanation}</p>}
-        {failed === null ? null : <p className="lab-problem" role="alert">{failed.text}</p>}
+        {shown === null ? null : <p className="lab-problem" role={failed === null ? "status" : "alert"}>{shown.text}</p>}
       </div>
       <footer className="lab-foot">
         <button type="button" className="sheet-action" onClick={onBack}>Not this</button>
-        {failed?.next === "again" ? (
+        {shown?.next === "again" ? (
           <button type="button" className="bar-apply" onClick={onAgain}><Play size={13} aria-hidden="true" />Type again</button>
         ) : (
           <button type="button" className="bar-apply" disabled={s.proposal === null || applying} onClick={apply}>

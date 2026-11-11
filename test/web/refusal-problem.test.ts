@@ -33,6 +33,22 @@ describe("refusalProblem", () => {
     expect(problem?.action).toBeUndefined();
   });
 
+  test("a refusal whose fix this page lacks opens the config whose page has it, and says which button is there", () => {
+    let opened = 0;
+    const problem = refusalProblem(refused("kanata_not_running"), {}, { name: "Travel", open: () => void opened++ });
+    expect(problem).toMatchObject({
+      message: "kanata isn't running",
+      detail: "The keyboard's status lists what is missing, with a button for each. Travel's page has Open keyboard status.",
+      action: { label: "Open Travel" },
+    });
+    problem?.action?.run();
+    expect(opened).toBe(1);
+    expect(refusalProblem(refused("foreign_firmware"), {}, { name: "Travel", open: () => {} })?.detail).toEndWith("Travel's page has Build and flash.");
+    // A handler on this page wins, and a refusal with no fix anywhere gets no button.
+    expect(refusalProblem(refused("foreign_firmware"), { open_release: () => {} }, { name: "Travel", open: () => {} })?.action?.label).toBe("Build and flash…");
+    expect(refusalProblem(refused("not_connected"), {}, { name: "Travel", open: () => {} })?.action).toBeUndefined();
+  });
+
   test("a failure that isn't a refusal is left to the caller", () => {
     expect(refusalProblem(refused("usage"), {})).toBeNull();
     expect(refusalProblem(refused(), {})).toBeNull();

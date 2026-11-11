@@ -92,7 +92,12 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
       const look = await lookAtRemapper(opts.board, over);
       if (look === "keyloom") {
         await withApp((app) => noteKanataSeen(app, opts.board));
-        throw new UsageError(`kanata is still running keyloom's config, so the chord hasn't stopped it yet. Hold Left Control + Space + Escape until the MacBook keyboard types plainly, then run this again within ${minutes} minutes`);
+        // The first of the two runs, not a failure: it exits 0 so a --json caller reads the next step, not an error.
+        print(io, format(), {
+          json: { ok: true, recorded: false, next: "hold_exit_chord", within_minutes: minutes },
+          table: `keyloom saw kanata running its config. Hold Left Control + Space + Escape until the MacBook keyboard types plainly, then run this again within ${minutes} minutes.`,
+        });
+        return;
       }
       if (look === "other") throw new UsageError("kanata is still running a config keyloom didn't write. The proof counts only for a kanata keyloom saw running its own config: `keyloom remap apply <layout> --overwrite` puts one on, then run this again");
       if (look === "unreadable") throw new UsageError("keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; run this again in a moment");
@@ -100,6 +105,6 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
       if (outcome === "not_seen") {
         throw new UsageError(`kanata isn't running, but keyloom hasn't seen it run keyloom's config in the last ${minutes} minutes, so this doesn't show the chord stopped it. Nothing was recorded. Start kanata (\`keyloom remap doctor\` says how), run this while it runs, then hold the chord and run this again`);
       }
-      print(io, format(), { json: { ok: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
+      print(io, format(), { json: { ok: true, recorded: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
     });
 }

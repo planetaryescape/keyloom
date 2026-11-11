@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, noticeOnPage, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -132,6 +132,12 @@ describe("syncNotice", () => {
     });
   });
 
+  test("a notice with no button is the same on any page", () => {
+    const notice = syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }));
+    if (notice === null) throw new Error("expected a notice");
+    expect(noticeOnPage(notice, at({ kind: "in_sync" }), "zsa/moonlander")).toBe(notice);
+  });
+
   test("a failed sync says what failed", () => {
     expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }))).toEqual({
       kind: "error", message: "Couldn't put the change on your Glove80", detail: "zapp exited with code 1",
@@ -152,6 +158,14 @@ describe("syncNotice", () => {
     expect(line.detail).toStartWith("Docker isn't ready");
     expect(line.action).toEqual({ id: "open_release", label: "Build and flash…" });
     expect(JSON.stringify([notice, line])).not.toContain("Quit your Docker app");
+    // Build and flash acts on the layout on screen: on the Glove80's page the notice keeps it, on another board's page it opens the Glove80.
+    if (notice === null) throw new Error("expected a notice");
+    expect(noticeOnPage(notice, failed, "moergo/glove80")).toBe(notice);
+    expect(noticeOnPage(notice, failed, "zsa/moonlander")).toEqual({
+      kind: "error", message: "Docker isn't ready",
+      detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs. Its page has Build and flash.",
+      action: { id: "open_board", label: "Open Glove80" },
+    });
     // Any other build failure keeps its own words: they are the compiler's, and the log has the rest.
     const other = { ...run("failed"), failure: "build", error: "compile error in keymap.c", errorCode: null };
     expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "compile error in keymap.c" }, other))?.detail).toBe("compile error in keymap.c");

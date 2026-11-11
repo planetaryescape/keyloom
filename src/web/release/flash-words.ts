@@ -114,7 +114,7 @@ export function afterApply(board: { firmware: string; name: string }, sync: Boar
     if (autoRuns) return { lead: "Applied.", text: `Auto-apply puts it on your ${name} in a moment. ${UNDO}`, toast: `Auto-apply puts it on your ${name}.`, action: null };
     // Apply now would be refused in these two states (R3-03): offer what gets kanata to a state where it works.
     if (state?.kind === "not_connected") {
-      return { lead: "Applied to your layout.", text: `kanata isn't running, so it isn't on your ${name} yet. ${UNDO}`, toast: "kanata isn't running yet.", action: { id: "open_status", label: "Set up kanata" } };
+      return { lead: "Applied to your layout.", text: `kanata isn't running, so it isn't on your ${name} yet. ${UNDO}`, toast: "kanata isn't running yet.", action: { id: "open_status", label: "Open keyboard status" } };
     }
     if (state?.kind === "not_keyloom") {
       return { lead: "Applied to your layout.", text: `kanata runs a config keyloom didn't write, so this isn't on your ${name} yet. ${UNDO}`, toast: "kanata runs a config keyloom didn't write.", action: { id: "replace_foreign", label: "Replace it…" } };

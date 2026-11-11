@@ -231,7 +231,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       );
     },
   };
-  useSyncToasts(sync, toasts.show, refusalHandlers);
+  // A toast about another keyboard opens that keyboard's page, where its fix is, not this layout's Build and flash.
+  useSyncToasts(sync, toasts.show, refusalHandlers, { boardId: summary.boardId, openBoard });
   // A refused put-on says why in its dialog, with the same fix as the toast (R3-01). Restore and Replace it act on the config being put on.
   const putOnProblem = (target: { id: string }) => (error: unknown) =>
     error instanceof ApiError
@@ -1379,6 +1380,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
    * Opens another board or config, carrying the layer by name and the chat (D-317). A conversation belongs to one layout, so the thread
    * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
    */
+  // A board opens on the config its keyboard runs (D-315), else its first.
+  function openBoard(boardId: string) {
+    const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
+    const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
+    if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
+  }
+
   function switchLayout(id: string) {
     const handoff = turnsNow.current.flatMap((turn) => turn.kind === "assistant" && turn.presentation?.handoff?.layoutId === id ? [turn.presentation.handoff] : []).at(-1);
     const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }) };
@@ -1813,12 +1821,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         boards={{
           entries: boardEntries(chrome.layouts, chrome.boardChoices).map((entry) => ({ ...entry, tone: boardLight(sync.boards.find((candidate) => candidate.boardId === entry.id)) })),
           active: summary.boardId,
-          onSelect: (boardId) => {
-            // A board opens on the config its keyboard runs (D-315), else its first.
-            const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
-            const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
-            if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
-          },
+          onSelect: openBoard,
         }}
         boardsAfter={newBoard.step.kind !== "idle" || (newBoard.waiting.length === 0 && newBoard.setupWaiting.length === 0) ? null : newBoard.waiting.length > 0 ? (
           // A keyboard keyloom hasn't met stays one click away after "Not now" (D-336).

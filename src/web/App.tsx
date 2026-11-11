@@ -521,8 +521,9 @@ function MismatchState({ token, summary, kanata, problem, fixable, onHome, onRel
           await useConfig(token, other.id);
           configs.reload();
         }}
-        // The keyboard's status popover isn't on this page, so a refusal shows its words without that button.
-        problemFor={(error) => (error instanceof ApiError ? refusalProblem(error, {}) : null)}
+        // This page has none of the refusals' fixes (no keyboard status, no Build and flash), so their button opens the config being put
+        // on, whose page has each one.
+        problemFor={(error) => (error instanceof ApiError ? refusalProblem(error, {}, onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }) : null)}
         onClose={() => setPutting(false)}
       />
     ) : null}
