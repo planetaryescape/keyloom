@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.75.0](https://github.com/planetaryescape/keyloom/compare/v0.74.0...v0.75.0) (2026-11-11)
+
+
+### Features
+
+* install a missing Codex from the chat setup, and give the desktop app's refused key its own steps ([595cc1c](https://github.com/planetaryescape/keyloom/commit/595cc1c28822899969fa2db959bdba04b24944f6))
+* open Karabiner-Elements from the kanata checklist when it is installed ([fd64003](https://github.com/planetaryescape/keyloom/commit/fd6400325402dd1fe694ee3dd2eec1f70b9bc39f))
+* restart a Colima that won't start, cancel a running build, and name the CLI's next step ([f4f7b3d](https://github.com/planetaryescape/keyloom/commit/f4f7b3d64c5d1fee12395bcaad6f4effbc701bea))
+* restart a Colima that won't start, cancel a running build, and recover a lost poll ([6c63538](https://github.com/planetaryescape/keyloom/commit/6c63538e4bb137081a35963e50e9b6c3ca44d167))
+
+
+### Bug Fixes
+
+* answer Cancel build at once and stop a build that waits on another build's lock ([a1dd21b](https://github.com/planetaryescape/keyloom/commit/a1dd21bca23496fd1929a0a97aa1e6ee70e9ffec))
+* dead ends in sync, configs, the MacBook and the typing lab (round 3) ([2831db0](https://github.com/planetaryescape/keyloom/commit/2831db05192c3275830ad79285decaf185892e28))
+* give a wall tile that can't be drawn an Open button ([150168f](https://github.com/planetaryescape/keyloom/commit/150168fe2213f5521469c39793b31734e0a98ef7))
+* give each page one h1, name the phone controls and serve the app icon ([0203ff5](https://github.com/planetaryescape/keyloom/commit/0203ff5be68af2d0a0ed22c681505003e5347eeb))
+* give typing lab failures a way on: Apply errors, Input Monitoring, foreign firmware and delete ([245d8d9](https://github.com/planetaryescape/keyloom/commit/245d8d9ad9d6e0279731b7c06e6ed22451e0a865))
+* hide Archive for the config on its keyboard on the mismatch page, and offer another to put on ([9a133be](https://github.com/planetaryescape/keyloom/commit/9a133be0f9bf8526bd6de3542603b9b21d0185bb))
+* keep CLI commands off the page, drop the terminal hint after a failed restart, and quote names in suggested commands ([c9e4798](https://github.com/planetaryescape/keyloom/commit/c9e479873e61b036f799474c9c9f0cab02379d3d))
+* keep Compare open after a failed Go back, say a failed version list, and hide Disable remapping while kanata is stopped ([465cbb7](https://github.com/planetaryescape/keyloom/commit/465cbb7c772d4bd5e3d92cff1419447334f51115))
+* let the desktop shell build without the updater and use no reserved name in its tests ([704163f](https://github.com/planetaryescape/keyloom/commit/704163f9592b9412c0a9daebacc9942abbad1a56))
+* name the next command in CLI failures, and keep CLI commands out of shared sentences ([79b4b22](https://github.com/planetaryescape/keyloom/commit/79b4b2296932b029453b80e7f48f6d466067cf6f))
+* never restart a slow Colima, which may be running a build ([4bd46ef](https://github.com/planetaryescape/keyloom/commit/4bd46efdeacf4c6cff70e36bbfd73a6dd5bf1c9b))
+* offer a way on from a failed board preview, an empty Karabiner, a failed reload and disabled layer actions ([b3fe872](https://github.com/planetaryescape/keyloom/commit/b3fe872894baa3ea7c0d7bf1a87a5e1fd4231a09))
+* offer kanata setup or Replace it after an Apply that kanata can't take ([431e45a](https://github.com/planetaryescape/keyloom/commit/431e45a2fe6e6cfd42930c575217f587a65a9469))
+* offer Resume syncing after a keyboard restore, and Your keyboards when it fails ([4584b54](https://github.com/planetaryescape/keyloom/commit/4584b54785b24e272e256fa4834069c64479c41e))
+* recheck updates at once, clear a stale board preview, and give Start blank a free name ([40b1cb9](https://github.com/planetaryescape/keyloom/commit/40b1cb967d16a7d66b673bc4bda4da5a661773c6))
+* record the exit-chord proof only after keyloom saw kanata running its config ([ae52b08](https://github.com/planetaryescape/keyloom/commit/ae52b089b391630030962061960e0b4e34af10e4))
+* record the slow-Colima, engine-lock and cancel changes in D-511 and D-512 ([1162f8e](https://github.com/planetaryescape/keyloom/commit/1162f8e3d344265d954171c9a25cc1664657d56a))
+* round 3 dead ends: accessibility, desktop shell and web polish ([20cb314](https://github.com/planetaryescape/keyloom/commit/20cb3143f8d29c9cc463750078ec15ab58e55a26))
+* run one Docker start or restart at a time, and refuse a restart over a start ([845e55d](https://github.com/planetaryescape/keyloom/commit/845e55d87a56e9ea76805abf50fc963acce4553f))
+* say Docker isn't ready after a failed auto-sync build, with Build and flash ([c15566b](https://github.com/planetaryescape/keyloom/commit/c15566bcb925405972f7c77a948e1fbb99472ba8))
+* say why a desktop update failed, show the server's last lines, and answer a refused Sync now ([cbf87d6](https://github.com/planetaryescape/keyloom/commit/cbf87d6eacfb093e9262feb43f81387d007d81fa))
+* send a refused put-on to the config that can fix it, and stop a busy Sync now that outlived its page ([004ace7](https://github.com/planetaryescape/keyloom/commit/004ace7ac4e1842e58fa8567e38d02288d800d1f))
+* send toasts, refusals and closed lab fixes to a page that can act on them ([3933796](https://github.com/planetaryescape/keyloom/commit/393379689ca603689045e8bc289f64b2a6f0bdb8))
+* show a refused put-on's fix in its dialog instead of CLI commands ([f17b6b4](https://github.com/planetaryescape/keyloom/commit/f17b6b4c490df555069804282159524fb91ec0a9))
+* sync by itself once a running build or flash ends, instead of telling the person to come back ([7bf6216](https://github.com/planetaryescape/keyloom/commit/7bf62160d940ce6330ccab86140837e68383ba69))
+
 ## [0.74.0](https://github.com/planetaryescape/keyloom/compare/v0.73.0...v0.74.0) (2026-11-11)
 
 
