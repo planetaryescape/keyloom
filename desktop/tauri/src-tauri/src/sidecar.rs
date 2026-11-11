@@ -83,13 +83,22 @@ fn parse_incompatible(stderr: &str) -> Option<(String, Option<String>)> {
     Some((words, line_after(CAN_REPLACE)))
 }
 
-// The CLI's error line on a pipe is JSON (src/cli/main.ts): `{"schema_version":1,"error":{"code":"schema_too_new",…}}`. The code is
-// read, never the sentence, which names install.sh for a terminal.
-fn error_code(stderr: &str) -> Option<String> {
-    stderr.lines().find_map(|line| {
-        let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
-        value["error"]["code"].as_str().map(str::to_string)
-    })
+// The CLI's error line on a pipe is JSON (src/cli/main.ts): `{"schema_version":1,"error":{"code":"schema_too_new",…}}`. The codes are
+// read, never the sentence, which names install.sh for a terminal. When the device helper's cleanup also fails, the line's code is
+// `cleanup_unconfirmed` and the command's own failure is its `cause`, so every code on every line counts.
+fn error_codes(stderr: &str) -> Vec<String> {
+    stderr
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line.trim()).ok())
+        .flat_map(|value| {
+            let error = &value["error"];
+            [error["code"].as_str(), error["cause"]["code"].as_str()].into_iter().flatten().map(str::to_string).collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn names_code(stderr: &str, code: &str) -> bool {
+    error_codes(stderr).iter().any(|c| c == code)
 }
 
 impl std::fmt::Display for Failure {
@@ -192,7 +201,7 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                 crate::log::server_output(app, &stderr);
                 return Err(if let Some((words, replace)) = parse_incompatible(&stderr) {
                     Failure::Incompatible { words, replace }
-                } else if error_code(&stderr).as_deref() == Some("schema_too_new") {
+                } else if names_code(&stderr, "schema_too_new") {
                     Failure::DataTooNew
                 } else if stderr.contains("is in use") {
                     Failure::PortInUse
@@ -390,11 +399,21 @@ mod tests {
     #[test]
     fn a_database_from_a_newer_keyloom_is_read_from_the_error_code() {
         let stderr = "{\"schema_version\":1,\"error\":{\"code\":\"schema_too_new\",\"message\":\"/d/keyloom.db is at database schema 99. Upgrade keyloom (re-run install.sh, or update the app)\"}}\n";
-        assert_eq!(error_code(stderr).as_deref(), Some("schema_too_new"));
-        assert_eq!(error_code("error: something else\n{\"error\":{\"code\":\"bug\"}}\n").as_deref(), Some("bug"));
-        assert_eq!(error_code("plain words\n"), None);
+        assert!(names_code(stderr, "schema_too_new"));
+        assert_eq!(error_codes("error: something else\n{\"error\":{\"code\":\"bug\"}}\n"), ["bug"]);
+        assert!(error_codes("plain words\n").is_empty());
         // A protocol mismatch also exits 10, so the exit code alone can't say which.
-        assert_eq!(error_code("{\"error\":{\"code\":\"client_protocol_mismatch\"}}").as_deref(), Some("client_protocol_mismatch"));
+        assert!(!names_code("{\"error\":{\"code\":\"client_protocol_mismatch\"}}", "schema_too_new"));
+    }
+
+    #[test]
+    fn a_database_from_a_newer_keyloom_is_found_when_cleanup_also_fails() {
+        // src/cli/main.ts prints one document whose code is the cleanup's and whose cause is the command's (test/cli/cleanup-json.test.ts).
+        let stderr = "{\"schema_version\":1,\"error\":{\"code\":\"cleanup_unconfirmed\",\"message\":\"restart keyloom\",\"cause\":{\"code\":\"schema_too_new\",\"message\":\"upgrade keyloom\"}}}\n";
+        assert_eq!(error_codes(stderr), ["cleanup_unconfirmed", "schema_too_new"]);
+        assert!(names_code(stderr, "schema_too_new"));
+        // A code on a later line counts too.
+        assert!(names_code("{\"error\":{\"code\":\"bug\"}}\n{\"error\":{\"code\":\"schema_too_new\"}}\n", "schema_too_new"));
     }
 
     #[test]

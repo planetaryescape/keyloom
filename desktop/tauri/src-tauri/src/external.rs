@@ -26,33 +26,40 @@ fn is_loopback(url: &Url) -> bool {
     matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"))
 }
 
-/// A link that asks for a new window. The window never opens one: keyloom has one page, so a web page goes to the browser.
-pub fn new_window_route(target: &Url) -> Route {
-    if matches!(target.scheme(), "http" | "https") {
-        Route::Browser
-    } else {
-        Route::Block
+/// Whether an `http(s)` page is keyloom's own. `own` is the server's origin; with none recorded (before the first server is up),
+/// any loopback page counts as keyloom's.
+fn is_own_page(target: &Url, own: Option<&Url>) -> bool {
+    match own {
+        Some(own) => own.origin() == target.origin(),
+        None => is_loopback(target),
     }
 }
 
-/// A navigation in the main window. `own` is the server's origin; with none recorded (between servers), any loopback page counts
-/// as keyloom's, so a restart's new port still loads.
+/// A link that asks for a new window. The window never opens one: keyloom has one page, so a web page goes to the browser.
+/// keyloom's own page never does: its address carries the session token (`?t=`), which the browser would keep in its history.
+pub fn new_window_route(target: &Url, own: Option<&Url>) -> Route {
+    match target.scheme() {
+        "http" | "https" if is_own_page(target, own) => Route::Block,
+        "http" | "https" => Route::Browser,
+        _ => Route::Block,
+    }
+}
+
+/// A navigation in the main window. Any loopback page counts as keyloom's before the first server is up, so its page still loads.
 pub fn navigation_route(target: &Url, own: Option<&Url>) -> Route {
     match target.scheme() {
         "about" | "blob" => Route::Stay,
-        "http" | "https" => {
-            let ours = match own {
-                Some(own) => own.origin() == target.origin(),
-                None => is_loopback(target),
-            };
-            if ours {
-                Route::Stay
-            } else {
-                Route::Browser
-            }
-        }
+        "http" | "https" if is_own_page(target, own) => Route::Stay,
+        "http" | "https" => Route::Browser,
         _ => Route::Block,
     }
+}
+
+/// Whether the shell saves a download. wry hands a link WebKit marks as a download (`<a download>`) straight to the download
+/// handler, past `on_navigation`, so this is the only check it gets. keyloom's page downloads `blob:` files it made itself; their
+/// origin is the page's. Anything from another origin, or before the first server is up, is refused.
+pub fn download_allowed(target: &Url, own: Option<&Url>) -> bool {
+    matches!(target.scheme(), "blob" | "http" | "https") && own.is_some_and(|own| own.origin() == target.origin())
 }
 
 /// Where a download is saved: `suggested`'s file name in `dir`, never over a file that is there. A taken name gets " (1)", " (2)"…
@@ -60,14 +67,16 @@ pub fn navigation_route(target: &Url, own: Option<&Url>) -> Route {
 /// saved as "download".
 pub fn unused_path(dir: &Path, suggested: &Path) -> PathBuf {
     let name = suggested.file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty()).unwrap_or("download");
+    // `exists` follows a symlink, so a dangling one looks free and the download would be written through it.
+    let taken = |p: &Path| p.symlink_metadata().is_ok();
     let first = dir.join(name);
-    if !first.exists() {
+    if !taken(&first) {
         return first;
     }
     // A leading dot (".env") belongs to the stem; the extension starts at the first dot after it.
     let split = name.char_indices().skip(1).find(|(_, c)| *c == '.').map(|(i, _)| i).unwrap_or(name.len());
     let (stem, ext) = name.split_at(split);
-    (1..).map(|n| dir.join(format!("{stem} ({n}){ext}"))).find(|p| !p.exists()).expect("some number is free")
+    (1..).map(|n| dir.join(format!("{stem} ({n}){ext}"))).find(|p| !taken(p)).expect("some number is free")
 }
 
 /// Downloads in flight, by URL: macOS doesn't say where a finished download was saved, so the shell keeps what it chose.
@@ -81,6 +90,25 @@ impl Downloads {
 
     fn finish(&self, url: &Url) -> Option<PathBuf> {
         self.0.lock().unwrap().remove(url.as_str())
+    }
+}
+
+/// What the shell does when a download ends.
+#[derive(Debug, PartialEq)]
+pub enum Finished {
+    /// Finder shows the saved file.
+    Reveal(PathBuf),
+    /// Saved, but the shell no longer knows where: a second download of the same URL took its entry. Nothing to show.
+    Saved,
+    /// Not saved: the person is told, with the file's name when the shell knows it.
+    Failed(Option<PathBuf>),
+}
+
+pub fn finished(path: Option<PathBuf>, success: bool) -> Finished {
+    match (path, success) {
+        (Some(path), true) => Finished::Reveal(path),
+        (None, true) => Finished::Saved,
+        (path, false) => Finished::Failed(path),
     }
 }
 
@@ -109,7 +137,7 @@ pub fn attach<'a>(app: &AppHandle, builder: WebviewWindowBuilder<'a, Wry, AppHan
     let downloads = Arc::new(Downloads::default());
     builder
         .on_new_window(move |url, _| {
-            match new_window_route(&url) {
+            match new_window_route(&url, own_origin(&links).as_ref()) {
                 Route::Browser => open_in_browser(&links, &url),
                 _ => log::say(&links, &format!("refused to open a {} link", url.scheme())),
             }
@@ -129,6 +157,10 @@ pub fn attach<'a>(app: &AppHandle, builder: WebviewWindowBuilder<'a, Wry, AppHan
         .on_download(move |_, event| {
             match event {
                 DownloadEvent::Requested { url, destination } => {
+                    if !download_allowed(&url, own_origin(&saves).as_ref()) {
+                        log::say(&saves, &format!("refused a {} download from another page", url.scheme()));
+                        return false;
+                    }
                     let Ok(dir) = saves.path().download_dir() else {
                         log::say(&saves, "refused a download: no Downloads folder");
                         return false;
@@ -138,17 +170,21 @@ pub fn attach<'a>(app: &AppHandle, builder: WebviewWindowBuilder<'a, Wry, AppHan
                     true
                 }
                 DownloadEvent::Finished { url, path, success } => {
+                    // A refused download can still end here as a failure; the person didn't start it, so nothing is said.
+                    if !download_allowed(&url, own_origin(&saves).as_ref()) {
+                        return true;
+                    }
                     let kept = downloads.finish(&url);
-                    let saved = path.or(kept);
-                    match (&saved, success) {
-                        (Some(file), true) => {
+                    match finished(path.or(kept), success) {
+                        Finished::Reveal(file) => {
                             log::say(&saves, "download saved");
                             // Finder selects the saved file, so the person sees where it went without a download shelf.
-                            log::reveal(&saves, file);
+                            log::reveal(&saves, &file);
                         }
-                        _ => {
+                        Finished::Saved => log::say(&saves, "download saved; another download of the same file took its place to show"),
+                        Finished::Failed(file) => {
                             log::say(&saves, "download failed");
-                            let (title, body) = failed_notice(saved.as_deref());
+                            let (title, body) = failed_notice(file.as_deref());
                             crate::menu_bar::notify(&saves, &title, &body);
                         }
                     }
@@ -169,11 +205,48 @@ mod tests {
 
     #[test]
     fn a_new_window_link_opens_web_pages_in_the_browser_and_nothing_else() {
-        assert_eq!(new_window_route(&url("https://docs.docker.com/desktop/")), Route::Browser);
-        assert_eq!(new_window_route(&url("http://example.com/")), Route::Browser);
-        assert_eq!(new_window_route(&url("file:///etc/passwd")), Route::Block);
-        assert_eq!(new_window_route(&url("keyloom-desktop://try-again")), Route::Block);
-        assert_eq!(new_window_route(&url("javascript:alert(1)")), Route::Block);
+        let own = url("http://127.0.0.1:4477");
+        assert_eq!(new_window_route(&url("https://docs.docker.com/desktop/"), Some(&own)), Route::Browser);
+        assert_eq!(new_window_route(&url("http://example.com/"), Some(&own)), Route::Browser);
+        assert_eq!(new_window_route(&url("file:///etc/passwd"), Some(&own)), Route::Block);
+        assert_eq!(new_window_route(&url("keyloom-desktop://try-again"), Some(&own)), Route::Block);
+        assert_eq!(new_window_route(&url("javascript:alert(1)"), Some(&own)), Route::Block);
+    }
+
+    #[test]
+    fn keyloom_s_own_page_never_goes_to_the_browser_with_its_token() {
+        let own = url("http://127.0.0.1:4477");
+        assert_eq!(new_window_route(&url("http://127.0.0.1:4477/?t=secret"), Some(&own)), Route::Block);
+        // Another server on this machine is someone else's page.
+        assert_eq!(new_window_route(&url("http://127.0.0.1:9999/"), Some(&own)), Route::Browser);
+        // Before the first server is up, any loopback page may be keyloom's.
+        assert_eq!(new_window_route(&url("http://localhost:5000/?t=secret"), None), Route::Block);
+        assert_eq!(new_window_route(&url("https://example.com/"), None), Route::Browser);
+    }
+
+    #[test]
+    fn only_keyloom_s_own_page_can_save_a_download() {
+        let own = url("http://127.0.0.1:4477");
+        assert!(download_allowed(&url("blob:http://127.0.0.1:4477/1b2c"), Some(&own)));
+        assert!(download_allowed(&url("http://127.0.0.1:4477/api/builds/x/firmware"), Some(&own)));
+        assert!(!download_allowed(&url("blob:https://evil.example/1b2c"), Some(&own)));
+        assert!(!download_allowed(&url("blob:http://127.0.0.1:9999/1b2c"), Some(&own)));
+        assert!(!download_allowed(&url("https://evil.example/payload.zip"), Some(&own)));
+        assert!(!download_allowed(&url("http://127.0.0.1:9999/payload.zip"), Some(&own)));
+        assert!(!download_allowed(&url("data:application/zip;base64,AAAA"), Some(&own)));
+        assert!(!download_allowed(&url("file:///etc/passwd"), Some(&own)));
+        // A blob with no web origin inside is opaque, never keyloom's.
+        assert!(!download_allowed(&url("blob:null/1b2c"), Some(&own)));
+        assert!(!download_allowed(&url("blob:http://127.0.0.1:4477/1b2c"), None), "nothing downloads before the page is up");
+    }
+
+    #[test]
+    fn a_finished_download_is_shown_saved_or_reported() {
+        assert_eq!(finished(Some(PathBuf::from("/d/a.zip")), true), Finished::Reveal(PathBuf::from("/d/a.zip")));
+        // A second download of the same URL took the entry: it saved, so the person isn't told it failed.
+        assert_eq!(finished(None, true), Finished::Saved);
+        assert_eq!(finished(Some(PathBuf::from("/d/a.zip")), false), Finished::Failed(Some(PathBuf::from("/d/a.zip"))));
+        assert_eq!(finished(None, false), Finished::Failed(None));
     }
 
     #[test]
@@ -190,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn between_servers_a_loopback_page_still_loads() {
+    fn before_the_first_server_a_loopback_page_still_loads() {
         assert_eq!(navigation_route(&url("http://127.0.0.1:5000/?t=abc"), None), Route::Stay);
         assert_eq!(navigation_route(&url("http://localhost:5000/"), None), Route::Stay);
         assert_eq!(navigation_route(&url("https://example.com/"), None), Route::Browser);
@@ -230,6 +303,19 @@ mod tests {
         assert_eq!(unused_path(&dir, Path::new(".keymap")), dir.join(".keymap (1)"));
         std::fs::write(dir.join("a.tar.gz"), "").unwrap();
         assert_eq!(unused_path(&dir, Path::new("a.tar.gz")), dir.join("a (1).tar.gz"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_download_never_writes_through_a_dangling_symlink() {
+        let dir = scratch();
+        let elsewhere = dir.join("elsewhere");
+        std::os::unix::fs::symlink(&elsewhere, dir.join("firmware.bin")).unwrap();
+        assert!(!dir.join("firmware.bin").exists(), "the link points nowhere");
+        assert_eq!(unused_path(&dir, Path::new("firmware.bin")), dir.join("firmware (1).bin"));
+        std::os::unix::fs::symlink(&elsewhere, dir.join("firmware (1).bin")).unwrap();
+        assert_eq!(unused_path(&dir, Path::new("firmware.bin")), dir.join("firmware (2).bin"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

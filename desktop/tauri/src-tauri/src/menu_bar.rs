@@ -3,6 +3,7 @@
 use crate::{log, sidecar, AppState};
 use futures_util::StreamExt;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 use tauri::{menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIcon, AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
@@ -146,8 +147,39 @@ pub async fn watch(app: &AppHandle, tray: &TrayIcon, items: &Items) {
 // again by itself, as the page does (src/web/sync/busy-retry.ts, R4-15). Same pace and limit as the page.
 const BUSY_RETRY_EVERY: Duration = Duration::from_secs(3);
 const BUSY_RETRY_FOR: Duration = Duration::from_secs(15 * 60);
-// One wait at a time: a second Sync now while one waits would only post the same sync twice.
-static WAITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// One Sync now at a time: a second while one runs would only post the same sync twice.
+const IDLE: u8 = 0;
+const POSTING: u8 = 1;
+const WAITING_FOR_BUSY: u8 = 2;
+static SYNC_NOW: AtomicU8 = AtomicU8::new(IDLE);
+
+/// Holds the one Sync now. Dropping it frees the slot, also when the task panics, so a panic can't leave Sync now doing nothing.
+struct SyncNowRun(&'static AtomicU8);
+
+impl SyncNowRun {
+    /// The run, or what the one already running is doing.
+    fn claim(slot: &'static AtomicU8) -> Result<Self, u8> {
+        slot.compare_exchange(IDLE, POSTING, Ordering::AcqRel, Ordering::Acquire).map(|_| SyncNowRun(slot))
+    }
+
+    fn waiting_for_busy(&self) {
+        self.0.store(WAITING_FOR_BUSY, Ordering::Release);
+    }
+}
+
+impl Drop for SyncNowRun {
+    fn drop(&mut self) {
+        self.0.store(IDLE, Ordering::Release);
+    }
+}
+
+fn already_running(state: u8) -> &'static str {
+    if state == WAITING_FOR_BUSY {
+        "sync now: already waiting for keyloom to finish building or flashing"
+    } else {
+        "sync now: one is already being sent"
+    }
+}
 
 fn server(app: &AppHandle) -> Option<(String, String)> {
     let state = app.state::<AppState>();
@@ -157,12 +189,16 @@ fn server(app: &AppHandle) -> Option<(String, String)> {
 
 // Posts the request the web app's Sync button posts, for the config the server says is waiting; the stream reports the result.
 pub fn sync_now(app: &AppHandle) {
-    if WAITING.swap(true, std::sync::atomic::Ordering::AcqRel) {
-        log::say(app, "sync now: already waiting for keyloom to finish building or flashing");
-        return;
-    }
+    let run = match SyncNowRun::claim(&SYNC_NOW) {
+        Ok(run) => run,
+        Err(state) => {
+            log::say(app, already_running(state));
+            return;
+        }
+    };
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        let run = run;
         let client = reqwest::Client::new();
         let started = tokio::time::Instant::now();
         let mut said_busy = false;
@@ -182,6 +218,7 @@ pub fn sync_now(app: &AppHandle) {
                     }
                     if !said_busy {
                         said_busy = true;
+                        run.waiting_for_busy();
                         let (title, body) = sync_now_notice(SyncNow::Busy);
                         notify(&app, title, body);
                     }
@@ -190,7 +227,7 @@ pub fn sync_now(app: &AppHandle) {
                 other => break Some(sync_now_notice(other)),
             }
         };
-        WAITING.store(false, std::sync::atomic::Ordering::Release);
+        drop(run);
         // The page shows the keyboard's state with a button for the way on, so the notice says why in short and opens it (R3-17).
         if let Some((title, body)) = notice {
             notify(&app, title, body);
@@ -272,6 +309,25 @@ data: {"type":"sync","boards":[],"menuBar":{"summary":"2 changes not on your Moo
         assert_eq!(bar.title.as_deref(), Some("Behind"));
         assert_eq!(bar.sync_layout_id.as_deref(), Some("lay_1"));
         assert_eq!(bar.notices[0].title, "On your Glove80");
+    }
+
+    #[test]
+    fn one_sync_now_runs_at_a_time_and_a_panic_frees_it() {
+        static SLOT: AtomicU8 = AtomicU8::new(IDLE);
+        let run = SyncNowRun::claim(&SLOT).unwrap();
+        assert_eq!(SyncNowRun::claim(&SLOT).err(), Some(POSTING));
+        assert_eq!(already_running(POSTING), "sync now: one is already being sent");
+        run.waiting_for_busy();
+        assert_eq!(SyncNowRun::claim(&SLOT).err(), Some(WAITING_FOR_BUSY));
+        assert_eq!(already_running(WAITING_FOR_BUSY), "sync now: already waiting for keyloom to finish building or flashing");
+        drop(run);
+        let run = SyncNowRun::claim(&SLOT).unwrap();
+        let panicked = std::panic::catch_unwind(move || {
+            let _run = run;
+            panic!("the sync task panicked");
+        });
+        assert!(panicked.is_err());
+        assert!(SyncNowRun::claim(&SLOT).is_ok(), "the panic freed Sync now");
     }
 
     #[test]
