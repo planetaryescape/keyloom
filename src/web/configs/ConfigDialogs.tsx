@@ -164,18 +164,24 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
   const [name, setName] = useState("");
   const [start, setStart] = useState<Start>(initialStart);
   const [versions, setVersions] = useState<Versions | null>(null);
+  // A failed version list is said, with Try again, instead of hiding the choice as if there were no versions (R3-23).
+  const [versionsFailed, setVersionsFailed] = useState(false);
+  const [versionReads, setVersionReads] = useState(0);
   const [version, setVersion] = useState<string>(initialVersion ?? "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    setVersionsFailed(false);
     fetchVersions(token, source.id, controller.signal).then((r) => {
       setVersions(r.versions);
       setVersion((v) => (v !== "" ? v : (r.versions[0]?.version.id ?? "")));
-    }, () => setVersions([]));
+    }, () => {
+      if (!controller.signal.aborted) setVersionsFailed(true);
+    });
     return () => controller.abort();
-  }, [token, source.id]);
+  }, [token, source.id, versionReads]);
 
   const now = Date.now();
   const go = async () => {
@@ -247,6 +253,12 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
                 </select>
               ) : null,
             )}
+        {versionsFailed ? (
+          <p className="config-problem" role="alert">
+            keyloom couldn't read {source.name}'s versions.{" "}
+            <button type="button" className="sheet-action" onClick={() => setVersionReads((n) => n + 1)}>Try again</button>
+          </p>
+        ) : null}
         {choice("blank", "Blank", "The keyboard's own default keymap where keyloom can get it, otherwise one empty layer")}
         {choice("file", "A file", "Oryx, QMK keymap.c or ZMK .keymap")}
       </fieldset>

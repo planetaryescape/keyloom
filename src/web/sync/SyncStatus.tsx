@@ -111,8 +111,9 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
             ) : null}
             <div className="menu-separator" role="separator" />
             {board.remapper === true ? (
-              // Reloads the identity map, so the MacBook types plainly again. Needs no sudo.
-              board.state.kind === "behind" && board.state.why === "remapping_off" ? null : (
+              // Reloads the identity map, so the MacBook types plainly again. Needs no sudo. With kanata stopped the keyboard already types
+              // plainly, and the reload would be refused, so it isn't offered.
+              (board.state.kind === "behind" && board.state.why === "remapping_off") || board.state.kind === "not_connected" ? null : (
                 <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.disableRemapping(board.boardId); }}>
                   <KeyboardOff size={14} aria-hidden="true" />
                   <span className="menu-item-label">Disable remapping</span>

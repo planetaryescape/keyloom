@@ -1515,7 +1515,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
-  async function undo(target?: { id: string; summary: string }) {
+  /** Resolves true when the step back went through, so Compare closes only then and a failure keeps it open beside the toast (R3-23). */
+  async function undo(target?: { id: string; summary: string }): Promise<boolean> {
     setUndoing(true);
     setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
@@ -1528,6 +1529,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ? { kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") }
           : { kind: "info", message: "Went back", detail: undone },
       );
+      return true;
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       toasts.show({
@@ -1536,6 +1538,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         ...(stale ? { detail: "Showing the latest version now." } : error instanceof Error ? { detail: error.message } : {}),
       });
       if (stale) void onChanged().catch(() => {});
+      return false;
     } finally {
       setUndoing(false);
     }
@@ -2157,7 +2160,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
-                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then(() => setComparing(null))}
+                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then((wentBack) => wentBack && setComparing(null))}
                   onPutOn={() => setConfigDialog({ kind: "put-version", milestone: comparing.milestone })}
                   onNewConfig={() => setConfigDialog({ kind: "new", start: "version", version: comparing.milestone.version.id })}
                   blockedReason={undoBlock}
@@ -2171,7 +2174,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   onKeyboard={!editingOther}
                   onClose={() => setHistoryOpen(false)}
                   onReload={history.reload}
-                  onGoBack={(target) => undo(target)}
+                  onGoBack={async (target) => void (await undo(target))}
                   onCompare={(milestone) => void compareWith(milestone)}
                   onPutOn={(milestone) => setConfigDialog({ kind: "put-version", milestone })}
                   onNewConfig={(milestone) => setConfigDialog({ kind: "new", start: "version", version: milestone.version.id })}
