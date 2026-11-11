@@ -88,9 +88,9 @@ import { keyForChar } from "./panel/slots.ts";
 import { Caption } from "./shell/Caption.tsx";
 import { boardDisplayName, boardEntries } from "./shell/Header.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
-import { boardLight, SyncStatus } from "./sync/SyncStatus.tsx";
+import { boardLight, openKeyboardStatus, ReplaceForeignHost, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
-import { AfterApplyContext, type AfterApplyKeyboard } from "./release/AfterApply.tsx";
+import { AfterApplyContext, type AfterApplyKeyboard, afterApplyRun } from "./release/AfterApply.tsx";
 import { afterApply } from "./release/flash-words.ts";
 import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
@@ -101,7 +101,7 @@ import { readStored, writeStored } from "./shell/storage.ts";
 import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
-import { useSyncToasts } from "./sync/useSyncToasts.ts";
+import { type RefusalHandlers, refusalProblem, useSyncToasts } from "./sync/useSyncToasts.ts";
 import { keyIn, keyOn } from "../validation/words.ts";
 
 interface ViewerProps {
@@ -142,7 +142,7 @@ interface ViewerProps {
 }
 
 /** What a board or config switch carries to the next layout (D-317). */
-export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; review?: boolean; conversationId?: string; continueCopy?: boolean };
+export type Arrival = { layerName: string | null; chatOpen: boolean; thread: CarriedThread | null; /** Open the config's waiting proposals (D-336). */ proposals?: boolean; review?: boolean; conversationId?: string; continueCopy?: boolean; /** Open the keyboard's status popover. */ status?: boolean };
 
 // `resume` is a draft kept from an earlier visit to this key (D-317); the card opens on it.
 type Editing = { layerId: string; position: number; focus: boolean; resume?: Draft };
@@ -199,7 +199,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
   // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
-  useSyncToasts(sync, toasts.show, {
+  // The status popover hangs off the sync pill. A config that isn't on the keyboard shows EditingStatus in its place (D-315), so there it
+  // opens on the keyboard's config, which opens the popover when it arrives.
+  const openStatus = () => {
+    if (editingOther && keyboardConfig !== null) switchLayout(keyboardConfig.id, { status: true });
+    else openKeyboardStatus();
+  };
+  useEffect(() => {
+    if (chrome.arrival?.status !== true) return;
+    const frame = requestAnimationFrame(openKeyboardStatus);
+    return () => cancelAnimationFrame(frame);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A Sync now waiting for a build or flash belongs to this page: the sync hook outlives it, so leaving stops the wait.
+  const stopWaiting = useRef(sync.stopWaiting);
+  stopWaiting.current = sync.stopWaiting;
+  useEffect(() => () => stopWaiting.current(), []);
+  const refusalHandlers: RefusalHandlers = {
+    open_status: openStatus,
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: () => onOpenRelease(),
@@ -213,13 +231,34 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     restore_keyboard: () => {
       request("POST", "/api/keyboards/restore", token, CollectionKeyboardSchema, undefined, { board: summary.boardId }).then(
         (restored) => {
-          toasts.show({ kind: "success", message: `${restored.name} restored`, detail: "Syncing stays paused until you resume it in the keyboard's status." });
+          // Restore leaves syncing paused (D-476); the toast offers the resume itself (R3-19).
+          toasts.show({
+            kind: "success", message: `${restored.name} restored`, detail: "Syncing stays paused until you resume it.",
+            action: { label: "Resume syncing", run: () => void sync.setPaused(summary.boardId, false) },
+          });
           onChanged();
         },
-        (error: unknown) => toasts.show({ kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Try again from Your keyboards." }),
+        (error: unknown) => {
+          const manage = chrome.onManageKeyboards;
+          toasts.show({
+            kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Your keyboards can restore it too.",
+            ...(manage === undefined ? {} : { action: { label: "Open Your keyboards", run: manage } }),
+          });
+        },
       );
     },
-  });
+  };
+  // A toast about another keyboard opens that keyboard's page, where its fix is, not this layout's Build and flash.
+  useSyncToasts(sync, toasts.show, refusalHandlers, { boardId: summary.boardId, openBoard });
+  // A refused put-on says why in its dialog, with the same fix as the toast (R3-01). Restore and Replace it act on the config being put on.
+  // Build and flash here builds this layout, so a put-on of another config opens that config, whose Build and flash builds it.
+  const putOnProblem = (target: { id: string; name: string }) => (error: unknown) => {
+    if (!(error instanceof ApiError)) return null;
+    const handlers: RefusalHandlers = { ...refusalHandlers, restore: () => void restoreArchived(target.id), replace_foreign: () => sync.setReplaceAsk(target.id) };
+    if (target.id === summary.id) return refusalProblem(error, handlers);
+    delete handlers.open_release;
+    return refusalProblem(error, handlers, (action) => (action === "open_release" ? { name: target.name, open: () => switchLayout(target.id) } : undefined));
+  };
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
@@ -229,6 +268,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     board: { firmware: board.firmware, name: boardDisplayName(board.name) }, layoutId: summary.id, revisionId: revision.id, sync: boardSync,
     onApplyNow: () => void sync.syncNow(summary.id),
     onPutOn: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
+    onOpenStatus: openStatus,
+    onReplaceForeign: () => sync.setReplaceAsk(summary.id),
   };
   const synced = boardSync !== undefined && boardSync.layoutId === summary.id && boardSync.state.kind === "in_sync";
   useEffect(() => {
@@ -827,6 +868,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setChatSelection(null);
   }
 
+  // New combo from the empty combo list (R3-23): the card opens with no keys yet, and clicks on the board pick them.
+  function newCombo() {
+    if (draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setSelectMode(false);
+    setComboDraft({ id: newComboId(layout), isNew: true, name: "", positions: [], layerIds: "all", output: null, timeoutMs: undefined });
+    setComboPicking(true);
+    setCombosOpen(true);
+    setChatSelection(null);
+  }
+
   function openCombo(id: string) {
     const combo = layout.combos.find((candidate) => candidate.id === id);
     if (combo === undefined || draftBlocks()) return;
@@ -882,6 +935,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (at < 0) return;
     setLabLit(new Set([at]));
     window.setTimeout(() => setLabLit((now) => (now.has(at) && now.size === 1 ? new Set() : now)), 220);
+  }
+
+  // The lab's Input Monitoring button (R3-09): the same System Settings opener as kanata's checklist (D-492).
+  function openInputMonitoring() {
+    const failed = (detail: string) => toasts.show({ kind: "error", message: "keyloom couldn't open System Settings", detail });
+    sync.remapperSetup.openSettings("input_monitoring").then(
+      (r) => { if (!r.ok) failed(r.reason); },
+      (error: unknown) => failed(error instanceof Error ? error.message : "Try the button again."),
+    );
   }
 
   async function labApply(card: ProposalCard) {
@@ -1304,7 +1366,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setUnsynced((current) => [...current, ...changed.filter((slot) => !current.some((c) => c.layerId === slot.layerId && c.position === slot.position))]);
     // The bar has closed, so the toast says what happens next on this keyboard, with its one button (R2-01).
     const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
-    const run = next.action === null ? null : next.action.id === "apply_now" ? afterApplyKeyboard.onApplyNow : next.action.id === "put_on" ? afterApplyKeyboard.onPutOn : () => onOpenRelease();
+    const run = afterApplyRun(next.action, afterApplyKeyboard, () => onOpenRelease());
     toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
   }
 
@@ -1351,13 +1413,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
    * Opens another board or config, carrying the layer by name and the chat (D-317). A conversation belongs to one layout, so the thread
    * travels as what was on screen: this layout's turns, after any it had carried in itself, so a run of switches keeps the whole thread.
    */
-  function switchLayout(id: string) {
+  function switchLayout(id: string, extra: Partial<Arrival> = {}) {
     const handoff = turnsNow.current.flatMap((turn) => turn.kind === "assistant" && turn.presentation?.handoff?.layoutId === id ? [turn.presentation.handoff] : []).at(-1);
-    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }) };
+    const carry: Arrival = { layerName: layer?.name ?? null, chatOpen, thread: threadToCarry(), ...(handoff === undefined ? {} : { conversationId: handoff.conversationId }), ...extra };
     if (chrome.onCarry !== undefined) chrome.onCarry(id, carry);
     else chrome.onSelect(id);
     // A config made since the page loaded isn't in the page's list yet, and selecting an unknown one leaves the page on its skeleton.
     if (!chrome.layouts.some((candidate) => candidate.id === id)) chrome.onReload?.(id);
+  }
+
+  // A board opens on the config its keyboard runs (D-315), else its first.
+  function openBoard(boardId: string) {
+    const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
+    const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
+    if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
   }
 
   /** The thread as it stands, with the config it was about, so the next page can show it and its config cards can go back. */
@@ -1491,7 +1560,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
-  async function undo(target?: { id: string; summary: string }) {
+  /** Resolves true when the step back went through, so Compare closes only then and a failure keeps it open beside the toast (R3-23). */
+  async function undo(target?: { id: string; summary: string }): Promise<boolean> {
     setUndoing(true);
     setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
@@ -1504,6 +1574,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ? { kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") }
           : { kind: "info", message: "Went back", detail: undone },
       );
+      return true;
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       toasts.show({
@@ -1512,6 +1583,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         ...(stale ? { detail: "Showing the latest version now." } : error instanceof Error ? { detail: error.message } : {}),
       });
       if (stale) void onChanged().catch(() => {});
+      return false;
     } finally {
       setUndoing(false);
     }
@@ -1782,12 +1854,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         boards={{
           entries: boardEntries(chrome.layouts, chrome.boardChoices).map((entry) => ({ ...entry, tone: boardLight(sync.boards.find((candidate) => candidate.boardId === entry.id)) })),
           active: summary.boardId,
-          onSelect: (boardId) => {
-            // A board opens on the config its keyboard runs (D-315), else its first.
-            const running = sync.boards.find((candidate) => candidate.boardId === boardId)?.layoutId;
-            const target = chrome.layouts.find((candidate) => candidate.id === running) ?? chrome.layouts.find((candidate) => candidate.boardId === boardId);
-            if (target !== undefined && target.id !== summary.id) switchLayout(target.id);
-          },
+          onSelect: openBoard,
         }}
         boardsAfter={newBoard.step.kind !== "idle" || (newBoard.waiting.length === 0 && newBoard.setupWaiting.length === 0) ? null : newBoard.waiting.length > 0 ? (
           // A keyboard keyloom hasn't met stays one click away after "Not now" (D-336).
@@ -1802,7 +1869,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         )}
         sync={
           editingOther && keyboardConfig !== null ? (
-            <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
+            <>
+              <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
+              {/* SyncStatus isn't here to host Replace it, which a refused put-on of this config asks for. */}
+              <ReplaceForeignHost sync={sync} boardId={summary.boardId} />
+            </>
           ) : (
             <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
           )
@@ -1989,7 +2060,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
             </div>
           ) : null}
-          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease() }} /> : null}
+          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease(), onOpenInputMonitoring: openInputMonitoring }} /> : null}
           {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
           {labOpen && narrow && lab.phase.kind === "readout" ? (
             <div className="lab-sheet">
@@ -2133,7 +2204,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
-                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then(() => setComparing(null))}
+                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then((wentBack) => wentBack && setComparing(null))}
                   onPutOn={() => setConfigDialog({ kind: "put-version", milestone: comparing.milestone })}
                   onNewConfig={() => setConfigDialog({ kind: "new", start: "version", version: comparing.milestone.version.id })}
                   blockedReason={undoBlock}
@@ -2147,7 +2218,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   onKeyboard={!editingOther}
                   onClose={() => setHistoryOpen(false)}
                   onReload={history.reload}
-                  onGoBack={(target) => undo(target)}
+                  onGoBack={async (target) => void (await undo(target))}
                   onCompare={(milestone) => void compareWith(milestone)}
                   onPutOn={(milestone) => setConfigDialog({ kind: "put-version", milestone })}
                   onNewConfig={(milestone) => setConfigDialog({ kind: "new", start: "version", version: milestone.version.id })}
@@ -2162,7 +2233,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           }
           combo={
             comboDraft !== null ? comboCard : combosOpen ? (
-              <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
+              <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} onNew={newCombo} />
             ) : null
           }
           summary={null}
@@ -2334,6 +2405,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putOn(configDialog.target)}
+          problemFor={putOnProblem(configDialog.target)}
           onClose={() => setConfigDialog(null)}
         />
       ) : configDialog?.kind === "put-version" ? (
@@ -2349,6 +2421,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putVersionOn(configDialog.milestone)}
+          problemFor={putOnProblem(summary)}
           onClose={() => setConfigDialog(null)}
         />
       ) : null}

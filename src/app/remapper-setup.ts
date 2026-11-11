@@ -34,6 +34,9 @@ export const SETTINGS_PANES = {
   files_and_folders: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
   full_disk_access: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
   login_items: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension",
+  // Not a pane: Karabiner-Elements' own settings, where its rules for the built-in keyboard are turned off (R3-21). The doctor reads the
+  // same app bundle to see it is installed.
+  karabiner_elements: "/Applications/Karabiner-Elements.app",
 } as const;
 export type SettingsPane = keyof typeof SETTINGS_PANES;
 export const SETTINGS_PANE_NAMES = Object.keys(SETTINGS_PANES) as [SettingsPane, ...SettingsPane[]];
@@ -43,7 +46,8 @@ export type OpenSettingsResult = { ok: true } | { ok: false; code: "unsupported_
 export async function openSettingsPane(pane: SettingsPane, deps: { run: Runner; platform: NodeJS.Platform }): Promise<OpenSettingsResult> {
   if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "System Settings is on macOS only." };
   const r = await deps.run(["open", SETTINGS_PANES[pane]]);
-  return r.code === 0 ? { ok: true } : { ok: false, code: "failed", reason: `macOS didn't open System Settings: ${lastLine(r.out) || `open exited ${r.code}`}` };
+  const what = pane === "karabiner_elements" ? "Karabiner-Elements" : "System Settings";
+  return r.code === 0 ? { ok: true } : { ok: false, code: "failed", reason: `macOS didn't open ${what}: ${lastLine(r.out) || `open exited ${r.code}`}` };
 }
 
 // --- quoting -----------------------------------------------------------------------------------

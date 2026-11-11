@@ -132,8 +132,14 @@ describe("afterApply", () => {
     for (const state of stuck) expect(afterApply(GLOVE, synced({ state }), "lay_1").action).toEqual({ id: "open_release", label: "Build and flash" });
   });
 
-  test("auto-apply is promised only while kanata can take it: when it isn't running, Apply now is offered", () => {
-    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_connected" } }), "lay_1").action?.id).toBe("apply_now");
+  test("auto-apply is promised only while kanata can take it; Apply now only where it can work (R3-03)", () => {
+    // Not running: Apply now would be refused, so the card opens kanata's setup checklist instead.
+    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_connected" } }), "lay_1")).toMatchObject({
+      text: "kanata isn't running, so it isn't on your MacBook keyboard yet. Undo above the board takes it back.", action: { id: "open_status", label: "Open keyboard status" },
+    });
+    expect(afterApply(MACBOOK, macSync({ on: false }, { state: { kind: "not_connected" } }), "lay_1").action?.id).toBe("open_status");
+    // Someone else's config: keyloom never replaces it by itself, so the card offers the confirm that does.
+    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_keyloom", detail: "kanata runs /tmp/x.kbd" } }), "lay_1").action).toEqual({ id: "replace_foreign", label: "Replace it…" });
     expect(afterApply(MACBOOK, macSync({}, { state: { kind: "behind", changes: 1, why: "failed", error: "reload failed" } }), "lay_1").action?.id).toBe("apply_now");
   });
 

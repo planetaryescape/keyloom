@@ -23,6 +23,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const [loads, setLoads] = useState(0);
   const [typed, setTyped] = useState("");
   const listening = useRef(false);
+  // What was last asked for, so Try again after a refusal (an Input Monitoring prompt, a busy keyboard) starts the same passage.
+  const lastChoice = useRef<{ passageId?: string; text?: string }>({});
 
   useEffect(() => {
     if (!open) return;
@@ -58,6 +60,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   };
 
   const start = useCallback(async (choice: { passageId?: string; text?: string }) => {
+    lastChoice.current = choice;
     setProblem(null);
     setProblemCode(null);
     try {
@@ -105,8 +108,14 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     setPhase({ kind: "start" });
   }, [token]);
 
+  // A session leaves the list only once the server has deleted it; a failed delete keeps the row and says why (R3-23).
   const remove = useCallback(async (id: string) => {
-    await api.deleteSession(token, id).catch(say);
+    try {
+      await api.deleteSession(token, id);
+    } catch (error) {
+      say(error);
+      return;
+    }
     setSessions((list) => list.filter((s) => s.id !== id));
     setPhase({ kind: "start" });
   }, [token]);
@@ -114,7 +123,10 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const openFinding = (id: string | null) => setPhase((p) => (p.kind === "readout" ? { ...p, open: id, trying: null } : p));
   const tryFix = (index: number | null) => setPhase((p) => (p.kind === "readout" ? { ...p, trying: index } : p));
 
-  return { phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }) };
+  return {
+    phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, retry: () => start(lastChoice.current),
+    stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }),
+  };
 }
 
 export type Lab = ReturnType<typeof useLab>;

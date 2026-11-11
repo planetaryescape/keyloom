@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, noticeOnPage, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -97,7 +97,26 @@ describe("autoSyncLine", () => {
     const unproven = board({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } });
     expect(autoSyncLine(unproven)).toMatchObject({ on: false, canTurnOn: false });
     expect(autoSyncLine(unproven).note).toContain("by itself once");
-    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ name: "Auto-sync", on: true, canTurnOn: true, note: null });
+    expect(autoSyncLine(board({ kind: "in_sync" }))).toEqual({ name: "Auto-sync", on: true, canTurnOn: true, note: null, exitChord: false });
+  });
+
+  // D-509: "I held it and kanata stopped" appears only after keyloom saw kanata run its config, and the note says why it isn't there.
+  test("the exit-chord button waits until keyloom has seen kanata running, and says why", () => {
+    const mac = (state: BoardSync["state"], exitChordReady: boolean | undefined) =>
+      autoSyncLine(board(state, { remapper: true, boardName: "MacBook keyboard", auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null, ...(exitChordReady === undefined ? {} : { exitChordReady }) } }));
+    const ready = mac({ kind: "not_connected", changes: null }, true);
+    expect(ready).toMatchObject({ name: "Auto-apply", exitChord: true });
+    expect(ready.note).toContain("press the button below");
+    const fresh = mac({ kind: "not_connected", changes: null }, false);
+    expect(fresh.exitChord).toBe(false);
+    expect(fresh.note).toContain("Start kanata first");
+    expect(fresh.note).not.toContain("button below");
+    // An older server that doesn't send the field never shows the button.
+    expect(mac({ kind: "not_connected", changes: null }, undefined).exitChord).toBe(false);
+    const foreign = mac({ kind: "not_keyloom", detail: "kanata runs /tmp/x.kbd" }, false);
+    expect(foreign.note).toContain("replace the one it runs first");
+    // Once proven there is nothing to prove.
+    expect(autoSyncLine(board({ kind: "in_sync" }, { remapper: true, auto: { on: true, choice: null, paused: false, proven: true, provenAt: 1, dueAt: null, exitChordReady: false } })).exitChord).toBe(false);
   });
 });
 
@@ -113,10 +132,43 @@ describe("syncNotice", () => {
     });
   });
 
+  test("a notice with no button is the same on any page", () => {
+    const notice = syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }));
+    if (notice === null) throw new Error("expected a notice");
+    expect(noticeOnPage(notice, at({ kind: "in_sync" }), "zsa/moonlander")).toBe(notice);
+  });
+
   test("a failed sync says what failed", () => {
     expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }))).toEqual({
       kind: "error", message: "Couldn't put the change on your Glove80", detail: "zapp exited with code 1",
     });
+  });
+
+  // R3-05: Docker's own sentence (which can name a terminal fix) stays in the build log; the toast, the line and the menu bar say this.
+  test("an auto-sync build that failed because Docker wasn't ready offers Build and flash", () => {
+    const raw = "Colima is running, but this account can't use its Docker socket. Quit your Docker app and open it again.";
+    const docker = { ...run("failed"), failure: "build", error: raw, errorCode: "docker_unavailable" };
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: raw }, docker);
+    const notice = syncNotice(at(syncing), failed);
+    expect(notice).toEqual({
+      kind: "error", message: "Docker isn't ready", detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs.",
+      action: { id: "open_release", label: "Build and flash…" },
+    });
+    const line = syncLine(failed, "lay_1");
+    expect(line.detail).toStartWith("Docker isn't ready");
+    expect(line.action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(JSON.stringify([notice, line])).not.toContain("Quit your Docker app");
+    // Build and flash acts on the layout on screen: on the Glove80's page the notice keeps it, on another board's page it opens the Glove80.
+    if (notice === null) throw new Error("expected a notice");
+    expect(noticeOnPage(notice, failed, "moergo/glove80")).toBe(notice);
+    expect(noticeOnPage(notice, failed, "zsa/moonlander")).toEqual({
+      kind: "error", message: "Docker isn't ready",
+      detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs. Its page has Build and flash.",
+      action: { id: "open_board", label: "Open Glove80" },
+    });
+    // Any other build failure keeps its own words: they are the compiler's, and the log has the rest.
+    const other = { ...run("failed"), failure: "build", error: "compile error in keymap.c", errorCode: null };
+    expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "compile error in keymap.c" }, other))?.detail).toBe("compile error in keymap.c");
   });
 
   test("a failed latest sync cannot produce a success toast from a stale in-sync reading", () => {
@@ -197,6 +249,8 @@ describe("refusalNotice", () => {
     // An exit-chord check that couldn't read kanata, or found it running, offers the check again rather than a dead end (D-497).
     expect(refusalNotice("kanata_unreadable", cli)).toMatchObject({ message: "keyloom couldn't tell whether kanata stopped", action: { id: "check_exit_chord", label: "Check again" } });
     expect(refusalNotice("kanata_still_running", cli).action).toEqual({ id: "check_exit_chord", label: "Check again" });
+    expect(refusalNotice("kanata_not_seen", cli)).toMatchObject({ message: "keyloom hasn't seen kanata running lately", action: { id: "open_status", label: "Open keyboard status" } });
+    expect(refusalNotice("kanata_not_seen", cli).detail).not.toContain("keyloom remap");
     // A stale Replace it has nothing to retry; kanata's state is in the keyboard's status, and the toast opens it (R2-14).
     expect(refusalNotice("kanata_not_foreign", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
     expect(refusalNotice("kanata_not_running", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });

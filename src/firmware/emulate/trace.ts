@@ -45,10 +45,11 @@ export type CaptureHooks = {
 };
 
 /**
- * Why a capture couldn't start, for a screen to offer the fix (R1-19): `needs_sync` is a keyboard whose firmware can't stream yet, which
- * a sync or a build and flash replaces; `not_connected` is no keyboard at all.
+ * Why a capture couldn't start, for a screen to offer the fix (R1-19): `needs_sync` is a keyloom build that can't stream yet, which a sync
+ * or a build and flash replaces; `foreign_firmware` is firmware keyloom didn't build, which only Build and flash replaces, because a sync
+ * never replaces it by itself; `not_connected` is no keyboard at all.
  */
-export type CaptureCode = "needs_sync" | "not_connected";
+export type CaptureCode = "needs_sync" | "foreign_firmware" | "not_connected";
 
 export class CaptureError extends Error {
   override name = "CaptureError";

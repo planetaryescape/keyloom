@@ -135,6 +135,7 @@ describe("recording from a Moonlander", () => {
     expect((await findQmkStreamDevice(fakeMoonlander().transport)).handle).toBe("fake-hid-1");
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [] }).transport)).rejects.toThrow("no ZSA keyboard");
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [moonlanderInterface("QxKPz/zLQ3Md")] }).transport)).rejects.toThrow("isn't running a keyloom build");
+    await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [moonlanderInterface("QxKPz/zLQ3Md")] }).transport)).rejects.toMatchObject({ code: "foreign_firmware" });
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [moonlanderInterface(), moonlanderInterface("keyloom/ABCDEFGHJKMN")] }).transport)).rejects.toThrow("more than one");
     await expect(findQmkStreamDevice(fakeMoonlander({ interfaces: [{ ...moonlanderInterface(), vendorId: 0x1234 }] }).transport)).rejects.toThrow(CaptureError);
   });
@@ -269,6 +270,14 @@ describe("recording from a Glove80", () => {
     await expect(findZmkStreamPort(board, fakeGlove({ ports: [right] }).transport)).rejects.toThrow("running keyloom's firmware is connected");
     await expect(findZmkStreamPort(board, fakeGlove({ ports: [] }).transport)).rejects.toThrow("running keyloom's firmware is connected");
     await expect(findZmkStreamPort(board, fakeGlove({ ports: [central, { ...central, path: "/fake/other" }] }).transport)).rejects.toThrow("more than one");
+  });
+
+  // R1-19: a sync never replaces firmware keyloom didn't build, so the lab must offer Build and flash for it, and nothing for an absent one.
+  test("a central half on firmware keyloom didn't build is foreign_firmware; no central at all is not_connected", async () => {
+    const board = (await loadBoardDir(`${ROOT}/boards/moergo/glove80`)).definition;
+    const moergo = glovePort("GLV80-0123456789ABCDEF", "/fake/left");
+    await expect(findZmkStreamPort(board, fakeGlove({ ports: [moergo] }).transport)).rejects.toMatchObject({ code: "foreign_firmware" });
+    await expect(findZmkStreamPort(board, fakeGlove({ ports: [] }).transport)).rejects.toMatchObject({ code: "not_connected" });
   });
 });
 

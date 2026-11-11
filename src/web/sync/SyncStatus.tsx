@@ -101,8 +101,9 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
               <span className="sync-switch" data-on={auto.on} aria-hidden="true" />
             </button>
             {auto.note === null ? null : <p className="sync-note">{auto.note}</p>}
-            {board.remapper === true && !board.auto.proven ? (
-              // Recorded only while kanata isn't answering, so it stands for the chord having worked (R1-18).
+            {auto.exitChord ? (
+              // Offered only after keyloom saw kanata run its config, and recorded only while kanata isn't answering, so it stands for the
+              // chord having worked (R1-18, D-509). The note above says why it isn't there otherwise.
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.confirmExitChord(board.boardId); }}>
                 <ShieldCheck size={14} aria-hidden="true" />
                 <span className="menu-item-label">I held it and kanata stopped</span>
@@ -110,8 +111,9 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
             ) : null}
             <div className="menu-separator" role="separator" />
             {board.remapper === true ? (
-              // Reloads the identity map, so the MacBook types plainly again. Needs no sudo.
-              board.state.kind === "behind" && board.state.why === "remapping_off" ? null : (
+              // Reloads the identity map, so the MacBook types plainly again. Needs no sudo. With kanata stopped the keyboard already types
+              // plainly, and the reload would be refused, so it isn't offered.
+              (board.state.kind === "behind" && board.state.why === "remapping_off") || board.state.kind === "not_connected" ? null : (
                 <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.disableRemapping(board.boardId); }}>
                   <KeyboardOff size={14} aria-hidden="true" />
                   <span className="menu-item-label">Disable remapping</span>
@@ -198,9 +200,15 @@ export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease,
           onPutOn={onPutOn}
         />
       ))}
-      {sync.replaceAsk === null ? null : <ReplaceForeignDialog sync={sync} layoutId={sync.replaceAsk} board={shown.find((b) => b.remapper === true)} />}
+      <ReplaceForeignHost sync={sync} boardId={boardId} />
     </div>
   );
+}
+
+/** The Replace it confirm while one is asked for. A page showing EditingStatus in place of the pill mounts it too, for a refused put-on. */
+export function ReplaceForeignHost({ sync, boardId }: { sync: SyncApi; boardId: string }) {
+  if (sync.replaceAsk === null) return null;
+  return <ReplaceForeignDialog sync={sync} layoutId={sync.replaceAsk} board={sync.boards.find((b) => b.boardId === boardId && b.remapper === true)} />;
 }
 
 /**
