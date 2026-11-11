@@ -7,7 +7,11 @@ import {
 } from "../../src/app/remapper-setup.ts";
 import { SettingsPaneSchema } from "../../src/api/system-remapper.ts";
 import type { DoctorProbe } from "../../src/firmware/kanata/doctor.ts";
+import { launchDaemonPlist } from "../../src/firmware/kanata/plist.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
+import { tempDir } from "../helpers/tmp.ts";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 let w: ReturnType<typeof remapperWorld> | undefined;
 afterEach(async () => {
@@ -61,7 +65,7 @@ describe("quoting", () => {
   });
 
   test("the admin command is osascript with one script argument that names what it does", () => {
-    const plist = `/Users/o'brien/Library/Application Support/kanata/dev.keyloom.kanata.plist`;
+    const plist = launchDaemonPlist({ kanataPath: "/opt/homebrew/bin/kanata", configPath: `/Users/o'brien/Library/Application Support/kanata/keyloom.kbd`, port: 10000 });
     const cmd = adminCommand(daemonInstallScript(plist), ADMIN_PROMPT);
     expect(cmd.slice(0, 2)).toEqual(["osascript", "-e"]);
     expect(cmd).toHaveLength(3);
@@ -70,16 +74,65 @@ describe("quoting", () => {
     const shell = unAppleScript(m![1]!);
     expect(shell).toBe(daemonInstallScript(plist));
     expect(unAppleScript(m![2]!)).toContain("kanata");
-    // The plist path reaches cp as one word, quote and all.
-    expect(shell.startsWith(`cp ${shellQuote(plist)} '/Library/LaunchDaemons/dev.keyloom.kanata.plist'`)).toBe(true);
+    expect(shell).toContain("mv -f \"$t\" '/Library/LaunchDaemons/dev.keyloom.kanata.plist'");
     expect(shell).toContain("launchctl bootstrap system '/Library/LaunchDaemons/dev.keyloom.kanata.plist'");
     expect(shell).not.toContain("sudo");
   });
 
-  test("the install script parses as shell, so a path can't break it", async () => {
-    const script = daemonInstallScript(`/tmp/it's "a" $(x).plist`);
+  test("the root script carries the plist itself and reads no path under the person's home", () => {
+    const home = `/Users/o'brien`;
+    const plist = launchDaemonPlist({ kanataPath: "/opt/homebrew/bin/kanata", configPath: `${home}/Library/Application Support/kanata/keyloom.kbd`, port: 10000 });
+    const shell = daemonInstallScript(plist);
+    // The only paths it names are root's: the destination and a temporary file beside it.
+    expect(shell).not.toContain("/Users/");
+    expect(shell).not.toContain("Application Support");
+    expect(shell).not.toMatch(/\bcp\b/);
+    const encoded = /printf %s '([A-Za-z0-9+/=]+)' \| base64 --decode/.exec(shell)?.[1];
+    expect(encoded).toBeDefined();
+    expect(Buffer.from(encoded!, "base64").toString("utf8")).toBe(plist);
+    expect(shell).toContain("mktemp '/Library/LaunchDaemons/.dev.keyloom.kanata.XXXXXX'");
+  });
+
+  test("the install script parses as shell", async () => {
+    const script = daemonInstallScript(`<plist>it's "a" $(x) \`y\`</plist>`);
     const proc = Bun.spawn(["/bin/sh", "-n", "-c", script], { stderr: "pipe" });
     expect(await proc.exited).toBe(0);
+  });
+
+  /** Runs the script for real against a temporary destination, with `chown` and `launchctl` replaced by scripts that only log. */
+  async function runInstall(chownExit: number) {
+    const dir = tempDir();
+    const bin = join(dir, "bin");
+    const dest = join(dir, "LaunchDaemons", "dev.keyloom.kanata.plist");
+    mkdirSync(bin);
+    mkdirSync(dirname(dest));
+    const log = join(dir, "calls.log");
+    for (const [name, exit] of [["chown", chownExit], ["launchctl", 0]] as const) {
+      writeFileSync(join(bin, name), `#!/bin/sh\necho "${name} $*" >> '${log}'\nexit ${exit}\n`);
+      chmodSync(join(bin, name), 0o755);
+    }
+    const plist = launchDaemonPlist({ kanataPath: "/opt/homebrew/bin/kanata", configPath: "/tmp/keyloom.kbd", port: 10000 });
+    const proc = Bun.spawn(["/bin/sh", "-c", daemonInstallScript(plist, dest)], { env: { PATH: `${bin}:/usr/bin:/bin` }, stderr: "pipe" });
+    const code = await proc.exited;
+    const calls = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : [];
+    return { code, dest, plist, calls, left: readdirSync(dirname(dest)) };
+  }
+
+  test("the script installs exactly the plist it carries, mode 644, then bootstraps it", async () => {
+    const r = await runInstall(0);
+    expect(r.code).toBe(0);
+    expect(readFileSync(r.dest, "utf8")).toBe(r.plist);
+    expect(statSync(r.dest).mode & 0o777).toBe(0o644);
+    expect(r.left).toEqual(["dev.keyloom.kanata.plist"]);
+    expect(r.calls[0]).toMatch(/^chown root:wheel .*\.dev\.keyloom\.kanata\.\w+$/);
+    expect(r.calls.slice(1)).toEqual(["launchctl bootout system/dev.keyloom.kanata", `launchctl bootstrap system ${r.dest}`]);
+  });
+
+  test("a failed step installs nothing, bootstraps nothing and leaves no temporary file", async () => {
+    const r = await runInstall(1);
+    expect(r.code).not.toBe(0);
+    expect(r.left).toEqual([]);
+    expect(r.calls.every((c) => c.startsWith("chown"))).toBe(true);
   });
 });
 
@@ -126,8 +179,13 @@ describe("starting kanata", () => {
     expect(await startKanataDaemon(MAC, deps(r.run, { remapper: world.over }))).toEqual({ ok: true });
     expect(r.calls).toHaveLength(1);
     expect(r.calls[0]?.[0]).toBe("osascript");
-    expect(r.calls[0]?.[2]).toContain(world.home);
-    expect(await Bun.file(`${world.paths.dir}/dev.keyloom.kanata.plist`).exists()).toBe(true);
+    // The plist names keyloom.kbd under the home folder, but the script carries it encoded and never names the home folder itself.
+    expect(r.calls[0]?.[2]).not.toContain(world.home);
+    const carried = /printf %s '([A-Za-z0-9+/=]+)'/.exec(r.calls[0]?.[2] ?? "")?.[1] ?? "";
+    const plist = Buffer.from(carried, "base64").toString("utf8");
+    expect(plist).toContain(`<string>${world.paths.kbd}</string>`);
+    // The copy in keyloom's folder is for the CLI's printed command; the privileged step never reads it.
+    expect(readFileSync(`${world.paths.dir}/dev.keyloom.kanata.plist`, "utf8")).toBe(plist);
   });
 
   test("a cancelled password dialog says so", async () => {

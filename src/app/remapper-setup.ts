@@ -2,6 +2,7 @@
 // Every outside command goes through an injected runner, so tests describe a Mac instead of changing one: no real `brew`,
 // `osascript` or `open` runs under `bun test`.
 import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { findKanata } from "../firmware/kanata/binary.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { DAEMON_LABEL, DAEMON_PLIST_PATH } from "../firmware/kanata/plist.ts";
@@ -61,17 +62,26 @@ export function adminCommand(shell: string, prompt: string): string[] {
 }
 
 /**
- * Installs keyloom's LaunchDaemon and (re)loads it, which starts kanata (RunAtLoad). It is `rootInstallCommand` without `sudo`, plus a
- * bootout first, so a daemon that is loaded but stopped (the exit chord stops it for good) or one with an older plist starts again.
+ * Installs keyloom's LaunchDaemon and (re)loads it, which starts kanata (RunAtLoad). A bootout comes first, so a daemon that is loaded but
+ * stopped (the exit chord stops it for good) or one with an older plist starts again.
+ *
+ * The plist's text travels inside the script, base64-encoded, and root writes it to a file it creates in the root-owned destination
+ * folder. Reading a file from the person's home instead would let any process running as them swap the plist while the password dialog
+ * is open, and the swapped `ProgramArguments` would then run as root. The rename into place is atomic, so launchd never reads a half-written
+ * file, and nothing is bootstrapped unless the install succeeded. base64's alphabet needs no quoting in shell or AppleScript.
+ * `dest` is a parameter only so a test can run the script against a temporary folder.
  */
-export function daemonInstallScript(plistSource: string): string {
-  const dest = shellQuote(DAEMON_PLIST_PATH);
+export function daemonInstallScript(plist: string, dest: string = DAEMON_PLIST_PATH): string {
+  const encoded = Buffer.from(plist, "utf8").toString("base64");
+  const to = shellQuote(dest);
+  const template = shellQuote(join(dirname(dest), `.${DAEMON_LABEL}.XXXXXX`));
+  // `--decode` is the spelling both macOS's and GNU's base64 accept.
   return [
-    `cp ${shellQuote(plistSource)} ${dest}`,
-    `chown root:wheel ${dest}`,
-    `chmod 644 ${dest}`,
-    `{ launchctl bootout system/${DAEMON_LABEL} 2>/dev/null; launchctl bootstrap system ${dest} || { sleep 1; launchctl bootstrap system ${dest}; }; }`,
-  ].join(" && ");
+    `t=$(mktemp ${template}) || exit 1;`,
+    `if printf %s '${encoded}' | base64 --decode > "$t" && chown root:wheel "$t" && chmod 644 "$t" && mv -f "$t" ${to}; then`,
+    `launchctl bootout system/${DAEMON_LABEL} 2>/dev/null; launchctl bootstrap system ${to} || { sleep 1; launchctl bootstrap system ${to}; };`,
+    `else rm -f "$t"; exit 1; fi`,
+  ].join(" ");
 }
 
 export const ADMIN_PROMPT = "keyloom wants to install kanata's background service and start it, so your MacBook keyboard can type your layout.";
@@ -127,14 +137,15 @@ export async function installKanata(deps: SetupDeps): Promise<ActionResult> {
 }
 
 /**
- * Writes the daemon's plist into keyloom's folder (`setupRemapper`, which never replaces a keyloom.kbd it didn't write), then installs
- * and starts it as root through macOS's password dialog. The person sees what it does and can cancel; keyloom never holds the password.
+ * Prepares keyloom's folder (`setupRemapper`, which never replaces a keyloom.kbd it didn't write), then installs and starts the daemon as
+ * root through macOS's password dialog, with the plist text carried in the script rather than read back from that folder. The person sees
+ * what it does and can cancel; keyloom never holds the password.
  */
 export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promise<ActionResult> {
   if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "keyloom starts kanata on macOS only." };
   if (deps.kanata() === undefined) return { ok: false, code: "no_kanata", reason: "Install kanata first." };
   const setup = await setupRemapper(boardId, deps.remapper ?? {});
-  const r = await deps.run(adminCommand(daemonInstallScript(setup.plistPath), ADMIN_PROMPT));
+  const r = await deps.run(adminCommand(daemonInstallScript(setup.plist), ADMIN_PROMPT));
   if (r.code === 0) return { ok: true };
   // osascript reports a cancelled password dialog as error -128.
   if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata wasn't started." };
