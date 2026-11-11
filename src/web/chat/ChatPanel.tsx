@@ -462,6 +462,16 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const usedProvider = transcript.pinned?.provider ?? status?.active?.provider;
   const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
   const setup = { token, status, onChanged: provider.replace, onReload: reloadProvider };
+  // A message refused for a missing key stays in the box; a ready provider takes it in a new conversation, sent when BK is ready.
+  const retry = {
+    pinned: transcript.pinned?.provider ?? null,
+    onRetry: retryDraft,
+    onSwitch: (id: keyof typeof PROVIDER_NAMES) => void chooseProvider(token, { provider: id }).then((next) => {
+      provider.replace(next);
+      chat.newConversation();
+      input.current?.focus();
+    }, () => {}),
+  };
   const switchProvider = (id: string) => {
     const lastAsked = transcript.turns.findLast((turn) => turn.kind === "user");
     void chooseProvider(token, { provider: id as keyof typeof PROVIDER_NAMES }).then((next) => {
@@ -530,7 +540,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     <section className="chat" data-streaming={streaming} data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
       {variant === "bar" ? (
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
-        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
+        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
       ) : null}
       <header className="chat-head" hidden={variant === "bar"}>
         <h2>Chat</h2>
@@ -555,7 +565,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </div>
       </header>
 
-      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
+      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} /> : null}
       {view !== "chat" ? null : <div className="chat-context"><p>Editing {board.name} · {configName ?? layoutRef}</p>{streaming ? <AgentMotionToggle paused={motionPaused} onChange={setMotionPaused} /> : null}</div>}
 
       {view === "decisions" ? (
@@ -715,7 +725,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                 <ModelSetup {...setup} replacing={setupOpen} />
               </section>
             )}
-            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
+            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onDismiss={chat.dismissProblem} />}
           </div>
           {commandRows.length === 0 ? null : (
             <ul className="bar-commands" role="listbox" aria-label="Commands">

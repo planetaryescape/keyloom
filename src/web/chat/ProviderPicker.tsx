@@ -16,13 +16,15 @@ interface Props {
   /** The provider and model the open conversation started on; it can't switch (D-111). */
   pinned: Pinned | null;
   onChanged: (status: ChatProviderStatus) => void;
+  /** Re-reads the status, when a key save finds it changed under the page (an environment key appeared, the store went away). */
+  onReload: () => void;
   /** The command bar opens the picker from its menu and shows no model line: the model surfaces only when it fails (P3 review). */
   menuOpened?: { open: boolean; onClose: () => void };
 }
 
 // Which model answers, and the way to change it for the next conversation (19#choosing-a-provider).
 // The choice goes to the data directory's config.json; a conversation already going keeps its own.
-export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }: Props) {
+export function ProviderPicker({ token, status, pinned, onChanged, onReload, menuOpened }: Props) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
@@ -211,7 +213,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
           )}
           {chosen === undefined || locked !== null ? null : (
             // Set it up, or replace or forget its saved key, right here; the choice below then saves a provider that works (D-496).
-            <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={() => {}} />
+            <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={onReload} />
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
           </div>

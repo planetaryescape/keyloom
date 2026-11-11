@@ -40,9 +40,12 @@ function envProvider(env: Env): ProviderId | undefined {
   return value;
 }
 
+/** The provider named by the flag, the variable or the config, before any credential is looked at. */
+const explicitProvider = (choice: ModelChoice, config: AgentConfig, env: Env): ProviderId | undefined => choice.provider ?? envProvider(env) ?? config.provider;
+
 /** Which provider this message uses, and where that came from. Throws a missing_key ModelError when nothing is set up. */
 export async function chooseProvider(choice: ModelChoice, config: AgentConfig, env: Env = process.env, codexReady?: boolean): Promise<ProviderId> {
-  const explicit = choice.provider ?? envProvider(env) ?? config.provider;
+  const explicit = explicitProvider(choice, config, env);
   if (explicit) return explicit;
   const first = keyedProviders(env)[0];
   if (first) return first;
@@ -55,9 +58,10 @@ export async function chooseProvider(choice: ModelChoice, config: AgentConfig, e
 }
 
 export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, baseEnv: Env = process.env): Promise<AgentModel> {
-  // Read at each call, not at startup, so a key saved a moment ago answers the next message (D-496).
-  const env = await credentials().env(baseEnv);
+  // Read at each call, not at startup, so a key saved a moment ago answers the next message (D-496). Only the answering
+  // provider's key is read, so a stalled read for another provider can't hold up a key that is in the environment.
   const config = readAgentConfig(dataDir);
+  const env = await credentials().envFor(baseEnv, explicitProvider(choice, config, baseEnv));
   const provider = await chooseProvider(choice, config, env);
   // A pinned conversation keeps its model; otherwise the config's model applies only to the provider it was written for.
   const model = choice.model ?? (config.provider === undefined || config.provider === provider ? config.model : undefined) ?? DEFAULT_MODELS[provider];
@@ -113,7 +117,7 @@ const SETUP: Record<ProviderId, { label: string; setup: string; command: string 
 /** For the chat panel: which provider answers, and what each one still needs. Never throws on a missing credential. */
 export async function providerStatus(dataDir: string, choice: ModelChoice = {}, baseEnv: Env = process.env): Promise<ProviderStatus> {
   // The store reads and `codex login status` don't depend on each other; Codex needs only CODEX_API_KEY and its binary from baseEnv.
-  const [env, sources, codex] = await Promise.all([credentials().env(baseEnv), credentials().sources(baseEnv), checkCodexLogin(baseEnv)]);
+  const [env, sources, codex, keyStore] = await Promise.all([credentials().env(baseEnv), credentials().sources(baseEnv), checkCodexLogin(baseEnv), credentials().usableStore()]);
   const config = readAgentConfig(dataDir);
   const ready = new Set<ProviderId>(keyedProviders(env));
   if (codex.ready) ready.add("codex");
@@ -128,7 +132,7 @@ export async function providerStatus(dataDir: string, choice: ModelChoice = {}, 
   }
   const lockedBy = choice.provider ? "--provider" : hasEnvProvider(env) ? "KEYLOOM_PROVIDER" : null;
   return {
-    active, lockedBy, keyStore: credentials().store?.kind ?? null, codexSignIn: codexSignIn().current(),
+    active, lockedBy, keyStore, codexSignIn: codexSignIn().current(),
     providers: PROVIDERS.map((id) => ({
       id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id],
       credential: id === "codex" ? null : sources[id],

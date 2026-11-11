@@ -106,7 +106,7 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
 function ProviderSetup({ token, provider, status, onChanged, onReload, replacing }: {
   token: string; provider: Provider; status: ChatProviderStatus; onChanged: (status: ChatProviderStatus) => void; onReload: () => void; replacing: boolean;
 }) {
-  const view = setupView(provider, status);
+  const view = setupView(provider, status, replacing);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [replace, setReplace] = useState(replacing);

@@ -105,6 +105,60 @@ describe("the Secret Service store", () => {
   });
 });
 
+describe("a Secret Service that fails", () => {
+  // secret-tool exits 1 for a missing item and for a failure alike; only a failure writes a reason to stderr.
+  const unreachable = { code: 1, stdout: "", stderr: "secret-tool: Cannot autolaunch D-Bus without X11 $DISPLAY" };
+
+  test("a failed clear is an error, so forget never reports a key gone that is still there", async () => {
+    // The lookup fails for the same reason, so it can't confirm the key is gone either.
+    const store = secretServiceStore(async () => unreachable);
+    await expect(store.remove("anthropic")).rejects.toThrow("could not remove the key");
+    await expect(new Credentials(store).forget("anthropic")).rejects.toThrow("could not remove the key");
+  });
+
+  test("a silent exit 1 is nothing to clear or nothing found, and a failed lookup is an error, not an empty store", async () => {
+    const missing = secretServiceStore(async () => ({ code: 1, stdout: "", stderr: "" }));
+    await missing.remove("anthropic");
+    expect(await missing.read("anthropic")).toBeNull();
+    expect(await missing.available?.()).toBe(true);
+    const down = secretServiceStore(async () => unreachable);
+    await expect(down.read("anthropic")).rejects.toThrow("could not be read");
+    expect(await down.available?.()).toBe(false);
+  });
+
+  test("installed but not running: the app offers the environment, and saving says there is no store", async () => {
+    useCredentials(new Credentials(secretServiceStore(async () => unreachable)));
+    const dir = tempDir("keyloom-key-");
+    const env = { KEYLOOM_CODEX_BIN: NO_CODEX };
+    expect((await providerStatus(dir, {}, env)).keyStore).toBeNull();
+    await expect(saveProviderKey(dir, "anthropic", KEY, {}, { env, verify: async () => ({ status: "ok" }) })).rejects.toMatchObject({ code: "key_store_unavailable" });
+    await expect(forgetProviderKey(dir, "anthropic", {}, env)).rejects.toMatchObject({ code: "key_store_unavailable" });
+  });
+});
+
+describe("a store read that stalls", () => {
+  /** A store whose read of `stalled` never answers, like a locked Keychain waiting on its password prompt. */
+  const stalling = (stalled: "anthropic" | "openrouter", key: string | null = null): KeyStore => ({
+    kind: "keychain",
+    read: (provider) => (provider === stalled ? new Promise<string | null>(() => {}) : Promise.resolve(key)),
+    write: async () => {},
+    remove: async () => {},
+  });
+  const soon = <T,>(work: Promise<T>) => Promise.race([work, Bun.sleep(500).then(() => { throw new Error("waited on the stalled read"); })]);
+
+  test("doesn't hold up a key that is in the environment", async () => {
+    useCredentials(new Credentials(stalling("openrouter")));
+    const model = await soon(defaultAgentModel(tempDir("keyloom-key-"), {}, { ANTHROPIC_API_KEY: KEY, KEYLOOM_CODEX_BIN: NO_CODEX }));
+    expect(model.provider).toBe("anthropic");
+  });
+
+  test("a named provider reads only its own key", async () => {
+    useCredentials(new Credentials(stalling("anthropic", KEY)));
+    const model = await soon(defaultAgentModel(tempDir("keyloom-key-"), { provider: "openrouter" }, { KEYLOOM_CODEX_BIN: NO_CODEX }));
+    expect(model.provider).toBe("openrouter");
+  });
+});
+
 describe("which store this computer has", () => {
   test("the Keychain on macOS, secret-tool on Linux when it is installed, none otherwise", () => {
     expect(systemKeyStore({}, "darwin")?.kind).toBe("keychain");

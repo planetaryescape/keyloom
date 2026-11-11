@@ -1,7 +1,8 @@
-import { KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
+import { ArrowRightLeft, KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
-import { anyReady } from "./provider-ready.ts";
+import { retryOffer } from "./provider-ready.ts";
+import { PROVIDER_NAMES } from "./setup-words.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [
@@ -33,13 +34,17 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
 }
 
 type Setup = { token: string; status: ChatProviderStatus | null; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
+type ProviderId = ChatProviderStatus["providers"][number]["id"];
+/** The refused message: the provider its conversation is pinned to, and how to send it again or move it to a ready provider. */
+type Retry = { pinned: ProviderId | null; onRetry?: (() => void) | undefined; onSwitch?: ((id: ProviderId) => void) | undefined };
 
 /**
  * Shown before anything is typed when no provider has a credential, and again if a send is refused for the same reason. Setting
- * one up here works at once (D-496); `onRetry` sends the refused message again, and is offered only once a model is ready.
+ * one up here works at once (D-496). Sending again is offered only once the provider that would answer is ready; until then a
+ * ready provider can take the message in a new conversation.
  */
-export function MissingKey({ setup, onRetry }: { setup: Setup; onRetry?: (() => void) | undefined }) {
-  const ready = setup.status !== null && anyReady(setup.status);
+export function MissingKey({ setup, retry }: { setup: Setup; retry?: Retry | undefined }) {
+  const offer = retry === undefined ? { kind: "none" as const } : retryOffer(setup.status, retry.pinned);
   return (
     <div className="chat-problem chat-missing-key" role="alert">
       <span className="state-icon" aria-hidden="true">
@@ -48,12 +53,22 @@ export function MissingKey({ setup, onRetry }: { setup: Setup; onRetry?: (() => 
       <h3>Chat needs a model</h3>
       <p>Paste an API key, or sign in with Codex. Chat can use it straight away.</p>
       <ModelSetup {...setup} />
-      {onRetry === undefined || !ready ? null : (
-        <button type="button" className="button button-primary" onClick={onRetry}>
+      {offer.kind === "send" && retry?.onRetry !== undefined ? (
+        <button type="button" className="button button-primary" onClick={retry.onRetry}>
           <Send size={14} aria-hidden="true" />
           Send your message
         </button>
-      )}
+      ) : null}
+      {offer.kind === "switch" && retry?.onSwitch !== undefined ? (
+        <div className="setup-actions">
+          {offer.to.map((id) => (
+            <button key={id} type="button" className="button" onClick={() => retry.onSwitch?.(id)}>
+              <ArrowRightLeft size={14} aria-hidden="true" />
+              Use {PROVIDER_NAMES[id]} in a new conversation
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -66,8 +81,9 @@ const TITLES: Record<Exclude<Problem["kind"], "missing_key">, string> = {
 };
 
 // A refusal before the reply started. Your message is back in the box, so Try again is one click.
-export function ProblemNotice({ problem, setup, onRetry, onDismiss }: { problem: Problem; setup: Setup; onRetry?: (() => void) | undefined; onDismiss: () => void }) {
-  if (problem.kind === "missing_key") return <MissingKey setup={setup} onRetry={onRetry} />;
+export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: Problem; setup: Setup; retry: Retry; onDismiss: () => void }) {
+  if (problem.kind === "missing_key") return <MissingKey setup={setup} retry={retry} />;
+  const onRetry = retry.onRetry;
   return (
     <div className="chat-problem" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />

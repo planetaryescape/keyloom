@@ -78,7 +78,8 @@ Codex's loop isn't keyloom's, so the guarantee can't depend on the loop. It rest
   - A key pasted in the app or piped to `keyloom provider key set` is kept in the macOS Keychain (`security`, service `keyloom`, account = the provider) or the Linux Secret Service (`secret-tool`), and read again at each message, so it works with no restart (D-496). The environment wins over it.
   - The key never goes into argv: `security -i` and `secret-tool store` read it from stdin. It never reaches the database, the logs, the event stream or an API response; responses say where a key came from and its last four characters.
   - Before saving, keyloom checks the key with one `models.retrieve` read, which spends no tokens. A refused key is not saved. A key that can't be checked (no network) is saved, and the first message tells.
-  - On Windows, or Linux without `secret-tool`, there is no store: the setup shows the environment variable to copy.
+  - On Windows, or Linux without `secret-tool` or without a running Secret Service, there is no store: the setup shows the environment variable to copy. A `secret-tool` failure is told from a missing item by its stderr, so a removal that fails is reported, never taken as done.
+  - A message reads only the answering provider's stored key, so a slow store read for another provider never holds up a key in the environment.
   - **Sign in with Codex** runs `codex login`, which opens the browser; the status says `waiting` until it exits, then Codex is ready. keyloom still never reads the ChatGPT credential (D-108). The button is hidden when `codex` is not installed.
 - **Logging.** The turn log records provider, model, effort, tokens and cost where known ([11](11-observability-and-evals.md)).
 

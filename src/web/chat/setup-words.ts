@@ -33,7 +33,8 @@ export type SetupView =
   | { kind: "codex-sign-in"; text: string; failed: string | null }
   | { kind: "codex-waiting"; url: string | null };
 
-export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "keyStore" | "codexSignIn">): SetupView {
+/** `refused` is true when the provider just turned the key down (a refused key, no credits), so it is no longer shown as Ready. */
+export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "keyStore" | "codexSignIn">, refused = false): SetupView {
   if (provider.id === "codex") {
     if (status.codexSignIn.state === "waiting") return { kind: "codex-waiting", url: status.codexSignIn.url };
     if (provider.ready) return { kind: "ready", text: "Ready. Signed in to Codex with ChatGPT.", forget: false };
@@ -46,6 +47,14 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
   }
   const id = provider.id;
   const credential = provider.credential;
+  if (credential?.source === "environment" && refused) {
+    // keyloom can't change a variable it was started with, and a saved key would lose to it; the way out is a new variable.
+    return {
+      kind: "env-only",
+      text: `${PROVIDER_NAMES[id]} didn't accept ${ENV_NAMES[id]} from your environment, ending ${credential.last4}. Start keyloom again with another key in ${ENV_NAMES[id]}.`,
+      command: provider.command, keyPage: KEY_PAGES[id],
+    };
+  }
   if (credential?.source === "environment") {
     return { kind: "ready", text: `Ready. Using ${ENV_NAMES[id]} from your environment, ending ${credential.last4}.`, forget: false };
   }

@@ -48,3 +48,20 @@ describe("a failed save", () => {
     expect(failureReloads("key_store_unavailable")).toBe(true);
   });
 });
+
+describe("a key the provider turned down", () => {
+  test("from the environment: not Ready, and says which variable to change", () => {
+    const fromEnv: Provider = { ...anthropic, ready: true, credential: { source: "environment", last4: "1234" } };
+    expect(setupView(fromEnv, idle, true)).toEqual({
+      kind: "env-only",
+      text: "Anthropic didn't accept ANTHROPIC_API_KEY from your environment, ending 1234. Start keyloom again with another key in ANTHROPIC_API_KEY.",
+      command: "ANTHROPIC_API_KEY=<your key> keyloom serve",
+      keyPage: "https://console.anthropic.com/settings/keys",
+    });
+    expect(setupView(fromEnv, idle).kind).toBe("ready");
+  });
+
+  test("saved by keyloom: still the saved key, which Replace the key opens over", () => {
+    expect(setupView({ ...anthropic, ready: true, credential: { source: "keychain", last4: "WXYZ" } }, idle, true)).toMatchObject({ kind: "ready", forget: true });
+  });
+});

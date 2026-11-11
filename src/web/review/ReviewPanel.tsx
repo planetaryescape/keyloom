@@ -16,7 +16,7 @@ import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
-import { activeProviderReady, anyReady } from "../chat/provider-ready.ts";
+import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
@@ -171,7 +171,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const [picking, setPicking] = useState(false);
   const provider = useProviderStatus(token);
   // A model is set up but isn't the chosen one: Set up a model offers the picker, to choose the ready one; otherwise the setup.
-  const pickReady = provider.status !== null && anyReady(provider.status) && !activeProviderReady(provider.status);
+  // A locked choice (--provider, KEYLOOM_PROVIDER) can't be changed in the picker, so it gets the setup.
+  const pickReady = offersPicker(provider.status);
   const [applying, setApplying] = useState<string | null>(null);
   const review = r.review;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
@@ -370,6 +371,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                 token={token}
                 status={provider.status}
                 pinned={null}
+                onReload={() => void provider.reload()}
                 menuOpened={{ open: picking, onClose: () => setPicking(false) }}
                 onChanged={(next) => {
                   provider.replace(next);

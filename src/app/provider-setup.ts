@@ -17,7 +17,8 @@ export type SaveKeyOptions = {
 
 /** Runs a store write, turning "no store" and a failed store command into the CredentialError the routes and CLI map. */
 async function withKeyStore(verb: "save" | "remove", write: () => Promise<void>): Promise<void> {
-  if (credentials().store === null) throw new CredentialError("key_store_unavailable", "This computer has no key store keyloom can use.");
+  // A store that is installed but not running (Linux with no Secret Service) counts as none, so the app offers the environment instead.
+  if ((await credentials().usableStore()) === null) throw new CredentialError("key_store_unavailable", "This computer has no key store keyloom can use right now.");
   try {
     await write();
   } catch (err) {

@@ -1,6 +1,7 @@
 // Where a pasted API key is kept (D-496): the macOS Keychain, or the Secret Service (libsecret) on Linux. The
 // environment still wins, so `op run -- keyloom …` behaves as before; a stored key only fills a variable that is unset.
 // The key never goes into argv, where any process can read it: `security -i` and `secret-tool store` read it from stdin.
+import type { ProviderId } from "../agent/provider.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
 
 type Env = Record<string, string | undefined>;
@@ -12,7 +13,7 @@ export const KEY_NAMES: Record<KeyProvider, string> = { anthropic: "Anthropic", 
 export const isKeyProvider = (value: unknown): value is KeyProvider => KEY_PROVIDERS.includes(value as KeyProvider);
 
 /** Runs a store's command. `stdin` is written and closed; the key only ever travels this way or comes back on stdout. */
-export type SecretRunner = (command: string, args: readonly string[], stdin?: string) => Promise<{ code: number; stdout: string }>;
+export type SecretRunner = (command: string, args: readonly string[], stdin?: string) => Promise<{ code: number; stdout: string; stderr?: string }>;
 
 export type StoreKind = "keychain" | "secret-service";
 
@@ -22,6 +23,8 @@ export interface KeyStore {
   write(provider: KeyProvider, key: string): Promise<void>;
   /** Removing a key that isn't there is not an error. */
   remove(provider: KeyProvider): Promise<void>;
+  /** False when the store is installed but can't be reached now. A store without it is always reachable. */
+  available?(): Promise<boolean>;
 }
 
 /** A store command failed. The message never carries the command's output, which may hold the key. */
@@ -46,7 +49,7 @@ export const runSecretCommand: SecretRunner = async (command, args, stdin) => {
   const result = await capture([command, ...args], { ...(stdin === undefined ? {} : { stdin }), timeoutMs: STORE_TIMEOUT_MS }).catch(() => {
     throw new KeyStoreError(`${command} is not installed`);
   });
-  return { code: result.exitCode ?? 1, stdout: result.stdout };
+  return { code: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr };
 };
 
 /** macOS: one generic password per provider, service "keyloom", account = the provider. */
@@ -76,9 +79,12 @@ export function keychainStore(run: SecretRunner = runSecretCommand): KeyStore {
 /** Linux: the Secret Service through `secret-tool`, which reads the secret from stdin. */
 export function secretServiceStore(run: SecretRunner = runSecretCommand): KeyStore {
   const attrs = (provider: KeyProvider) => ["service", SERVICE, "account", provider];
+  // secret-tool exits 1 both for "not found" and for a failure. Only a failure prints a reason on stderr (libsecret
+  // tool/secret-tool.c, secret_tool_action_lookup and _clear), so stderr is what tells them apart.
+  const failed = (out: { code: number; stderr?: string }) => out.code !== 0 && Boolean(out.stderr?.trim());
   const read = async (provider: KeyProvider): Promise<string | null> => {
     const out = await run("secret-tool", ["lookup", ...attrs(provider)]);
-    // secret-tool exits 1 both for "not found" and for a failure, and says nothing on stdout either way.
+    if (failed(out)) throw new KeyStoreError(`the Secret Service could not be read (secret-tool exited ${out.code})`);
     if (out.code !== 0) return null;
     return out.stdout.trim() || null;
   };
@@ -91,10 +97,12 @@ export function secretServiceStore(run: SecretRunner = runSecretCommand): KeySto
       if (out.code !== 0) throw new KeyStoreError(`the Secret Service refused the key (secret-tool exited ${out.code})`);
     },
     async remove(provider) {
-      // secret-tool exits 1 for "nothing to clear" too, so only a key still there afterwards is a failure.
+      // A silent exit 1 is "nothing to clear"; a failure says why, and the key may still be there.
       const out = await run("secret-tool", ["clear", ...attrs(provider)]);
-      if (out.code !== 0 && (await read(provider)) !== null) throw new KeyStoreError(`the Secret Service could not remove the key (secret-tool exited ${out.code})`);
+      if (failed(out)) throw new KeyStoreError(`the Secret Service could not remove the key (secret-tool exited ${out.code})`);
     },
+    // secret-tool can be installed where no Secret Service runs (no D-Bus session, no keyring daemon). A lookup finds out.
+    available: () => read("anthropic").then(() => true, () => false),
   };
 }
 
@@ -120,6 +128,7 @@ const CACHE_MS = 5_000;
 export class Credentials {
   // The read itself is cached, so two lookups that start together (status and env) share one `security` run.
   private readonly cache = new Map<KeyProvider, { key: Promise<string | null>; at: number }>();
+  private reachable: { ok: Promise<boolean>; at: number } | undefined;
 
   constructor(readonly store: KeyStore | null, private readonly now: () => number = Date.now) {}
 
@@ -135,6 +144,32 @@ export class Credentials {
     });
     this.cache.set(provider, { key, at: this.now() });
     return key;
+  }
+
+  /** The store a pasted key can be saved to now; null when there is none, or it is installed but can't be reached. */
+  async usableStore(): Promise<StoreKind | null> {
+    const store = this.store;
+    if (store === null) return null;
+    if (store.available === undefined) return store.kind;
+    if (this.reachable === undefined || this.now() - this.reachable.at >= CACHE_MS) this.reachable = { ok: store.available(), at: this.now() };
+    return (await this.reachable.ok) ? store.kind : null;
+  }
+
+  /**
+   * `env` filled for the one provider that will answer, so a slow store read for another provider never holds up a key that is
+   * already set. With no provider named, the providers are tried in the order the default is picked, stopping at the first key.
+   */
+  async envFor(env: Env, provider: ProviderId | undefined): Promise<Env> {
+    if (this.store === null) return env;
+    const order = provider === undefined ? KEY_PROVIDERS : KEY_PROVIDERS.filter((p) => p === provider);
+    const first = order.findIndex((p) => envKey(env, p));
+    // Everything before the first environment key may be needed, so those reads start together.
+    const reads = order.slice(0, first === -1 ? order.length : first).map((p) => ({ provider: p, key: this.stored(p) }));
+    for (const read of reads) {
+      const key = await read.key;
+      if (key) return { ...env, [KEY_ENV[read.provider]]: key };
+    }
+    return env;
   }
 
   /** `env` with each unset key variable filled from the store. A variable that is set always wins. */
