@@ -45,20 +45,27 @@ export type LabDeps = {
   replay(app: App, view: LayoutView, boardRevision: string, hooks: { log: LogSink; onProgress?: (line: string) => void; signal?: AbortSignal }): Replay;
 };
 
-/** Reads the keyboard that is plugged in: raw HID for the Moonlander, the keyloom module's serial port for ZMK boards. */
-async function startRealCapture(board: BoardDefinition, hooks: CaptureHooks): Promise<KeyCapture> {
+/**
+ * Reads the keyboard that is plugged in: raw HID for the Moonlander, the keyloom module's serial port for ZMK boards. `transports` is
+ * the machine's own unless a test passes fakes.
+ */
+export async function startRealCapture(
+  board: BoardDefinition, hooks: CaptureHooks,
+  transports: { hid: typeof defaultHidTransport; serial: typeof defaultSerialTransport } = { hid: defaultHidTransport, serial: defaultSerialTransport },
+): Promise<KeyCapture> {
   if (board.firmware === "kanata") {
     throw new UsageError(`${board.name} can't be recorded: its software remapper exposes no stream of physical key events. S52 looks at a later route.`);
   }
   try {
     if (board.firmware === "qmk") {
-      const hid = await defaultHidTransport();
+      const hid = await transports.hid();
       return await startQmkCapture(hid, await findQmkStreamDevice(hid), hooks);
     }
-    const serial = await defaultSerialTransport();
+    const serial = await transports.serial();
     return await startZmkCapture(serial, (await findZmkStreamPort(board, serial)).path, hooks);
   } catch (err) {
-    if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
+    // A helper that died is passed on with its cause, so beginRecording can offer Try again (#290 review).
+    if (err instanceof CaptureError && deadChannel(err) === undefined) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
 }

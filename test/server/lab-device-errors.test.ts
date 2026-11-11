@@ -122,7 +122,9 @@ test("a helper that dies during the START write, after the session opened, offer
     // The channel's failure reaches the session first, as the client's fail() does, then every write is refused with it.
     openSession: async (_target, _onReport, onError = () => {}) => ({ write: async () => { onError(died); throw died; }, close: async () => {} }),
   };
-  const backend = appLabBackend(app, { startCapture: async (_board, hooks) => startQmkCapture(transport, await findQmkStreamDevice(transport), hooks), replay: () => { throw new Error("no replay"); } });
+  // Through the production capture, which turns other capture failures into usage errors.
+  const { startRealCapture } = await import("../../src/app/lab.ts");
+  const backend = appLabBackend(app, { startCapture: (board, hooks) => startRealCapture(board, hooks, { hid: async () => transport, serial: async () => { throw new Error("no serial"); } }), replay: () => { throw new Error("no replay"); } });
   const request = new Request(`http://keyloom.test/api/lab/${layoutId}/recording`, { method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: "{}" });
   const response = await handleLabRoute(request, new URL(request.url).pathname, backend, TOKEN);
   expect(response?.status).toBe(409);
