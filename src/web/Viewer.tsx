@@ -213,10 +213,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     restore_keyboard: () => {
       request("POST", "/api/keyboards/restore", token, CollectionKeyboardSchema, undefined, { board: summary.boardId }).then(
         (restored) => {
-          toasts.show({ kind: "success", message: `${restored.name} restored`, detail: "Syncing stays paused until you resume it in the keyboard's status." });
+          // Restore leaves syncing paused (D-476); the toast offers the resume itself (R3-19).
+          toasts.show({
+            kind: "success", message: `${restored.name} restored`, detail: "Syncing stays paused until you resume it.",
+            action: { label: "Resume syncing", run: () => void sync.setPaused(summary.boardId, false) },
+          });
           onChanged();
         },
-        (error: unknown) => toasts.show({ kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Try again from Your keyboards." }),
+        (error: unknown) => {
+          const manage = chrome.onManageKeyboards;
+          toasts.show({
+            kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Your keyboards can restore it too.",
+            ...(manage === undefined ? {} : { action: { label: "Open Your keyboards", run: manage } }),
+          });
+        },
       );
     },
   };
