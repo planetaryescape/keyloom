@@ -811,7 +811,7 @@ export class SyncEngine {
 
   /**
    * "Replace it" on a MacBook whose kanata runs a config keyloom didn't write (R1-17): applies the config's head with the overwrite the
-   * CLI's `remap apply --overwrite` uses. A keyloom.kbd keyloom didn't write is kept beside it as keyloom.kbd.before-keyloom; a file
+   * CLI's `remap apply --overwrite` uses. A keyloom.kbd keyloom didn't write is kept beside it as keyloom.kbd.before-keyloom (or a dated name); a file
    * kanata was started with elsewhere is not touched. Only this button does it, never auto-apply (21).
    */
   async replaceForeignRemapperConfig(layoutRef: string): Promise<void> {
