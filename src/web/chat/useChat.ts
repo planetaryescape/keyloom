@@ -31,6 +31,21 @@ function classify(error: unknown): Problem {
   return { kind: "other", message: error instanceof Error ? error.message : "Something went wrong sending that." };
 }
 
+/** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */
+export function refusedRetryFailure(error: ApiError): { code: string; message: string } {
+  return { code: error.code ?? "retry", message: classify(error).message };
+}
+
+/**
+ * A request that failed without a refusal. Once the reply started it keeps the server's code. Before that, keyloom may have the message
+ * already, so it is `unconfirmed`, which offers Open history and Ask again (R5-07).
+ */
+export function lostFailure(error: unknown, started: boolean): { code: string; message: string } {
+  const message = error instanceof Error ? error.message : "The reply stopped.";
+  if (started) return { code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message };
+  return { code: "unconfirmed", message: `${message} keyloom may already be answering it. Open history to see whether it did before you ask again.` };
+}
+
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
 
 /**
@@ -178,7 +193,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         if (refused) localStorage.removeItem(storageKey);
         if (refused && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
-          dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", code: "retry", message: classify(error).message });
+          dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", ...refusedRetryFailure(error) });
         } else if (refused && answer !== undefined) {
           // The question is still open on the server, so it opens again here for another try.
           dispatch({ type: "answerRejected", toolUseId: answer.toolUseId });
@@ -193,8 +208,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         } else if (isAbort(error)) {
           dispatch({ type: "stopped" });
         } else {
-          const message = error instanceof Error ? error.message : "The reply stopped.";
-          dispatch({ type: "failed", code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message: started ? message : `${message} The request may have been accepted. Read conversation history before sending it again.` });
+          dispatch({ type: "failed", ...lostFailure(error, started) });
         }
       } finally {
         window.removeEventListener("blur", loseForeground);
