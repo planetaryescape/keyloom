@@ -1,6 +1,7 @@
 // A fake of kanata's TCP server (21): the same newline-JSON protocol on a loopback port, with a "running config" it reads from the
 // file a ReloadFile names. It lets the apply, verify, disable and sync tests run without a remapper, a driver or root.
-import { readFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 export type FakeKanata = {
   port: number;
@@ -78,4 +79,29 @@ export function startFakeKanata(opts: { initialFile?: string; port?: number } = 
     ignoreNextReload: () => { ignore = true; },
     stop: () => server.stop(true),
   };
+}
+
+/**
+ * A stand-in kanata binary, for setup's `cmd` check and copy (D-498). It never remaps: `--version` prints a version and `--check` answers
+ * a config the way kanata does. `no_cmd` is kanata built with its default features, as Homebrew builds it, which refuses the `cmd`
+ * action with kanata's own words (parser/src/cfg/cmd.rs @ v1.12.0). `cmd` is a build with the feature, which accepts it, and `garbled`
+ * fails for some other reason.
+ */
+export function writeFakeKanataBinary(dir: string, mode: "no_cmd" | "cmd" | "garbled" = "no_cmd", version = "1.12.0"): string {
+  const path = join(dir, `kanata-${mode}`);
+  const onCmd = {
+    no_cmd: `printf '%s\\n' "Error:   × cmd is not enabled for this kanata executable. Use a cmd_allowed prebuilt" "  │ executable or compile with the feature: cmd." >&2; exit 1`,
+    cmd: `echo "config file is valid"; exit 0`,
+    garbled: `echo "Error: unexpected token" >&2; exit 1`,
+  }[mode];
+  writeFileSync(path, [
+    "#!/bin/sh",
+    `cfg=""`,
+    `while [ $# -gt 0 ]; do case "$1" in -c|--cfg) cfg="$2"; shift ;; --version) echo "kanata ${version}"; exit 0 ;; esac; shift; done`,
+    `if grep -q '(cmd' "$cfg"; then ${onCmd}; fi`,
+    `echo "config file is valid"`,
+    "",
+  ].join("\n"));
+  chmodSync(path, 0o755);
+  return path;
 }
