@@ -74,7 +74,8 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
               const removed = collection.some((keyboard) => keyboard.boardId === board.id && keyboard.removedAt !== null);
               return <button key={board.id} type="button" onClick={() => removed ? onManage(true) : flow.chooseKnown(board)}>{board.keys ? <Silhouette keys={board.keys} display={board.display} width={48} height={24} /> : null}<span>{board.name}<small>{removed ? "Removed · restore" : board.vendor}</small></span></button>;
             })}
-            {collection !== null && rows.length === 0 ? <p>No supported board matches. <button type="button" className="link-button" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Search QMK and ZMK</button> for it, or read <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a>.</p> : null}
+            {/* Once the QMK and ZMK search runs, its own answer below says what to do next. */}
+            {collection !== null && rows.length === 0 && !firmwareSearch ? <p>No supported board matches. <button type="button" className="link-button" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Search QMK and ZMK</button> for it, or read <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a>.</p> : null}
           </div>
           <button type="button" className="sheet-action" disabled={collection === null} onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
           {firmwareSearch && collection !== null ? <FirmwareResults query={query} flow={flow} /> : null}
