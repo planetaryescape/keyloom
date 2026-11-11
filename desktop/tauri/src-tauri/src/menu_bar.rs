@@ -1,6 +1,6 @@
 // Mirrors GET /api/events into the menu-bar extra and native notifications. The server words everything (`menuBar` in each frame,
 // src/server/menu-bar.ts), so this file only displays strings and relays clicks (D-325).
-use crate::{sidecar, AppState};
+use crate::{log, problem::Stop, restarts::Restarts, sidecar, AppState};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use std::time::Duration;
@@ -59,7 +59,7 @@ pub fn parse_frame(frame: &str) -> Option<MenuBar> {
 
 fn notify(app: &AppHandle, title: &str, body: &str) {
     if let Err(err) = app.notification().builder().title(title).body(body).show() {
-        eprintln!("keyloom-desktop: notification failed: {err}");
+        log::say(app, &format!("notification failed: {err}"));
     }
 }
 
@@ -99,13 +99,12 @@ pub fn separator(app: &AppHandle) -> tauri::Result<PredefinedMenuItem<Wry>> {
 
 const GIVE_UP_ATTACHED_AFTER: u32 = 3;
 
-pub async fn watch(app: AppHandle, tray: TrayIcon, items: Items) {
-    // macOS shows a notification only after the user has allowed it; this asks on first launch.
-    if let Err(err) = app.notification().request_permission() {
-        eprintln!("keyloom-desktop: notification permission failed: {err}");
-    }
+/// Mirrors the server into the menu bar until there is no server to show. A server that stops is started again through the same path
+/// as at launch, with a back-off and a cap (restarts.rs); the return says why the shell gave up, for the problem window.
+pub async fn watch(app: &AppHandle, tray: &TrayIcon, items: &Items) -> Stop {
     let client = reqwest::Client::new();
     let mut failures = 0u32;
+    let mut restarts = Restarts::default();
     loop {
         let (origin, token, owned) = {
             let state = app.state::<AppState>();
@@ -123,30 +122,40 @@ pub async fn watch(app: AppHandle, tray: TrayIcon, items: Items) {
                     while let Some(end) = buf.find("\n\n") {
                         let frame: String = buf.drain(..end + 2).collect();
                         if let Some(bar) = parse_frame(&frame) {
-                            apply(&app, &tray, &items, &bar);
+                            apply(app, tray, items, &bar);
                         }
                     }
                 }
             }
-            Ok(resp) => eprintln!("keyloom-desktop: /api/events answered {}", resp.status()),
-            Err(err) => eprintln!("keyloom-desktop: /api/events: {err}"),
+            Ok(resp) => log::say(app, &format!("/api/events answered {}", resp.status())),
+            Err(err) => log::say(app, &format!("/api/events: {err}")),
         }
         failures += 1;
-        // A server we attached to can be stopped by whoever started it (BK's browser one). The shell then starts its own, once the old one is clearly gone.
-        if !owned && failures >= GIVE_UP_ATTACHED_AFTER {
-            match sidecar::start(&app, sidecar::Mode::Reuse).await {
+        // Quitting stops the server on purpose; starting it again would undo that.
+        if app.state::<AppState>().quitting.load(std::sync::atomic::Ordering::Acquire) {
+            return std::future::pending().await;
+        }
+        // The server this shell started has exited; or one it attached to (BK's browser one) stopped answering, and whoever started it
+        // may have stopped it. Either way the shell starts its own, the way it did at launch, once the old one is clearly gone.
+        let gone = if owned { sidecar::exited(app) } else { failures >= GIVE_UP_ATTACHED_AFTER };
+        if gone {
+            let Some(delay) = restarts.next(std::time::Instant::now()) else {
+                return Stop::KeepsStopping { times: restarts.stops() };
+            };
+            log::say(app, &format!("keyloom's server is gone; starting it again in {} s", delay.as_secs()));
+            let _ = items.summary.set_text("keyloom stopped. Starting it again…");
+            tokio::time::sleep(delay).await;
+            match sidecar::start(app, sidecar::Mode::Reuse).await {
                 Ok(server) => {
-                    crate::navigate(&app, &server.url);
+                    crate::navigate(app, &server.url);
                     *app.state::<AppState>().server.lock().unwrap() = Some(server);
                     failures = 0;
                 }
-                // A server that came back and can't work with this app: say so where the person looks, in the CLI's words.
-                Err(sidecar::Failure::Incompatible { words, .. }) => {
-                    eprintln!("keyloom-desktop: {words}");
-                    let _ = items.summary.set_text(&words);
-                }
-                Err(err) => eprintln!("keyloom-desktop: could not take over serving: {err}"),
+                // A server that came back and can't work with this app: the problem window says so, with its way out.
+                Err(failure @ sidecar::Failure::Incompatible { .. }) => return Stop::Failed(failure),
+                Err(err) => log::say(app, &format!("could not start keyloom again: {err}")),
             }
+            continue;
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }

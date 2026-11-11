@@ -49,10 +49,16 @@ pub async fn start(app: &AppHandle, mode: Mode) -> Result<Server, Failure> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Failure {
     PortInUse,
     /// Another keyloom is serving the data directory and can't be used. `words` are the CLI's; `replace` is the CLI's label for replacing it, when it offers that.
     Incompatible { words: String, replace: Option<String> },
+    /// The server printed no URL within URL_WAIT_SECS.
+    TimedOut,
+    /// The server exited before it printed its URL; `output` is what it wrote to stderr.
+    Exited { code: Option<i32>, output: String },
+    /// The sidecar could not be run, or printed something the shell can't read.
     Other(String),
 }
 
@@ -78,6 +84,8 @@ impl std::fmt::Display for Failure {
         match self {
             Failure::PortInUse => write!(f, "the port keyloom asked for is in use"),
             Failure::Incompatible { words, .. } => write!(f, "{words}"),
+            Failure::TimedOut => write!(f, "timed out waiting for keyloom to print its URL"),
+            Failure::Exited { code, output } => write!(f, "keyloom exited early ({code:?}): {}", output.trim()),
             Failure::Other(m) => write!(f, "{m}"),
         }
     }
@@ -105,7 +113,7 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
     let mut stderr = String::new();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(URL_WAIT_SECS);
     loop {
-        let event = tokio::time::timeout_at(deadline, rx.recv()).await.map_err(|_| Failure::Other("timed out waiting for keyloom to print its URL".into()))?;
+        let event = tokio::time::timeout_at(deadline, rx.recv()).await.map_err(|_| Failure::TimedOut)?;
         match event {
             Some(CommandEvent::Stderr(line)) => {
                 let text = String::from_utf8_lossy(&line).to_string();
@@ -119,12 +127,20 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                 let origin = format!("{}://{}:{}", parsed.scheme(), parsed.host_str().unwrap_or("127.0.0.1"), parsed.port().unwrap_or(80));
                 if owned {
                     remember_port(app, parsed.port().unwrap_or(0));
-                    // Keep draining so the pipe never fills; report an exit so quit can wait for it.
+                    crate::log::say(app, "keyloom's server started");
+                    // Keep draining so the pipe never fills, into the log so Show log can say why it stopped; report an exit so quit
+                    // can wait for it and the watcher can start it again.
+                    let log_app = app.clone();
                     tauri::async_runtime::spawn(async move {
                         while let Some(ev) = rx.recv().await {
-                            if let CommandEvent::Terminated(_) = ev {
-                                let _ = exit_tx.send(());
-                                break;
+                            match ev {
+                                CommandEvent::Stderr(line) => crate::log::server_output(&log_app, &String::from_utf8_lossy(&line)),
+                                CommandEvent::Terminated(p) => {
+                                    crate::log::say(&log_app, &format!("keyloom's server exited (code {:?}, signal {:?})", p.code, p.signal));
+                                    let _ = exit_tx.send(());
+                                    break;
+                                }
+                                _ => {}
                             }
                         }
                     });
@@ -134,12 +150,13 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                 return Ok(Server { url, origin, token, owned });
             }
             Some(CommandEvent::Terminated(p)) => {
+                crate::log::server_output(app, &stderr);
                 return Err(if let Some((words, replace)) = parse_incompatible(&stderr) {
                     Failure::Incompatible { words, replace }
                 } else if stderr.contains("is in use") {
                     Failure::PortInUse
                 } else {
-                    Failure::Other(format!("keyloom exited early ({:?}): {}", p.code, stderr.trim()))
+                    Failure::Exited { code: p.code, output: stderr }
                 });
             }
             Some(_) => {}
@@ -151,11 +168,24 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
 // SIGTERM, not the plugin's kill(): the server finishes a keyboard write that is in progress before it exits
 // (src/cli/main.ts), and a SIGKILL mid-flash is the one outcome the app must avoid. A server the shell did not start is left running.
 pub fn stop(app: &AppHandle) {
-    if let Some(running) = app.state::<AppState>().sidecar.lock().unwrap().take() {
+    let state = app.state::<AppState>();
+    // Set first, so the watcher doesn't start the server again while it is being stopped.
+    state.quitting.store(true, std::sync::atomic::Ordering::Release);
+    let running = state.sidecar.lock().unwrap().take();
+    if let Some(running) = running {
         unsafe { libc::kill(running.child.pid() as i32, libc::SIGTERM) };
         if running.exited.recv_timeout(std::time::Duration::from_secs(30)).is_err() {
             let _ = running.child.kill();
         }
+    }
+}
+
+/// True when the server this shell started has exited (or none is recorded), so the watcher may start it again.
+pub fn exited(app: &AppHandle) -> bool {
+    match app.state::<AppState>().sidecar.lock().unwrap().as_ref() {
+        // The drain task sends once and then drops its sender, so a later look sees Disconnected.
+        Some(running) => matches!(running.exited.try_recv(), Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected)),
+        None => true,
     }
 }
 
