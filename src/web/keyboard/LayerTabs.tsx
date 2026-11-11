@@ -27,6 +27,7 @@ export interface LayerActions {
   nameFunction: (fn: string) => string;
   openKey: (slot: Slot) => void;
   openCombo: (comboId: string) => void;
+  removeTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   notify: (message: string) => void;
 }
 
@@ -262,6 +263,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
           nameFunction={actions.nameFunction}
           onOpenKey={actions.openKey}
           onOpenCombo={actions.openCombo}
+          onRemoveTapDance={actions.removeTapDance}
           onClose={() => setDeleting(null)}
         />
       )}

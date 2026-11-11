@@ -862,6 +862,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             }
             openCombo(id);
           },
+          removeTapDance: (id) => {
+            const name = layout.tapDances.find((dance) => dance.id === id)?.name ?? id;
+            return perform([{ op: "removeTapDance", tapDanceId: id }], `Removed the tap dance ${name}`, { quiet: true });
+          },
           notify: (message) => toasts.show({ kind: "info", message }),
           nameFunction: (fn) => functionName(fn, layout),
         };

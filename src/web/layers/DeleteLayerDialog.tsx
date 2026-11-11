@@ -16,19 +16,22 @@ interface Props {
   onOpenKey: (slot: Slot) => void;
   /** Opens a combo's card, where its output or its layers are changed (R4-09). */
   onOpenCombo: (comboId: string) => void;
+  /** Removes a tap dance nothing uses, the one way past a dance that goes to this layer (#290 review). */
+  onRemoveTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   onClose: () => void;
 }
 
-/** The button beside a reference: the place where it is changed, or null for one the page can't open (a tap dance on no key). */
-export function referenceAction(reference: LayerReference): { label: string; open: { slot: Slot } | { comboId: string } } | null {
+/** The button beside a reference: the place where it is changed, or, for a tap dance nothing uses, removing it. */
+export function referenceAction(reference: LayerReference): { label: string; open: { slot: Slot } | { comboId: string } | { tapDanceId: string } } | null {
   if (reference.comboId !== undefined) return { label: "Open combo", open: { comboId: reference.comboId } };
   if (reference.slot !== undefined) return { label: reference.tapDance === true ? "Open tap dance" : "Open key", open: { slot: reference.slot } };
+  if (reference.tapDanceId !== undefined) return { label: "Remove tap dance", open: { tapDanceId: reference.tapDanceId } };
   return null;
 }
 
 // Deleting is the one layer action that can strand keys, so it lists what points at the layer first
 // and asks the validator, which refuses while any of those keys would reach nothing (16#layers, D-090).
-export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onClose }: Props) {
+export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onRemoveTapDance, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [outcome, setOutcome] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +53,14 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
       setDropping(result.lost);
       setOutcome(null);
     } else setOutcome(result);
+  }
+
+  // Removing a dance stays in the dialog: the list is read again from the layout, so the row goes and Delete may come back.
+  async function removeTapDance(tapDanceId: string) {
+    setBusy(true);
+    const result = await onRemoveTapDance(tapDanceId);
+    setBusy(false);
+    setOutcome(result.ok ? null : result);
   }
 
   const stuck = references.length > 0;
@@ -79,10 +90,13 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
                     <button
                       type="button"
                       className="button layer-ref-open"
+                      disabled={busy}
                       onClick={() => {
+                        const open = action.open;
+                        if ("tapDanceId" in open) return void removeTapDance(open.tapDanceId);
                         onClose();
-                        if ("slot" in action.open) onOpenKey(action.open.slot);
-                        else onOpenCombo(action.open.comboId);
+                        if ("slot" in open) onOpenKey(open.slot);
+                        else onOpenCombo(open.comboId);
                       }}
                     >
                       {action.label}
