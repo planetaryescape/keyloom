@@ -35,6 +35,18 @@ export function draftFromCombo(combo: Combo): ComboDraft {
   return { id: combo.id, isNew: false, name: combo.name, positions: [...combo.positions], layerIds: combo.layerIds, output: combo.output, timeoutMs: combo.timeoutMs };
 }
 
+/**
+ * What Open combo from another place (the delete-layer dialog) does while a combo card may hold edits (#290 review). An unchanged card
+ * is replaced (`open`). A changed one is never replaced: the same combo shows the card as it is (`show_draft`), and another one waits
+ * until the card is applied or closed (`blocked`).
+ */
+export function openComboFromElsewhere(draft: ComboDraft | null, combos: readonly Combo[], id: string): "open" | "show_draft" | "blocked" {
+  if (draft === null) return "open";
+  const saved = combos.find((combo) => combo.id === draft.id);
+  if (saved !== undefined && JSON.stringify(draftFromCombo(saved)) === JSON.stringify(draft)) return "open";
+  return draft.id === id ? "show_draft" : "blocked";
+}
+
 interface ListProps {
   layout: Layout;
   onOpen: (combo: Combo) => void;
@@ -290,12 +302,14 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
           </button>
           {picking
             ? draft.positions.map((position) => (
-                <button key={position} type="button" className="card-chip" disabled={tooFew} title={tooFew ? "A combo needs at least two keys" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
+                <button key={position} type="button" className="card-chip" disabled={tooFew} aria-describedby={tooFew ? "combo-too-few" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
                   Remove this key
                 </button>
               ))
             : null}
         </div>
+        {/* Said beside the chips, not only in a hover title (R4-17). */}
+        {picking && tooFew && draft.positions.length > 0 ? <p id="combo-too-few" className="card-note">A combo needs at least two keys. Click another key on the board to add it before you remove one.</p> : null}
 
         <div className="card-picker combo-sends" hidden={!pickerOpen && !canToggleTapMods(pickerDraft)}>
           {pickerOpen ? (

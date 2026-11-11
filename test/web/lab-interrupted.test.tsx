@@ -67,3 +67,16 @@ test("a past session's fix that is no longer proposed says why instead of offeri
   for (const status of ["applied", "superseded", "rejected"] as const) expect(labFixClosed(status)).toContain("Type again");
   expect(labFixClosed("applied")).toContain("applied already");
 });
+
+test("a keyboard connection that stopped answering offers Try again, which gets a new one; one keyloom can't close offers none (R4-03)", () => {
+  expect(labFixes("connection_lost", false)).toEqual([{ id: "retry", label: "Try again" }]);
+  expect(labFixes("restart_required", false)).toEqual([]);
+});
+
+test("an incomplete recording in Earlier sessions says why it can't be read and is no button; a whole one opens (R4-14)", () => {
+  const session = (id: string, incomplete: boolean) => ({ id, layoutId: "lay", passageId: "p", startedAt: 1, endedAt: 60_001, eventCount: 3, analysed: false, warnings: [], incomplete });
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ sessions: [session("a", true), session("b", false)] })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("incomplete, so it can&#x27;t be read");
+  expect(html).toMatch(/<span class="lab-past-row" data-incomplete="true">/);
+  expect(html).toMatch(/<button type="button" class="lab-past-row">/);
+});

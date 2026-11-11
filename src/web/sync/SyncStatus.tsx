@@ -213,7 +213,8 @@ export function ReplaceForeignHost({ sync, boardId }: { sync: SyncApi; boardId: 
 
 /**
  * "Replace it" for kanata running a config keyloom didn't write (R1-17). The words follow `applyKanata`: a keyloom.kbd keyloom didn't
- * write is copied to keyloom.kbd.before-keyloom first, and a file kanata was started with elsewhere is never touched.
+ * write is copied to keyloom.kbd.before-keyloom once kanata --check passes (a dated name when an earlier, different copy has that
+ * name, so no copy is written over), and a file kanata was started with elsewhere is never touched.
  */
 function ReplaceForeignDialog({ sync, layoutId, board }: { sync: SyncApi; layoutId: string; board: BoardSync | undefined }) {
   const name = board === undefined ? "this layout" : board.layoutId === layoutId ? `“${board.layoutName}”` : "this layout";
@@ -222,7 +223,7 @@ function ReplaceForeignDialog({ sync, layoutId, board }: { sync: SyncApi; layout
       title="Replace kanata's config?"
       lines={[
         `keyloom loads ${name} into kanata in place of the config it runs now. Your MacBook keyboard types your layout from then on.`,
-        "keyloom keeps a copy: if its own file, keyloom.kbd, was written or edited by someone else, it is saved beside it as keyloom.kbd.before-keyloom. A config file kanata was started with elsewhere stays where it is.",
+        "keyloom keeps a copy: if its own file, keyloom.kbd, was written or edited by someone else, it is saved beside it as keyloom.kbd.before-keyloom, or under a dated name if an earlier copy is already there. A config file kanata was started with elsewhere stays where it is.",
       ]}
       confirmLabel="Replace it"
       onConfirm={() => sync.replaceForeign(layoutId)}

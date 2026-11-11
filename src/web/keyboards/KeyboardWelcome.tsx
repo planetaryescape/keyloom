@@ -6,6 +6,7 @@ import { request } from "../api-write.ts";
 import type { SyncApi } from "../sync/useSync.ts";
 import { ImportScreen } from "../import/ImportScreen.tsx";
 import { useNewKeyboard } from "./useNewKeyboard.ts";
+import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SetupCard } from "./SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./NewBoardPanel.tsx";
@@ -73,10 +74,11 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
               const removed = collection.some((keyboard) => keyboard.boardId === board.id && keyboard.removedAt !== null);
               return <button key={board.id} type="button" onClick={() => removed ? onManage(true) : flow.chooseKnown(board)}>{board.keys ? <Silhouette keys={board.keys} display={board.display} width={48} height={24} /> : null}<span>{board.name}<small>{removed ? "Removed · restore" : board.vendor}</small></span></button>;
             })}
-            {collection !== null && rows.length === 0 ? <p>No supported board matches. <button type="button" className="link-button" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Search QMK and ZMK</button> for it, or read <a href="https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">the contribution guide</a>.</p> : null}
+            {/* Once the QMK and ZMK search runs, its own answer below says what to do next. */}
+            {collection !== null && rows.length === 0 && !firmwareSearch ? <p>No supported board matches. <button type="button" className="link-button" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Search QMK and ZMK</button> for it, or read <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a>.</p> : null}
           </div>
           <button type="button" className="sheet-action" disabled={collection === null} onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
-          {firmwareSearch && collection !== null ? <div className="nb-list">{query.trim().length < 2 ? <p>Type at least two letters in the search above.</p> : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}</div> : null}
+          {firmwareSearch && collection !== null ? <FirmwareResults query={query} flow={flow} /> : null}
           {flow.problem ? <p role="alert" className="nb-problem">{flow.problem}</p> : null}
           <p className="nb-note">Already have a keymap? <button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import a layout</button></p>
         </div> : null}
@@ -84,6 +86,21 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
       {panel ? <aside className="onboarding-panel"><NewBoardPanel flow={flow} sources={sources} onMade={(id) => onMade(id, flow.step.kind === "put" && flow.step.source !== null)} /><button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import an existing keymap instead</button></aside> : null}
     </div>
     {/* Words for someone who isn't a developer (R1-30): the app prepares the folder; the guide is for whoever takes it further. */}
-    <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href="https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>
+    <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>
   </div>;
+}
+
+/** The QMK and ZMK results under the search, or why there are none yet (R4-12). */
+function FirmwareResults({ query, flow }: { query: string; flow: ReturnType<typeof useNewKeyboard> }) {
+  const note = searchNote(query, flow.foundFor, flow.found.length, flow.problem !== null);
+  return (
+    <div className="nb-list" aria-live="polite">
+      {note === "too_short" ? <p>Type at least two letters in the search above.</p>
+        : note === "searching" ? <p role="status">Searching QMK and ZMK…</p>
+        : note === "none" ? <p>QMK and ZMK have no keyboard called “{query.trim()}”. Try its maker or another spelling. If it isn&rsquo;t there at all, <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">the contribution guide</a> says how to add it.</p>
+        // Results for an earlier text, or kept from before a failed search, don't answer this one (#290 review).
+        : flow.problem !== null || flow.foundFor !== query.trim() ? null
+        : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}
+    </div>
+  );
 }

@@ -24,6 +24,10 @@ export type DockerReadiness =
       access: DockerAccessFix | null;
       /** The engine keyloom can stop and start from scratch when a start fails (Colima, R3-04); null otherwise. */
       restartEngine: string | null;
+      /** Other engines to install, for a `restartEngine` that won't start even after a restart (R4-04b); empty otherwise. */
+      alternatives: Array<{ name: string; url: string }>;
+      /** keyloom is starting or restarting the engine now, for a page or a build, so the page shows that instead of a button (R4-04). */
+      engineAction: "start" | "restart" | null;
     };
 
 /**
@@ -95,6 +99,7 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const engine = now.kind === "cli-missing" ? now.app ?? null : found?.name ?? null;
   const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
   const platform = over.platform ?? process.platform;
+  const colima = now.kind === "daemon-down" && found?.command[0] === "colima";
   return {
     ok: false, problem: now.kind, reason, engine,
     // A start can't give this account the socket, so it isn't offered for `no-access`; a build doesn't open an app for its CLI.
@@ -103,8 +108,16 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
     access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
     // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
-    restartEngine: now.kind === "daemon-down" && found?.command[0] === "colima" ? found.name : null,
+    restartEngine: colima ? found.name : null,
+    alternatives: colima ? otherEngines(platform, found.name, over.has) : [],
+    engineAction: engineHolder?.kind ?? null,
   };
+}
+
+/** The engines to install instead of one that won't start: this platform's install and its alternatives, without the one that failed. */
+function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command: string) => boolean): Array<{ name: string; url: string }> {
+  const install = dockerInstall(platform, ...(has === undefined ? [] : [has]));
+  return [{ name: install.engine, url: install.url }, ...install.alternatives].filter((engine) => engine.name !== failed);
 }
 
 /**
@@ -167,11 +180,12 @@ function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?:
  * R2-07), and a Colima whose daemon is down (R3-04), which is stopped hard and started again. Anything else keeps its own fix, so this
  * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
-export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
-  // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing.
+export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult & { code?: "engine_busy" }> {
+  // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing. The code lets the
+  // page follow the action that is running instead of offering the restart again (R4-04).
   if (engineHolder !== null) {
     const what = engineHolder.kind === "restart" ? "restarting" : "starting";
-    return { ok: false, engine: null, reason: `keyloom is already ${what} Docker, for this page or for a build. Wait for that to finish, then check again.` };
+    return { ok: false, engine: null, code: "engine_busy", reason: `keyloom is already ${what} Docker, for this page or for a build. Wait for that to finish, then check again.` };
   }
   return holdEngine("restart", () => restartDockerUnheld(opts));
 }

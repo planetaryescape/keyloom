@@ -10,10 +10,11 @@ export type SyncStatus = "building" | "flashing" | "succeeded" | "failed" | "can
 export type SyncTrigger = "auto" | "manual";
 
 /**
- * Why a sync did not finish. `build`, `flash`, `verify` and `needs_hand` stop the same revision being tried again by
- * itself, because trying again would do the same thing; the others say the world changed, so trying again is right.
+ * Why a sync did not finish. `build`, `flash`, `verify`, `needs_hand` and `foreign_file` stop the same revision being tried again by
+ * itself, because trying again would do the same thing; the others say the world changed, so trying again is right. `foreign_file`
+ * is a remapper's: the keyloom.kbd on disk isn't keyloom's, so only Replace it gets past it (R4 residual 2).
  */
-export type SyncFailure = "build" | "flash" | "verify" | "needs_hand" | "disconnected" | "interrupted" | "superseded" | "cancelled";
+export type SyncFailure = "build" | "flash" | "verify" | "needs_hand" | "foreign_file" | "disconnected" | "interrupted" | "superseded" | "cancelled";
 
 export const RETRYABLE_FAILURES: readonly SyncFailure[] = ["disconnected", "interrupted", "superseded", "cancelled"];
 

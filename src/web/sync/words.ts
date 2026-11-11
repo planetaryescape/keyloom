@@ -112,6 +112,15 @@ function behindAction(board: BoardSync, why: Extract<BoardSync["state"], { kind:
   return { id: "sync_now", label: "Sync now" };
 }
 
+/**
+ * keyloom's last apply was refused because the keyloom.kbd on disk isn't keyloom's (R4 residual 2). Apply now would be refused the same
+ * way, so the line offers Replace it, which keeps a copy of the file. kanata may still run keyloom's config, or remapping may be off.
+ */
+// The engine sends the code only while Replace it can still run: not after remapping was turned off since the failure.
+const foreignFile = (board: BoardSync): boolean => board.last?.status === "failed" && board.last.errorCode === "foreign_file";
+const FOREIGN_FILE_DETAIL = "Someone else wrote or edited keyloom.kbd, keyloom's config file, so keyloom left it alone. Replace it to put this layout on, and keyloom keeps a copy of that file.";
+const REPLACE_FOREIGN = { id: "replace_foreign", label: "Replace it…" } as const;
+
 function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): SyncLine {
   switch (s.kind) {
     case "in_sync":
@@ -120,6 +129,13 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
       return { label: REMAPPER_STEP_WORDS[s.step], short: "Syncing", detail: "Writing the config and reloading it. Your keyboard keeps working meanwhile.", tone: "busy", action: null };
     case "behind": {
       const label = s.why === "remapping_off" ? "Remapping is off" : s.changes === null || s.changes === 0 ? `Changes not on your ${name}` : `${plural(s.changes, "change", "changes")} not on your ${name}`;
+      const foreign = (s.why === "failed" || s.why === "remapping_off") && foreignFile(board);
+      if (foreign) {
+        return {
+          label, short: s.why === "remapping_off" ? "Off" : "Behind", detail: s.why === "remapping_off" ? `Your MacBook keyboard is typing plainly. ${FOREIGN_FILE_DETAIL}` : FOREIGN_FILE_DETAIL,
+          ...(board.last?.error ? { more: board.last.error } : {}), tone: s.why === "failed" ? "error" : "neutral", action: REPLACE_FOREIGN,
+        };
+      }
       const detail =
         s.why === "remapping_off" ? "Your MacBook keyboard is typing plainly. Turn remapping back on to get your layout."
         : s.why === "failed" ? (s.error ?? "The last apply failed.")
@@ -138,7 +154,7 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
     case "not_keyloom":
       return {
         label: "kanata runs a config keyloom didn't write", short: "Not keyloom's", detail: "keyloom never replaces it by itself. Replace it to put this layout on, and keyloom keeps a copy.", more: `${s.detail}.`,
-        tone: "warning", action: { id: "replace_foreign", label: "Replace it…" },
+        tone: "warning", action: REPLACE_FOREIGN,
       };
   }
 }
@@ -192,6 +208,10 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
     // Under a second is the point of a remapper, so it says milliseconds instead of rounding up to one second.
     if (after.remapper === true && ms !== null && ms < 1000) return { kind: "success", message: `On your ${after.boardName}`, detail: `${Math.round(ms)} ms from your change.` };
     return { kind: "success", message: `On your ${after.boardName}`, ...(took ? { detail: `${took} from your change.` } : {}) };
+  }
+  // Turn remapping on that was refused leaves the state `remapping_off`, so the file is checked before the failed state is.
+  if (was === "syncing" && now.kind === "behind" && after.remapper === true && foreignFile(after)) {
+    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: REPLACE_FOREIGN };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
     if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: { id: "open_release", label: "Build and flash…" } };

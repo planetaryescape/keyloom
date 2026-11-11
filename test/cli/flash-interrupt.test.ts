@@ -1,7 +1,7 @@
 // A terminal's Ctrl-C goes to its whole foreground process group. These run keyloom's interrupt handling and a fake zapp in a real
 // child process and signal that child's group, as a terminal does, so a flash tool that shares keyloom's group would get the
 // signal too (D-506). The fake zapp and the USB check are files in a temporary directory; nothing here can reach a keyboard.
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WRITE_IN_PROGRESS_MESSAGE } from "../../src/firmware/toolchain/write-guard.ts";
@@ -60,14 +60,59 @@ function collect(stream: ReadableStream<Uint8Array>) {
   };
 }
 
+/**
+ * Every child here runs in its own process group, and keyloom starts zapp in another (D-506), so killing the child leaves zapp and its
+ * `sleep` running (R4 residual 8). Each test's groups are killed after it, whether it passed or not.
+ */
+const cleanups: Array<() => void> = [];
+afterEach(() => {
+  for (const clean of cleanups.splice(0)) clean();
+});
+
+/** SIGKILLs a process group, or the process alone when it doesn't lead one. Gone already is fine. */
+function killGroup(pid: number): void {
+  if (!Number.isSafeInteger(pid) || pid <= 1) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ }
+  }
+}
+
+/** A detached child, killed with its group after the test. */
+function spawnGroup(cmd: string[]) {
+  const proc = Bun.spawn(cmd, { detached: true, stdout: "pipe", stderr: "pipe" });
+  cleanups.push(() => killGroup(proc.pid));
+  return proc;
+}
+
+/**
+ * The fake zapp writes its start time and then its pid beside itself first, so the test can kill its group even when keyloom never
+ * stopped it, and can tell it from a process that reused the pid: `exec sleep` keeps the start time but drops the fake's path.
+ */
+const ZAPP_PID = `ps -o lstart= -p $$ > "$0.started"; echo $$ > "$0.pid"; `;
+
 async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadable" | "slow" } = {}) {
   const dir = tempDir();
   const flag = join(dir, "in-bootloader");
   const artifact = join(dir, "build.bin");
   await Bun.write(artifact, dfuImage("3297:2003"));
-  const bin = fakeBinDir({ zapp: zappBody(flag) });
+  const bin = fakeBinDir({ zapp: ZAPP_PID + zappBody(flag) });
+  const zappPath = join(bin, "zapp");
+  const zappPid = `${zappPath}.pid`;
+  cleanups.push(() => {
+    if (!existsSync(zappPid)) return;
+    const pid = Number(readFileSync(zappPid, "utf8").trim());
+    // A file read while the shell was still writing it is empty, and Number("") is 0: process group 0 is this test runner's (#290 review).
+    if (!Number.isSafeInteger(pid) || pid <= 1) return;
+    // A recorded pid alive with another start time was reused after the fake ended: that process isn't this test's (#290 review).
+    if (!alive(pid)) return killGroup(pid);
+    const started = existsSync(`${zappPath}.started`) ? readFileSync(`${zappPath}.started`, "utf8").trim() : "";
+    const now = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)]).stdout.toString().trim();
+    if (started !== "" && started === now) killGroup(pid);
+  });
   // Its own process group, standing in for the terminal's foreground group that keyloom runs in.
-  const proc = Bun.spawn(["bun", flashScript(dir, opts), join(bin, "zapp"), artifact, join(dir, "flash.log"), flag], { detached: true, stdout: "pipe", stderr: "pipe" });
+  const proc = spawnGroup(["bun", flashScript(dir, opts), zappPath, artifact, join(dir, "flash.log"), flag]);
   const out = collect(proc.stdout);
   const err = collect(proc.stderr);
   const ctrlC = () => process.kill(-proc.pid, "SIGINT");
@@ -124,110 +169,84 @@ const r = await untilInterrupted((signal) => flashUf2Drives({
 }));
 console.log("result " + r.state + " " + (r.error ?? ""));
 `);
-  const proc = Bun.spawn(["bun", script, root, artifact, join(dir, "flash.log"), steps], { detached: true, stdout: "pipe", stderr: "pipe" });
+  const proc = spawnGroup(["bun", script, root, artifact, join(dir, "flash.log"), steps]);
   return { proc, out: collect(proc.stdout), err: collect(proc.stderr), ctrlC: () => process.kill(-proc.pid, "SIGINT") };
 }
 
 describe("Ctrl-C during a flash (D-506)", () => {
   test("two Ctrl-Cs while zapp writes neither stop zapp nor end keyloom: the write finishes and keyloom says why it waits", async () => {
     const c = await child((flag) => `echo "Firmware loaded: x"; while [ ! -f "${flag}" ]; do sleep 0.05; done; sleep 1.5; echo wrote > "${flag}.written"; exit 0`);
-    try {
-      await c.out.until("state waiting_for_bootloader");
-      writeFileSync(c.flag, "");
-      await c.out.until("state writing");
-      c.ctrlC();
-      await Bun.sleep(200);
-      c.ctrlC();
-      expect(await c.proc.exited).toBe(0);
-      await c.out.done;
-      await c.err.done;
-      expect(c.out.text()).toContain("result succeeded");
-      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
-      expect(existsSync(`${c.flag}.written`)).toBe(true);
-    } finally {
-      c.proc.kill("SIGKILL");
-    }
+    await c.out.until("state waiting_for_bootloader");
+    writeFileSync(c.flag, "");
+    await c.out.until("state writing");
+    c.ctrlC();
+    await Bun.sleep(200);
+    c.ctrlC();
+    expect(await c.proc.exited).toBe(0);
+    await c.out.done;
+    await c.err.done;
+    expect(c.out.text()).toContain("result succeeded");
+    expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
+    expect(existsSync(`${c.flag}.written`)).toBe(true);
   }, SLOW_RUNNER_MS);
 
   test("a Ctrl-C while zapp still waits for the bootloader stops zapp, and the flash is cancelled", async () => {
-    const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`);
-    try {
-      await c.out.until("state waiting_for_bootloader");
-      // zapp's line is read before the cancel, so keyloom has seen it start.
-      await Bun.sleep(300);
-      c.ctrlC();
-      expect(await c.proc.exited).toBe(0);
-      await c.out.done;
-      expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
-    } finally {
-      c.proc.kill("SIGKILL");
-    }
+    const c = await child(() => `echo "Firmware loaded: x"; exec sleep 600`);
+    await c.out.until("state waiting_for_bootloader");
+    // zapp's line is read before the cancel, so keyloom has seen it start.
+    await Bun.sleep(300);
+    c.ctrlC();
+    expect(await c.proc.exited).toBe(0);
+    await c.out.done;
+    expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
   }, SLOW_RUNNER_MS);
 
   test("two Ctrl-Cs while keyloom can't read USB neither end keyloom nor orphan zapp: the write timeout ends zapp", async () => {
-    const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`, { usb: "unreadable" });
+    const c = await child(() => `echo "Firmware loaded: x"; exec sleep 600`, { usb: "unreadable" });
     const pidFile = () => join(c.bin, "zapp.pid");
-    try {
-      await c.out.until("state waiting_for_bootloader");
-      // zapp's line is read before the cancel, so keyloom has seen it start.
-      await Bun.sleep(300);
-      c.ctrlC();
-      // keyloom tries USB three times before it decides zapp may be writing.
-      await Bun.sleep(400);
-      c.ctrlC();
-      expect(await c.proc.exited).toBe(0);
-      await c.out.done;
-      await c.err.done;
-      expect(c.out.text()).toContain("result failed");
-      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
-      expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
-    } finally {
-      c.proc.kill("SIGKILL");
-      if (existsSync(pidFile())) {
-        try { process.kill(Number(readFileSync(pidFile(), "utf8").trim()), "SIGKILL"); } catch { /* already gone */ }
-      }
-    }
+    await c.out.until("state waiting_for_bootloader");
+    // zapp's line is read before the cancel, so keyloom has seen it start.
+    await Bun.sleep(300);
+    c.ctrlC();
+    // keyloom tries USB three times before it decides zapp may be writing.
+    await Bun.sleep(400);
+    c.ctrlC();
+    expect(await c.proc.exited).toBe(0);
+    await c.out.done;
+    await c.err.done;
+    expect(c.out.text()).toContain("result failed");
+    expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
+    expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
   }, SLOW_RUNNER_MS);
 
   test("a second Ctrl-C while the first one's USB check runs neither ends keyloom nor orphans zapp: zapp is stopped and the flash cancelled", async () => {
-    const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`, { usb: "slow" });
+    const c = await child(() => `echo "Firmware loaded: x"; exec sleep 600`, { usb: "slow" });
     const pidFile = () => join(c.bin, "zapp.pid");
-    try {
-      // keyloom has read zapp's line, so the cancel looks at USB before it stops zapp. Before that line it stops zapp at once.
-      await c.out.until("zapp Firmware loaded");
-      c.ctrlC();
-      // The cancel's USB read takes a second; this lands inside it.
-      await Bun.sleep(200);
-      c.ctrlC();
-      expect(await c.proc.exited).toBe(0);
-      await c.out.done;
-      await c.err.done;
-      expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
-      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
-      expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
-    } finally {
-      c.proc.kill("SIGKILL");
-      if (existsSync(pidFile())) {
-        try { process.kill(Number(readFileSync(pidFile(), "utf8").trim()), "SIGKILL"); } catch { /* already gone */ }
-      }
-    }
+    // keyloom has read zapp's line, so the cancel looks at USB before it stops zapp. Before that line it stops zapp at once.
+    await c.out.until("zapp Firmware loaded");
+    c.ctrlC();
+    // The cancel's USB read takes a second; this lands inside it.
+    await Bun.sleep(200);
+    c.ctrlC();
+    expect(await c.proc.exited).toBe(0);
+    await c.out.done;
+    await c.err.done;
+    expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
+    expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
+    expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
   }, SLOW_RUNNER_MS);
 
   test("two Ctrl-Cs while keyloom restarts a ZMK half neither end keyloom: the half keyloom restarted is written", async () => {
     const c = await zmkChild();
-    try {
-      await c.out.until("restarting right half");
-      c.ctrlC();
-      await Bun.sleep(200);
-      c.ctrlC();
-      expect(await c.proc.exited).toBe(0);
-      await c.out.done;
-      await c.err.done;
-      expect(c.out.text()).toContain("result succeeded");
-      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
-    } finally {
-      c.proc.kill("SIGKILL");
-    }
+    await c.out.until("restarting right half");
+    c.ctrlC();
+    await Bun.sleep(200);
+    c.ctrlC();
+    expect(await c.proc.exited).toBe(0);
+    await c.out.done;
+    await c.err.done;
+    expect(c.out.text()).toContain("result succeeded");
+    expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
   }, SLOW_RUNNER_MS);
 
   test("with no write under way, a second Ctrl-C ends keyloom, so a stop that hangs can still be left", async () => {
@@ -238,18 +257,14 @@ import { untilInterrupted } from ${JSON.stringify(join(SRC, "cli/commands/firmwa
 console.log("ready");
 await untilInterrupted(() => new Promise(() => setInterval(() => {}, 1000)));
 `);
-    const proc = Bun.spawn(["bun", script], { detached: true, stdout: "pipe", stderr: "pipe" });
+    const proc = spawnGroup(["bun", script]);
     const out = collect(proc.stdout);
-    try {
-      await out.until("ready");
-      process.kill(-proc.pid, "SIGINT");
-      await Bun.sleep(200);
-      expect(proc.exitCode).toBeNull();
-      process.kill(-proc.pid, "SIGINT");
-      await proc.exited;
-      expect(proc.signalCode ?? proc.exitCode).toBeOneOf(["SIGINT", 130]);
-    } finally {
-      proc.kill("SIGKILL");
-    }
+    await out.until("ready");
+    process.kill(-proc.pid, "SIGINT");
+    await Bun.sleep(200);
+    expect(proc.exitCode).toBeNull();
+    process.kill(-proc.pid, "SIGINT");
+    await proc.exited;
+    expect(proc.signalCode ?? proc.exitCode).toBeOneOf(["SIGINT", 130]);
   }, SLOW_RUNNER_MS);
 });

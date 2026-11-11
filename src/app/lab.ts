@@ -8,6 +8,7 @@ import type { CaptureHooks, CapturedTrace, KeyCapture } from "../firmware/emulat
 import { findQmkStreamDevice, startQmkCapture } from "../firmware/qmk/typing-capture.ts";
 import { defaultHidTransport } from "../firmware/toolchain/hid-default.ts";
 import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
+import { HelperCleanupUnconfirmedError, isLatchedSetupFailure } from "../firmware/toolchain/device-helper/setup-failure.ts";
 import { defaultSerialTransport } from "../firmware/toolchain/serial-default.ts";
 import { findZmkStreamPort, startZmkCapture } from "../firmware/zmk/typing-capture.ts";
 import { CaptureError, incompleteRecording } from "../firmware/emulate/trace.ts";
@@ -44,20 +45,27 @@ export type LabDeps = {
   replay(app: App, view: LayoutView, boardRevision: string, hooks: { log: LogSink; onProgress?: (line: string) => void; signal?: AbortSignal }): Replay;
 };
 
-/** Reads the keyboard that is plugged in: raw HID for the Moonlander, the keyloom module's serial port for ZMK boards. */
-async function startRealCapture(board: BoardDefinition, hooks: CaptureHooks): Promise<KeyCapture> {
+/**
+ * Reads the keyboard that is plugged in: raw HID for the Moonlander, the keyloom module's serial port for ZMK boards. `transports` is
+ * the machine's own unless a test passes fakes.
+ */
+export async function startRealCapture(
+  board: BoardDefinition, hooks: CaptureHooks,
+  transports: { hid: typeof defaultHidTransport; serial: typeof defaultSerialTransport } = { hid: defaultHidTransport, serial: defaultSerialTransport },
+): Promise<KeyCapture> {
   if (board.firmware === "kanata") {
     throw new UsageError(`${board.name} can't be recorded: its software remapper exposes no stream of physical key events. S52 looks at a later route.`);
   }
   try {
     if (board.firmware === "qmk") {
-      const hid = await defaultHidTransport();
+      const hid = await transports.hid();
       return await startQmkCapture(hid, await findQmkStreamDevice(hid), hooks);
     }
-    const serial = await defaultSerialTransport();
+    const serial = await transports.serial();
     return await startZmkCapture(serial, (await findZmkStreamPort(board, serial)).path, hooks);
   } catch (err) {
-    if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
+    // A helper that died is passed on with its cause, so beginRecording can offer Try again (#290 review).
+    if (err instanceof CaptureError && deadChannel(err) === undefined) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
 }
@@ -117,13 +125,24 @@ export async function beginRecording(
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
       throw accessRefused(err.detail.code, view.board.definition.firmware);
     }
-    if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
-      throw new LabCaptureError("restart_required");
-    }
+    // A dead helper is replaced on the next try (R4-03), so this one is worth repeating. A setup that failed stays failed in this process,
+    // and an old helper that may still hold the keyboard blocks a new one, so those need keyloom restarted.
+    if (err instanceof HelperCleanupUnconfirmedError) throw new LabCaptureError("restart_required");
+    // A helper that died during the START write reaches here inside a CaptureError, so its cause is looked at too (#290 review).
+    const dead = deadChannel(err);
+    if (dead !== undefined) throw new LabCaptureError(isLatchedSetupFailure(dead) ? "restart_required" : "connection_lost");
     if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
   return { view, passage, capture, startedAt: Date.now() };
+}
+
+/** The helper channel error behind a capture failure, when the helper exited, broke the protocol or stopped answering. */
+function deadChannel(err: unknown): DeviceTransportError | undefined {
+  for (let at: unknown = err, depth = 0; at instanceof Error && depth < 4; at = at.cause, depth++) {
+    if (at instanceof DeviceTransportError) return ["helper_exited", "protocol_error", "timeout"].includes(at.detail.code) ? at : undefined;
+  }
+  return undefined;
 }
 
 /**

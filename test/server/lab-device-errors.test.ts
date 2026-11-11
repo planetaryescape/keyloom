@@ -83,7 +83,7 @@ test("denied keyboard access returns the platform remedy without retrying", asyn
 });
 
 for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
-  test(`${code} requires restarting the long-lived keyloom process without retrying or exposing details`, async () => {
+  test(`${code} asks for another try, which gets a new helper (R4-03), without retrying by itself or exposing details`, async () => {
     const error = new DeviceTransportError({ code, effect: "possible", retry: "never" });
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -91,8 +91,8 @@ for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
       expect(result.response.status).toBe(409);
       expect(await result.response.json()).toEqual({
         error: {
-          code: "restart_required",
-          message: "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.",
+          code: "connection_lost",
+          message: "The keyboard connection stopped responding. Try again, and keyloom opens a new one.",
         },
       });
       expect(result.opens()).toBe(1);
@@ -102,6 +102,34 @@ for (const code of ["helper_exited", "protocol_error", "timeout"] as const) {
     } finally { log.mockRestore(); }
   });
 }
+
+test("a timeout from a helper setup that stays failed asks for a restart, not a try that gets the same error (#290 review)", async () => {
+  const { markLatchedSetup } = await import("../../src/firmware/toolchain/device-helper/setup-failure.ts");
+  const error = new DeviceTransportError({ code: "timeout", effect: "possible", retry: "never" });
+  markLatchedSetup(error);
+  const result = await startFailure(error);
+  expect(result.response.status).toBe(409);
+  expect(((await result.response.json()) as { error: { code: string } }).error.code).toBe("restart_required");
+});
+
+test("a helper that dies during the START write, after the session opened, offers Try again (#290 review)", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  apps.push(app);
+  const died = new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" });
+  const transport: HidTransport = {
+    list: async () => [{ vendorId: 0x3297, productId: 0x1969, serial: "keyloom/NPQRSTVWXYZ0", handle: "synthetic-only" }],
+    write: async () => { throw new Error("unexpected direct HID write"); },
+    // The channel's failure reaches the session first, as the client's fail() does, then every write is refused with it.
+    openSession: async (_target, _onReport, onError = () => {}) => ({ write: async () => { onError(died); throw died; }, close: async () => {} }),
+  };
+  // Through the production capture, which turns other capture failures into usage errors.
+  const { startRealCapture } = await import("../../src/app/lab.ts");
+  const backend = appLabBackend(app, { startCapture: (board, hooks) => startRealCapture(board, hooks, { hid: async () => transport, serial: async () => { throw new Error("no serial"); } }), replay: () => { throw new Error("no replay"); } });
+  const request = new Request(`http://keyloom.test/api/lab/${layoutId}/recording`, { method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: "{}" });
+  const response = await handleLabRoute(request, new URL(request.url).pathname, backend, TOKEN);
+  expect(response?.status).toBe(409);
+  expect(((await response!.json()) as { error: { code: string } }).error.code).toBe("connection_lost");
+});
 
 test("an unclassified capture error remains an internal error and is not exposed", async () => {
   const log = spyOn(console, "error").mockImplementation(() => {});

@@ -74,14 +74,17 @@ export class LabStartError extends UsageError {
  */
 export class LabCaptureError extends Error {
   override name = "LabCaptureError";
-  constructor(readonly code: "busy" | "permission_denied" | "permission_input_monitoring" | "restart_required", remedy?: string) {
+  constructor(readonly code: "busy" | "permission_denied" | "permission_input_monitoring" | "connection_lost" | "restart_required", remedy?: string) {
     super(code === "busy"
       ? (remedy ?? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again.")
       : code === "permission_input_monitoring"
         ? (remedy ?? "macOS didn't let keyloom read the keyboard. Allow keyloom in System Settings > Privacy & Security > Input Monitoring, then try again.")
       : code === "permission_denied"
         ? (remedy ?? "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.")
-        : "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.");
+      // The owner starts a new keyboard connection on the next try (R4-03); only one whose old connection may still be open needs a restart.
+      : code === "connection_lost"
+        ? "The keyboard connection stopped responding. Try again, and keyloom opens a new one."
+        : "keyloom's keyboard connection is stuck, and only a restart clears it. Quit keyloom and open it again, then try again.");
   }
 }
 

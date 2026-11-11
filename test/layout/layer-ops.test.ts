@@ -155,6 +155,8 @@ describe("deleting a layer", () => {
     layout.layers[0] = { ...layout.layers[0]!, bindings: [{ kind: "holdTap", tap: { code: "A" }, hold: { layerId: "nav" }, profileId: "p" }, key("B"), T, key("D")] };
     const texts = layerReferences(layout, "nav").map((r) => r.text);
     expect(texts).toEqual(["The A key on Base holds Nav", "The combo Go nav toggles Nav", "The combo Quote is set up on Nav"]);
+    // Each combo carries its id, so the delete dialog can open it (R4-09).
+    expect(layerReferences(layout, "nav").map((r) => r.comboId)).toEqual([undefined, "c1", "c2"]);
     expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(false);
   });
 
@@ -165,7 +167,41 @@ describe("deleting a layer", () => {
     });
     layout.layers[0] = { ...layout.layers[0]!, bindings: [{ kind: "tapDance", tapDanceId: "td" }, key("B"), T, key("D")] };
     expect(layerReferences(layout, "nav").map((r) => r.text)).toEqual(["The A key on Base is the tap dance Twice, which goes to Nav"]);
+    expect(layerReferences(layout, "nav")[0]).toMatchObject({ slot: { layerId: "base", position: 0 }, tapDance: true });
     expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).errors.map((e) => e.code)).toContain("unknown_ref");
+  });
+
+  test("a tap dance only the layer's own keys carry opens there, so Delete layer has a way forward (#290 review)", () => {
+    const layout = tiny({
+      combos: [],
+      tapDances: [{ id: "td", name: "Twice", tap: { kind: "key", code: "A" }, doubleTap: { kind: "layer", action: "to", layerId: "nav" } }],
+    });
+    layout.layers[2] = { ...layout.layers[2]!, bindings: [T, { kind: "tapDance", tapDanceId: "td" }, T, T] };
+    expect(ids(layout)[2]).toBe("nav");
+    expect(layerReferences(layout, "nav")).toEqual([{ slot: { layerId: "nav", position: 1 }, tapDance: true, text: "The tap dance Twice goes to Nav, and keys on Nav carry it" }]);
+    // The keys go with the layer, but the dance stays behind pointing at nothing, so the validator refuses: the listing is not noise.
+    expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(false);
+  });
+
+  test("a tap dance only a combo runs opens that combo (#290 review)", () => {
+    const layout = tiny({
+      combos: [{ id: "c1", name: "Go", positions: [0, 1], layerIds: "all", output: { kind: "tapDance", tapDanceId: "td" } }],
+      tapDances: [{ id: "td", name: "Twice", tap: { kind: "key", code: "A" }, hold: { kind: "layer", action: "momentary", layerId: "nav" } }],
+    });
+    expect(layerReferences(layout, "nav")).toEqual([{ comboId: "c1", text: "The combo Go runs the tap dance Twice, which goes to Nav" }]);
+    expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(false);
+  });
+
+  test("a tap dance nothing uses offers its removal, after which the layer deletes (#290 review)", () => {
+    const layout = tiny({
+      combos: [],
+      tapDances: [{ id: "td", name: "Twice", tap: { kind: "key", code: "A" }, doubleTap: { kind: "layer", action: "to", layerId: "nav" } }],
+    });
+    expect(layerReferences(layout, "nav")).toEqual([{ tapDanceId: "td", text: "The tap dance Twice goes to Nav, and nothing uses it" }]);
+    expect(validate(tinyBoard, layout, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(false);
+    const without = run([{ op: "removeTapDance", tapDanceId: "td" }], layout);
+    expect(layerReferences(without, "nav")).toEqual([]);
+    expect(validate(tinyBoard, without, [{ op: "removeLayer", layerId: "nav" }]).ok).toBe(true);
   });
 
   test("a layer nothing points at deletes cleanly, and keys on the layer itself are not references", () => {

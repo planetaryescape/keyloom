@@ -16,9 +16,9 @@ export function extractForSetup(bytes: Uint8Array, manifest: HelperManifest, rel
   }
 }
 
-export async function ownClient<T>(client: { shutdown(): Promise<void> }, makeTransport: () => T): Promise<{ transport: T; shutdown(): Promise<void> }> {
+export async function ownClient<T>(client: { shutdown(): Promise<void>; readonly deadCode?: string | undefined }, makeTransport: () => T): Promise<{ transport: T; shutdown(): Promise<void>; dead(): boolean }> {
   try {
-    return { transport: makeTransport(), shutdown: () => client.shutdown() };
+    return { transport: makeTransport(), shutdown: () => client.shutdown(), dead: () => client.deadCode !== undefined };
   } catch (error) {
     try {
       await client.shutdown();
@@ -32,7 +32,7 @@ export async function ownClient<T>(client: { shutdown(): Promise<void> }, makeTr
   }
 }
 
-export async function packagedTransport<T>(capabilities: readonly Capability[], makeTransport: (client: DeviceTransportClient) => T, notBundled: () => Error): Promise<{ transport: T; shutdown(): Promise<void> }> {
+export async function packagedTransport<T>(capabilities: readonly Capability[], makeTransport: (client: DeviceTransportClient) => T, notBundled: () => Error): Promise<{ transport: T; shutdown(): Promise<void>; dead(): boolean }> {
   const pair = packagedHelper;
   if (!pair) throw new HelperSetupFailure(notBundled(), "no_child");
   let bytes: Uint8Array;

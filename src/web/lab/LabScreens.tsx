@@ -101,10 +101,18 @@ function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardN
           <ul>
             {lab.sessions.slice(0, 3).map((s) => (
               <li key={s.id}>
-                <button type="button" className="lab-past-row" onClick={() => void lab.showSession(s.id, false)}>
-                  <span>{formatWhen(s.startedAt, Date.now())}</span>
-                  <span className="lab-note">{clock(s.endedAt - s.startedAt)} · {s.analysed ? "read" : "not read yet"}</span>
-                </button>
+                {/* keyloom refuses to read a recording that lost keys, so it isn't a button: it says why, and Start listening records again (R4-14). */}
+                {s.incomplete === true ? (
+                  <span className="lab-past-row" data-incomplete="true">
+                    <span>{formatWhen(s.startedAt, Date.now())}</span>
+                    <span className="lab-note">{clock(s.endedAt - s.startedAt)} · incomplete, so it can&apos;t be read</span>
+                  </span>
+                ) : (
+                  <button type="button" className="lab-past-row" onClick={() => void lab.showSession(s.id, false)}>
+                    <span>{formatWhen(s.startedAt, Date.now())}</span>
+                    <span className="lab-note">{clock(s.endedAt - s.startedAt)} · {s.analysed ? "read" : "not read yet"}</span>
+                  </button>
+                )}
                 <button type="button" className="sheet-close" aria-label="Delete this session" onClick={() => void lab.remove(s.id)}><Trash2 size={14} aria-hidden="true" /></button>
               </li>
             ))}

@@ -95,14 +95,18 @@ export function cleanShortLabel(text: string): string | null {
   return label === "" ? null : label;
 }
 
-export type LayerReference = { text: string; slot?: Slot };
+/**
+ * `slot` is the key that carries it and `comboId` the combo, so the page can open the place to change it (R4-09). `tapDance` marks a key
+ * whose dance does it. `tapDanceId` is a dance nothing uses, which the page offers to remove (#290 review).
+ */
+export type LayerReference = { text: string; slot?: Slot; comboId?: string; tapDance?: true; tapDanceId?: string };
 
 const ACTION_WORD = { momentary: "holds", toggle: "toggles", to: "goes to", oneShot: "switches once to" } as const;
 
 /**
  * Everything that would be left pointing at nothing if the layer went: layer keys, hold-tap holds,
  * tap dance slots (named with the keys that carry the dance), combo outputs and combos limited to
- * it. Keys on the layer itself go with it, so they aren't listed.
+ * it. Keys on the layer itself go with it, so they aren't listed, but a tap dance only they carry is.
  */
 export function layerReferences(layout: Layout, layerId: string): LayerReference[] {
   const out: LayerReference[] = [];
@@ -128,19 +132,26 @@ export function layerReferences(layout: Layout, layerId: string): LayerReference
       if (binding.kind === "tapDance") {
         const dance = layout.tapDances.find((candidate) => candidate.id === binding.tapDanceId);
         const hit = [dance?.tap, dance?.hold, dance?.doubleTap, dance?.tapThenHold].find((action) => action?.kind === "layer" && action.layerId === layerId);
-        if (dance !== undefined && hit?.kind === "layer") out.push({ slot, text: `${where(slot)} is the tap dance ${dance.name}, which ${ACTION_WORD[hit.action]} ${target}` });
+        if (dance !== undefined && hit?.kind === "layer") out.push({ slot, tapDance: true, text: `${where(slot)} is the tap dance ${dance.name}, which ${ACTION_WORD[hit.action]} ${target}` });
       }
     }
   }
+  // A dance no key on another layer carries still stops the delete, so it gets its own way out (#290 review): the key on this layer
+  // that carries it, else the combo that outputs it, else Remove tap dance for a dance nothing uses.
   for (const dance of layout.tapDances) {
     const hit = [dance.tap, dance.hold, dance.doubleTap, dance.tapThenHold].some((action) => action?.kind === "layer" && action.layerId === layerId);
-    const used = layout.layers.some((layer) => layer.bindings.some((binding) => binding.kind === "tapDance" && binding.tapDanceId === dance.id && layer.id !== layerId));
-    if (hit && !used) out.push({ text: `The tap dance ${dance.name} goes to ${target}` });
+    const carries = (binding: Binding) => binding.kind === "tapDance" && binding.tapDanceId === dance.id;
+    if (!hit || layout.layers.some((layer) => layer.id !== layerId && layer.bindings.some(carries))) continue;
+    const here = layout.layers.find((layer) => layer.id === layerId)?.bindings.findIndex(carries) ?? -1;
+    const combo = layout.combos.find((candidate) => carries(candidate.output));
+    if (here >= 0) out.push({ slot: { layerId, position: here }, tapDance: true, text: `The tap dance ${dance.name} goes to ${target}, and keys on ${target} carry it` });
+    else if (combo !== undefined) out.push({ comboId: combo.id, text: `The combo ${combo.name} runs the tap dance ${dance.name}, which goes to ${target}` });
+    else out.push({ tapDanceId: dance.id, text: `The tap dance ${dance.name} goes to ${target}, and nothing uses it` });
   }
   for (const combo of layout.combos) {
     const said = describe(combo.output);
-    if (said !== null) out.push({ text: `The combo ${combo.name} ${said}` });
-    else if (combo.layerIds !== "all" && combo.layerIds.includes(layerId)) out.push({ text: `The combo ${combo.name} is set up on ${target}` });
+    if (said !== null) out.push({ comboId: combo.id, text: `The combo ${combo.name} ${said}` });
+    else if (combo.layerIds !== "all" && combo.layerIds.includes(layerId)) out.push({ comboId: combo.id, text: `The combo ${combo.name} is set up on ${target}` });
   }
   return out;
 }

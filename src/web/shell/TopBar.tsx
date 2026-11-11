@@ -149,6 +149,8 @@ export function TopBar({ onHome, boards, boardsAfter, sync, ask, undo, menu, onM
                 <>
                   {phone ? <Item icon={Undo2} label="Undo" hint="⌘Z" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} /> : null}
                   <Item icon={Redo2} label="Redo" hint="⇧⌘Z" disabled={!undo.canRedo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
+                  {/* On a phone the menu is the only place Undo shows, so its reason sits beside it (R4-17). */}
+                  {phone && undo.blockedReason !== null ? <p className="menu-note">{undo.blockedReason}</p> : null}
                   <div className="menu-separator" role="separator" />
                 </>
               )}
@@ -205,12 +207,16 @@ function Item({ icon: Icon, label, hint, checked, disabled = false, role = "menu
 // revision, so redo puts back the change the last undo took away.
 function UndoButtons({ canUndo, canRedo, busy, blockedReason, summary, onUndo }: UndoState) {
   const blocked = busy || blockedReason !== null;
+  // The reason is said under the button while it applies, as the toolbar does, not only in a hover title (R4-17). It also holds back Redo
+  // in the More menu, so it shows whenever either has something to do (#290 review).
+  const why = blockedReason !== null && (canUndo || canRedo);
   return (
-    <>
-      <button type="button" className="topbar-icon" aria-label="Undo" title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
+    <span className="toolbar-undo">
+      <button type="button" className="topbar-icon" aria-label="Undo" aria-describedby={why ? "topbar-undo-why" : undefined} title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
         {busy ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : <Undo2 size={17} aria-hidden="true" />}
       </button>
-    </>
+      {why ? <span id="topbar-undo-why" className="toolbar-why" role="status">{blockedReason}</span> : null}
+    </span>
   );
 }
 

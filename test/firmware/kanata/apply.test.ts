@@ -124,6 +124,43 @@ describe("apply on a kanata board", () => {
     expect(readFileSync(`${paths.kbd}.before-keyloom`, "utf8")).toBe("(defsrc a)\n(deflayer base a)\n");
   });
 
+  test("a second replace keeps the first original and puts the second beside it under a dated name (#290 review)", async () => {
+    const { paths, deps } = setup();
+    mkdirSync(paths.dir, { recursive: true });
+    const first = "(defsrc a)\n(deflayer base a)\n";
+    const second = "(defsrc b)\n(deflayer base b)\n";
+    writeFileSync(paths.kbd, first);
+    expect((await applyKanata(deps, source("rev_ONE"), "rev_ONE", { overwriteForeign: true })).ok).toBe(true);
+    writeFileSync(paths.kbd, second);
+    const at = Date.UTC(2026, 10, 11, 9, 30, 0);
+    expect((await applyKanata({ ...deps, now: () => at }, source("rev_TWO"), "rev_TWO", { overwriteForeign: true })).ok).toBe(true);
+    expect(readFileSync(`${paths.kbd}.before-keyloom`, "utf8")).toBe(first);
+    expect(readFileSync(`${paths.kbd}.before-keyloom.2026-11-11T09-30-00-000Z`, "utf8")).toBe(second);
+    // The same foreign text again is already kept, so no third copy appears.
+    writeFileSync(paths.kbd, first);
+    expect((await applyKanata(deps, source("rev_THREE"), "rev_THREE", { overwriteForeign: true })).ok).toBe(true);
+    expect(readdirSync(paths.dir).filter((f) => f.includes("before-keyloom")).sort()).toEqual(["keyloom.kbd.before-keyloom", "keyloom.kbd.before-keyloom.2026-11-11T09-30-00-000Z"]);
+  });
+
+  test("a replace kanata --check refuses leaves the foreign file and any kept copy untouched (#290 review)", async () => {
+    const { paths, deps } = setup();
+    mkdirSync(paths.dir, { recursive: true });
+    const original = "(defsrc a)\n(deflayer base a)\n";
+    const later = "(defsrc b)\n(deflayer base b)\n";
+    const failing = { ...deps, check: async () => ({ ok: false, output: "Error: unknown key" }) };
+    // No copy yet: a refused check makes none.
+    writeFileSync(paths.kbd, original);
+    expect(await applyKanata(failing, source("rev_BAD"), "rev_BAD", { overwriteForeign: true })).toMatchObject({ ok: false, step: "check" });
+    expect(existsSync(`${paths.kbd}.before-keyloom`)).toBe(false);
+    // A copy already kept stays as it was, and the foreign file stays in place.
+    writeFileSync(`${paths.kbd}.before-keyloom`, original);
+    writeFileSync(paths.kbd, later);
+    expect(await applyKanata(failing, source("rev_BAD"), "rev_BAD", { overwriteForeign: true })).toMatchObject({ ok: false, step: "check" });
+    expect(readFileSync(`${paths.kbd}.before-keyloom`, "utf8")).toBe(original);
+    expect(readFileSync(paths.kbd, "utf8")).toBe(later);
+    expect(readdirSync(paths.dir).filter((f) => f.includes("before-keyloom") || f.includes("candidate"))).toEqual(["keyloom.kbd.before-keyloom"]);
+  });
+
   test("a hand edit of keyloom's own file counts as not keyloom's", async () => {
     const { paths, deps } = setup();
     await applyKanata(deps, source("rev_ONE"), "rev_ONE");

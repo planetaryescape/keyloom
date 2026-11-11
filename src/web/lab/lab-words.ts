@@ -8,7 +8,8 @@ export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
   if (code === "needs_sync") return [{ id: "sync_now", label: "Sync now" }, { id: "open_release", label: "Build and flash…" }];
   if (code === "foreign_firmware") return [{ id: "open_release", label: "Build and flash…" }];
   if (code === "permission_input_monitoring") return [{ id: "open_input_monitoring", label: "Open Input Monitoring settings" }, { id: "retry", label: "Try again" }];
-  if (code === "busy") return [{ id: "retry", label: "Try again" }];
+  // A keyboard connection that stopped answering is replaced on the next try (R4-03).
+  if (code === "busy" || code === "connection_lost") return [{ id: "retry", label: "Try again" }];
   return [];
 }
 
@@ -16,6 +17,7 @@ export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
 export function labProblemText(code: string | null, message: string): string {
   if (code === "permission_input_monitoring") return "macOS didn't let keyloom read your keyboard. Allow keyloom in Input Monitoring, then try again.";
   if (code === "foreign_firmware") return "Your keyboard runs firmware keyloom didn't build, so it can't stream its keys. Build and flash puts keyloom's build on it.";
+  if (code === "connection_lost") return "keyloom's connection to the keyboard stopped answering. Try again, and keyloom opens a new one.";
   return message;
 }
 

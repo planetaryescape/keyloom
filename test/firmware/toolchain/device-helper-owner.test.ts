@@ -110,3 +110,89 @@ test("both adapters share one owner and failed cleanup stays latched for both", 
   await expect(owner.transport()).rejects.toThrow("start a new command");
   expect(connects).toBe(1); expect(closes).toBe(1);
 });
+
+test("a helper that died after setup is replaced on the next transport(), once its termination is observed (R4-03)", async () => {
+  let dead = false, connects = 0, closes = 0;
+  const owner = new CandidateHidOwner(async () => {
+    connects++;
+    const mine = connects;
+    return { transport, shutdown: async () => { closes++; }, dead: () => mine === 1 && dead };
+  });
+  await owner.transport();
+  dead = true;
+  // Two callers at once share one replacement: never two children for one device.
+  await Promise.all([owner.transport(), owner.transport()]);
+  expect(connects).toBe(2);
+  expect(closes).toBe(1);
+  await owner.transport();
+  expect(connects).toBe(2);
+  await owner.shutdown();
+  expect(closes).toBe(2);
+});
+
+test("a dead helper whose termination can't be confirmed is never replaced, and the owner says restart (R4-03)", async () => {
+  let connects = 0;
+  const owner = new CandidateHidOwner(async () => {
+    connects++;
+    return { transport, shutdown: async () => { throw new Error("kill not observed"); }, dead: () => true };
+  });
+  await owner.transport();
+  await expect(owner.transport()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  await expect(owner.transport()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  await expect(owner.shutdown()).rejects.toBeInstanceOf(HelperCleanupUnconfirmedError);
+  expect(connects).toBe(1);
+});
+
+test("a dead helper isn't replaced after shutdown began", async () => {
+  let connects = 0;
+  const owner = new CandidateHidOwner(async () => { connects++; return { transport, shutdown: async () => {}, dead: () => true }; });
+  await owner.transport();
+  await owner.shutdown();
+  await expect(owner.transport()).rejects.toThrow("start a new command");
+  expect(connects).toBe(1);
+});
+
+test("an error from a failed setup is marked as latched, so the lab doesn't offer a try that gets the same error (#290 review)", async () => {
+  const { isLatchedSetupFailure } = await import("../../../src/firmware/toolchain/device-helper/setup-failure.ts");
+  const original = new Error("synthetic handshake timeout");
+  const owner = new CandidateHidOwner(async () => { throw new HelperSetupFailure(original, "terminated"); });
+  await expect(owner.transport()).rejects.toBe(original);
+  expect(isLatchedSetupFailure(original)).toBe(true);
+  expect(isLatchedSetupFailure(new Error("another"))).toBe(false);
+});
+
+test("a helper that dies after every replacement is respawned with a growing wait, and one seen alive resets it (#290 review)", async () => {
+  let clock = 0, connects = 0, dead = true;
+  const owner = new CandidateHidOwner(async () => { connects++; return { transport, shutdown: async () => {}, dead: () => dead }; }, undefined, () => clock);
+  await owner.transport();
+  expect(connects).toBe(1);
+  await owner.transport();
+  expect(connects).toBe(2);
+  // Within the first second the dead child is handed back, not replaced.
+  clock = 999;
+  await owner.transport();
+  expect(connects).toBe(2);
+  clock = 1_000;
+  await owner.transport();
+  expect(connects).toBe(3);
+  // The wait doubles: 2 s after the second replacement.
+  clock = 2_999;
+  await owner.transport();
+  expect(connects).toBe(3);
+  clock = 3_000;
+  await owner.transport();
+  expect(connects).toBe(4);
+  // A child seen alive resets the wait, so the next death after it is replaced once the last wait has passed, and the one after waits 1 s.
+  dead = false;
+  clock = 7_000;
+  await owner.transport();
+  dead = true;
+  await owner.transport();
+  expect(connects).toBe(5);
+  clock = 7_999;
+  await owner.transport();
+  expect(connects).toBe(5);
+  clock = 8_000;
+  await owner.transport();
+  expect(connects).toBe(6);
+});

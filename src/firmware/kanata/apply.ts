@@ -34,8 +34,30 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 
 const read = async (path: string): Promise<string | undefined> => readFile(path, "utf8").catch(() => undefined);
 
+/**
+ * Keeps the keyloom.kbd keyloom is about to replace, and returns where. A copy already kept is never written over: one with the same
+ * text is the copy, and a different one (from an earlier replace) leaves this one a dated name, so the first original survives.
+ */
+async function keepCopy(kbd: string, text: string, now: () => number): Promise<string> {
+  const first = `${kbd}.before-keyloom`;
+  const dated = `${first}.${new Date(now()).toISOString().replace(/[:.]/g, "-")}`;
+  for (let n = 0; ; n++) {
+    const path = n === 0 ? first : n === 1 ? dated : `${dated}-${n}`;
+    if ((await read(path)) === text) return path;
+    try {
+      await writeFile(path, text, { flag: "wx" });
+      return path;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    }
+  }
+}
+
 export type ApplyOptions = {
-  /** Replace a keyloom.kbd that keyloom didn't write, keeping the old one beside it as keyloom.kbd.before-keyloom. */
+  /**
+   * Replace a keyloom.kbd that keyloom didn't write, keeping the old one beside it as keyloom.kbd.before-keyloom, or under a dated
+   * keyloom.kbd.before-keyloom.<time> when an earlier, different copy already has that name.
+   */
   overwriteForeign?: boolean;
 };
 
@@ -48,6 +70,7 @@ export async function applyKanata(deps: ApplyDeps, source: KanataSource, revisio
   if (!kbd || !safe) return { ok: false, step: "write", error: "the generated source has no keyloom.kbd or safe.kbd", written: false };
 
   const before = await read(paths.kbd);
+  let foreign = false;
   if (before !== undefined) {
     const header = readHeader(before);
     if (!header || !header.intact) {
@@ -57,23 +80,33 @@ export async function applyKanata(deps: ApplyDeps, source: KanataSource, revisio
           error: `${paths.kbd} wasn't written by keyloom${header ? " (it has been edited by hand)" : ""}, so keyloom left it alone. Move it aside, or replace it and keep a copy.`,
         };
       }
-      await writeFile(`${paths.kbd}.before-keyloom`, before);
+      foreign = true;
     }
   }
 
+  // The candidate is checked under its own name, so a config kanata refuses never replaces a working one.
+  const candidate = `${paths.kbd}.${process.pid}.${crypto.randomUUID().slice(0, 8)}.candidate`;
   try {
     await mkdir(paths.dir, { recursive: true });
-    // The candidate is checked under its own name, so a config kanata refuses never replaces a working one.
-    const candidate = `${paths.kbd}.${process.pid}.${crypto.randomUUID().slice(0, 8)}.candidate`;
     await writeFile(candidate, kbd.content);
     const checked = await deps.check(candidate);
     if (!checked.ok) {
       await rm(candidate, { force: true });
       return { ok: false, step: "check", written: false, error: `kanata --check refused the new config, so nothing was changed: ${checked.output.split("\n").slice(-6).join(" ")}` };
     }
+    // Only a config that passed the check replaces the foreign file, so the copy is made here and not before: a refused replace changes nothing.
+    if (foreign && before !== undefined) {
+      try {
+        await keepCopy(paths.kbd, before, now);
+      } catch (err) {
+        await rm(candidate, { force: true });
+        return { ok: false, step: "write", written: false, error: `couldn't keep a copy of ${paths.kbd}, so keyloom left it alone: ${(err as Error).message}` };
+      }
+    }
     await writeAtomic(paths.safe, safe.content);
     await rename(candidate, paths.kbd);
   } catch (err) {
+    await rm(candidate, { force: true });
     return { ok: false, step: "write", written: false, error: `couldn't write ${paths.kbd}: ${(err as Error).message}` };
   }
 

@@ -95,6 +95,17 @@ describe("sync now and put on", () => {
     expect(w.calls.builds).toEqual([]);
   });
 
+  test("a name a shell would split is quoted in the command the refusal names (R4 residual 3)", async () => {
+    const w = await world();
+    w.flashed();
+    const other = second(w, "My Travel");
+    const e = w.engine();
+    await e.start();
+    await expect(e.syncNow(other)).rejects.toThrow("keyloom config use 'My Travel'");
+    setArchivedAt(w.app.db, other, Date.now());
+    await expect(e.syncNow(other)).rejects.toThrow("keyloom config restore 'My Travel'");
+  });
+
   test("useConfig stores the choice, syncs the new config once, and then only that one auto-syncs", async () => {
     const w = await world();
     w.flashed();

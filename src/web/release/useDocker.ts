@@ -33,12 +33,16 @@ export function useDocker(token: string): Docker {
 
   useEffect(() => {
     const controller = new AbortController();
+    let again: ReturnType<typeof setTimeout> | undefined;
     fetchDockerReadiness(token, controller.signal)
       .then((next) => {
         setReadiness(next);
         setUnanswered(false);
         // A failed start no longer says anything once Docker answers.
         if (next?.ok === true) setProblem(null);
+        // While keyloom starts the engine for something else, ask again once this answer is in, so the page follows that start to Docker
+        // up or its failure. Asking only after an answer keeps a slow readiness from being cut off by the next ask (#290 review).
+        if (next !== null && !next.ok && next.engineAction != null && !controller.signal.aborted) again = setTimeout(() => setAsks((n) => n + 1), ENGINE_ACTION_POLL_MS);
       })
       // A server without the route, or one that can't answer, leaves the dialog without this line rather than failing it.
       .catch(() => {
@@ -46,27 +50,39 @@ export function useDocker(token: string): Docker {
         setReadiness(null);
         setUnanswered(true);
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      clearTimeout(again);
+    };
   }, [token, asks]);
 
   const run = useCallback((action: "start" | "restart", ask: (token: string) => Promise<DockerStartResponse>) => {
     setStarting(true);
     setProblem(null);
+    const before = lastAction;
     setLastAction(action);
     ask(token)
       .then((result) => {
         if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
-        else setProblem(result.reason);
+        else if (result.code === "engine_busy") {
+          // keyloom is already starting the engine (R4-04): nothing failed, so nothing is recorded, and the readiness follows that start.
+          setLastAction(before);
+          // Shown as starting until the readiness asked for below says which action runs, so the button doesn't come back meanwhile.
+          setReadiness((previous) => (previous !== null && !previous.ok && previous.engineAction == null ? { ...previous, engineAction: "start" } : previous));
+          setAsks((n) => n + 1);
+        } else setProblem(result.reason);
       })
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
       .finally(() => setStarting(false));
-  }, [token]);
+  }, [token, lastAction]);
   const start = useCallback(() => run("start", startDockerEngine), [run]);
   const restart = useCallback(() => run("restart", restartDockerApp), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
   return { readiness, unanswered, starting, problem, lastAction, start, restart, refresh };
 }
+
+const ENGINE_ACTION_POLL_MS = 2000;
 
 const RECHECK_MS = 4000;
 

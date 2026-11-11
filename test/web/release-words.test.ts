@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import type { DockerReadinessResponse } from "../../src/api/system.ts";
 import type { InstallState } from "../../src/api/tool-install.ts";
-import { COLIMA_HELP_URL, buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
+import { COLIMA_HELP_URL, buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
 import { adoptOnMount, installEnded } from "../../src/web/release/useInstall.ts";
 
 const missing = (canInstall: boolean): DockerReadinessResponse => ({
@@ -90,7 +90,7 @@ describe("dockerView", () => {
     expect(dockerView(colima, true, null, null, "restart")).toEqual({ kind: "starting", engine: "Colima", verb: "Restarting" });
     expect(dockerView(colima, true, null, null, "start")).toEqual({ kind: "starting", engine: "Colima", verb: "Starting" });
     // The restart failed too: no button that repeats it, and Colima's own guide.
-    expect(dockerView(colima, false, "Colima did not answer within 120 s", null, "restart")).toEqual({ kind: "start-failed", reason: "Colima did not answer within 120 s", retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL });
+    expect(dockerView(colima, false, "Colima did not answer within 120 s", null, "restart")).toEqual({ kind: "start-failed", reason: "Colima did not answer within 120 s", retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL, alternatives: [] });
     // After a good install whose first start failed, the way on carries the engine to restart.
     const failed = install({ status: "failed", phase: null, error: "Colima did not answer within 960 s.", errorCode: "start_failed" });
     expect(dockerView(colima, false, null, failed)).toMatchObject({ kind: "down", restartEngine: "Colima", afterInstall: { cancelled: false } });
@@ -155,5 +155,31 @@ describe("installEnded", () => {
     for (const status of ["succeeded", "failed", "cancelled"] as const) expect(installEnded(install({ status, phase: null }))).toBe(true);
     expect(installEnded(install({ status: "running" }))).toBe(false);
     expect(installEnded(install({ status: "idle", phase: null }))).toBe(false);
+  });
+});
+
+describe("Docker that keyloom is already starting, or that won't come back (R4-04)", () => {
+  const colima: DockerReadinessResponse = { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima" };
+  test("a start or restart running for something else shows as starting, with Build waiting for it, not a button", () => {
+    expect(dockerView({ ...colima, engineAction: "start" }, false, null, null)).toEqual({ kind: "starting", engine: "Colima", verb: "Starting" });
+    expect(dockerView({ ...colima, engineAction: "restart" }, false, null, null)).toEqual({ kind: "starting", engine: "Colima", verb: "Restarting" });
+    expect(buildBlockedReason(dockerView({ ...colima, engineAction: "start" }, false, null, null))).toBe("Waiting for Docker to start.");
+  });
+  test("a Colima a restart didn't bring back blocks Build firmware with the reason, and offers the other engines", () => {
+    const alternatives = [{ name: "Docker Desktop", url: "https://docs.docker.com/desktop/" }, { name: "OrbStack", url: "https://orbstack.dev/" }];
+    const view = dockerView({ ...colima, alternatives }, false, "Colima did not answer within 120 s", null, "restart");
+    expect(view).toMatchObject({ kind: "start-failed", helpUrl: COLIMA_HELP_URL, alternatives });
+    expect(buildBlockedReason(view)).toContain("install another engine");
+    // A first failed start isn't a reason to block: Restart Colima is the way on, and a build would try it too.
+    expect(buildBlockedReason(dockerView(colima, false, "keyloom couldn't start Colima", null, "start"))).toBeNull();
+  });
+});
+
+describe("buildDisabledReason (R4-19)", () => {
+  test("a board revision not chosen yet is said beside Build firmware; Docker's reason comes first", () => {
+    expect(buildDisabledReason(null, true, null, "Moonlander")).toBe("Choose which Moonlander this is first.");
+    expect(buildDisabledReason(null, true, "reva", "Moonlander")).toBeNull();
+    expect(buildDisabledReason(null, false, null, "Moonlander")).toBeNull();
+    expect(buildDisabledReason("Install Docker first.", true, null, "Moonlander")).toBe("Install Docker first.");
   });
 });

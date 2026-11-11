@@ -3,7 +3,8 @@ import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboard
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import type { ReviewActivity } from "../../api/review.ts";
 import { ApiError } from "../api.ts";
-import { createConfig } from "../configs/api-configs.ts";
+import { firstFreeName } from "../import/export-steps.ts";
+import { createConfig, fetchAllConfigs } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
@@ -38,6 +39,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [putPreview, setPutPreview] = useState<PutPreviewResponse | null>(null);
   const [searchText, setSearchText] = useState("");
   const [found, setFound] = useState<ApiCandidate[]>([]);
+  // The text whose answer `found` holds, so an empty answer reads as "none" only once the search for this text came back (R4-12).
+  const [foundFor, setFoundFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // A board preview that failed stops the "Reading…" and offers Try again, which reads it again (R3-08).
@@ -122,11 +125,15 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     setSearchText(text);
     if (text.trim().length < 2) {
       setFound([]);
+      setFoundFor(null);
       return;
     }
     try {
       const result = await api.searchKeyboards(token, text.trim());
-      if (searchSequence.current === sequence) setFound(result.candidates);
+      if (searchSequence.current === sequence) {
+        setFound(result.candidates);
+        setFoundFor(text.trim());
+      }
     } catch (e) {
       if (searchSequence.current === sequence) setProblem(message(e));
     }
@@ -145,7 +152,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     step, preview, previewProblem, putPreview, busy, problem, waiting,
     /** Reads the board preview again after it failed. */
-    retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, activities, setActivities,
+    retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));
@@ -218,12 +225,15 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
     },
     /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
-    startBlank: async (name: string): Promise<string | null> => {
+    /** `free`: `name` is keyloom's own default, so it becomes "name 2", "name 3"… when a config already has it (R4-16). A typed name is kept. */
+    startBlank: async (name: string, opts: { free?: boolean } = {}): Promise<string | null> => {
       if (step.kind !== "setup" && step.kind !== "put") return null;
       setBusy(true);
       setProblem(null);
       try {
-        const config = await createConfig(token, { from: "blank", name: name.trim(), board: step.boardId });
+        // Every config's name, archived ones and removed keyboards' included: they still hold their names (#290 review).
+        const taken = opts.free === true ? (await fetchAllConfigs(token)).map((config) => config.name) : [];
+        const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board: step.boardId });
         return config.id;
       } catch (e) {
         setProblem(message(e));

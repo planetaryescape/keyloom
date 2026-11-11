@@ -158,6 +158,14 @@
   background: var(--surface-2);
 }
 
+.lab-past-row[data-incomplete] {
+  cursor: default;
+}
+
+.lab-past-row[data-incomplete]:hover {
+  background: none;
+}
+
 /* ---------- listening ---------- */
 
 .lab-listening {

@@ -66,6 +66,14 @@ export class DeviceTransportClient {
       throw new HelperSetupFailure(original, "terminated");
     }
   }
+  /**
+   * Why this child's channel died, when it exited, broke the protocol or stopped answering. Such a client never serves again; its owner
+   * may start another child once this one's termination is observed (R4-03). Any other latched failure is not a dead channel.
+   */
+  get deadCode(): "helper_exited" | "protocol_error" | "timeout" | undefined {
+    const code = this.failure instanceof DeviceTransportError ? this.failure.detail.code : undefined;
+    return code === "helper_exited" || code === "protocol_error" || code === "timeout" ? code : undefined;
+  }
   request<T>(method: string, params: Record<string, unknown>, schema: z.ZodType<T>, timeout: number, admitted?: (result: T) => void): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     if (this.pending.size >= 32) return Promise.reject(new DeviceTransportError({ code: "capacity", effect: "none", retry: "never" }));

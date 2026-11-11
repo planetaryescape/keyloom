@@ -84,6 +84,8 @@ describe("a session through the routes", () => {
 
     const list = LabSessionsResponseSchema.parse(await (await call(`/api/lab/${layoutId}/sessions`)).json());
     expect(list.sessions[0]?.analysed).toBe(true);
+    // A whole recording says so, so the page offers it as a row to open (R4-14).
+    expect(list.sessions[0]?.incomplete).toBe(false);
     expect((await post(`/api/lab/sessions/${stopped.session.id}/delete`)).status).toBe(200);
     expect((await call(`/api/lab/sessions/${stopped.session.id}`)).status).toBe(404);
   });

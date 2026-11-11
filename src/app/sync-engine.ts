@@ -31,6 +31,7 @@ import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
 import { confirmExitChord, kanataSeenRecently } from "./remapper.ts";
 import { firmwareBusy } from "./firmware.ts";
+import { commandArg } from "./command-words.ts";
 import type { SyncDeps } from "./sync-deps.ts";
 import { type KeyboardReading, syncSupported, syncableBoards } from "./sync-keyboard.ts";
 import { type SyncFacts, type SyncState, autoSyncDue, deriveState } from "./sync-state.ts";
@@ -143,9 +144,13 @@ const isRemapper = (boardId: string): boolean => showBoard(boardId).definition.f
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-/** A failed remapper apply's step as a sync failure. Not running is the world changing (retry when it is back); a refused or unreadable config would fail the same way again. */
+/**
+ * A failed remapper apply's step as a sync failure. Not running is the world changing (retry when it is back); a refused or unreadable
+ * config would fail the same way again. A keyloom.kbd keyloom didn't write is `foreign_file`, which the page answers with Replace it.
+ */
 const remapperFailure = (step: string): SyncFailure =>
-  step === "not_connected" ? "disconnected" : step === "verify" ? "verify" : step === "reload" || step === "check" || step === "generate" ? "build" : "flash";
+  step === "not_connected" ? "disconnected" : step === "verify" ? "verify" : step === "not_keyloom" ? "foreign_file"
+  : step === "reload" || step === "check" || step === "generate" ? "build" : "flash";
 
 /** What the engine knows about one board when it decides. */
 type BoardFacts = { boardId: string; boardName: string; layout: LayoutRow; layouts: LayoutRow[]; reading: KeyboardReading; facts: SyncFacts };
@@ -176,6 +181,11 @@ export class SyncEngine {
   private readonly sameDocument = new Map<string, boolean>();
   /** A failed build's code, by build: it never changes, and the views are built every tick. */
   private readonly buildCodes = new Map<string, string | null>();
+  /**
+   * The board's latest sync when this engine last turned remapping off. A `foreign_file` failure that is that sync no longer stands
+   * for the person's choice: replacing then would turn remapping back on (#290 review). Kept in memory, so a restart forgets it.
+   */
+  private readonly remappingOffAfter = new Map<string, string | null>();
 
   constructor(private readonly app: App, private readonly deps: SyncDeps, opts: SyncOptions = {}) {
     this.quietMs = opts.quietMs ?? 3000;
@@ -458,9 +468,14 @@ export class SyncEngine {
   private runView(s: SyncRow): SyncRunView {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
-      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : null,
+      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : this.replaceable(s) ? "foreign_file" : null,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
+  }
+
+  /** A remapper apply refused because keyloom.kbd isn't keyloom's, and remapping wasn't turned off after it: Replace it answers it. */
+  private replaceable(s: SyncRow): boolean {
+    return s.status === "failed" && s.failure === "foreign_file" && this.remappingOffAfter.get(s.boardId) !== s.id;
   }
 
   private buildCodeOf(buildId: string): string | null {
@@ -721,11 +736,11 @@ export class SyncEngine {
     const layout = findLayoutRow(this.app.db, layoutRef);
     if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
     if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", `this keyboard was removed from your setup; restore it with \`keyloom keyboard restore ${layout.boardId}\` before syncing`);
-    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
+    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${commandArg(layout.name)}\``);
     const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
     if (!put && onKeyboard !== layout.id) {
       const current = onKeyboard === undefined ? undefined : findLayoutRow(this.app.db, onKeyboard);
-      throw new SyncRefusal("not_on_keyboard", `${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${layout.name}\``);
+      throw new SyncRefusal("not_on_keyboard", `${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${commandArg(layout.name)}\``);
     }
     const board = showBoard(layout.boardId);
     const name = board.definition.name;
@@ -741,10 +756,10 @@ export class SyncEngine {
         : new SyncRefusal("not_connected", `no ${name} is attached; plug it in and try again`);
     }
     if (reading.state === "other" && board.definition.firmware === "kanata") {
-      throw new SyncRefusal("kanata_foreign", `kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
+      throw new SyncRefusal("kanata_foreign", `kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${commandArg(layout.name)} --overwrite\` to do it deliberately.`);
     }
     if (reading.state === "other") {
-      throw new SyncRefusal("foreign_firmware", `the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
+      throw new SyncRefusal("foreign_firmware", `the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${commandArg(layout.name)}\` and \`keyloom flash --layout ${commandArg(layout.name)}\` to do it deliberately.`);
     }
 
     const run = this.running;
@@ -788,6 +803,7 @@ export class SyncEngine {
       if (run && run.row.boardId === boardId) await run.done;
       const r = await remapper.disable(boardId);
       if (!r.ok) throw new UsageError(`couldn't disable remapping: ${r.error}. If kanata is stuck, hold Left Control + Space + Escape to stop it`);
+      this.remappingOffAfter.set(boardId, lastSyncOfBoard(this.app.db, boardId)?.id ?? null);
       await this.refresh(true);
       this.publish();
     });
@@ -795,7 +811,7 @@ export class SyncEngine {
 
   /**
    * "Replace it" on a MacBook whose kanata runs a config keyloom didn't write (R1-17): applies the config's head with the overwrite the
-   * CLI's `remap apply --overwrite` uses. A keyloom.kbd keyloom didn't write is kept beside it as keyloom.kbd.before-keyloom; a file
+   * CLI's `remap apply --overwrite` uses. A keyloom.kbd keyloom didn't write is kept beside it as keyloom.kbd.before-keyloom (or a dated name); a file
    * kanata was started with elsewhere is not touched. Only this button does it, never auto-apply (21).
    */
   async replaceForeignRemapperConfig(layoutRef: string): Promise<void> {
@@ -812,9 +828,14 @@ export class SyncEngine {
       await this.refresh(true);
       const reading = this.readingOf(layout.boardId);
       if (reading.state === "absent") throw new SyncRefusal("kanata_not_running", "kanata isn't running, so there is nothing to replace");
-      // The confirm was asked about a foreign config. Anything else now (remapping switched off, keyloom's own file) means it is stale,
-      // and applying would undo what changed since, such as turning remapping back on.
-      if (reading.state !== "other") throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
+      // The confirm was asked about a foreign config: kanata running one, or keyloom's last apply refused because keyloom.kbd on disk
+      // isn't keyloom's while kanata still runs keyloom's loaded config (foreign_file). Anything else now (remapping switched off by
+      // hand after that failure, keyloom's own file) means it is stale, and applying would undo what changed since, such as turning
+      // remapping back on.
+      // applyKanata looks at the file itself, so a file that became keyloom's again is applied over without a copy.
+      const last = lastSyncOfBoard(this.app.db, layout.boardId);
+      const foreignFile = last !== undefined && this.replaceable(last) && (reading.state === "keyloom" || reading.state === "remapping_off");
+      if (reading.state !== "other" && !foreignFile) throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
       // Claimed like any sync, so no sync here or in another keyloom starts until this write is done: a sync whose reload failed would
       // otherwise restore its own file over this one. A sync that started after the wait above is busy, not waited for in the queue.
       const id = newSyncId();

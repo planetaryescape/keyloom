@@ -1,7 +1,7 @@
 // The server's typing lab over the app (rung 22, D-314): it holds the one recording in progress, so the browser starts and stops it
 // and the keyboard's stream lives in this process. The keyboard and the emulator come from LabDeps, so tests run on a fake keyboard.
 import {
-  LabCaptureError, LabStartError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, labPassages, labReadout, labSessions,
+  LabCaptureError, LabStartError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, incompleteRecording, labPassages, labReadout, labSessions,
   type App, type LabDeps, type RecordingInProgress,
 } from "../app/index.ts";
 import { LabError, type LabBackend } from "../server/lab-backend.ts";
@@ -21,6 +21,7 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
 
 const sessionView = (s: ReturnType<typeof labSessions>[number]) => ({
   id: s.id, layoutId: s.layoutId, passageId: s.passageId, startedAt: s.startedAt, endedAt: s.endedAt, eventCount: s.eventCount, analysed: s.analysed, warnings: s.warnings,
+  incomplete: incompleteRecording(s.warnings),
 });
 
 export function appLabBackend(app: App, deps: LabDeps): LabBackend {
