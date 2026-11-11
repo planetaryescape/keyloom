@@ -41,9 +41,13 @@ describe("readiness", () => {
   });
 
   test("no Docker at all carries what to install, in this computer's terms", async () => {
-    const readiness = await dockerReadiness({ status: async () => ({ ok: false, kind: "not-installed", reason: "Docker is not on this computer." }), env: {}, platform: "darwin" });
-    expect(readiness).toMatchObject({ ok: false, problem: "not-installed", engine: null, canStart: false });
-    if (!readiness.ok) expect(readiness.install).toMatchObject({ engine: "Docker Desktop", url: "https://www.docker.com/products/docker-desktop/" });
+    const missing = async () => ({ ok: false as const, kind: "not-installed" as const, reason: "Docker is not on this computer." });
+    const withBrew = await dockerReadiness({ status: missing, env: {}, platform: "darwin", has: (c) => c === "brew" });
+    expect(withBrew).toMatchObject({ ok: false, problem: "not-installed", engine: null, canStart: false });
+    // Homebrew on a Mac: keyloom installs Colima itself (D-488).
+    if (!withBrew.ok) expect(withBrew.install).toMatchObject({ engine: "Colima", command: "brew install colima docker", canInstall: true });
+    const noBrew = await dockerReadiness({ status: missing, env: {}, platform: "darwin", has: () => false });
+    if (!noBrew.ok) expect(noBrew.install).toMatchObject({ engine: "Docker Desktop", url: "https://www.docker.com/products/docker-desktop/", canInstall: false });
   });
 
   test("an engine whose CLI missed the PATH is a link, not an install", async () => {

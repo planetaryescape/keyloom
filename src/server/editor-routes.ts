@@ -55,6 +55,8 @@ const ROUTES: readonly (readonly [pattern: string, route: Route])[] = [
   ["builds/:", { method: "GET", run: (b, id) => found(b.getBuild(id), BuildSchema, "build") }],
   ["builds/:/flashes", { method: "POST", run: (b, id, r) => startFlash(b, id, r) }],
   ["flashes/:", { method: "GET", run: (b, id) => found(b.getFlash(id), FlashSchema, "flash") }],
+  ["builds/:/artifact", { method: "GET", run: (b, id) => artifact(b, id) }],
+  ["builds/:/reveal", { method: "POST", run: (b, id, r) => reveal(b, id, r) }],
 ];
 
 /** True for paths only the editor serves, so a server without a backend can answer 404 for them. */
@@ -225,6 +227,26 @@ async function startFlash(backend: EditorBackend, buildId: string, request: Requ
   const body = await readBody(request, EmptyBody);
   if (body instanceof Response) return body;
   return Response.json(FlashSchema.parse(await backend.startFlash(buildId)), { status: 202 });
+}
+
+// The file goes out as a download: the page fetches it with its token and saves the blob, so a link alone can't take it.
+async function artifact(backend: EditorBackend, buildId: string): Promise<Response> {
+  const file = await backend.buildArtifact(buildId);
+  if (file === null) return fail(404, "not_found", "This build has no firmware file. Build it again.");
+  return new Response(Bun.file(file.path), {
+    headers: {
+      "content-type": "application/octet-stream",
+      "content-disposition": `attachment; filename="${file.filename.replace(/[^\w.-]/g, "_")}"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+async function reveal(backend: EditorBackend, buildId: string, request: Request): Promise<Response> {
+  const body = await readBody(request, EmptyBody);
+  if (body instanceof Response) return body;
+  await backend.revealBuild(buildId);
+  return Response.json({});
 }
 
 async function found<T>(pending: Promise<T | null>, schema: z.ZodType<T>, what: string): Promise<Response> {

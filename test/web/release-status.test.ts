@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { releaseStatus } from "../../src/web/release/status.ts";
 
 const build = {
-  id: "bld_test", revisionId: "rev_test", status: "succeeded" as const, error: null,
-  startedAt: 1, finishedAt: 2, logTail: [],
+  id: "bld_test", revisionId: "rev_test", status: "succeeded" as const, error: null, errorCode: null,
+  flashPlan: { manual: null, tool: null, canReveal: true }, startedAt: 1, finishedAt: 2, logTail: [],
 };
 
 const flash = (verified: boolean) => ({

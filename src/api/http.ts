@@ -5,6 +5,7 @@ import { BoardDefinitionSchema, GeometrySchema } from "../boards/schema.ts";
 import { ChangeOpSchema, DecisionDraftSchema, SlotSchema } from "../layout/change.ts";
 import { BindingSchema, LayerSchema, LayoutSchema } from "../layout/schema.ts";
 import { DetectedKeyboardSchema } from "./detected-keyboards.ts";
+import { InstallableToolSchema } from "./tool-install.ts";
 import { ValidationResultSchema } from "../validation/result.ts";
 
 export const LayoutSummarySchema = z.object({
@@ -63,6 +64,8 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   GET  /api/builds/:id                              -> Build
 //   POST /api/builds/:id/flashes        {}            -> Flash             (202; poll GET /api/flashes/:id)
 //   GET  /api/flashes/:id                             -> Flash
+//   GET  /api/builds/:id/artifact                     -> the firmware file   (D-490; 404 unless the build succeeded)
+//   POST /api/builds/:id/reveal         {}            -> {}                  (D-490; shows the file in Finder, macOS only)
 
 export const ApiErrorBodySchema = z.object({
   error: z.object({ code: z.string().min(1), message: z.string().min(1) }),
@@ -164,11 +167,23 @@ export const BuildRequestSchema = z.object({
 });
 export type BuildRequest = z.infer<typeof BuildRequestSchema>;
 
+// What flashing a build will need, known before anyone clicks Flash (D-489, D-490). `manual` holds the board's own steps
+// when keyloom can't flash it; `tool` is the program the flash runs and whether it is here.
+export const FlashPlanSchema = z.object({
+  manual: z.string().nullable(),
+  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), url: z.string().min(1) }).nullable(),
+  canReveal: z.boolean(),
+});
+export type FlashPlan = z.infer<typeof FlashPlanSchema>;
+
 export const BuildSchema = z.object({
   id: z.string().min(1),
   revisionId: z.string().min(1),
   status: z.enum(["running", "succeeded", "failed"]),
   error: z.string().nullable(),
+  // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488).
+  errorCode: z.enum(["docker_unavailable"]).nullable(),
+  flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
   // The last lines of the build log, oldest first, for a progress view.

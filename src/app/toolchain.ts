@@ -28,6 +28,8 @@ export type ToolchainOverrides = {
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
   platform?: NodeJS.Platform;
+  /** Which commands are here, such as Homebrew; injected so the install advice doesn't depend on the test machine. */
+  has?: (command: string) => boolean;
 };
 
 /**
@@ -55,7 +57,7 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     ok: false, problem: now.kind, reason, engine,
     canStart: autoStart && engine !== null,
     autoStart,
-    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform) : null,
+    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform, ...(over.has === undefined ? [] : [over.has])) : null,
   };
 }
 

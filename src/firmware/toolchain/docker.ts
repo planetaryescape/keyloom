@@ -2,7 +2,7 @@
 // disk fails a build late, with "No space left on device"), and what starts it when it isn't.
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { capture, which } from "./run.ts";
 
 /**
@@ -16,7 +16,7 @@ export type DockerStatus = { ok: true; version: string } | { ok: false; kind: Do
 const hasCommand = (command: string): boolean => which(command) !== null;
 
 export async function dockerStatus(timeoutMs = 15_000): Promise<DockerStatus> {
-  if (!which("docker")) {
+  if (!which("docker") && adoptBundledDockerCli() === null) {
     const app = installedEngineApp();
     return app === null
       ? { ok: false, kind: "not-installed", reason: `Docker is not on this computer. ${installSentence()}` }
@@ -86,26 +86,45 @@ export type DockerStartResult =
   | { ok: true; version: string; engine: string; waitedMs: number }
   | { ok: false; engine: string | null; reason: string };
 
-/** What to install where there is no Docker, per platform; the UI and doctor both read it. */
-export type DockerInstall = { engine: string; command: string | null; url: string; note: string };
+/** Another engine the person may prefer to the one keyloom installs, with the page that installs it. */
+export type DockerAlternative = { name: string; url: string };
+
+/**
+ * What to install where there is no Docker, per platform; the UI and doctor both read it. `canInstall` is true only
+ * where keyloom can run `command` itself with no password or app to click through: Homebrew on a Mac (D-488).
+ */
+export type DockerInstall = { engine: string; command: string | null; url: string; note: string; canInstall: boolean; alternatives: DockerAlternative[] };
 
 const DOCKER_DESKTOP_URL = "https://www.docker.com/products/docker-desktop/";
 const ENGINE_DOCS_URL = "https://docs.docker.com/engine/install/";
 
+const ORBSTACK_URL = "https://orbstack.dev/download";
+const COLIMA_URL = "https://colima.run";
+/** What keyloom installs on a Mac with Homebrew (D-488): headless, open source, and no admin password. */
+export const DOCKER_BREW_FORMULAE = ["colima", "docker"] as const;
+
 export function dockerInstall(platform: NodeJS.Platform = process.platform, has: (command: string) => boolean = hasCommand): DockerInstall {
   if (platform === "darwin") {
+    // Docker Desktop's cask can ask for an admin password, which a server can't answer; Colima's formulae never do.
     return has("brew")
-      ? { engine: "Docker Desktop", command: "brew install --cask docker", url: DOCKER_DESKTOP_URL, note: "OrbStack works too, and is lighter." }
-      : { engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, note: "OrbStack works too, and is lighter." };
+      ? {
+          engine: "Colima", command: `brew install ${DOCKER_BREW_FORMULAE.join(" ")}`, url: COLIMA_URL, canInstall: true,
+          note: "Colima runs Docker in the background, with no app to keep open.",
+          alternatives: [{ name: "Docker Desktop", url: DOCKER_DESKTOP_URL }, { name: "OrbStack", url: ORBSTACK_URL }],
+        }
+      : {
+          engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, canInstall: false, note: "OrbStack works too, and is lighter.",
+          alternatives: [{ name: "OrbStack", url: ORBSTACK_URL }],
+        };
   }
   if (platform === "win32") {
     return has("winget")
-      ? { engine: "Docker Desktop", command: "winget install --id Docker.DockerDesktop -e", url: DOCKER_DESKTOP_URL, note: "Windows builds are not available in keyloom yet (D-435); Docker is only needed for the board review's activity tests." }
-      : { engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, note: "Windows builds are not available in keyloom yet (D-435)." };
+      ? { engine: "Docker Desktop", command: "winget install --id Docker.DockerDesktop -e", url: DOCKER_DESKTOP_URL, canInstall: false, alternatives: [], note: "Windows builds are not available in keyloom yet (D-435); Docker is only needed for the board review's activity tests." }
+      : { engine: "Docker Desktop", command: null, url: DOCKER_DESKTOP_URL, canInstall: false, alternatives: [], note: "Windows builds are not available in keyloom yet (D-435)." };
   }
   return has("apt-get") || has("dnf") || has("pacman")
-    ? { engine: "Docker Engine", command: null, url: ENGINE_DOCS_URL, note: "Install it from your distribution's packages, or use Docker Desktop for Linux." }
-    : { engine: "Docker Engine", command: null, url: ENGINE_DOCS_URL, note: "Install Docker Engine for your distribution, or Docker Desktop for Linux." };
+    ? { engine: "Docker Engine", command: null, url: ENGINE_DOCS_URL, canInstall: false, alternatives: [], note: "Install it from your distribution's packages, or use Docker Desktop for Linux." }
+    : { engine: "Docker Engine", command: null, url: ENGINE_DOCS_URL, canInstall: false, alternatives: [], note: "Install Docker Engine for your distribution, or Docker Desktop for Linux." };
 }
 
 function installSentence(platform: NodeJS.Platform = process.platform, has: (command: string) => boolean = hasCommand): string {
@@ -135,13 +154,37 @@ function installedEngineApp(): (typeof ENGINE_APPS)[number] | null {
   return ENGINE_APPS.find((entry) => appInstalled(entry.app)) ?? null;
 }
 
-/** The command that puts a GUI-installed engine's CLI on the PATH, for the app that hides it. */
+/**
+ * The `docker` command an installed engine app bundles, or null. A GUI launch, or a shell that never ran the app's setup,
+ * leaves it off the PATH, though keyloom knows where it is (R1-11).
+ */
+export function bundledDockerCli(
+  platform: NodeJS.Platform = process.platform,
+  installed: (app: string) => boolean = appInstalled,
+  exists: (path: string) => boolean = existsSync,
+): string | null {
+  if (platform !== "darwin") return null;
+  for (const entry of ENGINE_APPS) {
+    if (entry.cli !== undefined && installed(entry.app) && exists(entry.cli)) return entry.cli;
+  }
+  return null;
+}
+
+/**
+ * Puts the bundled CLI's folder on this process's PATH, so every later `docker` call (and the credential helpers
+ * beside it) resolves with no step from the person. Returns the CLI it adopted, or null when there is none.
+ */
+export function adoptBundledDockerCli(find: () => string | null = () => bundledDockerCli()): string | null {
+  const cli = find();
+  if (cli === null) return null;
+  process.env.PATH = `${dirname(cli)}:${process.env.PATH ?? ""}`;
+  return which("docker") === null ? null : cli;
+}
+
+/** What to do about an engine whose CLI keyloom couldn't find, even bundled in the app. */
 function cliFix(app: (typeof ENGINE_APPS)[number]): string {
   if (app.name === "OrbStack") return "Open OrbStack once and run `orb setup`, or add ~/.orbstack/bin to your PATH, then try again.";
-  const bundled = app.cli ?? null;
-  return bundled === null || !existsSync(bundled)
-    ? "Open it and install its command line tools, then try again."
-    : `Add it with \`sudo ln -sf ${bundled} /usr/local/bin/docker\` (or Docker Desktop's Settings > Advanced > Install CLI tools), then try again.`;
+  return "Open it and install its command line tools, then try again.";
 }
 
 /**

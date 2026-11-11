@@ -255,6 +255,32 @@ describe("build and flash", () => {
     expect(accepted.status).toBe(202);
   });
 
+  test("a successful build's file downloads and reveals; a running one has none (D-490)", async () => {
+    const fake = quick();
+    const { call } = start(fake);
+    const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    expect((await call("GET", `/api/builds/${build.id}/artifact`)).status).toBe(404);
+    await Bun.sleep(260);
+    const file = await call("GET", `/api/builds/${build.id}/artifact`);
+    expect(file.status).toBe(200);
+    expect(file.headers.get("content-type")).toBe("application/octet-stream");
+    expect(file.headers.get("content-disposition")).toBe(`attachment; filename="keyloom-zsa-moonlander-${build.id}.bin"`);
+    expect((await file.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    expect((await call("GET", `/api/builds/${build.id}/artifact`, undefined, { "x-keyloom-token": "wrong" })).status).toBe(401);
+    expect((await call("POST", `/api/builds/${build.id}/reveal`, {})).status).toBe(200);
+    expect(fake.revealed).toEqual([build.id]);
+    expect((await call("POST", `/api/builds/${build.id}/reveal`, "{}", { "content-type": "text/plain" })).status).toBe(415);
+    expect((await call("POST", "/api/builds/nope/reveal", {})).status).toBe(404);
+  });
+
+  test("a build that stopped at Docker carries its code, so the page shows the Docker callout (D-488)", async () => {
+    const { call } = start(new FakeEditor(fixture, { buildMs: 100, failBuildDocker: true }));
+    const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    await Bun.sleep(150);
+    const failed = BuildSchema.parse(await (await call("GET", `/api/builds/${build.id}`)).json());
+    expect(failed).toMatchObject({ status: "failed", errorCode: "docker_unavailable" });
+  });
+
   test("unknown build and flash ids are 404 with ApiErrorBody", async () => {
     const { call } = start(quick());
     for (const path of ["/api/builds/nope", "/api/flashes/nope"]) {
