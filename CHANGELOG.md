@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.73.0](https://github.com/planetaryescape/keyloom/compare/v0.72.5...v0.73.0) (2026-11-11)
+
+
+### Features
+
+* give a mismatched layout, a failed comparison and a failed wall tile a way on ([ddb02b6](https://github.com/planetaryescape/keyloom/commit/ddb02b61e219f2c16eff9cdbd892263bb5385a62))
+* install Docker and flash tools from the release dialog, and give manual boards their file ([baa1a17](https://github.com/planetaryescape/keyloom/commit/baa1a17b0ee9a7ecc88235650269267f0d5bacf9))
+* install Docker and Zapp from Build and flash, and give manual boards their file ([d25d5bb](https://github.com/planetaryescape/keyloom/commit/d25d5bb180dcf3a9a884c28b7f624d0a31a5ac1e))
+* put Sync now and Build and flash beside typing lab problems ([00ea02b](https://github.com/planetaryescape/keyloom/commit/00ea02b6f83e4c47df86c4d252990102e9d097ef))
+* save a pasted API key in the system key store and use it without a restart ([5c77d8c](https://github.com/planetaryescape/keyloom/commit/5c77d8cc8ba86e1f3dcada507de3f8b9ce21b072))
+* say once when keyloom stops answering, and give gone layouts and old links a way back ([1c2f435](https://github.com/planetaryescape/keyloom/commit/1c2f435e1e229678d356a7531ab3e800523f1456))
+* set up a model from chat, the picker, the review and a refused key ([bf1eb75](https://github.com/planetaryescape/keyloom/commit/bf1eb759980fea1947f87fe986a2fb6618535c39))
+* set up a model in the app and keep a pasted key in the Keychain ([de7fe0c](https://github.com/planetaryescape/keyloom/commit/de7fe0c00b7c2701e8027f6947398c756d6a75f1))
+* set up kanata, replace its config and confirm the exit chord from the sync menu ([500eb86](https://github.com/planetaryescape/keyloom/commit/500eb86a3988df6928f96bb5b55bc501b76ddafe))
+* start any engine the docker context names, and say what to install when there is none ([df2bc4a](https://github.com/planetaryescape/keyloom/commit/df2bc4a2c58e77c4c6c8771bf74434521348b71a))
+* start Docker's engine instead of stopping the build ([c66d71c](https://github.com/planetaryescape/keyloom/commit/c66d71ce697e147382ff1cd8bd4c7991170570ce))
+* sync, the MacBook keyboard and the app shell always offer a way forward ([319f632](https://github.com/planetaryescape/keyloom/commit/319f6328b9dc915b510a5784dd8e19240dd2ac5a))
+
+
+### Bug Fixes
+
+* act on [#270](https://github.com/planetaryescape/keyloom/issues/270)'s review: root plist, stale replace, exit-chord proof, Docker access and restarts ([c188465](https://github.com/planetaryescape/keyloom/commit/c188465cba941974a97c23affab1088f15e48731))
+* carry the kanata daemon's plist inside the root script instead of reading it from the home folder ([65be290](https://github.com/planetaryescape/keyloom/commit/65be29023b46568bc65d52414e7bcd34e6a157a5))
+* close the model setup dead ends from review ([97870c9](https://github.com/planetaryescape/keyloom/commit/97870c94f427b96cba4a6a7133e541bc55876d93))
+* fail Forget when the key store times out or is killed ([77864db](https://github.com/planetaryescape/keyloom/commit/77864dbef43fa955a0204659adbdfd6e00548789))
+* finish a failed replace's claim, wait for it on stop, probe the exit chord last, and give Colima its own access fix ([4c84a0f](https://github.com/planetaryescape/keyloom/commit/4c84a0fcffb64a43b5bad9daeae6867403a356df))
+* keep the server-gone banner's sentence readable beside its command ([f7732d9](https://github.com/planetaryescape/keyloom/commit/f7732d9e8e12dadd9f8bdcfee39b537f657a051e))
+* lay out the install callouts as a stack, and let the dev editor show flash and Docker states ([d1e3c68](https://github.com/planetaryescape/keyloom/commit/d1e3c68e4a080e40ae48924a01a6464178dcc5f7))
+* let the Corne pair a new computer without a typed passkey ([e3fd0ac](https://github.com/planetaryescape/keyloom/commit/e3fd0ac933529ad8cf72ee0d001a545741f3ca62))
+* let the Corne pair a new computer without a typed passkey ([234c538](https://github.com/planetaryescape/keyloom/commit/234c5380ab749e287b10c4e0ec78634b23b63ed9))
+* never abort a flash that is already writing when the sync engine stops ([de27ed7](https://github.com/planetaryescape/keyloom/commit/de27ed711630ef4e513845c7dacc76eb6034424f))
+* offer only the locked provider's setup in the chat bar ([c09fedf](https://github.com/planetaryescape/keyloom/commit/c09fedf12d70befed599327ae6d56ff1c3a92ceb))
+* offer Resume auto-sync in the release dialog, and keep the decision log newest first ([3a08d9c](https://github.com/planetaryescape/keyloom/commit/3a08d9cc7f532864f904416afaaa042cdc8407e2))
+* probe kanata before the CLI records the exit chord, and keep a config-file warning from blocking a Docker start ([a3ff718](https://github.com/planetaryescape/keyloom/commit/a3ff71864fa1597da250587678aad67b345ce60f))
+* replace a foreign kanata config only while it is still foreign, and prove the exit chord only on a refused port ([70ad2cd](https://github.com/planetaryescape/keyloom/commit/70ad2cd5b743b288c99fb3e7761dd102a421cd14))
+* tell a refused Docker socket from a stopped daemon, never restart a slow one, and give the launch the whole start window ([6082d42](https://github.com/planetaryescape/keyloom/commit/6082d4212934d351b0f55e48fd5b48e689afede6))
+* tell people to replug a keyboard whose flash wasn't confirmed, not to run keyloom doctor ([f03ecd0](https://github.com/planetaryescape/keyloom/commit/f03ecd0e01ead5952a9ad74a089b26740ee0939e))
+* treat any silent secret-tool exit but 1 as a failed delete ([210ccca](https://github.com/planetaryescape/keyloom/commit/210cccabaae1f092a893d9ab9fa9d8ab2e3b10cb))
+
 ## [0.72.5](https://github.com/planetaryescape/keyloom/compare/v0.72.4...v0.72.5) (2026-11-06)
 
 
