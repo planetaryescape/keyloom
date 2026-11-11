@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.75.1](https://github.com/planetaryescape/keyloom/compare/v0.75.0...v0.75.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* answer the [#290](https://github.com/planetaryescape/keyloom/issues/290) review on stale Replace it, latched helper setups, search states and test cleanup ([1e46c83](https://github.com/planetaryescape/keyloom/commit/1e46c83bb68b6b57609018b49dcfde9fb0236933))
+* back off respawning a keyboard helper that keeps dying ([9c000d4](https://github.com/planetaryescape/keyloom/commit/9c000d410a1d31aa384b4048c3a313846c116e91))
+* check an unconfirmed review Apply, show unread proposals in the review, and keep newer words on a retried switch ([a04a677](https://github.com/planetaryescape/keyloom/commit/a04a6778636a7982a0e528632087d6db154453ae))
+* describe a layer reference's tapDanceId in one comment ([042f3c9](https://github.com/planetaryescape/keyloom/commit/042f3c9898517a8c26924ad9cb21034aad2391e3))
+* desktop links, downloads, and update and sync ways out (R4-A) ([8834ba0](https://github.com/planetaryescape/keyloom/commit/8834ba0de20f73fa4a24528617f413b217219b7d))
+* drop the catalogue's search hint once the QMK and ZMK search answers ([a2cee31](https://github.com/planetaryescape/keyloom/commit/a2cee31964e7918d678d0db73ffa594412a438c0))
+* follow a Docker start already running, and block builds on a Colima that won't come back ([5162ed8](https://github.com/planetaryescape/keyloom/commit/5162ed820bdebd607ca516963efa88e77ab7f80f))
+* give a blank config a free default name ([0706d7d](https://github.com/planetaryescape/keyloom/commit/0706d7dcc6075b693dcddc0fde5e1473766f3352))
+* give a tap dance only the deleted layer or a combo uses an Open button, and offer Remove tap dance for an unused one ([b8490bf](https://github.com/planetaryescape/keyloom/commit/b8490bff0f5c96a08a3234d6ec061955808f6f0e))
+* hold Delete layer while something switches to it, and open each reference ([b128d8a](https://github.com/planetaryescape/keyloom/commit/b128d8af66faf7b78a9f58d37149c9a942d75137))
+* keep a combo card's edits when Open combo names the same combo ([d71433c](https://github.com/planetaryescape/keyloom/commit/d71433c068d42e8a3f17b96560d7c0fae3f1fa7e))
+* keep a dead helper's cause through the lab's real capture ([3744120](https://github.com/planetaryescape/keyloom/commit/37441206ab3907610bef4ffbdfc5db52b8c9b4ad))
+* keep review Apply off until its check reads back, and say an Apply landed when only the layout refresh failed ([a434132](https://github.com/planetaryescape/keyloom/commit/a4341324a11015125c4939d514a6d87226576ccd))
+* keep the first foreign keyloom.kbd copy, and make it only after kanata --check passes ([2c62105](https://github.com/planetaryescape/keyloom/commit/2c62105d19b4567cb988370680303e7a892153f9))
+* let a refused review run again, and say what a stopped chat reply already prepared ([2568fcb](https://github.com/planetaryescape/keyloom/commit/2568fcb2b87611d513ef31a8967855c717dcce37))
+* offer Replace it when keyloom.kbd on disk isn't keyloom's ([32122e4](https://github.com/planetaryescape/keyloom/commit/32122e4932423a766471ec97bf338fdfaaee58ce))
+* offer Resume syncing after a keyboard is restored ([4577ebb](https://github.com/planetaryescape/keyloom/commit/4577ebbfa9ad41eece4bbf8ffaba8ed69bbb0abb))
+* offer Try again when the helper dies during the START write, and keep a missing helper's own error ([4d12f8e](https://github.com/planetaryescape/keyloom/commit/4d12f8e46656189a6179b423c98027c272de67e7))
+* open desktop links in the browser and save downloads, and give the shell's update and sync dead ends a way out ([d867a0c](https://github.com/planetaryescape/keyloom/commit/d867a0c37c9166598cbd2e0d3655789e860142ac))
+* quote layout names in the commands sync refusals name ([2dfcd21](https://github.com/planetaryescape/keyloom/commit/2dfcd21984ca6afcf7d2ccf6ea0f34c2024a24cf))
+* replace a dead keyboard helper on the next try instead of asking for a restart ([641f9a5](https://github.com/planetaryescape/keyloom/commit/641f9a5d178c9a108d53ceb88e6c42b390242951))
+* round-4 dead ends in sync, MacBook, lab, Docker and the editor ([35fdb9c](https://github.com/planetaryescape/keyloom/commit/35fdb9ca2e90517d795528e8758a6ad33341becd))
+* save only keyloom's own downloads and keep a too-new database's code past a cleanup failure ([61ead48](https://github.com/planetaryescape/keyloom/commit/61ead48776f939ab31cbf103c1760ef708754f05))
+* say Choose which board this is beside a Build firmware waiting for it ([07cebb8](https://github.com/planetaryescape/keyloom/commit/07cebb80228caa92e5c5628807ff8335745d3861))
+* say when a QMK and ZMK keyboard search finds nothing ([af2ea3c](https://github.com/planetaryescape/keyloom/commit/af2ea3cfdd50e4f0e95f455e04f86723e1703fd4))
+* say why Undo and a combo's Remove this key are off beside them ([fed9a88](https://github.com/planetaryescape/keyloom/commit/fed9a88b0e07c0d1fdf2927309049318bed94744))
+* show an incomplete lab recording as one that can't be read, not a button ([c40ab05](https://github.com/planetaryescape/keyloom/commit/c40ab0571bd1a7f54b59537efe246fb48f3e1765))
+* show kanata's setup in the mismatch page's put-on while kanata isn't running ([33ae473](https://github.com/planetaryescape/keyloom/commit/33ae473befad81650c65bcb7db2df3587df5a599))
+* show why a chat turn or board review failed after it started, with the button that fixes it ([be2c53a](https://github.com/planetaryescape/keyloom/commit/be2c53a9c9bf79208e7c342dece961b6373fc301))
+* show why a chat turn or board review failed, with the button that fixes it ([f18f035](https://github.com/planetaryescape/keyloom/commit/f18f0357a553ba8a8818a84cf0e6c734bb725e1b))
+* show why Undo is off in the phone menu, and read the last Docker action without a render-time ref ([dd50d52](https://github.com/planetaryescape/keyloom/commit/dd50d52a01333e715b83dceb84c8289f2e66c192))
+
 ## [0.75.0](https://github.com/planetaryescape/keyloom/compare/v0.74.0...v0.75.0) (2026-11-11)
 
 
