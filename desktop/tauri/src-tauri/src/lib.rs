@@ -84,6 +84,9 @@ fn present_main(app: &AppHandle, url: &str, reveal: bool) {
         }
         // Links to other sites open in the browser and downloads land in Downloads; without these the page's links did nothing (R4-01).
         let built = external::attach(&handle, WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed)))
+            // Tauri's own drag-and-drop handler takes every drag for Tauri drag events, which nothing here listens to, so a file dropped
+            // on the import card and a dragged layer tab never reached the page (R5-01). Without it WKWebView gives the page its drags.
+            .disable_drag_drop_handler()
             .title("keyloom")
             .inner_size(1440.0, 900.0)
             .min_inner_size(900.0, 600.0)
