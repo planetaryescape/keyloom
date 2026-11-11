@@ -171,7 +171,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
   const needle = filter.trim().toLowerCase();
   const shown = needle === "" ? sources : sources.filter((s) => `${s.name} ${s.boardName}`.toLowerCase().includes(needle));
   const start = async () => {
-    const id = await flow.startBlank(`${step.boardName} daily`);
+    const id = await flow.startBlank(`${step.boardName} daily`, { free: true });
     if (id !== null) onMade(id);
   };
   return (

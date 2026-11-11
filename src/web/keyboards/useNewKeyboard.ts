@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import type { ReviewActivity } from "../../api/review.ts";
-import { ApiError } from "../api.ts";
+import { ApiError, fetchLayouts } from "../api.ts";
+import { firstFreeName } from "../import/export-steps.ts";
 import { createConfig } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
 
@@ -224,12 +225,14 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
     },
     /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
-    startBlank: async (name: string): Promise<string | null> => {
+    /** `free`: `name` is keyloom's own default, so it becomes "name 2", "name 3"… when a config already has it (R4-16). A typed name is kept. */
+    startBlank: async (name: string, opts: { free?: boolean } = {}): Promise<string | null> => {
       if (step.kind !== "setup" && step.kind !== "put") return null;
       setBusy(true);
       setProblem(null);
       try {
-        const config = await createConfig(token, { from: "blank", name: name.trim(), board: step.boardId });
+        const taken = opts.free === true ? (await fetchLayouts(token, new AbortController().signal)).map((layout) => layout.name) : [];
+        const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board: step.boardId });
         return config.id;
       } catch (e) {
         setProblem(message(e));

@@ -17,7 +17,7 @@ export function SetupCard({ flow, hasConfigs, onImport, onMade }: {
   const [name, setName] = useState("");
   if (step.kind !== "setup") return null;
   const startBlank = async () => {
-    const id = await flow.startBlank(name.trim() === "" ? `${step.boardName} blank` : name);
+    const id = name.trim() === "" ? await flow.startBlank(`${step.boardName} blank`, { free: true }) : await flow.startBlank(name);
     if (id !== null) onMade(id);
   };
   return (
