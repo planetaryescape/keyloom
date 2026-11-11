@@ -76,6 +76,9 @@ describe("buildZmkWest (fake docker)", () => {
     expect(script).toContain("-b corne_choc_pro_right -- -DZMK_CONFIG");
     expect(script).not.toContain("-DSHIELD=undefined");
     expect(script).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
+    // A cancelled update's git locks are cleared before the next update, which would otherwise fail on them.
+    expect(script.indexOf("-name '*.lock' -print -delete")).toBeGreaterThan(-1);
+    expect(script.indexOf("-name '*.lock' -print -delete")).toBeLessThan(script.indexOf("west update"));
   });
 
   test("a half with its own product name gets a conf fragment and a build flag", async () => {

@@ -36,6 +36,9 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "export CMAKE_BUILD_PARALLEL_LEVEL=5",
     "rm -rf build",
     "[ -d .west ] || west init -l config",
+    // A build stopped during `west update` leaves git's lock files behind, and every later update then fails on them.
+    // keyloom holds this checkout's lock for the whole build, so no git of ours is running here and any lock is stale.
+    `west list -f '{abspath}' 2>/dev/null | while read -r p; do find "$p/.git" -name '*.lock' -print -delete 2>/dev/null | sed 's/^/keyloom: removed a stale git lock /' || true; done`,
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
     ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
