@@ -155,6 +155,40 @@ describe("the MacBook's sync state", () => {
     expect(readFileSync(world.paths.kbd, "utf8")).toBe(before);
   });
 
+  test("a keyloom.kbd edited on disk while kanata runs keyloom's config fails as foreign_file, and Replace it gets past it (R4 residual 2)", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    const foreign = "(defsrc a)\n(deflayer base a)\n";
+    // kanata still runs keyloom's setup file; only the file on disk changed.
+    writeFileSync(world.paths.kbd, foreign);
+    const r = await e.syncNow(world.layoutId);
+    if (r.kind !== "started") throw new Error("sync did not start");
+    expect(await r.done).toMatchObject({ status: "failed", failure: "foreign_file" });
+    expect(kind(e)).toMatchObject({ kind: "behind", why: "failed" });
+    expect(readFileSync(world.paths.kbd, "utf8")).toBe(foreign);
+    await e.replaceForeignRemapperConfig(world.layoutId);
+    expect(readFileSync(`${world.paths.kbd}.before-keyloom`, "utf8")).toBe(foreign);
+    expect(world.fake.running()).toBe(world.paths.kbd);
+    expect(kind(e)).toEqual({ kind: "in_sync" });
+  });
+
+  test("Turn remapping on refused by a foreign keyloom.kbd can be replaced while remapping is off (R4 residual 2)", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    await e.disableRemapping(MAC);
+    const foreign = "(defsrc a)\n(deflayer base a)\n";
+    writeFileSync(world.paths.kbd, foreign);
+    const r = await e.syncNow(world.layoutId);
+    if (r.kind !== "started") throw new Error("sync did not start");
+    expect(await r.done).toMatchObject({ status: "failed", failure: "foreign_file" });
+    expect(world.fake.running()).toBe(world.paths.safe);
+    await e.replaceForeignRemapperConfig(world.layoutId);
+    expect(readFileSync(`${world.paths.kbd}.before-keyloom`, "utf8")).toBe(foreign);
+    expect(kind(e)).toEqual({ kind: "in_sync" });
+  });
+
   test("Replace it while another keyloom process holds the sync claim is busy and writes nothing", async () => {
     const world = make();
     const foreign = "(defsrc a)\n(deflayer base a)\n";

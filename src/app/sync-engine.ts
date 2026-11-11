@@ -143,9 +143,13 @@ const isRemapper = (boardId: string): boolean => showBoard(boardId).definition.f
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-/** A failed remapper apply's step as a sync failure. Not running is the world changing (retry when it is back); a refused or unreadable config would fail the same way again. */
+/**
+ * A failed remapper apply's step as a sync failure. Not running is the world changing (retry when it is back); a refused or unreadable
+ * config would fail the same way again. A keyloom.kbd keyloom didn't write is `foreign_file`, which the page answers with Replace it.
+ */
 const remapperFailure = (step: string): SyncFailure =>
-  step === "not_connected" ? "disconnected" : step === "verify" ? "verify" : step === "reload" || step === "check" || step === "generate" ? "build" : "flash";
+  step === "not_connected" ? "disconnected" : step === "verify" ? "verify" : step === "not_keyloom" ? "foreign_file"
+  : step === "reload" || step === "check" || step === "generate" ? "build" : "flash";
 
 /** What the engine knows about one board when it decides. */
 type BoardFacts = { boardId: string; boardName: string; layout: LayoutRow; layouts: LayoutRow[]; reading: KeyboardReading; facts: SyncFacts };
@@ -812,9 +816,13 @@ export class SyncEngine {
       await this.refresh(true);
       const reading = this.readingOf(layout.boardId);
       if (reading.state === "absent") throw new SyncRefusal("kanata_not_running", "kanata isn't running, so there is nothing to replace");
-      // The confirm was asked about a foreign config. Anything else now (remapping switched off, keyloom's own file) means it is stale,
-      // and applying would undo what changed since, such as turning remapping back on.
-      if (reading.state !== "other") throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
+      // The confirm was asked about a foreign config: kanata running one, or keyloom's last apply refused because keyloom.kbd on disk
+      // isn't keyloom's while kanata still runs keyloom's loaded config (foreign_file). Anything else now (remapping switched off by
+      // hand, keyloom's own file) means it is stale, and applying would undo what changed since, such as turning remapping back on.
+      // applyKanata looks at the file itself, so a file that became keyloom's again is applied over without a copy.
+      const last = lastSyncOfBoard(this.app.db, layout.boardId);
+      const foreignFile = last?.status === "failed" && last.failure === "foreign_file" && (reading.state === "keyloom" || reading.state === "remapping_off");
+      if (reading.state !== "other" && !foreignFile) throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
       // Claimed like any sync, so no sync here or in another keyloom starts until this write is done: a sync whose reload failed would
       // otherwise restore its own file over this one. A sync that started after the wait above is busy, not waited for in the queue.
       const id = newSyncId();

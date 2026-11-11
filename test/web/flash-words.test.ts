@@ -141,6 +141,9 @@ describe("afterApply", () => {
     // Someone else's config: keyloom never replaces it by itself, so the card offers the confirm that does.
     expect(afterApply(MACBOOK, macSync({}, { state: { kind: "not_keyloom", detail: "kanata runs /tmp/x.kbd" } }), "lay_1").action).toEqual({ id: "replace_foreign", label: "Replace it…" });
     expect(afterApply(MACBOOK, macSync({}, { state: { kind: "behind", changes: 1, why: "failed", error: "reload failed" } }), "lay_1").action?.id).toBe("apply_now");
+    // keyloom.kbd on disk isn't keyloom's: auto-apply and Apply now would be refused again, so the card offers Replace it (R4 residual 2).
+    const last = { id: "syn_1", trigger: "manual" as const, status: "failed" as const, step: "done", revisionId: "rev_1", failure: "foreign_file", error: "x", startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } };
+    expect(afterApply(MACBOOK, macSync({}, { state: { kind: "behind", changes: 1, why: "waiting", error: null }, last }), "lay_1").action).toEqual({ id: "replace_foreign", label: "Replace it…" });
   });
 
   test("once the sync view has this change, the line follows it: applying now, then on the keyboard with no button", () => {
