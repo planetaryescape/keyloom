@@ -11,6 +11,21 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-11 round 5: keyboards, editor and the mismatch page
+
+### D-526: The Delete layer dialog decides before it closes, Make a combo says why it is off, and the mismatch page drops a detail that points elsewhere. Refines D-520. (Claude, from the round-5 dead-ends review, R5-12, R5-13, R5-14)
+
+- **Open combo from Delete layer** (R5-13). `LayerActions.openCombo` now returns a refusal or null, and the dialog acts on it before it closes (`openReference`). While another combo's card holds edits, the dialog stays open, says "Your changes to the combo “Go” aren't applied yet. Apply or close them before you open another combo." (or "The combo you're making…"), and offers **Show the combo you're editing**, which closes it and shows that card. It never closes into a toast with no button. A key's unapplied draft can't block here: it turns the layer menu off (`undoBlock`), so the dialog can't open while one is held.
+- **Make a combo** (R5-12). With one key selected, "Select a second key to make a combo" shows beside the disabled button and describes it, in place of a title only a mouse hover shows.
+- **Put-on refused while kanata's setup shows** (R5-14). `ConfirmDialog` leaves out a refusal's detail when `extra` is up and the refusal has no button (`shownDetail`): the setup checklist is then the way past it, and "The keyboard's status lists what is missing" named a page the dialog doesn't open. A detail with its own button, such as Restore, stays. The toast for the same refusal keeps the detail beside its Open keyboard status button.
+
+### D-525: A keyboard keyloom can't add yet says why in words and offers the contribution guide, and a QMK keyboard with several layouts asks which is yours. Refines D-336. (Claude, from the round-5 dead-ends review, R5-06, R5-16)
+
+- **Codes, not flags** (R5-06). `DeriveError` carries a code at each of its four sites: `controller_unknown` (a shield needs a controller and none fits that keyloom can flash: MakerDiary m60, nice!view, nice!view adapter, TesterRpiPico, ZMK Uno), `boot_drive_unknown`, `layout_macro_missing` and `home_row_out_of_range`. `KeyboardAddError` (a `UsageError`, exit 2) adds `no_key_positions`, for a firmware tree with no key positions keyloom can read (40 of the index's 69 ZMK entries). The preview carries `boardProblemCode`; add and a refused preview answer 400 with the code. The CLI keeps its sentences and flags.
+- **The Confirm step** says it in plain words (`derive-words.ts`): "keyloom doesn't know a controller for the MakerDiary m60 yet…". It offers **Open the contribution guide** (CONTRIBUTING.md) and **Pick another keyboard**, and hides Show me the board, which could never work. A refused preview with one of these codes gets the same, in place of Try again. Prepare contribution isn't offered: it packages a stored board, and there is none to package.
+- **Several layouts** (R5-06). 1,127 of the index's 3,687 QMK keyboards have several layouts and none called LAYOUT, so the preview ended at "choose one with --layout" with a Try again that failed the same way. The preview now draws the one with most keys, lists every layout in `layouts`, and adds `--layout` to `needs`. The Confirm step asks "Which layout is yours?" first, with keyloom's guess marked, whenever a QMK keyboard has more than one; picking one draws it and resets the home row to the guess for it. `keyboard add` still refuses without `--layout` rather than store a guess, and lists the layouts.
+- **Start a config on the Put step** (R5-16). With configs to copy, "Or start a config from the {board}'s own keys" sits under the list, so a keyboard none of them maps to still has a way on.
+
 ## 2026-11-11 round 4: sync, MacBook, lab, Docker and editor dead ends
 
 ### D-520: A Docker start already running is followed, a Colima a restart can't fix blocks the build, and the editor says why its controls are off. Refines D-511. (Claude, from the round-4 dead-ends review, R4-04, R4-04b, R4-09, R4-12, R4-13, R4-16, R4-17, R4-19, residual 3)
