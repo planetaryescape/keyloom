@@ -14,9 +14,9 @@ export type DockerView =
   /**
    * A start from this page failed. `retry` repeats what failed, or is null when repeating it would fail the same way. `restartEngine` is
    * the engine to stop and start from scratch instead (Colima, R3-04), and `helpUrl` the engine's own troubleshooting page once that
-   * restart failed too.
+   * restart failed too, with `alternatives`: the engines to install instead (R4-04b).
    */
-  | { kind: "start-failed"; reason: string; retry: "start" | "restart" | null; restartEngine: string | null; helpUrl: string | null }
+  | { kind: "start-failed"; reason: string; retry: "start" | "restart" | null; restartEngine: string | null; helpUrl: string | null; alternatives?: Alternative[] }
   /** No Docker, and keyloom can install it: the Install Docker button. `stopped` when the person cancelled the last install. */
   | { kind: "install"; engine: string; note: string; alternatives: Alternative[]; stopped: boolean }
   /** No Docker, and keyloom can't install it here: the download page. */
@@ -58,9 +58,12 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
   // A Mac app that refuses keyloom is restarted rather than started, so its progress and its Try again say so.
   const restartApp = down?.problem === "no-access" ? down.access?.restartApp ?? null : null;
   const restartEngine = down?.restartEngine ?? null;
-  if (starting) {
+  // keyloom may be starting the engine for something else, such as a build or another page (R4-04): the page follows that one.
+  const elsewhere = down?.engineAction ?? null;
+  if (starting || elsewhere !== null) {
+    const restarting = starting ? lastAction === "restart" : elsewhere === "restart";
     if (restartApp !== null) return { kind: "starting", engine: restartApp, verb: "Restarting" };
-    if (restartEngine !== null && lastAction === "restart") return { kind: "starting", engine: restartEngine, verb: "Restarting" };
+    if (restartEngine !== null && restarting) return { kind: "starting", engine: restartEngine, verb: "Restarting" };
     return { kind: "starting", engine: down?.engine ?? "Docker", verb: down?.problem === "cli-missing" ? "Opening" : "Starting" };
   }
   // A Docker that answers now outranks how an earlier start from this page failed.
@@ -69,7 +72,7 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
     // A Colima that wouldn't start fails the same way again, so its way on is a restart from scratch; after that, its own guide (R3-04).
     if (restartEngine !== null) {
       return lastAction === "restart"
-        ? { kind: "start-failed", reason: plain(problem), retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL }
+        ? { kind: "start-failed", reason: plain(problem), retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL, alternatives: down?.alternatives ?? [] }
         : { kind: "start-failed", reason: plain(problem), retry: null, restartEngine, helpUrl: null };
     }
     return { kind: "start-failed", reason: plain(problem), retry: "start", restartEngine: null, helpUrl: null };
@@ -101,6 +104,8 @@ export function buildBlockedReason(view: DockerView): string | null {
     case "install": case "download": case "install-failed": return "Install Docker first.";
     case "installing": return view.phase === "stopping" ? "Waiting for the install to stop." : "Waiting for Docker to finish installing.";
     case "starting": return "Waiting for Docker to start.";
+    // A Colima that a restart didn't bring back fails a build the same way (R4-04b).
+    case "start-failed": return view.helpUrl === null ? null : "Docker won't start, so a build would stop the same way. Fix it with Colima's guide, or install another engine.";
     case "no-access": return "Give keyloom access to Docker first.";
     case "cli-missing": return "Install Docker's command line tools first.";
     // An engine keyloom can't start fails the build the same way; one that only answered slowly may still come up, and the build waits for it.

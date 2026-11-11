@@ -65,8 +65,16 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
                   Open Colima's guide
                 </a>
               )}
+              {/* Another engine is the other way on when Colima won't come back (R4-04b), as after a failed install. */}
+              {view.alternatives?.[0] === undefined ? null : (
+                <a className="button" href={view.alternatives[0].url} target="_blank" rel="noreferrer">
+                  <Download size={14} aria-hidden="true" />
+                  Download {view.alternatives[0].name}
+                </a>
+              )}
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
+            {view.alternatives === undefined ? null : <Alternatives items={view.alternatives.slice(1)} lead="Or install" />}
           </div>
         </div>
       );

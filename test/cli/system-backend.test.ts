@@ -30,6 +30,11 @@ describe("appSystemBackend", () => {
     expect(await backend.restartDocker()).toEqual({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1" });
   });
 
+  test("a restart refused because keyloom is already starting Docker carries engine_busy to the page (R4-04)", async () => {
+    const backend = appSystemBackend({}, { restart: async () => ({ ok: false, engine: null, code: "engine_busy" as const, reason: "keyloom is already starting Docker, for this page or for a build. Wait for that to finish, then check again." }) });
+    expect(await backend.restartDocker()).toMatchObject({ ok: false, code: "engine_busy" });
+  });
+
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

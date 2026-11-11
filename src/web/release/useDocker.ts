@@ -1,6 +1,6 @@
 // Whether the Docker a firmware build needs is up, for the release dialog (D-486). keyloom starts the engine
 // itself, so this only ever says what is happening or what is missing, and offers the click when it can't.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DockerReadinessResponse } from "../../api/system.ts";
 import type { DockerStartResponse } from "../../api/system.ts";
 import { fetchDockerReadiness, restartDockerApp, startDockerEngine } from "../system.ts";
@@ -30,6 +30,8 @@ export function useDocker(token: string): Docker {
   const [problem, setProblem] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
   const [asks, setAsks] = useState(0);
+  const lastActionNow = useRef(lastAction);
+  lastActionNow.current = lastAction;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,11 +54,18 @@ export function useDocker(token: string): Docker {
   const run = useCallback((action: "start" | "restart", ask: (token: string) => Promise<DockerStartResponse>) => {
     setStarting(true);
     setProblem(null);
+    const before = lastActionNow.current;
     setLastAction(action);
     ask(token)
       .then((result) => {
         if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
-        else setProblem(result.reason);
+        else if (result.code === "engine_busy") {
+          // keyloom is already starting the engine (R4-04): nothing failed, so nothing is recorded, and the readiness follows that start.
+          setLastAction(before);
+          // Shown as starting until the readiness asked for below says which action runs, so the button doesn't come back meanwhile.
+          setReadiness((previous) => (previous !== null && !previous.ok && previous.engineAction == null ? { ...previous, engineAction: "start" } : previous));
+          setAsks((n) => n + 1);
+        } else setProblem(result.reason);
       })
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
       .finally(() => setStarting(false));
@@ -65,8 +74,17 @@ export function useDocker(token: string): Docker {
   const restart = useCallback(() => run("restart", restartDockerApp), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
+  // While keyloom starts the engine for something else, ask again until it ends, so the page follows it to Docker up or its failure.
+  const elsewhere = readiness !== null && !readiness.ok && readiness.engineAction != null;
+  useEffect(() => {
+    if (!elsewhere) return;
+    const timer = window.setInterval(refresh, ENGINE_ACTION_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [elsewhere, refresh]);
   return { readiness, unanswered, starting, problem, lastAction, start, restart, refresh };
 }
+
+const ENGINE_ACTION_POLL_MS = 2000;
 
 const RECHECK_MS = 4000;
 

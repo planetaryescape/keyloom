@@ -41,6 +41,10 @@ export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
     // The engine keyloom can stop and start from scratch (POST /api/system/docker/restart) when a start fails: Colima (R3-04). Optional
     // so an older server's answer still reads.
     restartEngine: z.string().min(1).nullable().optional(),
+    // Engines to install instead of a `restartEngine` that won't start, even after a restart (R4-04b). Optional for older servers.
+    alternatives: z.array(z.object({ name: z.string().min(1), url: z.string().min(1) })).optional(),
+    // keyloom is starting or restarting the engine now, for a page or a build (R4-04). Optional for older servers.
+    engineAction: z.enum(["start", "restart"]).nullable().optional(),
   }),
 ]);
 export type DockerReadinessResponse = z.infer<typeof DockerReadinessResponseSchema>;
@@ -48,7 +52,8 @@ export type DockerReadinessResponse = z.infer<typeof DockerReadinessResponseSche
 export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), version: z.string().min(1), engine: z.string().min(1), waitedMs: z.number().finite() }),
   // A start that fails is not a bad request; the sentence is what the person reads, so it comes back as data.
-  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable() }),
+  // `engine_busy`: refused because keyloom is already starting or restarting the engine (R4-04); the page follows that one instead.
+  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.literal("engine_busy").optional() }),
 ]);
 export type DockerStartResponse = z.infer<typeof DockerStartResponseSchema>;
 

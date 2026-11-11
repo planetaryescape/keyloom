@@ -110,7 +110,11 @@ describe("a daemon that refuses this account (D-497)", () => {
     expect(restarted).toHaveLength(1);
     // Readiness says which engine the page may restart, and only for a dead daemon.
     expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ restartEngine: "Colima" });
-    expect(await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} })).toMatchObject({ restartEngine: null });
+    expect(await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} })).toMatchObject({ restartEngine: null, alternatives: [] });
+    // The engines to install instead, for a Colima a restart doesn't bring back (R4-04b): never Colima itself.
+    expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {}, platform: "darwin", has: () => true })).toMatchObject({
+      alternatives: [{ name: "Docker Desktop" }, { name: "OrbStack" }],
+    });
   });
 
   test("a slow Colima is busy, not broken: it is never restarted, so a build running in it survives (D-497, #285 review)", async () => {
@@ -261,11 +265,15 @@ describe("one engine action at a time (#285 review)", () => {
     let restarted = 0;
     const restartColima = async () => (restarted++, { ok: true as const, version: "29", engine: "Colima", waitedMs: 1 });
     const refused = await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } });
-    expect(refused).toMatchObject({ ok: false, engine: null });
+    // A code, so the page follows the running start instead of recording a failed restart (R4-04).
+    expect(refused).toMatchObject({ ok: false, engine: null, code: "engine_busy" });
     if (!refused.ok) expect(refused.reason).toContain("already starting");
     expect(restarted).toBe(0);
+    // Readiness says keyloom is starting it, for the page that didn't start it.
+    expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ engineAction: "start" });
     held.open();
     expect(await starting).toMatchObject({ ok: true });
+    expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ engineAction: null });
     // Once the start has ended, a restart runs.
     expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } })).toMatchObject({ ok: true });
     expect(restarted).toBe(1);
