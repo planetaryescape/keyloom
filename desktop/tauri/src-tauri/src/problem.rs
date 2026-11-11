@@ -15,8 +15,9 @@ pub const RELEASES: &str = "https://github.com/planetaryescape/keyloom/releases/
 pub enum Stop {
     /// It didn't start.
     Failed(Failure),
-    /// It started, then stopped this many times inside the restart window, so the shell stopped restarting it.
-    KeepsStopping { times: usize },
+    /// It started, then stopped this many times inside the restart window, so the shell stopped restarting it. `output` is what the
+    /// last run wrote before it stopped, minus any line that carries its token (R3-16).
+    KeepsStopping { times: usize, output: String },
 }
 
 impl Stop {
@@ -48,7 +49,7 @@ impl std::fmt::Display for Stop {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Stop::Failed(failure) => write!(f, "could not start keyloom: {failure}"),
-            Stop::KeepsStopping { times } => write!(f, "keyloom stopped {times} times within {RESTART_WINDOW_WORDS}; not restarting it again"),
+            Stop::KeepsStopping { times, .. } => write!(f, "keyloom stopped {times} times within {RESTART_WINDOW_WORDS}; not restarting it again"),
         }
     }
 }
@@ -62,8 +63,11 @@ pub enum Updates {
     #[cfg_attr(feature = "updater", default)]
     Checking,
     Available(String),
-    /// The person chose to install this version; it is downloading, and the app restarts when it is in.
-    Installing(String),
+    /// The person chose to install this version; it is downloading (`percent` when the server said how big it is), and the app
+    /// restarts when it is in.
+    Installing { version: String, percent: Option<u8> },
+    /// The install of this version failed, for this reason; it is still offered, so it can be tried again (R3-15).
+    InstallFailed { version: String, reason: String },
     UpToDate,
     Failed,
 }
@@ -110,6 +114,19 @@ pub fn install_label(version: &str) -> String {
     format!("Install {version} and restart keyloom")
 }
 
+/// The menu item after a failed install: it installs the same version again.
+pub fn retry_install_label(version: &str) -> String {
+    format!("Couldn't install {version}. Try again")
+}
+
+/// Where a download is, for the menu item and the problem window.
+pub fn installing_words(version: &str, percent: Option<u8>) -> String {
+    match percent {
+        Some(p) => format!("Downloading version {version}: {p}%"),
+        None => format!("Downloading version {version}…"),
+    }
+}
+
 // The server's last words: enough to see why, short enough to read in the window. The whole output is in the log.
 fn tail(output: &str) -> Option<String> {
     let lines: Vec<&str> = output.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -140,7 +157,11 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
                 Updates::Checking => ("Checking for a newer version of this app…".to_string(), vec![try_again(), show_log()]),
                 Updates::Available(version) => (format!("Version {version} of this app is ready to install."), vec![action(INSTALL_UPDATE, install_label(version)), try_again(), show_log()]),
                 // No Install button: a second click would do nothing while the first install runs.
-                Updates::Installing(version) => (format!("Installing version {version}. keyloom restarts when it is done."), vec![show_log()]),
+                Updates::Installing { version, percent } => (format!("{}. keyloom restarts when it is in.", installing_words(version, *percent)), vec![show_log()]),
+                Updates::InstallFailed { version, reason } => (
+                    format!("Version {version} didn't install: {reason}"),
+                    vec![action(INSTALL_UPDATE, format!("Try installing {version} again")), download(), try_again(), show_log()],
+                ),
                 Updates::UpToDate => (
                     "This app has no update yet. Install the latest keyloom app over this one, or quit the other keyloom and try again.".to_string(),
                     vec![download(), action(CHECK_UPDATES, "Check for updates"), try_again(), show_log()],
@@ -184,11 +205,14 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
             busy: false,
             actions: actions(vec![try_again(), action(DOWNLOAD, "Download the latest keyloom"), show_log()]),
         },
-        Stop::KeepsStopping { times } => View {
+        Stop::KeepsStopping { times, output } => View {
             title: stop.title().into(),
             body: format!("keyloom's server stopped {times} times in {RESTART_WINDOW_WORDS}, so the app stopped starting it again."),
-            note: Some("The log shows what it said before it stopped.".into()),
-            detail: None,
+            note: Some(match tail(output) {
+                Some(_) => "These are the last lines it wrote before it stopped. The log has the rest.".into(),
+                None => "It wrote nothing before it stopped. The log shows what the app saw.".into(),
+            }),
+            detail: tail(output),
             busy: false,
             actions: actions(vec![try_again(), show_log()]),
         },
@@ -340,10 +364,12 @@ mod tests {
         let available = view(&stop, &Updates::Available("0.80.0".into()));
         assert_eq!(available.actions[0].id, INSTALL_UPDATE);
         assert_eq!(available.actions[0].label, "Install 0.80.0 and restart keyloom");
-        let installing = view(&stop, &Updates::Installing("0.80.0".into()));
+        let installing = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: Some(40) });
         assert!(installing.busy);
         assert_eq!(ids(&installing), [SHOW_LOG], "no Install button that does nothing during the download");
-        assert!(installing.note.as_deref().unwrap().contains("Installing version 0.80.0"));
+        assert!(installing.note.as_deref().unwrap().contains("Downloading version 0.80.0: 40%"));
+        let unsized = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: None });
+        assert!(unsized.note.as_deref().unwrap().contains("Downloading version 0.80.0…"));
         assert_eq!(ids(&view(&stop, &Updates::UpToDate))[..2], [DOWNLOAD, CHECK_UPDATES]);
         assert_eq!(ids(&view(&stop, &Updates::Failed))[..2], [CHECK_UPDATES, DOWNLOAD]);
     }
@@ -352,14 +378,32 @@ mod tests {
     fn only_a_newer_server_asks_for_an_update() {
         assert!(!Stop::Failed(Failure::Incompatible { words: "x".into(), replace: Some("r".into()) }).wants_update());
         assert!(!Stop::Failed(Failure::TimedOut).wants_update());
-        assert!(!Stop::KeepsStopping { times: 3 }.wants_update());
+        assert!(!Stop::KeepsStopping { times: 3, output: String::new() }.wants_update());
     }
 
     #[test]
     fn a_server_that_keeps_stopping_says_how_often() {
-        let v = view(&Stop::KeepsStopping { times: 3 }, &Updates::Off);
+        let v = view(&Stop::KeepsStopping { times: 3, output: String::new() }, &Updates::Off);
         assert!(v.body.contains("3 times in 10 minutes"));
+        assert_eq!(v.detail, None);
         assert_eq!(ids(&v), [TRY_AGAIN, SHOW_LOG]);
+    }
+
+    #[test]
+    fn a_server_that_keeps_stopping_shows_its_last_lines() {
+        let v = view(&Stop::KeepsStopping { times: 3, output: "serving\nerror: the database is locked\n".into() }, &Updates::Off);
+        assert_eq!(v.detail.as_deref(), Some("serving\nerror: the database is locked"));
+        assert!(v.note.as_deref().unwrap().contains("last lines"));
+    }
+
+    #[test]
+    fn a_failed_update_install_says_why_and_offers_it_again_and_the_download() {
+        let stop = Stop::Failed(Failure::Incompatible { words: "newer".into(), replace: None });
+        let v = view(&stop, &Updates::InstallFailed { version: "0.80.0".into(), reason: "the signature didn't match".into() });
+        assert!(!v.busy);
+        assert_eq!(v.note.as_deref(), Some("Version 0.80.0 didn't install: the signature didn't match"));
+        assert_eq!(ids(&v), [INSTALL_UPDATE, DOWNLOAD, TRY_AGAIN, SHOW_LOG]);
+        assert_eq!(v.actions[0].label, "Try installing 0.80.0 again");
     }
 
     #[test]
@@ -369,7 +413,7 @@ mod tests {
             Stop::Failed(Failure::PortInUse),
             Stop::Failed(Failure::Other("spawn failed".into())),
             Stop::Failed(Failure::Exited { code: None, output: String::new() }),
-            Stop::KeepsStopping { times: 3 },
+            Stop::KeepsStopping { times: 3, output: String::new() },
         ];
         for stop in &stops {
             let v = view(stop, &Updates::Off);

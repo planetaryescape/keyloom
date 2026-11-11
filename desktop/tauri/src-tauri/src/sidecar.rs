@@ -146,10 +146,15 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                     // Keep draining so the pipe never fills, into the log so Show log can say why it stopped; report an exit so quit
                     // can wait for it and the watcher can start it again.
                     let log_app = app.clone();
+                    app.state::<AppState>().server_tail.lock().unwrap().clear();
                     tauri::async_runtime::spawn(async move {
                         while let Some(ev) = rx.recv().await {
                             match ev {
-                                CommandEvent::Stderr(line) => crate::log::server_output(&log_app, &String::from_utf8_lossy(&line)),
+                                CommandEvent::Stderr(line) => {
+                                    let text = String::from_utf8_lossy(&line);
+                                    crate::log::server_output(&log_app, &text);
+                                    keep_tail(&mut log_app.state::<AppState>().server_tail.lock().unwrap(), &text);
+                                }
                                 CommandEvent::Terminated(p) => {
                                     crate::log::say(&log_app, &format!("keyloom's server exited (code {:?}, signal {:?})", p.code, p.signal));
                                     let _ = exit_tx.send(());
@@ -213,6 +218,24 @@ fn adopt<C>(slot: &std::sync::Mutex<Option<Running<C>>>, quit: &crate::restarts:
     Ok(())
 }
 
+// Enough of the server's last words to see why it stopped, held in memory; the whole output is in the log.
+const TAIL_LINES: usize = 12;
+
+// Keeps the last TAIL_LINES lines the server wrote, without blank lines or any that carry its session token.
+fn keep_tail(tail: &mut std::collections::VecDeque<String>, text: &str) {
+    for line in text.lines().filter(|l| !l.trim().is_empty() && !crate::log::carries_token(l)) {
+        if tail.len() == TAIL_LINES {
+            tail.pop_front();
+        }
+        tail.push_back(line.to_string());
+    }
+}
+
+/// What the last server this shell started wrote before it stopped, one line per line.
+pub fn last_output(app: &AppHandle) -> String {
+    app.state::<AppState>().server_tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n")
+}
+
 // A server the shell did not start is left running.
 pub fn stop(app: &AppHandle) {
     let state = app.state::<AppState>();
@@ -246,6 +269,19 @@ fn take_if_exited<C>(slot: &mut Option<Running<C>>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_tail_keeps_the_last_lines_and_never_the_token() {
+        let mut tail = std::collections::VecDeque::new();
+        keep_tail(&mut tail, "keyloom is running at http://127.0.0.1:4477/?t=secret\n\n");
+        assert!(tail.is_empty());
+        for n in 1..=20 {
+            keep_tail(&mut tail, &format!("line {n}\n"));
+        }
+        assert_eq!(tail.len(), TAIL_LINES);
+        assert_eq!(tail.front().map(String::as_str), Some("line 9"));
+        assert_eq!(tail.back().map(String::as_str), Some("line 20"));
+    }
 
     #[test]
     fn reads_the_words_and_the_replace_label_from_the_cli() {
