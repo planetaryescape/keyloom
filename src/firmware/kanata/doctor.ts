@@ -75,6 +75,8 @@ export type DoctorInput = {
   paths: RemapperPaths;
   /** Where the Karabiner-Elements config is read (read-only), to see whether it still grabs the built-in keyboard. */
   karabinerJson: string;
+  /** The port keyloom talks to kanata on, when it isn't the board's (KEYLOOM_KANATA_PORT), so the doctor asks where Apply does. */
+  port?: number;
 };
 
 export type DoctorReport = { findings: Finding[]; rootCommand: string | null };
@@ -157,10 +159,10 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
 
   let port: Awaited<ReturnType<DoctorProbe["hello"]>> | undefined;
   try {
-    port = await probe.hello({ port: rev.tcpPort });
-    add({ code: "port_closed", name: "kanata TCP port", status: "ok", detail: `kanata ${port.version} is answering on 127.0.0.1:${rev.tcpPort}` });
+    port = await probe.hello({ port: input.port ?? rev.tcpPort });
+    add({ code: "port_closed", name: "kanata TCP port", status: "ok", detail: `kanata ${port.version} is answering on 127.0.0.1:${input.port ?? rev.tcpPort}` });
   } catch (err) {
-    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl kickstart -k system/${DAEMON_LABEL}` : "install the LaunchDaemon first" });
+    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${input.port ?? rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl kickstart -k system/${DAEMON_LABEL}` : "install the LaunchDaemon first" });
   }
 
   const file = await probe.readText(paths.kbd);

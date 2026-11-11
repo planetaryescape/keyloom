@@ -13,6 +13,32 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 
 ## 2026-11-11 follow-up
 
+### D-495: Refusals and failures carry codes the web app turns into the action that fixes them; the CLI keeps its own words. (Claude, in the dead-ends round, from BK: "I don't want dead ends in the app, or places where a user is just told that something is wrong without being offered a way out")
+
+- **Sync refusals.** `SyncRefusal` (a `UsageError`, so CLI exit codes are unchanged) carries `archived`, `not_on_keyboard`, `cant_sync`, `not_connected`, `kanata_not_running`, `kanata_foreign`, `foreign_firmware`, `busy`, `unproven`, `keyboard_removed` or `kanata_still_running`; `/api/sync` answers 400 with that code. The toast maps it (`refusalNotice` in `src/web/sync/words.ts`) to Restore, Put it on…, Build and flash… or Replace it…, and never shows the server's sentence, which names CLI commands. Toasts gained an optional action button.
+- **The sync pill.** "Put this layout on it" and `behind/other_config` open the put-on confirm (D-300) instead of a Sync now the engine refuses. A sync whose last failure was a build opens Build and flash, where Docker's callout and the log are; R1-A's Docker code can replace that test later. kanata running a config keyloom didn't write offers **Replace it…**, which applies the head with `overwriteForeign` through `POST /api/sync/replace-foreign`: a keyloom.kbd keyloom didn't write is kept as `keyloom.kbd.before-keyloom`, and a file kanata was started with elsewhere is untouched. Only the button does it; auto-apply still never replaces a foreign config (21).
+- **The exit chord.** "I held it and kanata stopped" calls `POST /api/sync/confirm-exit-chord`, which records the proof only while kanata doesn't answer, so the button can't stand in for the chord (D-235 unchanged).
+- **Typing lab.** A capture refused because the firmware can't stream carries `needs_sync`; the lab shows Sync now and Build and flash… beside it. A lab that fails to load says so with Try again. The MacBook keyboard no longer offers the lab (its remapper has no key stream).
+- **Loads.** Layout reads give codes: `not_found` ("This layout is gone", with Show your other layouts and no Try again), `unreachable` and `token`. A layout keyloom can't draw offers Show your other layouts and Archive this config, and no longer asks to regenerate geometry. Version compare and a failed wall tile get Try again; a failed tile can still open its layout.
+- **Unknown addresses.** A path that isn't an asset gets an HTML 404 with Open keyloom, carrying the session token only when the request had this session's own. `/api/` paths keep JSON.
+
+### D-494: keyloom stopping is said once, app-wide, and the page recovers by itself. (Claude, in the dead-ends round)
+
+- After about three seconds without the events stream, and only once the page has been connected, a slim banner says "keyloom stopped answering. Reconnecting…". In a browser it adds what to do in the app and in a terminal, with Copy for `keyloom serve`; inside the desktop app (Tauri's internals are on the page) it says only the app's line. When the stream returns the banner goes and the page reads its layouts again.
+- A stream refused with 401 means keyloom restarted with a new link; the banner says so instead of reconnecting forever.
+- Per-request failures no longer ask whether keyloom is "still running in your terminal", which was wrong in the desktop app.
+
+### D-493: The MacBook remapper is set up from the app, through macOS's own password dialog. Replaces the "keyloom never installs it" part of D-231's cost line. (BK's brief for the dead-ends round)
+
+- `GET /api/system/remapper?board=` returns the doctor's findings, each with a code. The sync popover, while kanata isn't running, shows them as steps with one button each: **Install kanata** (`brew install kanata`, one shared run, followed while it lasts), **Open Input Monitoring settings** and **Open Accessibility settings** (D-492), and **Set up and start kanata**.
+- **Set up and start kanata** writes the plist into keyloom's folder (`setupRemapper`, which never replaces a keyloom.kbd it didn't write), then runs the install through `osascript … with administrator privileges`, whose prompt names what it does. It is the root command the CLI prints, without `sudo`, plus a bootout first so a daemon stopped by the exit chord starts again. keyloom never sees the password; it is the same trust as the printed `sudo` line, with no terminal. Every path is single-quoted for the shell and the whole command escaped for AppleScript; both are unit-tested, the shell side against a real `/bin/sh`.
+- The steps re-read the machine after each action, and the pill says kanata is running only when the sync engine sees it answer. The driver has no installer keyloom can run, so its step links the pinned release page. The doctor now asks kanata on the port Apply uses (`KEYLOOM_KANATA_PORT`), not only the board's.
+- The CLI is unchanged: `keyloom remap setup` still prints the command and runs nothing.
+
+### D-492: keyloom opens System Settings at the right pane itself. (BK's brief for the dead-ends round)
+
+- `POST /api/system/open-settings {pane}` takes a name from an allowlist (`input_monitoring`, `accessibility`, `files_and_folders`, `full_disk_access`, `login_items`), never a URL, and runs `open x-apple.systempreferences:…` on macOS only. Anything else is a 400 before the computer is asked. The UI shows these buttons only on macOS. R1-A's next round can use it for Files and Folders.
+
 ### D-487: Start the engine the person actually runs, and say plainly when it is not one keyloom can start. Extends D-486. (BK: "what if a user doesn't have colima but is using another docker engine? what happens if a user installs and they don't have docker at all on their computer?")
 
 D-486 asked the `docker` CLI for its context and knew four answers: Docker Desktop, OrbStack, Colima and systemd. Everything else was treated as "nothing to start", which is where "another engine" and "no Docker" got the same treatment.

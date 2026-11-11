@@ -1,6 +1,6 @@
 # 21: The MacBook keyboard, through kanata
 
-Status: built in v0.21.0 (rung 20), as of v0.36.1: the kanata family, the `apple/macbook-ansi` board, Karabiner import, apply by reload with verify, and the setup doctor. kanata is running keyloom's `keyloom.kbd` on BK's Mac (seen with `pgrep`, 2026-10-17), and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s). Not recorded: S30, S31, S32 and S36 have not run, the board's geometry says `verified: false`, and S33 waits on a kanata build from source. Written 2026-10-15 against origin/main after v0.19.1.
+Status: built in v0.21.0 (rung 20), as of v0.36.1: the kanata family, the `apple/macbook-ansi` board, Karabiner import, apply by reload with verify, and the setup doctor. kanata is running keyloom's `keyloom.kbd` on BK's Mac (seen with `pgrep`, 2026-10-17), and one automatic sync applied and verified (`syn_01M53B4CQBCACRJDCTGJJG799H`, 2026-10-16, 5.1 s). Not recorded: S30, S31, S32 and S36 have not run, the board's geometry says `verified: false`, and S33 waits on a kanata build from source. Since D-492 and D-493 (2026-11-11), the app sets kanata up from the sync popover: install with Homebrew, open the Privacy panes, and install and start the daemon through macOS's password dialog. It also replaces a foreign config with a kept copy, and records the exit-chord proof from a button. These were driven against a fake kanata and fake `osascript`, `open` and `brew`, never the real ones. Written 2026-10-15 against origin/main after v0.19.1.
 
 BK: "I would like to have the features that karabiner has or if I install karabiner elements kanata, this configurator should be able to configure that as well so that I can get my macbook keyboard to behave like the other keyboards."
 
@@ -16,7 +16,7 @@ BK chose kanata (D-231). Its config is closest to keyloom's model:
 - **Hold-taps keep their feel.** Its tap-hold variants line up with QMK's hold-tap options, so home-row mods can feel the same as on his boards.
 - **Changes can be checked before and after.** It has `--check`, a headless simulator to test against keyloom's emulator scripts, and a TCP reload that reports success.
 
-The cost is a one-time install of kanata as a root LaunchDaemon, with Karabiner's VirtualHIDDevice driver. BK runs that one command himself; keyloom never holds sudo. Spikes S30 and S31 decide it with BK present. If they fail, Karabiner-Elements goes first instead. Karabiner needs no root service, but it has no permissive hold and no read-back.
+The cost is a one-time install of kanata as a root LaunchDaemon, with Karabiner's VirtualHIDDevice driver. The person runs that one command, from the CLI's printed line or from the app's **Set up and start kanata**, which asks through macOS's own password dialog (D-493); keyloom never holds the password. Spikes S30 and S31 decide it with BK present. If they fail, Karabiner-Elements goes first instead. Karabiner needs no root service, but it has no permissive hold and no read-back.
 
 The two remappers can't both grab the built-in keyboard. kanata takes it, named with `macos-dev-names-include ("Apple Internal Keyboard / Trackpad")`, and Karabiner is set to ignore it. Karabiner keeps running for anything else BK uses it for.
 

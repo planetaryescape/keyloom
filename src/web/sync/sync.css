@@ -240,6 +240,7 @@
 }
 
 .sync-setup-actions .button {
+  color: var(--ink);
   white-space: normal;
   text-decoration: none;
 }

@@ -107,7 +107,7 @@ export async function setupRemapper(boardId: string, over: RemapperOverrides = {
 export function remapperDoctor(boardId: string, over: RemapperOverrides = {}): Promise<DoctorReport> {
   const env = remapperEnv(boardId, over);
   const karabinerJson = over.karabinerJson ?? join(over.home ?? homedir(), ".config", "karabiner", "karabiner.json");
-  return runRemapperDoctor({ rev: env.rev, paths: env.paths, karabinerJson }, over.probe);
+  return runRemapperDoctor({ rev: env.rev, paths: env.paths, karabinerJson, port: env.deps.endpoint.port }, over.probe);
 }
 
 /** BK pressed Left Control + Space + Escape and saw kanata stop: auto-apply may turn on (D-235, 17#auto-sync). */
