@@ -414,7 +414,7 @@ function MismatchState({ token, summary, problem, fixable, onHome, onReload }: {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
-  // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-503).
+  // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-506).
   const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
   useEffect(() => {
     setGoBackRefused(null);

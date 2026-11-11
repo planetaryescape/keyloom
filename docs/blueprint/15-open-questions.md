@@ -107,7 +107,7 @@ Both revisions build from BK's unchanged Oryx source with `docker run … ghcr.i
 
 ### S11 result, partial (2026-10-15)
 
-Zapp 1.0.2 rejects a non-DFU file before it looks for a device (exit 1). With a valid file it prints `Firmware loaded: …` and waits silently, with no timeout, and only SIGTERM ends it. keyloom wraps it with a 120 s timeout. Success and failure output still need BK's keyboard. See [../research/spikes/S11.md](../research/spikes/S11.md). Success, seen since: BK's hands-free flashes of 2026-10-22 log nothing between `Firmware loaded` and `zapp exited 0`, so Zapp writes silently (D-503). Failure output is still unobserved.
+Zapp 1.0.2 rejects a non-DFU file before it looks for a device (exit 1). With a valid file it prints `Firmware loaded: …` and waits silently, with no timeout, and only SIGTERM ends it. keyloom wraps it with a 120 s timeout. Success and failure output still need BK's keyboard. See [../research/spikes/S11.md](../research/spikes/S11.md). Success, seen since: BK's hands-free flashes of 2026-10-22 log nothing between `Firmware loaded` and `zapp exited 0`, so Zapp writes silently (D-506). Failure output is still unobserved.
 
 ### S7 result (2026-10-15)
 

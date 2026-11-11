@@ -385,7 +385,7 @@ function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock
           <p>{plain(check.problem)}</p>
         </div>
       )}
-      {/* A keyboard that has moved on to a later build has nothing left to check or flash here (D-503). */}
+      {/* A keyboard that has moved on to a later build has nothing left to check or flash here (D-506). */}
       {outcome !== null && outcome.next === null ? null : outcome?.next === "flash" && confirming ? confirmBlock : (
         <div className="step-actions">
           <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running} onClick={release.checkKeyboard}>

@@ -66,7 +66,7 @@ describe("a Glove80 flash", () => {
     expect((await getFlash(e.app, f.id)).note).toBe(f.note);
   });
 
-  test("Cancel is refused once keyloom has restarted a half into its bootloader, and the flash finishes (D-503)", async () => {
+  test("Cancel is refused once keyloom has restarted a half into its bootloader, and the flash finishes (D-506)", async () => {
     const e = await zmkEnv();
     const b = await built(e);
     // The right half's drive takes a while to mount after its restart: a cancel in that window would strand it in its bootloader.

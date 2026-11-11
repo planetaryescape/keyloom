@@ -225,7 +225,7 @@ export const FlashSchema = z.object({
 export type Flash = z.infer<typeof FlashSchema>;
 
 // What Check the keyboard again found (R1-15): `this_build` means the flash is now verified. `later_build`: a newer keyloom build has
-// replaced it since, so flashing this one again would be a rollback (D-503).
+// replaced it since, so flashing this one again would be a rollback (D-506).
 export const FlashCheckResponseSchema = z.object({
   flash: FlashSchema,
   found: z.enum(["this_build", "later_build", "other_build", "missing_halves", "absent", "bootloader", "other_firmware"]),

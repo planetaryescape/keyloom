@@ -1,4 +1,4 @@
-// What the "doesn't match its board" page does after the server refuses "Go back to the last revision that matched" (D-503). Pure, so
+// What the "doesn't match its board" page does after the server refuses "Go back to the last revision that matched" (D-506). Pure, so
 // the choice is tested without a browser.
 
 /** `reload`: reading the layout again can make the same button work. `null`: it can't, so the button goes and the reason stays. */

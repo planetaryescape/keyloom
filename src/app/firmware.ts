@@ -93,7 +93,7 @@ const buildTasks = new Map<string, Promise<void>>();
 const flashTasks = new Map<string, Promise<void>>();
 // What a running flash in this process lets the page do: cancel it until the keyboard is in its bootloader, and name the permission it
 // waits on (D-501). `committed` is set when the flasher writes or says keyloom put the keyboard in its bootloader, and never goes back,
-// so a split board whose first half is written can't be cancelled with its second half waiting (D-503). `onCommit` wakes a cancel
+// so a split board whose first half is written can't be cancelled with its second half waiting (D-506). `onCommit` wakes a cancel
 // that is waiting to hear whether the flasher stopped or went on to write.
 type FlashControl = { abort: AbortController; committed: boolean; cancelled: boolean; problem: FlashPermissionCode | null; onCommit: () => void };
 const flashControls = new Map<string, FlashControl>();
@@ -557,7 +557,7 @@ const CANCEL_SETTLE_MS = 3000;
 
 /**
  * Stops a flash that is waiting for the bootloader, before anything was written (D-501). Refuses once the keyboard is in its bootloader,
- * as `stop()` does for a sync (D-497, D-503): cutting a write off is how a keyboard is left in its bootloader with half an image. The
+ * as `stop()` does for a sync (D-497, D-506): cutting a write off is how a keyboard is left in its bootloader with half an image. The
  * flasher has the last word, because Zapp writes without a sign the moment the bootloader appears: it looks at USB before it stops.
  */
 export async function cancelFlash(app: App, id: string): Promise<FlashView> {

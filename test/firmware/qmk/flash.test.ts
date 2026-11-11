@@ -175,7 +175,7 @@ describe("flashWithZapp, hands-free", () => {
     expect(s.states.some(([, i]) => i === RESET_INSTRUCTION)).toBe(true);
   });
 
-  test("a keyboard keyloom restarted is being written: a zapp that never finishes is stopped only by the write timeout, which says where the keyboard is (D-503)", async () => {
+  test("a keyboard keyloom restarted is being written: a zapp that never finishes is stopped only by the write timeout, which says where the keyboard is (D-506)", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
     const c = new AbortController();
     const r = await s.flash({ bootloaderWaitMs: LOADED_WAIT_MS, writeTimeoutMs: LOADED_WAIT_MS * 2, signal: c.signal, enterBootloader: async () => { setTimeout(() => c.abort(), 20); return { ok: true }; } });

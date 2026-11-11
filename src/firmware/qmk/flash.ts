@@ -2,7 +2,7 @@
 // <file>`: it validates the file, prints "Firmware loaded", then waits for the keyboard to appear in
 // bootloader mode, without any timeout of its own. It prints nothing more until it exits: BK's three
 // hands-free flashes (2026-10-22) each logged "Firmware loaded", then the bootloader, then the exit. So the
-// write starts the moment the bootloader is on USB, and from then on nothing may stop Zapp (D-503).
+// write starts the moment the bootloader is on USB, and from then on nothing may stop Zapp (D-506).
 import { existsSync } from "node:fs";
 import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
@@ -52,7 +52,7 @@ export type FlashInput = {
   verify?: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
   /**
    * Whether the board's bootloader is on USB now. Zapp writes as soon as it is, without a word, so this is how keyloom knows the
-   * write has begun when the person pressed the reset key, and why a cancel that comes after it is refused (D-503).
+   * write has begun when the person pressed the reset key, and why a cancel that comes after it is refused (D-506).
    */
   bootloaderPresent?: () => Promise<boolean>;
   /** How often the bootloader is looked for while the person is asked to press reset; tests pass a short one. */
@@ -185,7 +185,7 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   clearTimeout(timer);
   input.signal?.removeEventListener("abort", cancel);
   await entering;
-  // A keyboard keyloom restarted counts as being written (D-503), so only the write timeout below can leave it in its bootloader.
+  // A keyboard keyloom restarted counts as being written (D-506), so only the write timeout below can leave it in its bootloader.
   if (abortedFor === "cancelled") return fail("Cancelled. Nothing was flashed.", output);
   if (abortedFor === "bootloader") {
     return fail("No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed. Press the reset button and flash again.", output);

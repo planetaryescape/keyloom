@@ -218,7 +218,7 @@ export async function handsFreeHooks(input: {
   buildId: string;
   log: LogSink;
 }): Promise<Pick<FlashInput, "enterBootloader" | "verify" | "bootloaderPresent">> {
-  // Any Zapp board: its bootloader on USB is when Zapp starts writing, which a cancel must not cut off (D-503).
+  // Any Zapp board: its bootloader on USB is when Zapp starts writing, which a cancel must not cut off (D-506).
   const flash = input.rev.flash;
   const present: Pick<FlashInput, "bootloaderPresent"> = flash.kind === "zapp" ? { bootloaderPresent: async () => inBootloader(await input.deps.usb(), flash) } : {};
   const target = keyboardTarget(input.board, input.rev);

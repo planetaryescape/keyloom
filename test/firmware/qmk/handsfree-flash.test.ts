@@ -205,7 +205,7 @@ describe("handsFreeHooks", () => {
     expect((await hooks(k, new Uint8Array())).enterBootloader).toBeUndefined();
   });
 
-  test("a board that isn't ZSA's gets no restart and no verify, only the look for its bootloader that tells when Zapp writes (D-503)", async () => {
+  test("a board that isn't ZSA's gets no restart and no verify, only the look for its bootloader that tells when Zapp writes (D-506)", async () => {
     const other = { ...web.definition, vendor: "Other" };
     expect(keyboardTarget(other, rev)).toBeUndefined();
     const hooks = await handsFreeHooks({ deps: fakeKeyboard({ usb: () => [dfuBootloader()] }).deps, board: other, rev, artifact: new Uint8Array(), buildId: BUILD, log });

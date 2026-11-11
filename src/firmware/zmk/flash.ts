@@ -170,7 +170,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
 
   const verified: string[] = [];
   let allRestarted = true;
-  // Set while a half keyloom restarted is being written; an abort then is refused, and stays refused (D-503).
+  // Set while a half keyloom restarted is being written; an abort then is refused, and stays refused (D-506).
   let committing = false;
   let refused = false;
   input.signal?.addEventListener("abort", () => {
@@ -190,7 +190,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let restartReason: string | undefined;
     const cancelled = (): string => (i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
     // A half keyloom restarted sits in its bootloader and won't type until it is written, so from here this half is written whoever
-    // asks to stop, and the app refuses a cancel (D-503). A stop that came during the restart stays refused for the rest of the flash.
+    // asks to stop, and the app refuses a cancel (D-506). A stop that came during the restart stays refused for the rest of the flash.
     const commit = () => {
       committing = true;
       if (input.signal?.aborted) refused = true;

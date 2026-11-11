@@ -355,7 +355,7 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
   });
 
-  test("a stop that comes while keyloom restarts a half is refused: the half is written, and so is the rest (D-503)", async () => {
+  test("a stop that comes while keyloom restarts a half is refused: the half is written, and so is the rest (D-506)", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);
     const c = new AbortController();

@@ -34,7 +34,7 @@ export function failedFlashText(code: FlashPermissionCode | "cancelled" | null |
   return { lead, detail: error ?? "Flashing failed." };
 }
 
-/** The answers to "Which <board> is this?", from the board's own revisions: their labels and hints, or their IDs (D-503). */
+/** The answers to "Which <board> is this?", from the board's own revisions: their labels and hints, or their IDs (D-506). */
 export function revisionChoices(revisions: ReadonlyArray<{ id: string; label?: string | undefined; hint?: string | undefined }>): Array<{ value: string; label: string; hint?: string }> {
   return revisions.map((r) => ({ value: r.id, label: r.label ?? r.id, ...(r.hint === undefined ? {} : { hint: r.hint }) }));
 }

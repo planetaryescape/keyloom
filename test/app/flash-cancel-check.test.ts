@@ -16,7 +16,7 @@ const OLD = "keyloom/AAAAAAAAAAAA";
 const ORYX = "QxKPz/zLQ3Md";
 
 // Like the real zapp, it writes only once the keyboard is in its bootloader (a file here), the write takes a moment, and it prints
-// nothing between "Firmware loaded" and exiting: BK's three real hands-free flashes (2026-10-22) logged exactly that (D-503).
+// nothing between "Firmware loaded" and exiting: BK's three real hands-free flashes (2026-10-22) logged exactly that (D-506).
 const ZAPP = 'echo "Firmware loaded: STM32 DFU (316 bytes)"; while [ ! -f "$BOOTLOADER_FLAG" ]; do sleep 0.05; done; sleep 1.5; echo ran >> "$ZAPP_CALLS"; exit 0';
 
 async function until(read: () => Promise<FlashView>, ok: (f: FlashView) => boolean, ms = 10_000): Promise<FlashView> {

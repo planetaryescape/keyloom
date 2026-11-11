@@ -16,7 +16,7 @@ import { type KeyboardReading, readKeyboards, syncSupported } from "./sync-keybo
 
 /**
  * What the keyboard reported when it was read again; `this_build` means the flash now counts as verified. `later_build` is a build this
- * copy made after this one, which a flash of this build would roll back (D-503); `other_build` is an earlier one or one it doesn't know.
+ * copy made after this one, which a flash of this build would roll back (D-506); `other_build` is an earlier one or one it doesn't know.
  */
 export type FlashCheckFound = "this_build" | "later_build" | "other_build" | "missing_halves" | "absent" | "bootloader" | "other_firmware";
 

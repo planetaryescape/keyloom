@@ -44,7 +44,7 @@ export async function waitFor(cond: () => boolean, what: string, ms = 15_000): P
 
 /**
  * `reset_at_stop`: waits for a hand; the stop arrives just as the person presses reset, so the flasher finds the bootloader, refuses
- * the stop as the real one does (D-503), writes, and the write fails.
+ * the stop as the real one does (D-506), writes, and the write fails.
  */
 export type FlashMode = "ok" | "unverified" | "fail" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop";
 

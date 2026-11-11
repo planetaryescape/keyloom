@@ -1,4 +1,4 @@
-// The "doesn't match its board" page after the server refuses Go back (D-503): a stale page reloads, anything else drops the button.
+// The "doesn't match its board" page after the server refuses Go back (D-506): a stale page reloads, anything else drops the button.
 import { describe, expect, test } from "bun:test";
 import { goBackRefusal } from "../../src/web/shell/mismatch-words.ts";
 
