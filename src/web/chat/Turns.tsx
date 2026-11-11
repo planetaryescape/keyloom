@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, Keyboard, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, Keyboard, KeyRound, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
 import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -273,6 +273,10 @@ interface Props {
   switchTo?: readonly { id: string; name: string }[];
   /** Starts a new conversation on that provider with the message that failed back in the box. */
   onSwitch?: (id: string) => void;
+  /** Opens the model setup with this provider's key field, for a key that was refused or ran out (D-496). */
+  onSetUpModel?: () => void;
+  /** The provider's billing page, offered when the account is out of credits. */
+  creditsUrl?: string | undefined;
   /** The command bar: alternatives are tabs and one card shows at a time, the one on the board (comp d). */
   compact?: boolean;
   /** UI-only projection of observed operations and explicit public working notes. */
@@ -286,7 +290,7 @@ interface Props {
   reference?: DrawReference;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -380,6 +384,18 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
               {turn.failure.message} Configs or proposals prepared before the reply stopped may remain. Check them before trying again.
             </p>
             <div className="chat-problem-actions">
+              {turn.failure.code === "model_no_credits" && creditsUrl !== undefined ? (
+                <a className="button button-primary" href={creditsUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} aria-hidden="true" />
+                  Add credits
+                </a>
+              ) : null}
+              {ACCOUNT_FAILURES.has(turn.failure.code) && onSetUpModel !== undefined ? (
+                <button type="button" className={turn.failure.code === "model_no_credits" ? "button" : "button button-primary"} onClick={onSetUpModel}>
+                  <KeyRound size={14} aria-hidden="true" />
+                  {turn.failure.code === "model_no_credits" ? "Use another key" : "Change the key"}
+                </button>
+              ) : null}
               {ACCOUNT_FAILURES.has(turn.failure.code) && onSwitch !== undefined
                 ? switchTo.map((other) => (
                     <button key={other.id} type="button" className="button" onClick={() => onSwitch(other.id)}>

@@ -1,0 +1,142 @@
+/* The model setup (D-496): one row per provider, left-aligned even inside the centred "Chat needs a model" state. */
+.setup-providers {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.setup-provider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.setup-provider p {
+  margin: 0;
+}
+
+.setup-provider .muted {
+  color: var(--color-text-muted);
+}
+
+.setup-ready,
+.setup-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.setup-ready svg {
+  flex: none;
+  color: var(--color-success);
+}
+
+.setup-paste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.setup-paste-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.setup-paste-row input {
+  min-width: 12rem;
+  min-height: 32px;
+  flex: 1;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.setup-paste-row input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.setup-paste-row input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.setup-paste .link-button {
+  align-self: flex-start;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.setup-actions a.button,
+.chat-problem-actions a.button {
+  text-decoration: none;
+}
+
+.setup-actions a.button:not(.button-primary),
+.chat-problem-actions a.button:not(.button-primary) {
+  color: var(--color-text);
+}
+
+.setup-key-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.setup-unread {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.setup-unread p {
+  margin: 0;
+}
+
+/* Opened from a refused key: sits under the reply that failed, with its own close. */
+.chat-setup-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+
+.chat-setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-missing-key .setup-providers,
+.bar-needs-model .setup-providers {
+  margin-top: var(--space-2);
+}
+
+.provider-picker .setup-providers {
+  margin-top: var(--space-2);
+}
+
+.setup-key-page {
+  color: var(--color-text);
+}

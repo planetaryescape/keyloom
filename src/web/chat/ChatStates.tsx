@@ -1,6 +1,7 @@
-import { Check, Copy, KeyRound, MessageSquareText, RefreshCw, TriangleAlert, X } from "lucide-react";
-import { useState } from "react";
+import { KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
 import type { ChatProviderStatus } from "../../api/http.ts";
+import { ModelSetup } from "./ModelSetup.tsx";
+import { anyReady } from "./setup-words.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [
@@ -31,52 +32,26 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-function CopyCommand({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    // Clipboard access can be refused; the command stays selectable either way.
-    navigator.clipboard
-      .writeText(command)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
-      })
-      .catch(() => {});
-  }
-  return (
-    <div className="command">
-      <code>{command}</code>
-      <button type="button" className="button" onClick={copy} aria-label={`Copy ${command}`}>
-        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
-}
+type Setup = { token: string; status: ChatProviderStatus | null; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
 
-/** Shown before anything is typed when no provider has a credential, and again if a send is refused for the same reason. */
-export function MissingKey({ providers, onRetry, retryLabel = "Try again" }: { providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined; retryLabel?: string }) {
+/**
+ * Shown before anything is typed when no provider has a credential, and again if a send is refused for the same reason. Setting
+ * one up here works at once (D-496); `onRetry` sends the refused message again, and is offered only once a model is ready.
+ */
+export function MissingKey({ setup, onRetry }: { setup: Setup; onRetry?: (() => void) | undefined }) {
+  const ready = setup.status !== null && anyReady(setup.status);
   return (
     <div className="chat-problem chat-missing-key" role="alert">
       <span className="state-icon" aria-hidden="true">
         <KeyRound size={22} />
       </span>
       <h3>Chat needs a model</h3>
-      <p>Pick one. A Codex sign-in is picked up when you check again. API keys are read when keyloom starts. In the desktop app, add the key to your shell profile, then quit and reopen keyloom; if the app is using a <code>keyloom serve</code> you started in a terminal, restart that one instead. In a terminal, restart <code>keyloom serve</code> with the key set.</p>
-      <ul className="provider-options" aria-label="Ways to set up a model">
-        {providers.map((p) => (
-          <li key={p.id}>
-            <strong>{p.label}</strong>
-            <span className="muted">{p.setup}</span>
-            <CopyCommand command={p.command} />
-          </li>
-        ))}
-      </ul>
-      <p className="muted">keyloom never stores your key. Reload this page once keyloom is running again.</p>
-      {onRetry === undefined ? null : (
-        <button type="button" className="button" onClick={onRetry}>
-          <RefreshCw size={14} aria-hidden="true" />
-          {retryLabel}
+      <p>Paste an API key, or sign in with Codex. Chat can use it straight away.</p>
+      <ModelSetup {...setup} />
+      {onRetry === undefined || !ready ? null : (
+        <button type="button" className="button button-primary" onClick={onRetry}>
+          <Send size={14} aria-hidden="true" />
+          Send your message
         </button>
       )}
     </div>
@@ -91,8 +66,8 @@ const TITLES: Record<Exclude<Problem["kind"], "missing_key">, string> = {
 };
 
 // A refusal before the reply started. Your message is back in the box, so Try again is one click.
-export function ProblemNotice({ problem, providers, onRetry, onDismiss }: { problem: Problem; providers: ChatProviderStatus["providers"]; onRetry?: (() => void) | undefined; onDismiss: () => void }) {
-  if (problem.kind === "missing_key") return <MissingKey providers={providers} onRetry={onRetry} />;
+export function ProblemNotice({ problem, setup, onRetry, onDismiss }: { problem: Problem; setup: Setup; onRetry?: (() => void) | undefined; onDismiss: () => void }) {
+  if (problem.kind === "missing_key") return <MissingKey setup={setup} onRetry={onRetry} />;
   return (
     <div className="chat-problem" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />

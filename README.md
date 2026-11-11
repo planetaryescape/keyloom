@@ -125,11 +125,13 @@ The agent runs on one of three providers.
 
 | Provider | What it needs |
 |---|---|
-| Anthropic | `ANTHROPIC_API_KEY` in the environment |
-| OpenRouter | `OPENROUTER_API_KEY` in the environment |
-| Codex CLI | The `codex` CLI installed and signed in with `codex login` |
+| Anthropic | A key pasted in the app, `keyloom provider key set anthropic`, or `ANTHROPIC_API_KEY` in the environment |
+| OpenRouter | A key pasted in the app, `keyloom provider key set openrouter`, or `OPENROUTER_API_KEY` in the environment |
+| Codex CLI | The `codex` CLI installed and signed in: **Sign in with Codex** in the app, or `codex login` |
 
-keyloom uses the first provider it finds a credential for. Pick one with `--provider` on `chat` or `serve`, or set `agent.provider` in `config.json` in the data directory. keyloom never stores your key. A conversation stays on the provider that started it.
+keyloom uses the first provider it finds a credential for. Pick one with `--provider` on `chat` or `serve`, or set `agent.provider` in `config.json` in the data directory. A conversation stays on the provider that started it.
+
+A key you paste is checked with the provider (a models read that spends no tokens), then kept in the macOS Keychain, or the system keyring through `secret-tool` on Linux. Chat uses it from the next message, with no restart. A key in the environment wins over a saved one. keyloom never writes a key to its database, its logs or its answers to the app; `keyloom provider` shows where each key comes from and its last four characters. On a computer with no keyring, set the environment variable instead.
 
 The agent only proposes. A validator checks every change set against the board and the layout, and nothing is applied until you accept it.
 
