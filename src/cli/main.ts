@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 // keyloom CLI (10). Every command is a thin call into src/app.
+import { resolve as resolvePath } from "node:path";
 import { Command, CommanderError, Option } from "commander";
 import {
   requireCommandSupport, type App, type ImportOutcome, type WorkloadDeps, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
@@ -22,7 +23,8 @@ import { registerReviewCommand } from "./commands/review.ts";
 import { registerProviderCommands } from "./commands/provider.ts";
 import { installDockerWithProgress } from "./install-docker.ts";
 import { EXIT, classify } from "./errors.ts";
-import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
+import { DEFAULT_PORT, restartCommand, serve, serveBoardDev } from "./serve.ts";
+import { RESTART_EXIT_CODE } from "../api/restart.ts";
 import { announceServer } from "../server/running-server.ts";
 import { resolveExistingServer } from "./serve-existing.ts";
 import { DESKTOP_PROTOCOL } from "../server/server-compat.ts";
@@ -41,7 +43,7 @@ const stdIo = (): Io => ({
 type Globals = { format?: Format; dataDir?: string; quiet?: boolean; verbose?: boolean };
 
 /** `handsFree` replaces how USB, raw HID and serial ports are read, and `syncDeps` how `sync` builds and flashes; tests pass fakes. */
-export function buildProgram(io: Io, state: { exitCode: number; dataDir: string }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps, workload?: WorkloadDeps): Command {
+export function buildProgram(io: Io, state: { exitCode: number; dataDir: string; restarting?: boolean }, chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps, workload?: WorkloadDeps): Command {
   const program = new Command("keyloom")
     .description("Local-first keyboard configurator for QMK and ZMK boards")
     .version(pkg.version, "-V, --version", "print the keyloom version")
@@ -269,7 +271,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .option("--exit-on-stdin-close", "stop when standard input closes, so a parent that dies can't leave this server running (the desktop app uses it)")
     .option("--reuse", "if keyloom is already serving this data directory, print its URL and exit 0 instead of failing (the desktop app uses it)")
     .option("--replace", "if another keyloom is serving this data directory, stop it (after it finishes any keyboard write) and serve from this one; refused if that server is newer")
-    .option("--client-protocol <n>", "the desktop protocol the caller was built for (the desktop app passes it); refuses to start if this keyloom speaks another, and makes --reuse refuse a server that does")
+    .option("--client-protocol <n>", "the desktop protocol the caller was built for (the desktop app passes it); refuses to start if this keyloom speaks another, and makes --reuse refuse a server that does. With --exit-on-stdin-close it also lets the page restart keyloom, because the caller starts it again")
     .option("--board-dev <board>", "contributors: show a board's keys with their position numbers instead of your layouts; takes a board ID under ./boards or a board folder")
     .option("--provider <provider>", `model provider for new chats: ${PROVIDERS.join(", ")} (default: the config, then the first one with a credential)`)
     .action(async (opts: { port: string; open: boolean; exitOnStdinClose?: boolean; reuse?: boolean; replace?: boolean; clientProtocol?: string; boardDev?: string; provider?: string }) => {
@@ -286,9 +288,24 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           throw new IncompatibleError("client_protocol_mismatch", `the desktop app was built for keyloom desktop protocol ${clientProtocol}, but this keyloom ${pkg.version} speaks protocol ${DESKTOP_PROTOCOL}. The app and its keyloom are from different releases; reinstall the app (or install the matching keyloom).`);
         }
       }
+      // Restart from the page or the menu bar (R5-15, D-521): it stops the server the way Ctrl-C does and exits RESTART_EXIT_CODE. Only the
+      // desktop app passes both flags, and only it starts the server again; a terminal gets the line to run instead. Both, so a terminal
+      // that passes --client-protocol alone still keeps its server.
+      let stopServing = () => {};
+      const givenDataDir = globals().dataDir;
+      const restart = {
+        canRestart: clientProtocol !== undefined && opts.exitOnStdinClose === true,
+        // Absolute, so the line opens this database from whichever folder the terminal is in.
+        command: restartCommand({ dataDir: givenDataDir === undefined ? undefined : resolvePath(givenDataDir), port: opts.port, provider }),
+        restart: () => {
+          // runCli reads it after every cleanup, so a drain or helper cleanup that fails still exits RESTART_EXIT_CODE.
+          state.restarting = true;
+          stopServing();
+        },
+      };
       const start = (app: App | undefined) => {
         try {
-          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
+          return opts.boardDev === undefined ? serve(app as App, { port, open: opts.open, restart, ...(provider ? { provider } : {}), ...(handsFree ? { handsFree } : {}), ...(syncDeps ? { syncDeps } : {}) }) : serveBoardDev(opts.boardDev, { port, open: opts.open });
         } catch (err) {
           if ((err as { code?: string }).code === "EADDRINUSE") throw new UsageError(`port ${port} is in use; pass --port`);
           throw err;
@@ -314,6 +331,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
         let disposeSignals = () => {};
         await new Promise<void>((resolve) => {
           const stop = () => resolve();
+          stopServing = stop;
           disposeSignals = catchStopSignals(stop, (text) => io.err(text));
           if (opts.exitOnStdinClose) {
             // A parent that dies closes the pipe, whatever killed it (D-321). Resuming is what makes the stream report the end.
@@ -420,7 +438,7 @@ const layoutJson = (r: { id: string; name: string; boardId: string; headRevision
 
 /** Runs the CLI and returns the exit code; never throws. */
 export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = {}, handsFree?: HandsFreeOverrides, syncDeps?: SyncDeps, lab?: LabCliDeps, keyboards?: KeyboardCliDeps, workload?: WorkloadDeps): Promise<number> {
-  const state = { exitCode: EXIT.ok as number, dataDir: "" };
+  const state: { exitCode: number; dataDir: string; restarting?: boolean } = { exitCode: EXIT.ok, dataDir: "" };
   const program = buildProgram(io, state, chat, handsFree, syncDeps, lab, keyboards, workload);
   let commandError: unknown;
   let hasCommandError = false;
@@ -441,6 +459,9 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
   }
 
   const jsonErrors = (program.opts<Globals>().format ?? defaultFormat(io)) !== "table";
+  // A restart the page asked for exits RESTART_EXIT_CODE even when its drain or cleanup failed: a stuck keyboard helper is the lab's
+  // reason to restart, and that helper fails cleanup again. Exit 1 would count as a crash in the desktop app (R5-15). The errors still print.
+  const restarting = state.restarting === true;
   let cleanupFailed = false;
   try { await shutdownDeviceConnections(); }
   catch { cleanupFailed = true; }
@@ -457,15 +478,15 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
     io.err(jsonErrors
       ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning, ...cause } })}\n`
       : `${warning}\n`);
-    return EXIT.bug;
+    return restarting ? RESTART_EXIT_CODE : EXIT.bug;
   }
   if (classified) {
     io.err(jsonErrors
       ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: classified.kind, message: classified.message } })}\n`
       : `error: ${classified.message}\n`);
-    return classified.code;
+    return restarting ? RESTART_EXIT_CODE : classified.code;
   }
-  return commandResult;
+  return restarting ? RESTART_EXIT_CODE : commandResult;
 }
 
 /** Runs the CLI for this process's arguments and exits with its code. */

@@ -82,7 +82,8 @@ export type ModelResult = {
 };
 
 /** `context_full`: the conversation no longer fits the model's context window, so sending it again fails the same way (R4-11). */
-export type ModelErrorKind = "missing_key" | "auth" | "no_credits" | "permission" | "rate_limit" | "overloaded" | "connection" | "request" | "server" | "context_full";
+/** `usage_limit` is a plan's allowance used up until it resets (Codex on a ChatGPT plan); `rate_limit` is too many requests for a moment. */
+export type ModelErrorKind = "missing_key" | "auth" | "no_credits" | "permission" | "rate_limit" | "usage_limit" | "overloaded" | "connection" | "request" | "server" | "context_full";
 
 export interface AgentModel {
   /** Recorded in the per-turn log. */

@@ -17,7 +17,7 @@ const failed = (code: string, message: string): AssistantTurn => ({
 const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = [], busy = false) =>
   renderToStaticMarkup(
     createElement(AssistantMessage, {
-      turn, layout, board: board.definition, pinnedId: null, switchTo, busy, onSetUpModel: () => {}, onNewConversation: () => {},
+      turn, layout, board: board.definition, pinnedId: null, switchTo, busy, onSetUpModel: () => {}, onNewConversation: () => {}, onSetUpOther: () => {}, onOpenHistory: () => {},
       onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {}, onSwitch: () => {},
     }),
   );
@@ -42,6 +42,28 @@ describe("a reply that stopped says why, in comp d2's words (P3)", () => {
     const html = render(failed("model_rate_limit", "Rate limit reached (429)."), [{ id: "codex", name: "Codex" }]);
     expect(html).toContain("The model is busy");
     expect(html).not.toContain("Switch to");
+  });
+
+  test("a used-up plan switches to a ready provider, or sets one up when none is ready (R5-04)", () => {
+    const message = "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.";
+    const ready = render(failed("model_usage_limit", message), [{ id: "anthropic", name: "Anthropic" }]);
+    expect(ready).toContain("Your Codex usage limit is reached");
+    expect(ready).toContain("until 3:45 PM");
+    expect(ready).toContain("Switch to Anthropic");
+    expect(ready).not.toContain("Set up another model");
+    expect(ready).not.toContain("The model is busy");
+    const none = render(failed("model_usage_limit", message));
+    expect(none).toContain("Set up another model");
+    expect(none).toContain("Try again");
+  });
+
+  test("a message keyloom may have accepted offers Open history and Ask again (R5-07)", () => {
+    const html = render(failed("unconfirmed", "keyloom stopped answering. keyloom may already be answering it. Open history to see whether it did before you ask again."));
+    expect(html).toContain("keyloom didn&#x27;t confirm your message");
+    expect(html).toContain("Open history");
+    expect(html).toContain("Ask again");
+    expect(html).not.toContain(">Try again<");
+    expect(html).not.toContain("Check them before trying again");
   });
 
   test("anything else keeps the plain title", () => {

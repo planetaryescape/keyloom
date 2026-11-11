@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, Keyboard, KeyRound, MapPin, MessageSquarePlus, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, History, Keyboard, KeyRound, MapPin, MessageSquarePlus, RefreshCw, ShieldCheck } from "lucide-react";
 import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -280,9 +280,13 @@ interface Props {
   reference?: DrawReference;
   /** Starts a new conversation, for a reply that ended because this one is full. */
   onNewConversation?: () => void;
+  /** Opens the model setup on a provider other than this conversation's, for a plan whose usage limit is reached (R5-04). */
+  onSetUpOther?: () => void;
+  /** Opens the conversation history, for a message keyloom may have accepted without confirming it (R5-07). */
+  onOpenHistory?: () => void;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation, onSetUpOther, onOpenHistory }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -370,7 +374,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       ))}
       {/* After the proposal it refines: the proposal is on the board first, and the question asks about it (D-452). */}
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
-      {turn.failure === null ? null : <FailureBox view={failureView(turn.failure)} prepared={{ proposals: turn.proposals.length, priorities: turn.priorities.length, mayHave: turn.presentation?.effectsMayHaveOccurred ?? null }} busy={busy} onRetry={onRetry} switchTo={switchTo} onSwitch={onSwitch} onSetUpModel={onSetUpModel} creditsUrl={creditsUrl} onNewConversation={onNewConversation} />}
+      {turn.failure === null ? null : <FailureBox view={failureView(turn.failure)} prepared={{ proposals: turn.proposals.length, priorities: turn.priorities.length, mayHave: turn.presentation?.effectsMayHaveOccurred ?? null }} busy={busy} onRetry={onRetry} switchTo={switchTo} onSwitch={onSwitch} onSetUpModel={onSetUpModel} creditsUrl={creditsUrl} onNewConversation={onNewConversation} onSetUpOther={onSetUpOther} onOpenHistory={onOpenHistory} />}
       {streaming ? null : <AgentWorking view={work} motionPaused={motionPaused} />}
       {streaming ? null : <TurnUsage accounting={turn.accounting} />}
     </div>
@@ -378,13 +382,18 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
 }
 
 // Every button here starts or changes a request, so none works while a reply is running; Add credits and the setup leave the request alone.
-function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUpModel, creditsUrl, onNewConversation }: {
+function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUpModel, creditsUrl, onNewConversation, onSetUpOther, onOpenHistory }: {
   view: FailureView; prepared: Prepared; busy: boolean; onRetry: () => void; switchTo: readonly { id: string; name: string }[];
   onSwitch: ((id: string) => void) | undefined; onSetUpModel: (() => void) | undefined; creditsUrl: string | undefined; onNewConversation: (() => void) | undefined;
+  onSetUpOther: (() => void) | undefined; onOpenHistory: (() => void) | undefined;
 }) {
   const offers = (action: FailureAction) => view.actions.includes(action);
   const credits = offers("credits") && creditsUrl !== undefined;
-  const { note, retryLabel } = preparedWords(prepared, offers("retry"));
+  const switches = offers("switch") && onSwitch !== undefined && switchTo.length > 0;
+  const words = preparedWords(prepared, offers("retry"));
+  // A view with its own Ask again already says to check before asking again; only work it can count is added to that.
+  const note = view.retryLabel !== undefined && prepared.proposals + prepared.priorities === 0 ? null : words.note;
+  const retryLabel = view.retryLabel ?? words.retryLabel;
   return (
     <div className="chat-problem chat-problem-inline" role="alert">
       <CircleAlert size={18} aria-hidden="true" />
@@ -406,7 +415,13 @@ function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUp
               {view.setUpLabel}
             </button>
           ) : null}
-          {offers("switch") && onSwitch !== undefined
+          {offers("open_history") && onOpenHistory !== undefined ? (
+            <button type="button" className="button button-primary" onClick={onOpenHistory}>
+              <History size={14} aria-hidden="true" />
+              Open history
+            </button>
+          ) : null}
+          {switches
             ? switchTo.map((other) => (
                 <button key={other.id} type="button" className="button" disabled={busy} onClick={() => onSwitch(other.id)}>
                   <ArrowRightLeft size={14} aria-hidden="true" />
@@ -414,6 +429,12 @@ function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUp
                 </button>
               ))
             : null}
+          {offers("set_up_other") && !switches && onSetUpOther !== undefined ? (
+            <button type="button" className="button button-primary" onClick={onSetUpOther}>
+              <KeyRound size={14} aria-hidden="true" />
+              {view.setUpLabel}
+            </button>
+          ) : null}
           {offers("new_conversation") && onNewConversation !== undefined ? (
             <button type="button" className={offers("retry") ? "button" : "button button-primary"} disabled={busy} onClick={onNewConversation}>
               <MessageSquarePlus size={14} aria-hidden="true" />
