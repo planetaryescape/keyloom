@@ -84,7 +84,7 @@ export class LabCaptureError extends Error {
       // The owner starts a new keyboard connection on the next try (R4-03); only one whose old connection may still be open needs a restart.
       : code === "connection_lost"
         ? "The keyboard connection stopped responding. Try again, and keyloom opens a new one."
-        : "keyloom couldn't confirm that its old keyboard connection closed, so it won't open another. Quit keyloom and open it again, then try again.");
+        : "keyloom's keyboard connection is stuck, and only a restart clears it. Quit keyloom and open it again, then try again.");
   }
 }
 

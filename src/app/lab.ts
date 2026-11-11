@@ -120,14 +120,22 @@ export async function beginRecording(
     }
     // A dead helper is replaced on the next try (R4-03), so this one is worth repeating. A setup that failed stays failed in this process,
     // and an old helper that may still hold the keyboard blocks a new one, so those need keyloom restarted.
-    if (err instanceof HelperCleanupUnconfirmedError || isLatchedSetupFailure(err)) throw new LabCaptureError("restart_required");
-    if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
-      throw new LabCaptureError("connection_lost");
-    }
+    if (err instanceof HelperCleanupUnconfirmedError) throw new LabCaptureError("restart_required");
+    // A helper that died during the START write reaches here inside a CaptureError, so its cause is looked at too (#290 review).
+    const dead = deadChannel(err);
+    if (dead !== undefined) throw new LabCaptureError(isLatchedSetupFailure(dead) ? "restart_required" : "connection_lost");
     if (err instanceof CaptureError) throw err.code === undefined ? new UsageError(err.message) : new LabStartError(err.code, err.message);
     throw err;
   }
   return { view, passage, capture, startedAt: Date.now() };
+}
+
+/** The helper channel error behind a capture failure, when the helper exited, broke the protocol or stopped answering. */
+function deadChannel(err: unknown): DeviceTransportError | undefined {
+  for (let at: unknown = err, depth = 0; at instanceof Error && depth < 4; at = at.cause, depth++) {
+    if (at instanceof DeviceTransportError) return ["helper_exited", "protocol_error", "timeout"].includes(at.detail.code) ? at : undefined;
+  }
+  return undefined;
 }
 
 /**

@@ -112,6 +112,23 @@ test("a timeout from a helper setup that stays failed asks for a restart, not a 
   expect(((await result.response.json()) as { error: { code: string } }).error.code).toBe("restart_required");
 });
 
+test("a helper that dies during the START write, after the session opened, offers Try again (#290 review)", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  apps.push(app);
+  const died = new DeviceTransportError({ code: "helper_exited", effect: "possible", retry: "never" });
+  const transport: HidTransport = {
+    list: async () => [{ vendorId: 0x3297, productId: 0x1969, serial: "keyloom/NPQRSTVWXYZ0", handle: "synthetic-only" }],
+    write: async () => { throw new Error("unexpected direct HID write"); },
+    // The channel's failure reaches the session first, as the client's fail() does, then every write is refused with it.
+    openSession: async (_target, _onReport, onError = () => {}) => ({ write: async () => { onError(died); throw died; }, close: async () => {} }),
+  };
+  const backend = appLabBackend(app, { startCapture: async (_board, hooks) => startQmkCapture(transport, await findQmkStreamDevice(transport), hooks), replay: () => { throw new Error("no replay"); } });
+  const request = new Request(`http://keyloom.test/api/lab/${layoutId}/recording`, { method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: "{}" });
+  const response = await handleLabRoute(request, new URL(request.url).pathname, backend, TOKEN);
+  expect(response?.status).toBe(409);
+  expect(((await response!.json()) as { error: { code: string } }).error.code).toBe("connection_lost");
+});
+
 test("an unclassified capture error remains an internal error and is not exposed", async () => {
   const log = spyOn(console, "error").mockImplementation(() => {});
   try {
