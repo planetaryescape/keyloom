@@ -5,7 +5,7 @@ import { type InstallRunner, brewFormulae, canInstall, installJobs, installTool 
 
 const mac = { platform: "darwin" as const, has: (c: string) => c === "brew" };
 
-function recorder(exitCodes: Record<string, number> = {}): { runner: InstallRunner; calls: string[][] } {
+function recorder(exitCodes: Record<string, number> = {}) {
   const calls: string[][] = [];
   const runner: InstallRunner = async (cmd, opts) => {
     calls.push(cmd);

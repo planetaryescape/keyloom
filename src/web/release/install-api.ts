@@ -30,6 +30,6 @@ export async function downloadArtifact(token: string, buildId: string): Promise<
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function revealArtifact(token: string, buildId: string): Promise<unknown> {
-  return request("POST", `/api/builds/${encodeURIComponent(buildId)}/reveal`, token, z.object({}), undefined, {});
+export async function revealArtifact(token: string, buildId: string): Promise<void> {
+  await request("POST", `/api/builds/${encodeURIComponent(buildId)}/reveal`, token, z.object({}), undefined, {});
 }

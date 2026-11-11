@@ -4,13 +4,15 @@ import { describe, expect, test } from "bun:test";
 import { showBoard } from "../../src/app/boards.ts";
 import { flashPlanFor } from "../../src/app/firmware-flash-plan.ts";
 import type { Board } from "../../src/boards/load.ts";
+import type { FlashRecipe } from "../../src/boards/recipes.ts";
 
 const mac = (has: string[]) => ({ platform: "darwin" as const, has: (c: string) => has.includes(c) });
 
 /** The Moonlander with every revision's flash recipe replaced, standing in for a mainline QMK board. */
-function moonlanderWith(flash: Record<string, unknown>): Board {
+function moonlanderWith(flash: FlashRecipe): Board {
   const board = structuredClone(showBoard("zsa/moonlander"));
-  for (const rev of board.definition.revisions) (rev as { flash: unknown }).flash = flash;
+  // SAFETY: every Moonlander revision is a QMK revision with a `flash` recipe; this swaps only that field on a private clone.
+  for (const rev of board.definition.revisions) (rev as { flash: FlashRecipe }).flash = flash;
   return board;
 }
 

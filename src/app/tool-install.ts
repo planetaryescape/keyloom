@@ -16,12 +16,12 @@ export function brewFormulae(tool: InstallableTool): string[] {
 }
 
 /** The page that installs a tool by hand, for a computer where keyloom can't. */
-export const TOOL_PAGES: Record<Exclude<InstallableTool, "docker">, string> = {
+export const TOOL_PAGES = {
   zapp: "https://github.com/zsa/zapp",
   "dfu-util": "https://dfu-util.sourceforge.net/",
   "dfu-programmer": "https://github.com/dfu-programmer/dfu-programmer",
   avrdude: "https://github.com/avrdudes/avrdude",
-};
+} satisfies Record<Exclude<InstallableTool, "docker">, string>;
 
 export type InstallErrorCode = "no_brew" | "brew_failed" | "start_failed";
 
