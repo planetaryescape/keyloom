@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Credentials, type KeyStore, type SecretRunner, keychainStore, runSecretCommand, secretServiceStore, systemKeyStore, useCredentials } from "../../src/app/credentials.ts";
+import { Credentials, type KeyStore, type SecretRunner, keychainStore, runSecretCommand, secretCommandRunner, secretServiceStore, systemKeyStore, useCredentials } from "../../src/app/credentials.ts";
 import { CodexSignIn, useCodexSignIn } from "../../src/app/codex-signin.ts";
 import { defaultAgentModel, providerStatus } from "../../src/app/chat-model.ts";
 import { CredentialError } from "../../src/app/errors.ts";
@@ -82,6 +82,31 @@ describe("the macOS Keychain store", () => {
     });
     expect(readFileSync(`${log}.args`, "utf8").trim()).toBe("-q -i");
     expect(readFileSync(`${log}.stdin`, "utf8")).toContain(KEY);
+  });
+});
+
+describe("a key-store command that never finishes", () => {
+  test("a clear that times out fails Forget instead of reading as nothing to clear", async () => {
+    const bin = fakeBinDir({ "secret-tool": "exec sleep 5" });
+    await withPath(bin, async () => {
+      const error = await secretServiceStore(secretCommandRunner(200)).remove("anthropic").catch((e: unknown) => e);
+      expect(String(error)).toContain("did not answer");
+    });
+  });
+
+  test("a clear killed by a signal fails Forget too", async () => {
+    const bin = fakeBinDir({ "secret-tool": "kill -9 $$" });
+    await withPath(bin, async () => {
+      const error = await secretServiceStore(secretCommandRunner(5_000)).remove("anthropic").catch((e: unknown) => e);
+      expect(String(error)).toContain("was stopped");
+    });
+  });
+
+  test("a silent exit 1 from a clear that finished is still nothing to clear", async () => {
+    const bin = fakeBinDir({ "secret-tool": "exit 1" });
+    await withPath(bin, async () => {
+      await secretServiceStore(secretCommandRunner(5_000)).remove("anthropic");
+    });
   });
 });
 

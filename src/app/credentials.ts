@@ -44,13 +44,21 @@ export const isKeyShaped = (key: string): boolean => KEY_SHAPE.test(key);
 /** Long enough to type a password into a locked Keychain's prompt; a store that hangs past it reads as empty, not as a stuck chat. */
 const STORE_TIMEOUT_MS = 60_000;
 
-export const runSecretCommand: SecretRunner = async (command, args, stdin) => {
+/**
+ * Runs a key-store command. One that hangs past the limit or dies from a signal throws: its exit code says nothing, and treating it
+ * as secret-tool's silent "not found" would let Forget report a key gone that is still stored.
+ */
+export const secretCommandRunner = (timeoutMs: number): SecretRunner => async (command, args, stdin) => {
   // No `log`: stdout of a read is the key.
-  const result = await capture([command, ...args], { ...(stdin === undefined ? {} : { stdin }), timeoutMs: STORE_TIMEOUT_MS }).catch(() => {
+  const result = await capture([command, ...args], { ...(stdin === undefined ? {} : { stdin }), timeoutMs }).catch(() => {
     throw new KeyStoreError(`${command} is not installed`);
   });
-  return { code: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr };
+  if (result.timedOut) throw new KeyStoreError(`${command} did not answer within ${Math.round(timeoutMs / 1000)} s`);
+  if (result.exitCode === null) throw new KeyStoreError(`${command} was stopped (${result.signalCode ?? "signal"})`);
+  return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 };
+
+export const runSecretCommand: SecretRunner = secretCommandRunner(STORE_TIMEOUT_MS);
 
 /** macOS: one generic password per provider, service "keyloom", account = the provider. */
 export function keychainStore(run: SecretRunner = runSecretCommand): KeyStore {
