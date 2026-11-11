@@ -86,8 +86,11 @@ function spawnGroup(cmd: string[]) {
   return proc;
 }
 
-/** The fake zapp writes its pid beside itself first, so the test can kill its group even when keyloom never stopped it. */
-const ZAPP_PID = `echo $$ > "$0.pid"; `;
+/**
+ * The fake zapp writes its start time and then its pid beside itself first, so the test can kill its group even when keyloom never
+ * stopped it, and can tell it from a process that reused the pid: `exec sleep` keeps the start time but drops the fake's path.
+ */
+const ZAPP_PID = `ps -o lstart= -p $$ > "$0.started"; echo $$ > "$0.pid"; `;
 
 async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadable" | "slow" } = {}) {
   const dir = tempDir();
@@ -95,18 +98,21 @@ async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadab
   const artifact = join(dir, "build.bin");
   await Bun.write(artifact, dfuImage("3297:2003"));
   const bin = fakeBinDir({ zapp: ZAPP_PID + zappBody(flag) });
-  const zappPid = join(bin, "zapp.pid");
+  const zappPath = join(bin, "zapp");
+  const zappPid = `${zappPath}.pid`;
   cleanups.push(() => {
     if (!existsSync(zappPid)) return;
     const pid = Number(readFileSync(zappPid, "utf8").trim());
     // A file read while the shell was still writing it is empty, and Number("") is 0: process group 0 is this test runner's (#290 review).
     if (!Number.isSafeInteger(pid) || pid <= 1) return;
-    // A recorded pid that is alive again under another command was reused after the fake ended: that process isn't this test's.
-    const command = alive(pid) ? Bun.spawnSync(["ps", "-o", "command=", "-p", String(pid)]).stdout.toString() : "";
-    if (command === "" || command.includes("sleep") || command.includes(bin)) killGroup(pid);
+    // A recorded pid alive with another start time was reused after the fake ended: that process isn't this test's (#290 review).
+    if (!alive(pid)) return killGroup(pid);
+    const started = existsSync(`${zappPath}.started`) ? readFileSync(`${zappPath}.started`, "utf8").trim() : "";
+    const now = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)]).stdout.toString().trim();
+    if (started !== "" && started === now) killGroup(pid);
   });
   // Its own process group, standing in for the terminal's foreground group that keyloom runs in.
-  const proc = spawnGroup(["bun", flashScript(dir, opts), join(bin, "zapp"), artifact, join(dir, "flash.log"), flag]);
+  const proc = spawnGroup(["bun", flashScript(dir, opts), zappPath, artifact, join(dir, "flash.log"), flag]);
   const out = collect(proc.stdout);
   const err = collect(proc.stderr);
   const ctrlC = () => process.kill(-proc.pid, "SIGINT");
