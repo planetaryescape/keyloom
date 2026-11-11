@@ -19,7 +19,8 @@ export async function findQmkStreamDevice(transport: HidTransport): Promise<RawH
   const ours = zsa.filter((i) => !i.driverMissing && markerOf(i.serial) !== undefined);
   if (ours.length === 0 && zsa.some((i) => i.driverMissing)) throw new CaptureError(WINDOWS_HID_DRIVER_HINT);
   if (ours.length === 0) {
-    throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build, so it can't stream its keys. Apply a change and sync once from keyloom, then try again", { code: "needs_sync" });
+    // Sync never replaces firmware keyloom didn't build, so this is Build and flash's to fix, not a sync's (R1-19).
+    throw new CaptureError("the connected ZSA keyboard isn't running a keyloom build, so it can't stream its keys. Build and flash a layout from keyloom once, then try again", { code: "foreign_firmware" });
   }
   if (ours.length > 1) throw new CaptureError("more than one keyboard running keyloom's firmware is connected; unplug the one you don't want to record");
   return ours[0] as RawHidInterface;

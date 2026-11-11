@@ -27,7 +27,11 @@ export async function findZmkStreamPort(board: BoardDefinition, transport: Seria
     const missingCentral = ports.some((p) => p.driverMissing && matchesHalfIds(p, central) &&
       (central.half.usbProductId !== undefined || parseSerial(p.serial)?.half === central.half.marker));
     if (missingCentral) throw new CaptureError(WINDOWS_COM_DRIVER_HINT);
-    throw new CaptureError(`no ${board.name} running keyloom's firmware is connected over USB (its ${central.step.label} must be). Apply a change and sync once from keyloom, then try again`, { code: "needs_sync" });
+    // A half that answers with firmware keyloom didn't build is Build and flash's to replace; a sync never replaces it (R1-19).
+    if (portsOfHalf(ports, central).other.length > 0) {
+      throw new CaptureError(`the ${board.name}'s ${central.step.label} runs firmware keyloom didn't build, so it can't stream its keys. Build and flash a layout from keyloom once, then try again`, { code: "foreign_firmware" });
+    }
+    throw new CaptureError(`no ${board.name} running keyloom's firmware is connected over USB (its ${central.step.label} must be). Connect it by USB, then try again`, { code: "not_connected" });
   }
   if (found.length > 1) throw new CaptureError(`more than one ${board.name} running keyloom's firmware is connected; unplug the one you don't want to record`);
   return { path: (found[0] as { port: { path: string } }).port.path };

@@ -63,17 +63,22 @@ export function linuxDevicePermissionRemedy(transport: "hid" | "serial", platfor
 /** A capture could not begin for a reason the page can act on (R1-19): `needs_sync` offers Sync now and Build and flash. */
 export class LabStartError extends UsageError {
   override name = "LabStartError";
-  constructor(readonly code: "needs_sync" | "not_connected", message: string) {
+  constructor(readonly code: "needs_sync" | "foreign_firmware" | "not_connected", message: string) {
     super(message);
   }
 }
 
-/** A capture could not begin because the operating system or another client refused keyboard access. */
+/**
+ * A capture could not begin because the operating system or another client refused keyboard access. `permission_input_monitoring` is
+ * macOS refusing raw HID until keyloom is allowed in Input Monitoring (D-492), which the page opens with a button (R3-09).
+ */
 export class LabCaptureError extends Error {
   override name = "LabCaptureError";
-  constructor(readonly code: "busy" | "permission_denied" | "restart_required", remedy?: string) {
+  constructor(readonly code: "busy" | "permission_denied" | "permission_input_monitoring" | "restart_required", remedy?: string) {
     super(code === "busy"
       ? (remedy ?? "Another application or keyloom instance is using this keyboard. Stop the other client, then try again.")
+      : code === "permission_input_monitoring"
+        ? (remedy ?? "macOS didn't let keyloom read the keyboard. Allow keyloom in System Settings > Privacy & Security > Input Monitoring, then try again.")
       : code === "permission_denied"
         ? (remedy ?? "The operating system denied keyboard access. Check the device-access permissions required by your platform for keyloom, then try again.")
         : "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.");

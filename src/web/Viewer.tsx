@@ -892,6 +892,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     window.setTimeout(() => setLabLit((now) => (now.has(at) && now.size === 1 ? new Set() : now)), 220);
   }
 
+  // The lab's Input Monitoring button (R3-09): the same System Settings opener as kanata's checklist (D-492).
+  function openInputMonitoring() {
+    sync.remapperSetup.openSettings("input_monitoring").catch((error: unknown) =>
+      toasts.show({ kind: "error", message: "keyloom couldn't open System Settings", detail: error instanceof Error ? error.message : "Try the button again." }));
+  }
+
   async function labApply(card: ProposalCard) {
     const result = await applyChangeSet(token, card.changeSetId);
     setLabOpen(false);
@@ -1997,7 +2003,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
             </div>
           ) : null}
-          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease() }} /> : null}
+          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease(), onOpenInputMonitoring: openInputMonitoring }} /> : null}
           {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
           {labOpen && narrow && lab.phase.kind === "readout" ? (
             <div className="lab-sheet">

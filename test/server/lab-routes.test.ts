@@ -172,6 +172,22 @@ test("a keyboard whose firmware can't stream yet is refused with needs_sync, whi
   }
 });
 
+test("firmware keyloom didn't build is refused with foreign_firmware, which the lab turns into Build and flash only (R1-19)", async () => {
+  const { app, layoutId } = await commandShiftApp();
+  const { findQmkStreamDevice } = await import("../../src/firmware/qmk/typing-capture.ts");
+  // An Oryx build: a ZSA keyboard with no keyloom marker in its serial.
+  const oryx = { list: async () => [{ vendorId: 0x3297, productId: 0x1969, serial: "QxKPz/zLQ3Md", handle: "synthetic-only" }], write: async () => {} };
+  const deps: LabDeps = {
+    startCapture: async () => { await findQmkStreamDevice(oryx); throw new Error("unreachable"); },
+    replay: () => modelReplay(getLayout(app, layoutId).board.definition),
+  };
+  try {
+    await expect(appLabBackend(app, deps).start(layoutId, {})).rejects.toMatchObject({ status: 400, code: "foreign_firmware" });
+  } finally {
+    app.db.close();
+  }
+});
+
 test("shutdown waits for a pending start and finishes the capture it acquires", async () => {
   const { app, layoutId } = await commandShiftApp();
   const started = Promise.withResolvers<ReturnType<LabDeps["startCapture"]> extends Promise<infer T> ? T : never>();

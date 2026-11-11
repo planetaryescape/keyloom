@@ -4,7 +4,8 @@ import type { FingerReadout, LabReadout } from "../../api/lab.ts";
 import type { ProposalCard } from "../../api/http.ts";
 import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
-import { labFixes } from "./lab-words.ts";
+import { labApplyFailure, labFixes, labProblemText } from "./lab-words.ts";
+import { ApiError } from "../api.ts";
 import "./lab.css";
 
 const FINGER_ORDER = ["left-pinky", "left-ring", "left-middle", "left-index", "left-thumb", "right-thumb", "right-index", "right-middle", "right-ring", "right-pinky"];
@@ -16,8 +17,11 @@ const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((m
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Over the stage: choosing a passage, the passage while listening, and reading it back (l1, l2 in the comps).
 
-/** What the lab's problem line can do: put keyloom's build on the keyboard, by sync or by Build and flash (R1-19). */
-type LabFixHandlers = { onSync: () => void; onOpenRelease: () => void };
+/**
+ * What the lab's problem line can do: put keyloom's build on the keyboard, by sync or by Build and flash (R1-19), and open macOS's Input
+ * Monitoring pane (R3-09).
+ */
+type LabFixHandlers = { onSync: () => void; onOpenRelease: () => void; onOpenInputMonitoring: () => void };
 
 export function LabStage({ lab, boardName, phone, onClose, onType, fixes }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void; onType: (ch: string) => void; fixes: LabFixHandlers }) {
   const { phase } = lab;
@@ -78,11 +82,11 @@ function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardN
           </div>
         </>
       ) : null}
-      {lab.problem === null ? null : <p className="lab-problem" role="alert">{lab.problem}</p>}
+      {lab.problem === null ? null : <p className="lab-problem" role="alert">{labProblemText(lab.problemCode, lab.problem)}</p>}
       {lab.problem === null ? null : (() => {
         const shown = labFixes(lab.problemCode, lab.loadFailed);
         if (shown.length === 0) return null;
-        const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload };
+        const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload, open_input_monitoring: fixes.onOpenInputMonitoring, retry: () => void lab.retry() };
         return (
           <div className="lab-fixes">
             {shown.map((fix, i) => (
@@ -176,7 +180,7 @@ export function LabPanel({ lab, heat, onHeat, onTry, onApply, onClose }: {
   const { readout, session } = phase;
   if (phase.trying !== null) {
     const s = readout.suggestions[phase.trying];
-    if (s !== undefined) return <TryFix suggestion={s} onBack={() => { lab.tryFix(null); onTry(null); }} onApply={onApply} />;
+    if (s !== undefined) return <TryFix suggestion={s} onBack={() => { lab.tryFix(null); onTry(null); }} onAgain={() => { onTry(null); lab.again(); }} onApply={onApply} />;
   }
   const drill = readout.passageId === "finger-drill";
   const fingers = <Fingers readout={readout} heat={heat} onHeat={onHeat} />;
@@ -304,8 +308,18 @@ function FindingMore({ positions, suggestions, onTry }: { positions: number[]; s
   );
 }
 
-function TryFix({ suggestion: s, onBack, onApply }: { suggestion: LabReadout["suggestions"][number]; onBack: () => void; onApply: (p: ProposalCard) => Promise<void> }) {
+function TryFix({ suggestion: s, onBack, onAgain, onApply }: { suggestion: LabReadout["suggestions"][number]; onBack: () => void; onAgain: () => void; onApply: (p: ProposalCard) => Promise<void> }) {
   const [applying, setApplying] = useState(false);
+  // A failed Apply says why beside the button, with the way on (R3-02): Type again for a layout that changed, Try again otherwise.
+  const [failed, setFailed] = useState<ReturnType<typeof labApplyFailure> | null>(null);
+  const apply = () => {
+    if (s.proposal === null) return;
+    setApplying(true);
+    setFailed(null);
+    void onApply(s.proposal)
+      .catch((error: unknown) => setFailed(labApplyFailure(error instanceof ApiError ? error : { message: error instanceof Error ? error.message : "" })))
+      .finally(() => setApplying(false));
+  };
   const e = s.example;
   return (
     <section className="lab-panel" aria-label={s.title}>
@@ -333,22 +347,18 @@ function TryFix({ suggestion: s, onBack, onApply }: { suggestion: LabReadout["su
         </div>
         {e === null ? null : <Timeline example={e} />}
         {s.proposal === null ? null : <p className="lab-explain">{s.proposal.explanation}</p>}
+        {failed === null ? null : <p className="lab-problem" role="alert">{failed.text}</p>}
       </div>
       <footer className="lab-foot">
         <button type="button" className="sheet-action" onClick={onBack}>Not this</button>
-        <button
-          type="button"
-          className="bar-apply"
-          disabled={s.proposal === null || applying}
-          onClick={() => {
-            if (s.proposal === null) return;
-            setApplying(true);
-            void onApply(s.proposal).finally(() => setApplying(false));
-          }}
-        >
-          {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-          Apply
-        </button>
+        {failed?.next === "again" ? (
+          <button type="button" className="bar-apply" onClick={onAgain}><Play size={13} aria-hidden="true" />Type again</button>
+        ) : (
+          <button type="button" className="bar-apply" disabled={s.proposal === null || applying} onClick={apply}>
+            {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+            {failed === null ? "Apply" : "Try again"}
+          </button>
+        )}
       </footer>
     </section>
   );

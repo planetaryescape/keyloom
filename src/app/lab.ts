@@ -115,10 +115,7 @@ export async function beginRecording(
     capture = await deps.startCapture(view.board.definition, opts.hooks ?? {});
   } catch (err) {
     if (err instanceof DeviceTransportError && (err.detail.code === "busy" || err.detail.code === "permission_denied")) {
-      const remedy = err.detail.code === "permission_denied"
-        ? linuxDevicePermissionRemedy(view.board.definition.firmware === "qmk" ? "hid" : "serial")
-        : process.platform === "win32" && view.board.definition.firmware !== "qmk" ? WINDOWS_BUSY_HINT : undefined;
-      throw new LabCaptureError(err.detail.code, remedy);
+      throw accessRefused(err.detail.code, view.board.definition.firmware);
     }
     if (err instanceof DeviceTransportError && ["helper_exited", "protocol_error", "timeout"].includes(err.detail.code)) {
       throw new LabCaptureError("restart_required");
@@ -127,6 +124,18 @@ export async function beginRecording(
     throw err;
   }
   return { view, passage, capture, startedAt: Date.now() };
+}
+
+/**
+ * The operating system or another client refused the keyboard. On a Mac, raw HID (QMK's stream) is refused until keyloom is allowed in
+ * Input Monitoring (D-492), so that refusal gets its own code, which the page turns into the button that opens the pane (R3-09).
+ */
+export function accessRefused(code: "busy" | "permission_denied", firmware: string, platform: NodeJS.Platform = process.platform): LabCaptureError {
+  if (code === "permission_denied" && platform === "darwin" && firmware === "qmk") return new LabCaptureError("permission_input_monitoring");
+  const remedy = code === "permission_denied"
+    ? linuxDevicePermissionRemedy(firmware === "qmk" ? "hid" : "serial", platform)
+    : platform === "win32" && firmware !== "qmk" ? WINDOWS_BUSY_HINT : undefined;
+  return new LabCaptureError(code, remedy);
 }
 
 /** Ends the stream, saves the session with what was typed, and returns it. A recording with no key presses is not saved. */
