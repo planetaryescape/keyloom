@@ -11,7 +11,7 @@ import { transact } from "../persistence/transaction.ts";
 import { reviewFreshness } from "./review-freshness.ts";
 import type { App } from "./context.ts";
 import type { ReviewActivity } from "../layout/review-workload.ts";
-import { saveReviewActivities } from "./review-workloads.ts";
+import { ReviewStopped, saveReviewActivities } from "./review-workloads.ts";
 import {
   type BoardReview, type ReviewAiDeps, type ReviewEvent, type ReviewTrigger, type ReviewView, createReview, dismissReviewItem, restoreReviewItem, runReviewAi, showReview,
 } from "./review.ts";
@@ -212,6 +212,19 @@ export class ReviewEngine {
       }
     }).catch(() => undefined);
     return { review, done };
+  }
+
+  /**
+   * Stops the run going on this config (R5-17): its activity tests, whose container the emulator removes when its signal aborts, and the
+   * model's look. The review ends `failed`, saying the person stopped it. Resolves once the run has finished, so the answer shows that;
+   * with nothing running it is the review as it is.
+   */
+  async stopRun(ref: string): Promise<ReviewView> {
+    const { layoutId } = this.show(ref);
+    const active = this.active.get(layoutId);
+    this.controllers.get(layoutId)?.abort(new ReviewStopped());
+    if (active !== undefined) await active.done.catch(() => undefined);
+    return this.show(ref);
   }
 
   dismiss(ref: string, itemId: string): ReviewView {

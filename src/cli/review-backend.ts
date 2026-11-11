@@ -24,6 +24,7 @@ export function appReviewBackend(engine: ReviewEngine): ReviewBackend {
         engine.review(ref, "manual", opts);
         return engine.show(ref);
       }),
+    stop: (ref) => translate(() => engine.stopRun(ref)),
     dismiss: (ref, itemId) => translate(() => engine.dismiss(ref, itemId)),
     restore: (ref, itemId) => translate(() => engine.restore(ref, itemId)),
     subscribe: (listener) => engine.subscribe(listener),

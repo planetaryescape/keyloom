@@ -2,6 +2,7 @@
 // the agent's part arrives after, announced on the events stream. `:ref` is a config's ID or exact name, as for /api/configs.
 //   GET  /api/layouts/:ref/review                       -> ReviewResponse (the newest review, whatever revision it was of; `review` is null before any)
 //   POST /api/layouts/:ref/review/run   RunReviewRequest -> ReviewResponse (202: the checks of the head are in; `ai.status` says what is still coming)
+//   POST /api/layouts/:ref/review/stop  {}               -> ReviewResponse (R5-17: stops the run going, activity tests included; answers once it has stopped)
 //   POST /api/layouts/:ref/review/items/:id/dismiss {}   -> ReviewResponse (404 for an id the latest review doesn't have)
 //   POST /api/layouts/:ref/review/items/:id/restore {}   -> ReviewResponse
 //   GET  /api/events: besides `event: sync` frames, an `event: review` frame (ReviewEvent) whenever a review is made or its agent part changes

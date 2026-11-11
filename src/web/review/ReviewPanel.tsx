@@ -1,4 +1,4 @@
-import { Check, CircleCheck, FileText, Layers, LoaderCircle, X } from "lucide-react";
+import { Check, CircleCheck, FileText, Layers, LoaderCircle, Square, X } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import type { ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
@@ -20,7 +20,7 @@ import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { CREDITS_PAGES } from "../chat/setup-words.ts";
 import { ApiError } from "../api.ts";
-import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -197,10 +197,20 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const activeProvider = provider.status?.active?.provider;
   const creditsUrl = activeProvider === "anthropic" || activeProvider === "openrouter" ? CREDITS_PAGES[activeProvider] : undefined;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
-  const readFailed = loading && r.problem !== null;
+  const readFailed = loading && r.readFailed;
   const now = Date.now();
   const card = (item: ReviewItem) => (item.proposalId === null ? undefined : proposals?.find((p) => p.changeSetId === item.proposalId && p.status === "proposed"));
   const workloadTests = <WorkloadTests key={JSON.stringify(r.activities)} token={token} firmware={board.firmware} activities={r.activities} evidence={review?.workload} busy={r.busy || review?.ai.status === "running"} onRun={(activities) => void r.run(true, activities)} />;
+
+  // A failed request says what failed with the one button that moves on: the same request again, or a fresh read (R5-03, R5-10).
+  const problem = r.problem === null ? null : (
+    <div className="br-apply-failure" role="alert">
+      <p>{r.problem}</p>
+      {r.problemAction === null ? null : <button type="button" className="sheet-action" onClick={r.problemAction.run}>{r.problemAction.label}</button>}
+    </div>
+  );
+  // Activity tests can take minutes; while they run, Stop ends them and the look they belong to, and their container (R5-17).
+  const testing = review?.ai.status === "running" && review.workload !== undefined;
 
   const head = (
     <header className="br-head">
@@ -223,7 +233,12 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       <div className="br-body">
         {readFailed ? null : <p className="br-quiet br-ai-coming" role="status"><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over this config…</p>}
         <p className="br-quiet">Nothing is applied to your layout or sent to the keyboard.</p>
-        {r.problem === null ? null : <><p className="br-problem" role="alert">{r.problem}</p><button type="button" className="sheet-action" onClick={r.reload}>Try loading again</button></>}
+        {testing && !readFailed ? (
+          <div className="br-actions br-actions-start">
+            <button type="button" className="sheet-action" disabled={r.stopping} onClick={() => void r.stop()}>{r.stopping ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Square size={12} aria-hidden="true" />}{r.stopping ? "Stopping" : "Stop testing"}</button>
+          </div>
+        ) : null}
+        {problem}
       </div>
     </section>
   );
@@ -236,6 +251,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           {workloadTests}
           <p className="br-quiet">keyloom looks a config over when its keyboard connects and after each change. This one hasn't had a look yet.</p>
           <div className="br-actions br-actions-start"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run()}>{r.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Look it over now</button></div>
+          {problem}
         </div>
       </section>
     );
@@ -294,7 +310,12 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             {applyFailure.view.action === "fresh_review" ? (
               <button type="button" className="sheet-action" disabled={r.busy} onClick={() => { setApplyFailure(null); void r.run(true); }}>Run a fresh review</button>
             ) : applyFailure.view.action === "show" ? (
-              <button type="button" className="sheet-action" onClick={() => { const showAgain = applyFailure.showAgain; if (showAgain !== undefined) void showAgain().then(() => setApplyFailure(null), () => {}); }}>Show the new layout</button>
+              <button type="button" className="sheet-action" onClick={() => {
+                const failure = applyFailure;
+                const showAgain = failure.showAgain;
+                // A second failure says so and keeps the button: the change is in the config either way (R5-09).
+                if (showAgain !== undefined) void showAgain().then(() => setApplyFailure(null), (error: unknown) => setApplyFailure({ ...failure, view: appliedNotShown(error) }));
+              }}>Show the new layout</button>
             ) : applyFailure.view.action === "check" ? (
               // An Apply that landed takes the suggestion off the list, so reading it again is what tells.
               <button type="button" className="sheet-action" onClick={() => { setApplyFailure(null); onReadProposals?.(); }}>Check again</button>
@@ -441,7 +462,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             ))}
           </div>
         ) : null}
-        {r.problem === null ? null : <p className="br-problem" role="alert">{r.problem}</p>}
+        {problem}
       </div>
       <footer className="br-foot">
         <span>
@@ -459,7 +480,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
 /** The marker by the config name (D-340): what the review found, calm; one click opens it. */
 export function ReviewMarker({ review: r, open, onToggle }: { review: Review; open: boolean; onToggle: () => void }) {
   const review = r.review;
-  if (!r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running") return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}>{r.problem === null ? <><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over…</> : <><FileText size={13} aria-hidden="true" />Review unavailable</>}</button>;
+  if (!r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running") return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}>{!r.readFailed ? <><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over…</> : <><FileText size={13} aria-hidden="true" />Review unavailable</>}</button>;
   if (review === null) {
     return <button type="button" className="br-marker" aria-pressed={open} onClick={onToggle}><i data-tone="hint" aria-hidden="true" />Not looked over yet</button>;
   }

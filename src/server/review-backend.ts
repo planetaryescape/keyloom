@@ -6,6 +6,8 @@ export interface ReviewBackend {
   show(ref: string): Promise<ReviewResponse>;
   /** Returns head checks at once; the agent continues via `subscribe`. `activities` saves a profile ([] disables tests) and, like `force`, reruns a finished review. Omit it to keep the profile. */
   run(ref: string, opts: { force: boolean; activities?: ReviewActivity[] }): Promise<ReviewResponse>;
+  /** Stops the run going on this config, its activity tests included, and answers once it has stopped (R5-17). */
+  stop(ref: string): Promise<ReviewResponse>;
   dismiss(ref: string, itemId: string): Promise<ReviewResponse>;
   restore(ref: string, itemId: string): Promise<ReviewResponse>;
   subscribe(listener: (event: ReviewEvent) => void): () => void;

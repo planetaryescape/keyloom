@@ -22,6 +22,6 @@ const show = async (ref: string): Promise<ReviewResponse> => ({
     })),
   },
 });
-const review: ReviewBackend = { show, run: show, dismiss: show, restore: show, subscribe: () => () => {} };
+const review: ReviewBackend = { show, run: show, stop: show, dismiss: show, restore: show, subscribe: () => () => {} };
 const server = startServer({ port: Number(process.argv[2] ?? 4518), token: "dev-editor-token", source: editor.source(), editor, chat: new FakeChat(editor, "moonlander-daily"), review });
 console.log(server.url);
