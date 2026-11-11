@@ -1,7 +1,7 @@
 // generate, build and flash (10#commands). Thin: each calls one use case in src/app.
 import type { Command } from "commander";
 import {
-  type App, type BuildView, type FlashView, type HandsFreeOverrides, buildAndWait, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
+  type App, type BuildView, type FlashView, type HandsFreeOverrides, buildAndWait, checkFlashAgain, flashAndWait, generateFirmware, rebootKeyboard, UsageError,
 } from "../../app/index.ts";
 import { type Format, type Io, columns, print } from "../output.ts";
 
@@ -51,6 +51,11 @@ const buildJson = (b: BuildView) => ({
   build_id: b.id, status: b.status, layout_id: b.layoutId, revision_id: b.revisionId, board_revision: b.boardRevision,
   artifact_path: b.artifactPath, log_path: b.logPath, error: b.error, started_at: b.startedAt, finished_at: b.finishedAt,
 });
+
+const PERMISSION_HINTS = {
+  permission_input_monitoring: "To let keyloom restart the keyboard itself next time, allow your terminal under System Settings > Privacy & Security > Input Monitoring.",
+  permission_files_and_folders: "To let keyloom write to the keyboard's drive, allow your terminal to use removable volumes under System Settings > Privacy & Security > Files & Folders.",
+} satisfies Record<NonNullable<FlashView["instructionCode"]>, string>;
 
 const flashJson = (f: FlashView) => ({
   flash_id: f.id, build_id: f.buildId, status: f.status, verified: f.verified, error: f.error, note: f.note, log_path: f.logPath, started_at: f.startedAt, finished_at: f.finishedAt,
@@ -117,7 +122,19 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
     .option("--board <board>", "with --reboot-only: which board, when more than one is attached")
     .option("--half <half>", "with --reboot-only and a ZMK --board: left or right; sends a restart request without checking a UF2 drive")
     .option("--wait <minutes>", "how long to wait for the keyboard to enter its bootloader, 1 to 60 (default 2); for a flash that needs a key or button pressed")
-    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string; half?: string; wait?: string }) => {
+    .option("--check <flash>", "read which build the keyboard runs now, for a flash that succeeded but wasn't verified; builds and flashes nothing")
+    .action(async (opts: { build?: string; layout?: string; volumesRoot?: string; rebootOnly?: boolean; board?: string; half?: string; wait?: string; check?: string }) => {
+      if (opts.check !== undefined) {
+        if (opts.build !== undefined || opts.layout !== undefined || opts.rebootOnly) throw new UsageError("--check flashes nothing; leave out --build, --layout and --reboot-only");
+        const id = opts.check;
+        const checked = await withApp((app) => checkFlashAgain(app, id, handsFree === undefined ? {} : { handsFree }));
+        print(io, format(), {
+          json: { ...flashJson(checked.flash), found: checked.found },
+          table: quiet() ? checked.found : columns([["flash", checked.flash.id], ["build", checked.flash.buildId], ["keyboard", checked.found.replaceAll("_", " ")], ["verified", checked.flash.verified ? "yes" : "no"]]),
+          ids: [checked.flash.id],
+        });
+        return;
+      }
       if (opts.build !== undefined && opts.layout !== undefined) throw new UsageError("pass --build or --layout, not both");
       const waitMinutes = opts.wait === undefined ? undefined : Number(opts.wait);
       if (waitMinutes !== undefined && !(Number.isFinite(waitMinutes) && waitMinutes >= 1 && waitMinutes <= 60)) {
@@ -135,6 +152,7 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
         return;
       }
       let shown: string | null = null;
+      const hinted = new Set<string>();
       const f = await untilInterrupted((signal) =>
         withApp((app) =>
           flashAndWait(app, {
@@ -147,6 +165,11 @@ export function registerFirmwareCommands(program: Command, deps: FirmwareCommand
             // The instruction is the point: it goes to stderr whatever the format, so a script's stdout stays parseable.
             onState: (flash) => {
               if (flash.instruction && flash.instruction !== shown) io.err(`${(shown = flash.instruction)}\n`);
+              // The page opens the pane with a button; a terminal says where it is, once.
+              if (flash.instructionCode !== null && !hinted.has(flash.instructionCode)) {
+                hinted.add(flash.instructionCode);
+                io.err(`${PERMISSION_HINTS[flash.instructionCode]}\n`);
+              }
             },
           }),
         ),

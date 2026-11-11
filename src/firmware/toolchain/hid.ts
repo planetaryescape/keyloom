@@ -39,6 +39,10 @@ export type HidTransport = {
 
 export class HidError extends Error {
   override name = "HidError";
+  /** Set when macOS refused the open for want of Input Monitoring, so the page can open that pane (D-501). */
+  constructor(message: string, readonly code?: "permission_input_monitoring") {
+    super(message);
+  }
 }
 
 export const isRawHidUsage = (usagePage: number, usage: number): boolean => usagePage === RAW_HID_USAGE_PAGE && usage === RAW_HID_USAGE;

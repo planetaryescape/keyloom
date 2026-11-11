@@ -1,5 +1,5 @@
 import type {
-  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, ImportResponse, LayoutExportDocument, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
+  ApplyRequest, ApplyResponse, BoardChoice, Build, BuildRequest, FittingRevisionResponse, FlashCheckResponse, ImportResponse, LayoutExportDocument, RevisionEntry, CheckRequest, Flash, ParseBindingRequest, ParseBindingResponse, UndoRequest, UndoResponse, UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import type { ReviewActivity } from "../api/review.ts";
@@ -34,6 +34,12 @@ export interface EditorBackend {
   buildArtifact(id: string): Promise<{ path: string; filename: string } | null>;
   /** Shows a build's firmware file in Finder (D-490). */
   revealBuild(id: string): Promise<void>;
+  /** Stops a flash still waiting for the bootloader, before any write (D-501). Optional: a backend without it answers 404. */
+  cancelFlash?(id: string): Promise<Flash>;
+  /** Reads what the keyboard runs now, for a flash keyloom couldn't confirm. Never builds or flashes (D-501). */
+  checkFlash?(id: string): Promise<FlashCheckResponse>;
+  /** The newest earlier revision whose layers fit the board, for a layout the editor can't draw (D-502). */
+  fittingRevision?(ref: string): Promise<FittingRevisionResponse["revision"]>;
 }
 
 /** A failure the browser should see as-is: the status and code go into ApiErrorBody. */

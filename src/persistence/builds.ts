@@ -26,6 +26,8 @@ export type FlashRow = {
   buildId: string;
   status: FlashStatus;
   error: string | null;
+  /** Why it failed as a code the UI acts on (D-501), or null. */
+  errorCode: string | null;
   logPath: string;
   pid: number;
   startedAt: number;
@@ -37,7 +39,7 @@ type BuildDb = {
   error: string | null; error_code: string | null; pid: number; started_at: number; finished_at: number | null;
 };
 type FlashDb = {
-  id: string; build_id: string; status: FlashStatus; error: string | null; log_path: string; pid: number; started_at: number; finished_at: number | null;
+  id: string; build_id: string; status: FlashStatus; error: string | null; error_code: string | null; log_path: string; pid: number; started_at: number; finished_at: number | null;
 };
 
 const toBuild = (r: BuildDb): BuildRow => ({
@@ -45,7 +47,7 @@ const toBuild = (r: BuildDb): BuildRow => ({
   error: r.error, errorCode: r.error_code ?? null, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
 });
 const toFlash = (r: FlashDb): FlashRow => ({
-  id: r.id, buildId: r.build_id, status: r.status, error: r.error, logPath: r.log_path, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
+  id: r.id, buildId: r.build_id, status: r.status, error: r.error, errorCode: r.error_code ?? null, logPath: r.log_path, pid: r.pid, startedAt: r.started_at, finishedAt: r.finished_at,
 });
 
 /** The id is made before the row, so the log path can name it. */
@@ -94,7 +96,7 @@ export function createFlash(db: Database, input: { id: string; buildId: string; 
   db.query(
     "INSERT INTO flashes (id, build_id, status, error, log_path, pid, started_at, finished_at) VALUES (?, ?, 'waiting_for_bootloader', NULL, ?, ?, ?, NULL)",
   ).run(input.id, input.buildId, input.logPath, pid, now);
-  return { id: input.id, buildId: input.buildId, status: "waiting_for_bootloader", error: null, logPath: input.logPath, pid, startedAt: now, finishedAt: null };
+  return { id: input.id, buildId: input.buildId, status: "waiting_for_bootloader", error: null, errorCode: null, logPath: input.logPath, pid, startedAt: now, finishedAt: null };
 }
 
 /** Moves a flash that is still in progress between its two live states. */
@@ -102,8 +104,8 @@ export function setFlashProgress(db: Database, id: string, status: "waiting_for_
   db.query("UPDATE flashes SET status = ? WHERE id = ? AND status IN ('waiting_for_bootloader','writing')").run(status, id);
 }
 
-export function finishFlash(db: Database, id: string, result: { error: string } | null, now = Date.now()): void {
-  if (result) db.query("UPDATE flashes SET status = 'failed', error = ?, finished_at = ? WHERE id = ? AND status IN ('waiting_for_bootloader','writing')").run(result.error, now, id);
+export function finishFlash(db: Database, id: string, result: { error: string; errorCode?: string | null } | null, now = Date.now()): void {
+  if (result) db.query("UPDATE flashes SET status = 'failed', error = ?, error_code = ?, finished_at = ? WHERE id = ? AND status IN ('waiting_for_bootloader','writing')").run(result.error, result.errorCode ?? null, now, id);
   else db.query("UPDATE flashes SET status = 'succeeded', finished_at = ? WHERE id = ? AND status IN ('waiting_for_bootloader','writing')").run(now, id);
 }
 

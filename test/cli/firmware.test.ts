@@ -120,6 +120,16 @@ describe("keyloom flash", () => {
     });
     expect(await Bun.file(e.vars.ZAPP_CALLS).exists()).toBe(false);
   });
+
+  test("--check reads a flash again and flashes nothing: it refuses flash options, an unknown flash and an unfinished one (D-501)", async () => {
+    const e = await toolchainEnv();
+    await e.run(async () => {
+      expect((await cli(["flash", "--check", "fl_x", "--build", "bld_x", "--data-dir", e.dataDir])).code).toBe(2);
+      expect((await cli(["flash", "--check", "fl_x", "--reboot-only", "--data-dir", e.dataDir])).code).toBe(2);
+      expect((await cli(["flash", "--check", "fl_nope", "--data-dir", e.dataDir])).code).toBe(3);
+    });
+    expect(await Bun.file(e.vars.ZAPP_CALLS).exists()).toBe(false);
+  });
 });
 
 describe("keyloom flash --wait", () => {

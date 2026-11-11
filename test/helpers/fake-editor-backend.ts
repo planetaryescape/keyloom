@@ -4,7 +4,7 @@
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
-import type { ApplyRequest, ApplyResponse, BoardChoice, Build, ImportResponse, LayoutExportDocument, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, FlashPlan, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
+import type { ApplyRequest, ApplyResponse, BoardChoice, Build, FittingRevisionResponse, FlashCheckResponse, ImportResponse, LayoutExportDocument, RevisionEntry, ParseBindingRequest, ParseBindingResponse, BuildRequest, CheckRequest, Flash, FlashPlan, LayoutDetail, RevisionInfo, UndoRequest, UndoResponse } from "../../src/api/http.ts";
 import type { Binding, Layout } from "../../src/layout/schema.ts";
 import { buildLayoutExportDocument } from "../../src/layout/export-document.ts";
 import type { ChangeOp, Slot } from "../../src/layout/change.ts";
@@ -25,6 +25,12 @@ export interface FakeOptions {
   failBuildDocker?: boolean;
   /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */
   flashPlan?: FlashPlan;
+  /** How a flash that isn't failed ends (D-501): verified by default, written but not confirmed, or refused by Files and Folders. */
+  flashResult?: "verified" | "unverified" | "permission_files_and_folders";
+  /** The flash waits for the reset key because macOS refused Input Monitoring (D-501). */
+  flashInputMonitoring?: boolean;
+  /** What Check the keyboard again finds (D-501). */
+  checkFinds?: FlashCheckResponse["found"];
 }
 
 type Revision = RevisionInfo & { document: Layout };
@@ -64,7 +70,7 @@ export class FakeEditor implements EditorBackend {
   private history: Revision[];
   private counter = 0;
   private readonly builds = new Map<string, { build: Build; revisionId: string }>();
-  private readonly flashes = new Map<string, { flash: Flash; startedAt: number }>();
+  private readonly flashes = new Map<string, { flash: Flash; startedAt: number; cancelledAt?: number; checkedAt?: number }>();
   private readonly options: Required<FakeOptions>;
   private readonly proposals = new Map<string, StoredProposal>();
 
@@ -74,6 +80,7 @@ export class FakeEditor implements EditorBackend {
   ) {
     this.options = {
       buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false,
+      flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
       ...options,
     };
@@ -210,7 +217,7 @@ export class FakeEditor implements EditorBackend {
 
   async startBuild(_ref: string, request: BuildRequest): Promise<Build> {
     if (this.options.needsBoardRevision && request.boardRevision === undefined) {
-      throw new EditorError(400, "usage", "No Moonlander is connected, so keyloom can't tell which revision to build for. Choose Rev A or Rev B.");
+      throw new EditorError(400, "board_revision_needed", "No Moonlander is connected, so keyloom can't tell which revision to build for. Choose Rev A or Rev B.");
     }
     if (!this.history.some((r) => r.id === request.revisionId)) {
       throw new EditorError(404, "not_found", "No such revision.");
@@ -239,6 +246,40 @@ export class FakeEditor implements EditorBackend {
   async getFlash(id: string): Promise<Flash | null> {
     const entry = this.flashes.get(id);
     return entry === undefined ? null : this.progressFlash(id, entry.flash.buildId, entry.startedAt);
+  }
+
+  async cancelFlash(id: string): Promise<Flash> {
+    const flash = await this.getFlash(id);
+    const entry = this.flashes.get(id);
+    if (flash === null || entry === undefined) throw new EditorError(404, "not_found", "No such flash.");
+    if (flash.status === "writing") throw new EditorError(409, "flash_writing", "The flash is writing; it finishes.");
+    if (flash.status !== "waiting_for_bootloader") throw new EditorError(409, "flash_finished", "The flash isn't waiting any more.");
+    entry.cancelledAt = Date.now();
+    return this.progressFlash(id, flash.buildId, entry.startedAt);
+  }
+
+  /** How many times Check the keyboard again ran, so a test can see it never started a build or a flash. */
+  checks = 0;
+  buildCount(): number {
+    return this.builds.size;
+  }
+  flashCount(): number {
+    return this.flashes.size;
+  }
+
+  async checkFlash(id: string): Promise<FlashCheckResponse> {
+    const flash = await this.getFlash(id);
+    const entry = this.flashes.get(id);
+    if (flash === null || entry === undefined) throw new EditorError(404, "not_found", "No such flash.");
+    if (flash.status !== "succeeded") throw new EditorError(400, "usage", "Only a finished flash can be checked again.");
+    this.checks++;
+    if (this.options.checkFinds === "this_build") entry.checkedAt = Date.now();
+    return { flash: this.progressFlash(id, flash.buildId, entry.startedAt), found: this.options.checkFinds };
+  }
+
+  async fittingRevision(_ref: string): Promise<FittingRevisionResponse["revision"]> {
+    const before = this.history.find((r) => r.id === this.head.parentId);
+    return before === undefined ? null : { id: before.id, summary: before.summary, createdAt: before.createdAt };
   }
 
   /** The reveals asked for, so a test can see one happened without opening Finder. */
@@ -358,7 +399,21 @@ export class FakeEditor implements EditorBackend {
   }
 
   private progressFlash(id: string, buildId: string, startedAt: number): Flash {
-    const { flashStepMs, failFlash } = this.options;
+    const { flashStepMs, failFlash, flashResult, flashInputMonitoring } = this.options;
+    const entry = this.flashes.get(id);
+    if (entry?.cancelledAt !== undefined) {
+      return {
+        id, buildId, status: "failed", error: "Cancelled. Nothing was flashed.", startedAt, finishedAt: entry.cancelledAt, instruction: null, note: null, verified: false,
+        logTail: [FLASH_LOG[0] as string, "keyloom: Cancelled. Nothing was flashed."], errorCode: "cancelled", instructionCode: null, cancellable: false, checkable: false,
+      };
+    }
+    if (flashResult === "permission_files_and_folders" && Date.now() - startedAt >= flashStepMs * 1.5) {
+      return {
+        id, buildId, status: "failed", startedAt, finishedAt: startedAt + flashStepMs * 1.5, instruction: null, note: null, verified: false, cancellable: false, checkable: false,
+        error: "Copying to /Volumes/GLV80RHBOOT/glove80.uf2 failed: EACCES: permission denied. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.",
+        errorCode: "permission_files_and_folders", instructionCode: null, logTail: ["keyloom: GLV80RHBOOT is mounted at /Volumes/GLV80RHBOOT; writing", "keyloom: Copying failed: EACCES"],
+      };
+    }
     const elapsed = Date.now() - startedAt;
     const writing = elapsed >= flashStepMs;
     const writeEnd = flashStepMs * 2;
@@ -367,6 +422,7 @@ export class FakeEditor implements EditorBackend {
     const status: Flash["status"] = failed ? "failed" : succeeded ? "succeeded" : writing ? "writing" : "waiting_for_bootloader";
     const lines = FLASH_LOG.slice(0, status === "waiting_for_bootloader" ? 1 : writing ? Math.min(FLASH_LOG.length, 3 + Math.floor((elapsed - flashStepMs) / (flashStepMs / 2))) : 1);
     if (succeeded) lines.push("zapp: done. The keyboard is restarting");
+    const confirmed = succeeded && (flashResult === "verified" || entry?.checkedAt !== undefined);
     if (failed) lines.push("zapp: write failed at 38%: device disconnected");
     return {
       id,
@@ -375,10 +431,16 @@ export class FakeEditor implements EditorBackend {
       error: failed ? "The keyboard disconnected while keyloom was writing. Plug it in again and press the reset button to retry." : null,
       startedAt,
       finishedAt: failed ? startedAt + flashStepMs * 1.5 : succeeded ? startedAt + writeEnd : null,
-      instruction: status === "waiting_for_bootloader" ? "Press the reset button on the Moonlander." : null,
-      note: succeeded ? `Verified: the keyboard is running build ${buildId}.` : null,
-      verified: succeeded,
+      instruction: status !== "waiting_for_bootloader" ? null : flashInputMonitoring
+        ? "macOS didn't let keyloom restart the keyboard by itself. Press the reset button on the Moonlander (the small hole on its back; use a paperclip), or press its Reset key if the layout has one. keyloom waits 2 minutes."
+        : "Press the reset button on the Moonlander.",
+      note: confirmed ? `Verified: the keyboard is running build ${buildId}.` : null,
+      verified: confirmed,
       logTail: lines,
+      errorCode: null,
+      instructionCode: status === "waiting_for_bootloader" && flashInputMonitoring ? "permission_input_monitoring" : null,
+      cancellable: status === "waiting_for_bootloader",
+      checkable: succeeded && !confirmed,
     };
   }
 }

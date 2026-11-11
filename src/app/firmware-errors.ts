@@ -47,3 +47,16 @@ export class FlashToolMissingError extends UsageError {
     super(`${tool} isn't installed. Install it with \`brew install ${brewFormulae(tool).join(" ")}\`, then flash again.`);
   }
 }
+
+/** The board has more than one revision and no connected keyboard says which this is; the page asks, the CLI wants --board-rev. */
+export class BoardRevisionNeededError extends UsageError {
+  override name = "BoardRevisionNeededError";
+}
+
+/** A flash can be cancelled only while it waits for the bootloader and before anything was written (D-501): `why` says which it is past. */
+export class FlashNotCancellableError extends UsageError {
+  override name = "FlashNotCancellableError";
+  constructor(readonly why: "writing" | "finished", message: string) {
+    super(message);
+  }
+}

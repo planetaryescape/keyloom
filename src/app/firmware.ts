@@ -7,7 +7,7 @@ import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
-import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
+import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
@@ -24,10 +24,11 @@ import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
-import { BuildFailedError, FlashFailedError, FlashToolMissingError } from "./firmware-errors.ts";
+import { BoardRevisionNeededError, BuildFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
 import { ensureDocker } from "./toolchain.ts";
+import { syncSupported } from "./sync-keyboard.ts";
 
 // These are the shapes of Build and Flash in src/api/http.ts (a superset: the extra fields are for
 // the CLI). app can't import src/api, so test/app/firmware.test.ts checks they stay assignable.
@@ -65,9 +66,20 @@ export type FlashView = {
   note: string | null;
   /** True only when the flasher read back this exact build marker from the keyboard. */
   verified: boolean;
+  /** Why it failed, as a code the UI acts on (D-501): a permission to grant, or a cancel before anything was written. */
+  errorCode: FlashErrorCode | null;
+  /** While it waits: the permission that stopped keyloom restarting the keyboard itself, so the page can open its pane. */
+  instructionCode: FlashPermissionCode | null;
+  /** True while it waits for the bootloader and nothing has been written, in this process: Cancel is safe (D-501). */
+  cancellable: boolean;
+  /** True for a finished flash that isn't verified on a board whose running build keyloom can read: Check the keyboard again (D-501). */
+  checkable: boolean;
   logTail: string[];
   logPath: string;
 };
+
+/** Why a flash failed, as the UI acts on it (D-501). */
+export type FlashErrorCode = FlashPermissionCode | "cancelled";
 
 const LOG_TAIL_LINES = 30;
 const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few seconds.";
@@ -79,6 +91,10 @@ const flashInstructions = new Map<string, string | null>();
 
 const buildTasks = new Map<string, Promise<void>>();
 const flashTasks = new Map<string, Promise<void>>();
+// What a running flash in this process lets the page do: cancel it until the first write, and name the permission it waits on (D-501).
+// `wrote` never goes back, so a split board whose first half is written can't be cancelled with its second half waiting.
+type FlashControl = { abort: AbortController; wrote: boolean; cancelled: boolean; problem: FlashPermissionCode | null };
+const flashControls = new Map<string, FlashControl>();
 // Shutdown belongs to one App: serve's stop must not refuse flashes for another App in the same process, such as a test run's.
 const pendingFlashStarts = new WeakMap<App, Set<Promise<void>>>();
 const drainingApps = new WeakSet<App>();
@@ -114,7 +130,7 @@ async function resolveBoardRevision(board: Board, requested: string | undefined)
     (r) => r.detect !== null && devices.some((d) => d.productId === r.detect?.usbProductId.toLowerCase() && (d.maker === "" || d.maker.toLowerCase().includes(vendor))),
   );
   if (found.length === 1) return (found[0] as { id: string }).id;
-  throw new UsageError(
+  throw new BoardRevisionNeededError(
     `which ${board.definition.name} revision is this for? Pass --board-rev ${ids.join("|")}. ` +
       (found.length === 0 ? "No connected keyboard was recognised, so keyloom can't tell." : `More than one was recognised (${found.map((r) => r.id).join(", ")}).`),
   );
@@ -315,14 +331,34 @@ const VERIFIED = /^keyloom: (Verified: .+)$/;
 async function toFlashView(app: App, row: FlashRow): Promise<FlashView> {
   const logPath = absolute(app, row.logPath);
   // Read before the first await: the instruction a state change carries must be the one in force when it was announced.
-  const instruction = instructionFor(row, boardOfFlash(app, row));
+  const board = boardOfFlash(app, row);
+  const instruction = instructionFor(row, board);
   const logTail = await tailOf(logPath);
   const note = row.status === "succeeded" ? (logTail.map((l) => VERIFIED.exec(l)?.[1]).findLast((n) => n !== undefined) ?? null) : null;
+  const verified = note !== null && note.includes(`build ${row.buildId}`);
+  const control = flashControls.get(row.id);
+  const waiting = row.status === "waiting_for_bootloader";
   return {
     id: row.id, buildId: row.buildId, status: row.status, error: row.error, startedAt: row.startedAt, finishedAt: row.finishedAt,
-    instruction, note, verified: note !== null && note.includes(`build ${row.buildId}`),
+    instruction, note, verified,
+    errorCode: row.status === "failed" ? flashErrorCode(row.errorCode) : null,
+    instructionCode: waiting ? (control?.problem ?? null) : null,
+    cancellable: waiting && control !== undefined && !control.wrote && !control.cancelled,
+    checkable: row.status === "succeeded" && !verified && board !== undefined && syncSupported(board),
     logTail, logPath,
   };
+}
+
+// A code a later keyloom stored and this one doesn't know reads as none: the sentence still says what happened.
+function flashErrorCode(code: string | null): FlashErrorCode | null {
+  switch (code) {
+    case "cancelled":
+    case "permission_files_and_folders":
+    case "permission_input_monitoring":
+      return code;
+    default:
+      return null;
+  }
 }
 
 function reapFlash(app: App, row: FlashRow): FlashRow {
@@ -401,11 +437,18 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
     const id = newFlashId();
     const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
+    const control: FlashControl = { abort: new AbortController(), wrote: false, cancelled: false, problem: null };
+    flashControls.set(id, control);
     // A longer wait was asked for, so the first instruction says so rather than the default.
     if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
-    const task = runFlash(app, row, board, build.boardRevision, artifact, opts);
+    // The caller's signal (a CLI's Ctrl-C, a sync's stop) and the page's Cancel both stop the same flasher.
+    const signal = opts.signal === undefined ? control.abort.signal : AbortSignal.any([opts.signal, control.abort.signal]);
+    const task = runFlash(app, row, board, build.boardRevision, artifact, { ...opts, signal }, control);
     flashTasks.set(id, task);
-    void task.finally(() => flashTasks.delete(id));
+    void task.finally(() => {
+      flashTasks.delete(id);
+      flashControls.delete(id);
+    });
     return toFlashView(app, row);
   } finally {
     starts.delete(pending.promise);
@@ -421,7 +464,7 @@ export async function drainManualFlashTasks(app: App): Promise<void> {
   await Promise.allSettled([...flashTasks.values()]);
 }
 
-async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: string, artifact: string, opts: FlashOptions): Promise<void> {
+async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: string, artifact: string, opts: FlashOptions, control: FlashControl): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
   // States are told in order and the last one before the flash task ends: each view reads the log, so unchained reads can land
   // out of order ("writing" after "succeeded") or after a caller already has the result.
@@ -444,6 +487,8 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       ...(opts.signal ? { signal: opts.signal } : {}),
       onState: (state: FlashState, instruction: string | null, note?: FlashNote) => {
         opts.onFlasherState?.(state, instruction, note);
+        if (state === "writing") control.wrote = true;
+        control.problem = state === "waiting_for_bootloader" ? (note?.problem ?? null) : null;
         if (state === "waiting_for_bootloader" || state === "writing") {
           flashInstructions.set(row.id, instruction);
           setFlashProgress(app.db, row.id, state);
@@ -453,7 +498,9 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
     });
     const verified = result.state === "succeeded" && result.output.some((line) => line.startsWith("keyloom: Verified:") && line.includes(`build ${row.buildId}`));
     app.db.transaction(() => {
-      finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed" });
+      // A cancel that stopped the flash before any write is said as one, so the page offers the flash again rather than a failure.
+      const errorCode: FlashErrorCode | null = control.cancelled && !control.wrote ? "cancelled" : (result.errorCode ?? null);
+      finishFlash(app.db, row.id, result.state === "succeeded" ? null : { error: result.error ?? "the flash failed", errorCode });
       if (verified) {
         const build = findBuild(app.db, row.buildId);
         if (build) {
@@ -498,6 +545,31 @@ export async function getFlash(app: App, id: string): Promise<FlashView> {
   const row = findFlash(app.db, id);
   if (!row) throw new NotFoundError(`no flash "${id}"`);
   return toFlashView(app, reapFlash(app, row));
+}
+
+// Long enough for the flasher to stop and say so (Zapp is killed at once, a UF2 wait wakes at once), short enough that the page never hangs on it.
+const CANCEL_SETTLE_MS = 3000;
+
+/**
+ * Stops a flash that is waiting for the bootloader, before anything was written (D-501). Refuses once the flasher has said it is
+ * writing, as `stop()` does for a sync (D-497): cutting a write off is how a keyboard is left in its bootloader.
+ */
+export async function cancelFlash(app: App, id: string): Promise<FlashView> {
+  const row = findFlash(app.db, id);
+  if (!row) throw new NotFoundError(`no flash "${id}"`);
+  const control = flashControls.get(id);
+  if (control === undefined || (row.status !== "waiting_for_bootloader" && row.status !== "writing")) {
+    throw new FlashNotCancellableError("finished", `flash ${id} isn't waiting for the keyboard any more, so there is nothing to cancel`);
+  }
+  if (control.wrote || row.status === "writing") {
+    throw new FlashNotCancellableError("writing", `flash ${id} is already writing to the keyboard; it can't be stopped safely, so it finishes`);
+  }
+  if (!control.cancelled) {
+    control.cancelled = true;
+    control.abort.abort();
+  }
+  await Promise.race([flashTasks.get(id), Bun.sleep(CANCEL_SETTLE_MS)]);
+  return getFlash(app, id);
 }
 
 /** Waits for a flash started in this process to finish, and returns it. */

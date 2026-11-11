@@ -16,7 +16,7 @@ export {
 } from "../layout/export-document.ts";
 export { type SettingView, type SettingsView, layoutSettings } from "./firmware-settings.ts";
 export { type UploadInput, importUpload } from "./import-upload.ts";
-export { listRevisions } from "./history.ts";
+export { lastFittingRevision, listRevisions } from "./history.ts";
 export { configsMadeInTurn } from "./made-configs.ts";
 export {
   type ConfigView, type ListConfigsOptions, type NewConfigInput, archiveConfig, blankDocument, deleteConfig, listConfigs, newBlankConfig, newConfig, newConfigFromImport, newConfigFromUpload, type NewBlankOutcome, renameConfig, restoreConfig, showConfig,
@@ -39,13 +39,16 @@ export {
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
-  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash,
+  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelFlash,
 } from "./firmware.ts";
+export { type FlashCheck, type FlashCheckFound, checkFlashAgain } from "./flash-check.ts";
 export {
   type AutoSyncReport, type BoardSyncView, type RunSyncOptions, type SyncDeps, type SyncEngine, type SyncOptions, type SyncOutcome, type SyncSetup, type SyncState,
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
-export { BuildFailedError, EmulateFailedError, FlashFailedError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError } from "./firmware-errors.ts";
+export {
+  BoardRevisionNeededError, BuildFailedError, EmulateFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError,
+} from "./firmware-errors.ts";
 export { type BuildArtifact, type RevealDeps, buildArtifact, revealBuildArtifact } from "./firmware-artifact.ts";
 export type { FlashPlan, FlashTool } from "./firmware-flash-plan.ts";
 export { type AgentConfig, CONFIG_FILE, readAgentConfig, writeAgentConfig } from "./agent-config.ts";

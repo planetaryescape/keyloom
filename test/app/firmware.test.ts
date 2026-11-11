@@ -1,10 +1,11 @@
 // The firmware use cases against fake docker, git and zapp. Nothing here can build for real or flash.
+import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { BuildSchema, FlashSchema } from "../../src/api/http.ts";
 import {
-  BuildFailedError, FlashFailedError, FlashToolMissingError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait,
+  BoardRevisionNeededError, BuildFailedError, FlashFailedError, FlashToolMissingError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait, getLayout,
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
@@ -103,6 +104,22 @@ describe("startBuild / getBuild / buildAndWait", () => {
       await expect(startBuild(e.app, "synchronized")).rejects.toThrow(UsageError);
       await expect(startBuild(e.app, "synchronized")).rejects.toThrow(/--board-rev reva\|revb/);
       await expect(startBuild(e.app, "synchronized", { boardRevision: "revc" })).rejects.toThrow(/no revision "revc"/);
+      // Only the question is a BoardRevisionNeededError: the page asks which board this is for it alone (R2-01).
+      await expect(startBuild(e.app, "synchronized")).rejects.toThrow(BoardRevisionNeededError);
+      const unknown = await startBuild(e.app, "synchronized", { boardRevision: "revc" }).catch((err: unknown) => err);
+      expect(unknown).not.toBeInstanceOf(BoardRevisionNeededError);
+    });
+  });
+
+  test("the editor's adapter answers board_revision_needed for the question and usage for anything else (R2-01)", async () => {
+    const e = await toolchainEnv();
+    const backend = appEditorBackend(e.app);
+    const head = getLayout(e.app, "synchronized").revision.id;
+    await e.run(async () => {
+      const asked = await backend.startBuild("synchronized", { revisionId: head }).catch((err: unknown) => err);
+      expect(asked).toMatchObject({ status: 400, code: "board_revision_needed" });
+      const wrong = await backend.startBuild("synchronized", { revisionId: head, boardRevision: "revc" }).catch((err: unknown) => err);
+      expect(wrong).toMatchObject({ status: 400, code: "usage" });
     });
   });
 

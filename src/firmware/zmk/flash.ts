@@ -8,7 +8,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import type { FlashStep } from "../../boards/recipes.ts";
-import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import type { LogSink } from "../toolchain/run.ts";
 import { type Uf2Shape, describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import type { VolumeFinder } from "./volumes.ts";
@@ -77,6 +77,8 @@ export type Uf2FlashInput = {
   unmountWaitMs?: number;
   pollMs?: number;
   signal?: AbortSignal;
+  /** Which system's permission a refused write points at; this machine's by default. Tests pass "darwin". */
+  platform?: NodeJS.Platform;
 };
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
@@ -145,10 +147,12 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     input.log.line(line);
     input.onLine?.(line);
   };
+  // Set when macOS refused a write to a boot drive, so the page can open the Files and Folders pane instead of naming it (D-501).
+  let permission: FlashPermissionCode | undefined;
   const fail = (error: string): FlashResult => {
     say(`keyloom: ${error}`);
     input.onState("failed", null);
-    return { state: "failed", error, output };
+    return { state: "failed", error, output, ...(permission === undefined ? {} : { errorCode: permission }) };
   };
   const poll = input.pollMs ?? POLL_MS;
   const waitMs = input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS;
@@ -341,7 +345,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       if (await input.findVolume(step.volume)) {
         // macOS refuses a write to a removable drive from an app without Removable Volumes access, and the raw EACCES doesn't say so.
-        const denied = code === "EACCES" || code === "EPERM" ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
+        const refused = code === "EACCES" || code === "EPERM";
+        if (refused && (input.platform ?? process.platform) === "darwin") permission = "permission_files_and_folders";
+        const denied = refused ? ` keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.` : "";
         return failed(`Copying to ${target} failed: ${(err as Error).message}. The ${step.label} was not flashed.${denied}`);
       }
       say(`keyloom: copy ended with "${(err as Error).message}", and ${step.volume} has unmounted, so the write is taken as done`);

@@ -247,6 +247,30 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     }
   });
 
+  test("on macOS a refused write carries the Files and Folders code, so the page can open that pane (D-501)", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    chmodSync(join(s.root, RIGHT), 0o555);
+    try {
+      const mac = await s.flash({ writeRetryMs: 50, platform: "darwin" });
+      expect(mac).toMatchObject({ state: "failed", errorCode: "permission_files_and_folders" });
+      // Elsewhere there is no such pane to open, so there is no code; the sentence still says what happened.
+      const linux = await s.flash({ writeRetryMs: 50, platform: "linux" });
+      expect(linux.state).toBe("failed");
+      expect(linux.errorCode).toBeUndefined();
+    } finally {
+      chmodSync(join(s.root, RIGHT), 0o755);
+    }
+  });
+
+  test("a copy that fails for another reason carries no permission code", async () => {
+    const s = await setup();
+    mkdirSync(join(s.root, RIGHT, "glove80.uf2"), { recursive: true });
+    const r = await s.flash({ platform: "darwin" });
+    expect(r.state).toBe("failed");
+    expect(r.errorCode).toBeUndefined();
+  });
+
   test("a freshly mounted drive that refuses the write at first is written once it allows it", async () => {
     const s = await setup();
     mkdirSync(join(s.root, RIGHT), { recursive: true });

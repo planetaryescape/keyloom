@@ -4,7 +4,7 @@
 // until it has flashed a real board, so this reads its exit code first and everything else loosely,
 // and keeps the raw output in the log.
 import { existsSync } from "node:fs";
-import type { FlashNote, FlashResult, FlashState } from "../toolchain/flash-state.ts";
+import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
 import { dfuProblem } from "./dfu.ts";
 
@@ -47,7 +47,7 @@ export type FlashInput = {
    * Called once zapp is waiting for the bootloader. Resolves ok when it put the keyboard there itself (hands-free,
    * D-070); otherwise `reason` is why the person has to press the reset key as usual.
    */
-  enterBootloader?: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+  enterBootloader?: () => Promise<{ ok: true } | { ok: false; reason: string; code?: FlashPermissionCode }>;
   /** Called after zapp exits 0. A failure turns the flash into a failed one, with the keyboard's state in the message. */
   verify?: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
 };
@@ -116,7 +116,9 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
                 rebooted = r.ok;
                 if (!r.ok) {
                   input.log.line(`keyloom: couldn't restart the keyboard itself: ${r.reason}`);
-                  input.onState("waiting_for_bootloader", `keyloom couldn't restart the keyboard by itself (${r.reason}). ${resetInstruction(input.bootloaderWaitMs)}`, { needsHand: true });
+                  // A permission has its own words, with no settings path: the page shows a button for it, and the CLI prints the path (D-501).
+                  const why = r.code === "permission_input_monitoring" ? "macOS didn't let keyloom restart the keyboard by itself." : `keyloom couldn't restart the keyboard by itself (${r.reason}).`;
+                  input.onState("waiting_for_bootloader", `${why} ${resetInstruction(input.bootloaderWaitMs)}`, { needsHand: true, ...(r.code === undefined ? {} : { problem: r.code }) });
                 }
               },
               (err: unknown) => {

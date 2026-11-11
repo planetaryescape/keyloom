@@ -4,6 +4,8 @@ import { qmkRevision } from "../../../src/firmware/qmk/board-config.ts";
 import { bootloaderPacket, buildMarker } from "../../../src/firmware/qmk/handsfree.ts";
 import { handsFreeHooks, keyboardTarget, readRunningFirmware, rebootToBootloader, verifyBuild } from "../../../src/firmware/qmk/handsfree-flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
+import { HidError } from "../../../src/firmware/toolchain/hid.ts";
+import { DeviceTransportError } from "../../../src/firmware/toolchain/device-helper/transport-client.ts";
 import { moonlander } from "../../helpers/board.ts";
 import { MOONLANDER_REVA, dfuBootloader, fakeKeyboard, rawHidOf, runningKeyboard } from "../../helpers/fake-hid.ts";
 import { tempDir } from "../../helpers/tmp.ts";
@@ -31,6 +33,22 @@ describe("readRunningFirmware", () => {
 describe("rebootToBootloader", () => {
   const lines: string[] = [];
   const say = (l: string) => lines.push(l);
+
+  test("a write macOS refuses for Input Monitoring says so as a code, from either transport (D-501)", async () => {
+    const refusals: Array<[Error, NodeJS.Platform, "permission_input_monitoring" | undefined]> = [
+      [new HidError("macOS refused to open the keyboard's raw HID interface", "permission_input_monitoring"), "darwin", "permission_input_monitoring"],
+      [new DeviceTransportError({ code: "permission_denied", effect: "none", retry: "after_user_action" }), "darwin", "permission_input_monitoring"],
+      // On Linux the helper's refusal is a udev rule, not a System Settings pane.
+      [new DeviceTransportError({ code: "permission_denied", effect: "none", retry: "after_user_action" }), "linux", undefined],
+      [new HidError("macOS could not write to the keyboard"), "darwin", undefined],
+    ];
+    for (const [error, platform, code] of refusals) {
+      const k = fakeKeyboard({ usb: () => [runningKeyboard(OLD)], hid: [rawHidOf(OLD)], onWrite: () => { throw error; } });
+      const result = await rebootToBootloader({ ...k.deps, platform }, MOONLANDER_REVA, say, 50);
+      expect(result.ok).toBe(false);
+      expect(result.ok ? undefined : result.code).toBe(code);
+    }
+  });
 
   test("sends the bootloader packet to the raw HID interface and succeeds when the bootloader appears", async () => {
     const k = fakeKeyboard({ usb: (n) => (n < 2 ? [runningKeyboard(OLD)] : [dfuBootloader()]), hid: [rawHidOf(OLD)] });
