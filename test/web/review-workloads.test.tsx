@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityChoices, SuggestionTestResults, WorkloadTests, testsNeedDocker } from "../../src/web/review/WorkloadTests.tsx";
+import { ActivityChoices, SuggestionTestResults, TestsNeedDockerView, WorkloadTests, testsNeedDocker } from "../../src/web/review/WorkloadTests.tsx";
 import { ReviewWorkloadSchema } from "../../src/layout/review-workload.ts";
 
 const baseline = { id: "prose-prose", status: "verified" as const, requestedOutputs: 21, physicalKeydowns: 22, maxSimultaneousKeys: 2, layerEntries: 1, modifierEntries: 0, busyKeys: [] };
@@ -81,4 +81,16 @@ test("tests that stopped for Docker show the Docker callout from the code, not t
   expect(html).not.toContain("Workload tests need Docker:");
   // Rows stored before the code existed still read.
   expect(ReviewWorkloadSchema.safeParse({ status: "unavailable", activities: ["prose"], reason: "x", identity: null, baseline: [], comparisons: [] }).success).toBe(true);
+});
+
+test("a readiness request that failed still offers Check again, and asks again by itself (#277 review)", () => {
+  const noop = () => {};
+  const docker = { readiness: null, unanswered: true, starting: false, problem: null, start: noop, restart: noop, refresh: noop };
+  const install = { state: null, problem: null, start: noop, cancel: noop };
+  const html = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install, busy: false, onRetry: noop }));
+  expect(html).toContain("couldn&#x27;t ask whether Docker is ready");
+  expect(html).toContain("Check again");
+  // While the first request is still out, there is nothing to say yet.
+  const asking = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker: { ...docker, unanswered: false }, install, busy: false, onRetry: noop }));
+  expect(asking).not.toContain("Check again");
 });

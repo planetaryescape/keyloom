@@ -8,6 +8,8 @@ import { fetchDockerReadiness, restartDockerApp, startDockerEngine } from "../sy
 export type Docker = {
   /** Null when the server offers no system routes, or the page hasn't asked yet. */
   readiness: DockerReadinessResponse | null;
+  /** The last readiness request failed, so `readiness` is null because the page couldn't ask, not because it hasn't yet. */
+  unanswered: boolean;
   /** A start or restart from this page is running. */
   starting: boolean;
   /** Why a start or restart from this page failed. */
@@ -21,6 +23,7 @@ export type Docker = {
 
 export function useDocker(token: string): Docker {
   const [readiness, setReadiness] = useState<DockerReadinessResponse | null>(null);
+  const [unanswered, setUnanswered] = useState(false);
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asks, setAsks] = useState(0);
@@ -28,9 +31,18 @@ export function useDocker(token: string): Docker {
   useEffect(() => {
     const controller = new AbortController();
     fetchDockerReadiness(token, controller.signal)
-      .then(setReadiness)
+      .then((next) => {
+        setReadiness(next);
+        setUnanswered(false);
+        // A failed start no longer says anything once Docker answers.
+        if (next?.ok === true) setProblem(null);
+      })
       // A server without the route, or one that can't answer, leaves the dialog without this line rather than failing it.
-      .catch(() => setReadiness(null));
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setReadiness(null);
+        setUnanswered(true);
+      });
     return () => controller.abort();
   }, [token, asks]);
 
@@ -49,7 +61,7 @@ export function useDocker(token: string): Docker {
   const restart = useCallback(() => run(restartDockerApp), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
-  return { readiness, starting, problem, start, restart, refresh };
+  return { readiness, unanswered, starting, problem, start, restart, refresh };
 }
 
 const RECHECK_MS = 4000;

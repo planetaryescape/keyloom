@@ -101,8 +101,10 @@ export async function run(opts: RunOptions): Promise<RunResult> {
   let timedOut = false;
   let aborted = false;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const groupKill = opts.processGroup === true && process.platform !== "win32";
+  const exited = () => proc.exitCode !== null || proc.signalCode !== null;
   const send = (signal: "SIGTERM" | "SIGKILL") => {
-    if (opts.processGroup && process.platform !== "win32") {
+    if (groupKill) {
       try {
         process.kill(-proc.pid, signal);
         return;
@@ -110,10 +112,11 @@ export async function run(opts: RunOptions): Promise<RunResult> {
         // The group is already gone; the process itself may still need its signal.
       }
     }
-    proc.kill(signal);
+    if (!exited()) proc.kill(signal);
   };
   const kill = async () => {
-    if (proc.exitCode !== null || proc.signalCode !== null) return;
+    // A group outlives its leader: a child still holding the output open keeps the run going, so the group is signalled even then.
+    if (exited() && !groupKill) return;
     try {
       await opts.onKill?.();
     } catch {

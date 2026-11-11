@@ -312,6 +312,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
           const stop = () => resolve();
           process.once("SIGINT", stop);
           process.once("SIGTERM", stop);
+          // A closed terminal: the shutdown still stops a Homebrew install, which runs in its own process group (R2-08).
+          process.once("SIGHUP", stop);
           if (opts.exitOnStdinClose) {
             // A parent that dies closes the pipe, whatever killed it (D-321). Resuming is what makes the stream report the end.
             process.stdin.once("end", stop);

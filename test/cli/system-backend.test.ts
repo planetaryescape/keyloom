@@ -16,6 +16,14 @@ describe("appSystemBackend", () => {
     expect(restarts).toBe(1);
   });
 
+  test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
+    const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
+    const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });
+    await backend.install("zapp");
+    await backend.stopInstalls();
+    expect(await backend.installState("zapp")).toMatchObject({ status: "cancelled" });
+  });
+
   test("Cancel stops the install the page started (R2-08)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

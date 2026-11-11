@@ -125,6 +125,24 @@ describe("installJobs", () => {
     expect(jobs.cancel("zapp").status).toBe("idle");
   });
 
+  test("cancelAll, which serve's shutdown runs, stops every running install and waits for Homebrew to exit (#277 review)", async () => {
+    const signals: AbortSignal[] = [];
+    const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => {
+      if (opts.signal) signals.push(opts.signal);
+      opts.signal?.addEventListener("abort", () => setTimeout(() => resolve({ exitCode: null, timedOut: false }), 5), { once: true });
+    });
+    const jobs = installJobs({ ...mac, runner });
+    jobs.start("zapp");
+    jobs.start("dfu-util");
+    await Bun.sleep(5);
+    await jobs.cancelAll();
+    expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+    expect(jobs.get("zapp").status).toBe("cancelled");
+    expect(jobs.get("dfu-util").status).toBe("cancelled");
+    // Nothing running: it returns at once.
+    await jobs.cancelAll();
+  });
+
   test("Cancel while Docker starts stops the start too, and no Try again state follows", async () => {
     let startSignal: AbortSignal | undefined;
     const { runner } = recorder();

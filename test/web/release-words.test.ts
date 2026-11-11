@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { DockerReadinessResponse } from "../../src/api/system.ts";
 import type { InstallState } from "../../src/api/tool-install.ts";
 import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
+import { installEnded } from "../../src/web/release/useInstall.ts";
 
 const missing = (canInstall: boolean): DockerReadinessResponse => ({
   ok: false, problem: "not-installed", reason: "Docker is not on this computer. Install Colima with `brew install colima docker`.", engine: null, canStart: false, autoStart: true,
@@ -38,7 +39,7 @@ describe("dockerView", () => {
     expect(buildBlockedReason({ kind: "no-access", command: null, note: "", restartApp: null })).toBe("Give keyloom access to Docker first.");
     expect(dockerView({ ok: false, problem: "cli-missing", reason: "its `docker` command isn't on keyloom's PATH", engine: null, canStart: false, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "other", reason: "its docker command isn't on keyloom's PATH", problem: "cli-missing" });
     expect(dockerView(ready, true, null, null)).toEqual({ kind: "starting", engine: "Docker", verb: "Starting" });
-    expect(dockerView(ready, false, "if it fails, run `colima restart`", null)).toEqual({ kind: "start-failed", reason: "if it fails, run colima restart", retry: "start" });
+    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, "if it fails, run `colima restart`", null)).toEqual({ kind: "start-failed", reason: "if it fails, run colima restart", retry: "start" });
   });
 
   test("a Colima start that fails after a good install offers the start, and Build stays open (R2-02)", () => {
@@ -85,6 +86,15 @@ describe("dockerView", () => {
     const unknown = (problem: "daemon-down" | "slow"): DockerReadinessResponse => ({ ok: false, problem, reason: "Docker isn't answering, and keyloom doesn't know what starts it.", engine: null, canStart: false, autoStart: true, install: null, access: null });
     expect(buildBlockedReason(dockerView(unknown("daemon-down"), false, null, null))).toBe("Start your Docker engine first.");
     expect(buildBlockedReason(dockerView(unknown("slow"), false, null, null))).toBeNull();
+    // Podman Desktop names no app to open: Build waits for the command line tools, not for a start.
+    const noCli: DockerReadinessResponse = { ok: false, problem: "cli-missing", reason: "Podman Desktop is installed, but it doesn't come with a `docker` command.", engine: null, canStart: false, autoStart: true, install: null, access: null };
+    expect(dockerView(noCli, false, null, null)).toMatchObject({ kind: "other", problem: "cli-missing" });
+    expect(buildBlockedReason(dockerView(noCli, false, null, null))).toBe("Install Docker's command line tools first.");
+  });
+
+  test("a failed start stops showing once a check finds Docker ready (#277 review)", () => {
+    expect(dockerView(ready, false, "Colima did not answer.", null)).toEqual({ kind: "none" });
+    expect(dockerView(ready, false, "Colima did not answer.", install({ status: "failed", phase: null, errorCode: "start_failed", error: "x" }))).toEqual({ kind: "none" });
   });
 });
 
@@ -115,5 +125,13 @@ describe("flashStepView", () => {
 
   test("plain drops terminal backticks", () => {
     expect(plain("run `keyloom sync`")).toBe("run keyloom sync");
+  });
+});
+
+describe("installEnded", () => {
+  test("the page re-reads the computer after any end, so a late cancel or a failed start isn't left stale (#277 review)", () => {
+    for (const status of ["succeeded", "failed", "cancelled"] as const) expect(installEnded(install({ status, phase: null }))).toBe(true);
+    expect(installEnded(install({ status: "running" }))).toBe(false);
+    expect(installEnded(install({ status: "idle", phase: null }))).toBe(false);
   });
 });

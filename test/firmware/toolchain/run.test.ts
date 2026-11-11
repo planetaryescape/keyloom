@@ -71,6 +71,19 @@ describe("run", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
+  test.skipIf(process.platform === "win32")("a process group stop reaches a child after its leader has exited", async () => {
+    // sh exits at once and leaves `sleep` holding stdout: a stop that only signalled a live leader would wait the full 30 s.
+    const c = new AbortController();
+    setTimeout(() => c.abort(), 300);
+    const started = Date.now();
+    const r = await Promise.race([
+      run({ cmd: ["sh", "-c", "sleep 30 & exit 0"], signal: c.signal, killGraceMs: 200, processGroup: true }),
+      Bun.sleep(2_500).then(() => null),
+    ]);
+    expect(r?.aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
   test("capture returns stdout and stderr", async () => {
     const r = await capture(["sh", "-c", "echo out; echo err >&2"]);
     expect(r).toMatchObject({ exitCode: 0, stdout: "out", stderr: "err" });

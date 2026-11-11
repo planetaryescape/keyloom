@@ -53,7 +53,8 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
     if (restartApp !== null) return { kind: "starting", engine: restartApp, verb: "Restarting" };
     return { kind: "starting", engine: down?.engine ?? "Docker", verb: down?.problem === "cli-missing" ? "Opening" : "Starting" };
   }
-  if (problem !== null) return { kind: "start-failed", reason: plain(problem), retry: restartApp !== null ? "restart" : "start" };
+  // A Docker that answers now outranks how an earlier start from this page failed.
+  if (problem !== null && readiness?.ok !== true) return { kind: "start-failed", reason: plain(problem), retry: restartApp !== null ? "restart" : "start" };
   if (readiness?.ok === true && install?.status === "succeeded") return { kind: "installed" };
   if (down === null) return { kind: "none" };
   if (down.problem === "not-installed" && down.install !== null) {
@@ -84,7 +85,7 @@ export function buildBlockedReason(view: DockerView): string | null {
     case "no-access": return "Give keyloom access to Docker first.";
     case "cli-missing": return "Install Docker's command line tools first.";
     // An engine keyloom can't start fails the build the same way; one that only answered slowly may still come up, and the build waits for it.
-    case "other": return view.problem === "slow" ? null : "Start your Docker engine first.";
+    case "other": return view.problem === "slow" ? null : view.problem === "cli-missing" ? "Install Docker's command line tools first." : "Start your Docker engine first.";
     default: return null;
   }
 }

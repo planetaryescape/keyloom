@@ -5,6 +5,9 @@ import {
   dockerInstall, dockerStatus, findDockerEngine, restartDockerApp, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 
+// The CLI asks the daemon before it installs (it may not import the toolchain itself).
+export { type DockerStatus, dockerStatus };
+
 /** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
 export type DockerReadiness =
   | { ok: true; version: string; engine: string; autoStart: boolean }
@@ -112,10 +115,16 @@ export async function startDocker(opts: { onProgress?: (line: string) => void; s
 
 /**
  * Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (`no-access`, R2-07). Anything that isn't a
- * Mac app keeps its own fix, so this says so instead of guessing.
+ * Mac app keeps its own fix, so this says so instead of guessing. A Docker that answers is left running.
  */
 export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
+  // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal is restarted.
+  const now = await (over.status ?? (() => dockerStatus()))();
+  if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
+  if (now.kind !== "no-access") {
+    return { ok: false, engine: null, reason: `keyloom restarts a Docker app only when it refuses this account, and this isn't that: ${now.reason}` };
+  }
   const finding = await (over.detect ?? findDockerEngine)();
   const engine = finding.kind === "engine" ? finding.engine : null;
   // restartDockerApp itself refuses an engine that isn't an app.

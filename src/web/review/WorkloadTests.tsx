@@ -1,11 +1,12 @@
+import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type { ReviewActivity } from "../../api/review.ts";
 import type { Firmware } from "../../layout/schema.ts";
 import { REVIEW_ACTIVITIES, REVIEW_ACTIVITY_LABELS, reviewTaskLabel, type ReviewWorkload, type ReviewWorkloadComparison } from "../../layout/review-workload.ts";
 import { DockerCallout } from "../release/DockerCallout.tsx";
 import { dockerView, recheckDocker } from "../release/release-words.ts";
-import { useDocker, useDockerRecheck } from "../release/useDocker.ts";
-import { useInstall } from "../release/useInstall.ts";
+import { type Docker, useDocker, useDockerRecheck } from "../release/useDocker.ts";
+import { type Install, useInstall } from "../release/useInstall.ts";
 
 /** Whether the last test run stopped for Docker, from the server's code rather than its sentence (R1-12). */
 export const testsNeedDocker = (evidence: ReviewWorkload | undefined): boolean => evidence?.status === "unavailable" && evidence.reasonCode === "docker";
@@ -14,11 +15,23 @@ export const testsNeedDocker = (evidence: ReviewWorkload | undefined): boolean =
 function TestsNeedDocker({ token, busy, onRetry }: { token: string; busy: boolean; onRetry: () => void }) {
   const docker = useDocker(token);
   const install = useInstall(token, "docker", docker.refresh);
+  return <TestsNeedDockerView docker={docker} install={install} busy={busy} onRetry={onRetry} />;
+}
+
+/** Split from its hooks so a test can render each state. A readiness request that failed keeps asking and offers Check again. */
+export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) {
   const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state);
-  useDockerRecheck(docker, recheckDocker(view));
+  useDockerRecheck(docker, recheckDocker(view) || docker.unanswered);
   const ready = docker.readiness?.ok === true;
   return <div className="br-test-results">
     <p>{ready ? "Docker is ready now." : "Activity tests run in Docker, and Docker isn't ready on this computer."}</p>
+    {docker.unanswered ? <div className="callout callout-warning" role="alert">
+      <TriangleAlert size={18} aria-hidden="true" />
+      <div className="callout-body">
+        <p>keyloom couldn't ask whether Docker is ready. It asks again every few seconds.</p>
+        <div className="callout-actions"><button type="button" className="button" onClick={docker.refresh}>Check again</button></div>
+      </div>
+    </div> : null}
     <DockerCallout view={view} docker={docker} install={install} />
     {ready ? <div className="br-actions br-actions-start"><button type="button" className="sheet-action" disabled={busy} onClick={onRetry}>Test again</button></div> : null}
   </div>;

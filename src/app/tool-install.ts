@@ -131,6 +131,7 @@ function startColima(runner: InstallRunner, onLine: (line: string) => void, sign
 export function installJobs(deps: InstallDeps = {}) {
   const states = new Map<InstallableTool, InstallState>();
   const controllers = new Map<InstallableTool, AbortController>();
+  const finished = new Map<InstallableTool, Promise<void>>();
   const idle = (tool: InstallableTool): InstallState => ({ tool, status: "idle", phase: null, logTail: [], error: null, errorCode: null });
   const get = (tool: InstallableTool): InstallState => {
     const state = states.get(tool) ?? idle(tool);
@@ -147,7 +148,7 @@ export function installJobs(deps: InstallDeps = {}) {
       state.logTail.push(line);
       if (state.logTail.length > TAIL_LINES) state.logTail.splice(0, state.logTail.length - TAIL_LINES);
     };
-    void installTool(tool, onLine, deps, (phase) => { if (!controller.signal.aborted) state.phase = phase; }, controller.signal)
+    const ended = installTool(tool, onLine, deps, (phase) => { if (!controller.signal.aborted) state.phase = phase; }, controller.signal)
       .catch((err: unknown): InstallOutcome => ({ ok: false, code: "brew_failed", reason: err instanceof Error ? err.message : String(err) }))
       .then((outcome) => {
         controllers.delete(tool);
@@ -157,6 +158,7 @@ export function installJobs(deps: InstallDeps = {}) {
         else if (outcome.ok) state.status = "succeeded";
         else Object.assign(state, { status: "failed", error: outcome.reason, errorCode: outcome.code });
       });
+    finished.set(tool, ended);
     return get(tool);
   };
   const cancel = (tool: InstallableTool): InstallState => {
@@ -169,6 +171,14 @@ export function installJobs(deps: InstallDeps = {}) {
     }
     return get(tool);
   };
-  return { start, get, cancel };
+  /**
+   * Stops every running install and waits for each to end. Homebrew runs in its own process group, so the server's own exit doesn't stop
+   * it: a shutdown that skipped this would leave it installing with nobody to report to (R2-08).
+   */
+  const cancelAll = async (): Promise<void> => {
+    for (const tool of controllers.keys()) cancel(tool);
+    await Promise.all(finished.values());
+  };
+  return { start, get, cancel, cancelAll };
 }
 export type InstallJobs = ReturnType<typeof installJobs>;

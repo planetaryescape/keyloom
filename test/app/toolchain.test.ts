@@ -3,7 +3,8 @@
 import { describe, expect, test } from "bun:test";
 import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
-import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
+import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
+import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
 const desktop = { kind: "engine" as const, engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } };
@@ -79,13 +80,24 @@ describe("a daemon that refuses this account (D-497)", () => {
   test("a restart goes to the Mac engine found; no engine, or not a Mac, says what to do instead (R2-07)", async () => {
     const restarted: string[] = [];
     const restartApp = async (engine: { name: string }) => (restarted.push(engine.name), { ok: true as const, version: "28", engine: engine.name, waitedMs: 1 });
-    const app = await restartDocker({ overrides: { platform: "darwin", detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }), restartApp } });
+    const app = await restartDocker({ overrides: { platform: "darwin", status: refused, detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }), restartApp } });
     expect(app).toMatchObject({ ok: true, engine: "OrbStack" });
     // Colima is refused by restartDockerApp itself (docker-start.test.ts); with no engine at all nothing is restarted.
-    expect(await restartDocker({ overrides: { platform: "darwin", detect: async () => ({ kind: "none" }), restartApp } })).toMatchObject({ ok: false, engine: null });
-    const linux = await restartDocker({ overrides: { platform: "linux", detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }), restartApp } });
+    expect(await restartDocker({ overrides: { platform: "darwin", status: refused, detect: async () => ({ kind: "none" }), restartApp } })).toMatchObject({ ok: false, engine: null });
+    const linux = await restartDocker({ overrides: { platform: "linux", status: refused, detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }), restartApp } });
     expect(linux.ok).toBe(false);
     expect(restarted).toEqual(["OrbStack"]);
+  });
+
+  test("a Docker that works, or is only stopped, is never quit: a restart could kill a running build (#277 review)", async () => {
+    let restarted = 0;
+    const restartApp = async () => (restarted++, { ok: true as const, version: "28", engine: "Docker Desktop", waitedMs: 1 });
+    const detect = async () => desktop;
+    expect(await restartDocker({ overrides: { platform: "darwin", status: async () => ({ ok: true, version: "28.4" }), detect, restartApp } })).toMatchObject({ ok: true, version: "28.4" });
+    const stopped = await restartDocker({ overrides: { platform: "darwin", status: async () => down, detect, restartApp } });
+    expect(stopped).toMatchObject({ ok: false });
+    if (!stopped.ok) expect(stopped.reason).toContain("only when it refuses this account");
+    expect(restarted).toBe(0);
   });
 
   test("doctor says the engine's own fix: Colima's commands, the Linux group, or the app to restart (#274)", () => {
@@ -176,5 +188,28 @@ describe("getting it ready for a build", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain("another machine");
+  });
+});
+
+describe("after Install Docker, when Colima's first start failed (R2-02, #277 review)", () => {
+  // Readiness as the server computes it: Homebrew's docker CLI still on the "default" context, Colima on PATH, no Mac app. Nothing is hand-built.
+  const lookup = { platform: "darwin" as const, installed: () => false, has: (c: string) => c === "colima" || c === "docker" || c === "brew", context: async () => ({ name: "default", host: "unix:///var/run/docker.sock" }), colimaRunning: async () => false };
+  const failedInstall = { tool: "docker" as const, status: "failed" as const, phase: null, logTail: [], error: "Colima did not answer within 960 s.", errorCode: "start_failed" as const };
+
+  test("readiness names Colima, the page offers Start it now, and Build isn't blocked", async () => {
+    const readiness = await dockerReadiness({ status: async () => down, detect: () => findDockerEngine(lookup), env: {}, platform: "darwin" });
+    expect(readiness).toMatchObject({ ok: false, problem: "daemon-down", engine: "Colima", canStart: true });
+    const view = dockerView(readiness, false, null, failedInstall);
+    expect(view).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: { cancelled: false, reason: "Colima did not answer within 960 s." } });
+    expect(buildBlockedReason(view)).toBeNull();
+    const cancelled = dockerView(readiness, false, null, { ...failedInstall, status: "cancelled", error: null, errorCode: null });
+    expect(cancelled).toMatchObject({ kind: "down", afterInstall: { cancelled: true } });
+  });
+
+  test("Start it now (and --start-docker) start Colima rather than saying keyloom doesn't know the engine", async () => {
+    const launched: string[][] = [];
+    const result = await startDockerEngine({ status: (() => { let n = 0; return async () => (n++ === 0 ? down : { ok: true as const, version: "29.0" }); })(), detect: () => findDockerEngine(lookup), start: async (engine) => (launched.push(engine.command), { ok: true }), sleep: async () => {} });
+    expect(launched).toEqual([["colima", "start"]]);
+    expect(result).toMatchObject({ ok: true, engine: "Colima" });
   });
 });

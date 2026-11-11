@@ -1,10 +1,16 @@
 // One install from a button (D-488, D-489): starts it, follows its output once a second until it finishes, and calls
-// `onDone` when it succeeded so the dialog re-reads what is now on the computer. It can be cancelled (R2-08).
+// `onDone` when it ends so the dialog re-reads what is now on the computer. It can be cancelled (R2-08).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InstallState, InstallableTool } from "../../api/tool-install.ts";
 import { cancelInstall, fetchInstall, startInstall } from "./install-api.ts";
 
 const POLL_MS = 1000;
+
+/**
+ * Whether an install has ended, so the page re-reads what is on the computer. Not only a success: a start that failed after the install, or
+ * a cancel that came after Homebrew finished, still left the tool there.
+ */
+export const installEnded = (state: InstallState): boolean => state.status === "succeeded" || state.status === "failed" || state.status === "cancelled";
 
 export type Install = {
   state: InstallState | null;
@@ -29,7 +35,7 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
       fetchInstall(token, tool, controller.signal)
         .then((next) => {
           setState(next);
-          if (next.status === "succeeded") done.current();
+          if (installEnded(next)) done.current();
         })
         // A missed poll says nothing of its own: a server that stopped answering gets the page's own banner (R2-13), and the next poll carries on.
         .catch(() => undefined);

@@ -3,8 +3,10 @@
 import { describe, expect, test } from "bun:test";
 import type { InstallRunner } from "../../src/app/tool-install.ts";
 import { installDockerWithProgress } from "../../src/cli/install-docker.ts";
+import type { DockerStatus } from "../../src/app/toolchain.ts";
 
-const mac = { platform: "darwin" as const, has: (c: string) => c === "brew" };
+// No Docker here: what the guard needs before it installs anything.
+const mac = { platform: "darwin" as const, has: (c: string) => c === "brew", status: async (): Promise<DockerStatus> => ({ ok: false, kind: "not-installed", reason: "Docker is not on this computer." }) };
 const brew = (exitCode: number): InstallRunner => async (cmd, opts) => {
   opts.onLine(`==> ${cmd.join(" ")}`);
   return { exitCode, timedOut: false };
@@ -31,12 +33,28 @@ describe("installDockerWithProgress", () => {
     expect(lines.at(-1)).toContain("keyloom doctor --start-docker");
   });
 
+  test("where Docker is already here, it installs nothing and says what is there (#277 review)", async () => {
+    let brewed = 0;
+    const runner: InstallRunner = async () => (brewed++, { exitCode: 0, timedOut: false });
+    const running: string[] = [];
+    expect(await installDockerWithProgress((l) => running.push(l), { ...mac, runner, status: async () => ({ ok: true, version: "28.4" }) })).toEqual({ ok: true });
+    expect(running).toEqual(["keyloom: Docker 28.4 is already installed and running, so nothing was installed"]);
+    const stopped: string[] = [];
+    await installDockerWithProgress((l) => stopped.push(l), { ...mac, runner, status: async () => ({ ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." }) });
+    expect(stopped.at(-1)).toContain("nothing was installed");
+    expect(stopped.at(-1)).toContain("keyloom doctor --start-docker");
+    const app: string[] = [];
+    await installDockerWithProgress((l) => app.push(l), { ...mac, runner, status: async () => ({ ok: false, kind: "cli-missing", app: "OrbStack", reason: "OrbStack is installed, but its `docker` command isn't on keyloom's PATH." }) });
+    expect(app.at(-1)).toContain("OrbStack is installed");
+    expect(brewed).toBe(0);
+  });
+
   test("a failed brew and a computer without Homebrew each say so", async () => {
     const failed: string[] = [];
     expect(await installDockerWithProgress((l) => failed.push(l), { ...mac, runner: brew(1) })).toMatchObject({ ok: false, code: "brew_failed" });
     expect(failed.at(-1)).toStartWith("keyloom: Docker didn't install: Homebrew stopped with exit code 1.");
     const none: string[] = [];
-    expect(await installDockerWithProgress((l) => none.push(l), { platform: "linux", has: () => false, runner: brew(0) })).toMatchObject({ ok: false, code: "no_brew" });
+    expect(await installDockerWithProgress((l) => none.push(l), { ...mac, platform: "linux", has: () => false, runner: brew(0) })).toMatchObject({ ok: false, code: "no_brew" });
     expect(none.at(-1)).toContain("names the page to install it from");
   });
 });
