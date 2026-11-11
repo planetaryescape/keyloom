@@ -79,3 +79,11 @@ export class LabCaptureError extends Error {
         : "The keyboard connection has stopped responding. Restart keyloom (or its serve process), then try again.");
   }
 }
+
+/** Why a pasted key was not saved, or a Codex sign-in couldn't start (D-496). The message never holds the key. */
+export class CredentialError extends Error {
+  override name = "CredentialError";
+  constructor(readonly code: "key_malformed" | "key_rejected" | "key_from_environment" | "key_store_unavailable" | "key_store_failed" | "codex_missing", message: string) {
+    super(message);
+  }
+}

@@ -17,7 +17,7 @@ The agent turns BK's frustrations and goals into proposals (D-004, D-005, D-010)
 - **Tool choice:** `auto`, with `strict: true` on the tools whose input is small. `analyse_change` and `propose_changes` are not strict: the ChangeOp union makes a grammar the API rejects as too large (400, checked live 2026-10-15), so zod validates their input instead. Opus 5.5 rejects forced `tool_choice` (`any` or `tool`) with a 400, so the system prompt names the tool to use instead.
 - **Streaming:** responses stream to the chat panel. Tools set `eager_input_streaming: true`. Each tool input is validated with its zod schema before it runs, because streamed inputs aren't validated by the API.
 - **Refusal fallback:** requests include the server-side fallback beta (`server-side-fallback-2026-07-01`, `fallbacks: "default"`) and check `stop_reason` for `refusal` before reading content. Keyboard layouts are unlikely to trigger a classifier. The fallback costs nothing when unused.
-- **Credentials:** BK's own key, read by the SDK's normal resolution order (`ANTHROPIC_API_KEY`, or an `ant auth login` profile). keyloom never stores a key in its database. Other users bring their own key (Q3).
+- **Credentials:** the person's own key, from `ANTHROPIC_API_KEY` or, when that is unset, from a key they saved in the macOS Keychain or the Linux Secret Service (D-496). keyloom never stores a key in its database. Other users bring their own key (Q3).
 
 ## What the agent sees
 

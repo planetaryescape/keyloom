@@ -3,11 +3,12 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
+import { ModelSetup } from "./ModelSetup.tsx";
+import { PROVIDER_NAMES } from "./setup-words.ts";
 import type { Pinned } from "./transcript.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
 
-const NAMES: Record<Provider["id"], string> = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" };
 
 interface Props {
   token: string;
@@ -15,13 +16,15 @@ interface Props {
   /** The provider and model the open conversation started on; it can't switch (D-111). */
   pinned: Pinned | null;
   onChanged: (status: ChatProviderStatus) => void;
+  /** Re-reads the status, when a key save finds it changed under the page (an environment key appeared, the store went away). */
+  onReload: () => void;
   /** The command bar opens the picker from its menu and shows no model line: the model surfaces only when it fails (P3 review). */
   menuOpened?: { open: boolean; onClose: () => void };
 }
 
 // Which model answers, and the way to change it for the next conversation (19#choosing-a-provider).
 // The choice goes to the data directory's config.json; a conversation already going keeps its own.
-export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }: Props) {
+export function ProviderPicker({ token, status, pinned, onChanged, onReload, menuOpened }: Props) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
@@ -129,7 +132,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
       const next = await chooseProvider(token, { provider, ...(typed === "" || typed === chosen?.defaultModel ? {} : { model: typed }) });
       onChanged(next);
       close();
-      setSaved(next.active === null ? null : `Next conversation: ${NAMES[next.active.provider]}, ${next.active.model}.`);
+      setSaved(next.active === null ? null : `Next conversation: ${PROVIDER_NAMES[next.active.provider]}, ${next.active.model}.`);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "Couldn't save the choice.");
     } finally {
@@ -151,7 +154,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
           <span>No model set up</span>
         ) : (
           <>
-            <span>{NAMES[shown.provider]}</span>
+            <span>{PROVIDER_NAMES[shown.provider]}</span>
             {shown.model === null ? null : <span className="chat-provider-model">{shown.model}</span>}
           </>
         )}
@@ -162,7 +165,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
         )}
       </p>}
       {saved === null || open || menuOpened !== undefined ? null : (
-        <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${NAMES[pinned.provider]}.`}</p>
+        <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${PROVIDER_NAMES[pinned.provider]}.`}</p>
       )}
       {!shownOpen || status === null ? null : createPortal(
         <form
@@ -181,7 +184,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
           <div className="provider-picker-content">
           <fieldset disabled={saving || locked !== null}>
             <legend>Model for the next conversation</legend>
-            {status.providers.map((candidate) => (
+            {status.providers.filter((candidate) => candidate.installed || candidate.ready || candidate.id === status.active?.provider).map((candidate) => (
               <label key={candidate.id} className="provider-choice" data-ready={candidate.ready}>
                 <input
                   type="radio"
@@ -193,8 +196,8 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
                   }}
                 />
                 <span className="provider-choice-text">
-                  <strong>{NAMES[candidate.id]}</strong>
-                  <span className="muted">{candidate.ready ? "Ready" : `Needs setup. ${candidate.setup}`}</span>
+                  <strong>{PROVIDER_NAMES[candidate.id]}</strong>
+                  <span className="muted">{candidate.ready ? "Ready" : "Needs setup"}</span>
                 </span>
               </label>
             ))}
@@ -208,8 +211,9 @@ export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }:
               keyloom was started with {locked === "--provider" ? "--provider" : "KEYLOOM_PROVIDER"}, which outranks this choice. Restart it without that to choose here.
             </p>
           )}
-          {chosen === undefined || chosen.ready || locked !== null ? null : (
-            <p className="muted">{NAMES[chosen.id]} has no credential yet. You can choose it now; set it up before the next conversation: <code>{chosen.command}</code></p>
+          {chosen === undefined || locked !== null ? null : (
+            // Set it up, or replace or forget its saved key, right here; the choice below then saves a provider that works (D-496).
+            <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={onReload} />
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
           </div>

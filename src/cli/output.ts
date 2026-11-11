@@ -7,7 +7,11 @@ export type Format = (typeof FORMATS)[number];
 
 export const SCHEMA_VERSION = 1;
 
-export type Io = { out: (text: string) => void; err: (text: string) => void; isTTY: boolean };
+export type Io = {
+  out: (text: string) => void; err: (text: string) => void; isTTY: boolean;
+  /** Standard input, for a secret piped in (`provider key set`); tests pass their own. */
+  stdin?: { isTTY: boolean; text: () => Promise<string> };
+};
 
 export const defaultFormat = (io: Io): Format => (io.isTTY ? "table" : "json");
 

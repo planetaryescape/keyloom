@@ -1,4 +1,4 @@
-import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen } from "lucide-react";
+import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen, X } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApplyResponse, ChatPresentation, ChatSelection, ProposalCard } from "../../api/http.ts";
@@ -16,10 +16,11 @@ import { ChatStopButton, Composer, type SelectedKeys } from "./Composer.tsx";
 import { AgentMotionToggle } from "./AgentWorking.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
+import { ModelSetup } from "./ModelSetup.tsx";
+import { CREDITS_PAGES, PROVIDER_NAMES } from "./setup-words.ts";
 import { ProviderPicker } from "./ProviderPicker.tsx";
 import { chooseProvider, fetchConversation } from "./api-chat.ts";
 
-const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" } as const;
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
@@ -36,7 +37,7 @@ import type { FindingRepairDraft } from "../../api/review.ts";
 import { declinedProposalCodes, refusalReasons, type RecoveryContext, type RecoverySource } from "../../validation/proposal-recovery.ts";
 import { owningRequest, proposalContext } from "./recovery-context.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
-import { activeProviderReady } from "./provider-ready.ts";
+import { activeProviderReady, offersPicker } from "./provider-ready.ts";
 import "./chat.css";
 import "./command-bar.css";
 
@@ -135,6 +136,9 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const repairRunId = useRef<string | null>(null);
   const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);
+  const reloadProvider = useCallback(() => void provider.reload(), [provider.reload]);
+  // Opened by an account failure ("The key was refused"): the setup, with that provider's key field open over the saved one.
+  const [setupOpen, setSetupOpen] = useState<keyof typeof PROVIDER_NAMES | null>(null);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
   const carried = useMemo(() => {
@@ -457,6 +461,17 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // A conversation keeps its provider, so switching after an account failure starts a new one with the failed message back in the box.
   const usedProvider = transcript.pinned?.provider ?? status?.active?.provider;
   const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
+  const setup = { token, status, onChanged: provider.replace, onReload: reloadProvider };
+  // A message refused for a missing key stays in the box; a ready provider takes it in a new conversation, sent when BK is ready.
+  const retry = {
+    pinned: transcript.pinned?.provider ?? null,
+    onRetry: retryDraft,
+    onSwitch: (id: keyof typeof PROVIDER_NAMES) => void chooseProvider(token, { provider: id }).then((next) => {
+      provider.replace(next);
+      chat.newConversation();
+      input.current?.focus();
+    }, () => {}),
+  };
   const switchProvider = (id: string) => {
     const lastAsked = transcript.turns.findLast((turn) => turn.kind === "user");
     void chooseProvider(token, { provider: id as keyof typeof PROVIDER_NAMES }).then((next) => {
@@ -525,7 +540,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     <section className="chat" data-streaming={streaming} data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
       {variant === "bar" ? (
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
-        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
+        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
       ) : null}
       <header className="chat-head" hidden={variant === "bar"}>
         <h2>Chat</h2>
@@ -550,7 +565,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </div>
       </header>
 
-      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} /> : null}
+      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} /> : null}
       {view !== "chat" ? null : <div className="chat-context"><p>Editing {board.name} · {configName ?? layoutRef}</p>{streaming ? <AgentMotionToggle paused={motionPaused} onChange={setMotionPaused} /> : null}</div>}
 
       {view === "decisions" ? (
@@ -618,11 +633,12 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
               if (placedAt.current !== null && Math.abs(el.scrollTop - placedAt.current) >= 2) placedAt.current = null;
             }}
           >
-            {needsModel && chat.problem === null && variant === "bar" && status.providers.some((candidate) => candidate.ready) ? (
-              // In the bar, a provider that is ready is one click away; setting up the chosen one is the fallback (comp d2).
+            {needsModel && chat.problem === null && variant === "bar" && offersPicker(status) ? (
+              // In the bar, a provider that is ready is one click away; setting up the chosen one is the fallback (comp d2). A provider
+              // fixed by --provider or KEYLOOM_PROVIDER can't be switched from here, so then only its setup is offered.
               <div className="bar-needs-model">
                 <p>
-                  <b>{PROVIDER_NAMES[status.active?.provider ?? "anthropic"]} isn&apos;t set up.</b> Use one that is ready, or set it up and restart keyloom.
+                  <b>{PROVIDER_NAMES[status.active?.provider ?? "anthropic"]} isn&apos;t set up.</b> Use one that is ready, or set it up here.
                 </p>
                 <div className="bar-ready">
                   {status.providers
@@ -639,9 +655,10 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                       </button>
                     ))}
                 </div>
+                <ModelSetup {...setup} only={[status.active?.provider ?? "anthropic"]} />
               </div>
             ) : needsModel && chat.problem === null ? (
-              <MissingKey providers={status.providers} onRetry={provider.reload} retryLabel="Check again" />
+              <MissingKey setup={setup} />
             ) : empty && chat.problem === null && carried === null ? (
               <EmptyChat
                 onPick={(prompt) => {
@@ -686,6 +703,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     busy={streaming}
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
+                    onSetUpModel={() => setSetupOpen(usedProvider ?? "anthropic")}
+                    creditsUrl={usedProvider === "anthropic" || usedProvider === "openrouter" ? CREDITS_PAGES[usedProvider] : undefined}
                     compact={variant === "bar"}
                     motionPaused={motionPaused}
                     revised={revised}
@@ -696,7 +715,18 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
               )}
               </>
             )}
-            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} providers={provider.status?.providers ?? []} onRetry={retryDraft} onDismiss={chat.dismissProblem} />}
+            {setupOpen === null || needsModel ? null : (
+              <section className="chat-setup-inline" aria-label="Set up a model">
+                <div className="chat-setup-head">
+                  <strong>Set up a model</strong>
+                  <button type="button" className="icon-button" aria-label="Close model setup" onClick={() => setSetupOpen(null)}>
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </div>
+                <ModelSetup {...setup} replacing={setupOpen} />
+              </section>
+            )}
+            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onDismiss={chat.dismissProblem} />}
           </div>
           {commandRows.length === 0 ? null : (
             <ul className="bar-commands" role="listbox" aria-label="Commands">
