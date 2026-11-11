@@ -2,7 +2,7 @@
 
 keyloom is an open-source, local-first keyboard configurator. You describe a frustration with your layout, an agent proposes validated changes you can preview on the keys, and keyloom builds the firmware and puts it on the keyboard. It runs on QMK boards (ZSA Moonlander), ZMK boards (MoErgo Glove80, foostan Corne, Keebart Corne Choc Pro BT) and the MacBook's built-in keyboard through kanata. It is a bun web app on localhost plus a CLI. There is no hosted backend.
 
-The code is built and released (v0.65.0 at the time of writing). The blueprint in `docs/blueprint/` is the design it follows and the record of why. `docs/blueprint/13-roadmap.md` says what each rung shipped in and what was checked on hardware. If the code and a document disagree, the code is current. Fix the document.
+The code is built and released (v0.74.0 on 11 November 2026). The blueprint in `docs/blueprint/` is the design it follows and the record of why. `docs/blueprint/13-roadmap.md` says what each rung shipped in and what was checked on hardware. If the code and a document disagree, the code is current. Fix the document.
 
 ## Where to start
 

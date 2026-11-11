@@ -93,7 +93,7 @@ export function buildBlockedReason(view: DockerView): string | null {
 /** Whether the dialog should ask the server again by itself: only while Docker is missing and nothing is running. */
 export const recheckDocker = (view: DockerView): boolean => view.kind === "install" || view.kind === "download" || view.kind === "other" || view.kind === "cli-missing";
 
-const TOOL_NAMES = { docker: "Docker", zapp: "Zapp", "dfu-util": "dfu-util", "dfu-programmer": "dfu-programmer", avrdude: "avrdude" } satisfies Record<InstallableTool, string>;
+const TOOL_NAMES = { docker: "Docker", zapp: "Zapp", "dfu-util": "dfu-util", "dfu-programmer": "dfu-programmer", avrdude: "avrdude", codex: "Codex" } satisfies Record<InstallableTool, string>;
 export const toolName = (tool: InstallableTool): string => TOOL_NAMES[tool];
 
 export type FlashStepView =

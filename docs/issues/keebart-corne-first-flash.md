@@ -4,6 +4,8 @@ Status: first flash and acceptance completed 2026-10-30 with build `bld_01M653RH
 
 ## The first flash that completed
 
+Correction, 2026-11-11: the right half's `ENXIO` below came from `open`, so nothing was written to it. The right half already ran `V8GP0NCBGE0T`, the build being flashed, before this flash started. Its verification passed without a write, so this flash proved only the left half. See [uf2-open-failure-taken-as-written](uf2-open-failure-taken-as-written.md).
+
 `POST /api/sync` on the Corne config reused `bld_01M653RH2SPEFMV8GP0NCBGE0T` and started sync `syn_01M659B8588R3NK1BNHXMA6ZM3`. The flasher restarted the right half over its serial port, wrote `right.uf2`, and took the `ENXIO: no such device or address` copy ending as done once `KEEBART` unmounted. It then restarted the **left** half at 1200 baud, wrote `left.uf2`, and waited for both to return:
 
 ```

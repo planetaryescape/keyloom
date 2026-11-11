@@ -847,6 +847,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setChatSelection(null);
   }
 
+  // New combo from the empty combo list (R3-23): the card opens with no keys yet, and clicks on the board pick them.
+  function newCombo() {
+    if (draftBlocks()) return;
+    if (editing !== null) closeEditor(false);
+    setChatOpen(false);
+    setSelectMode(false);
+    setComboDraft({ id: newComboId(layout), isNew: true, name: "", positions: [], layerIds: "all", output: null, timeoutMs: undefined });
+    setComboPicking(true);
+    setCombosOpen(true);
+    setChatSelection(null);
+  }
+
   function openCombo(id: string) {
     const combo = layout.combos.find((candidate) => candidate.id === id);
     if (combo === undefined || draftBlocks()) return;
@@ -2196,7 +2208,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           }
           combo={
             comboDraft !== null ? comboCard : combosOpen ? (
-              <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} />
+              <ComboList layout={layout} onOpen={(combo) => openCombo(combo.id)} onHover={setHoverCombo} onClose={() => { setCombosOpen(false); setHoverCombo(null); }} onNew={newCombo} />
             ) : null
           }
           summary={null}

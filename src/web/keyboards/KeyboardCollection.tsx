@@ -18,17 +18,25 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
   const [removed, setRemoved] = useState(initiallyRemoved);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  // A problem carries its Try again: the action that failed, not a reload of the list (R3-23).
+  const [problem, setProblemState] = useState<{ text: string; retry: () => void } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     const result = await request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, signal);
     if (!signal?.aborted) setItems(result.keyboards);
   }, [token]);
+  const reload = useCallback(() => {
+    setProblemState(null);
+    void load().catch((error) => setProblemState({ text: error instanceof Error ? error.message : "Couldn't load keyboards.", retry: reload }));
+  }, [load]);
+  const setProblem = (text: string | null, retry: () => void = reload) => setProblemState(text === null ? null : { text, retry });
   useEffect(() => {
     dialog.current?.showModal();
     const abort = new AbortController();
     void load(abort.signal).catch((error) => { if (!abort.signal.aborted) setProblem(error instanceof Error ? error.message : "Couldn't load keyboards."); });
     return () => abort.abort();
+    // setProblem is rebuilt each render; the load is what this effect follows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
   const change = async (keyboard: CollectionKeyboard, action: "remove" | "restore") => {
     setBusy(keyboard.boardId); setProblem(null); setNote(null);
@@ -41,7 +49,7 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       onChanged();
       try { await load(); }
       catch { setProblem("The keyboard was updated, but the collection couldn't refresh. Try again to reload the list."); }
-    } catch (error) { setProblem(error instanceof Error ? error.message : "That didn't work."); }
+    } catch (error) { setProblem(error instanceof Error ? error.message : "That didn't work.", () => void change(keyboard, action)); }
     finally { setBusy(null); }
   };
   const download = async (keyboard: CollectionKeyboard) => {
@@ -53,7 +61,7 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       const link = document.createElement("a"); link.href = url; link.download = "keyloom-board-contribution.zip"; link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setNote("Downloaded board data and CONTRIBUTION.md. No personal layouts are included. Nothing was published.");
-    } catch (error) { setProblem(error instanceof Error ? error.message : "Couldn't prepare the contribution."); }
+    } catch (error) { setProblem(error instanceof Error ? error.message : "Couldn't prepare the contribution.", () => void download(keyboard)); }
     finally { setBusy(null); }
   };
   const matches = (items ?? []).filter((k) => (k.removedAt !== null) === removed && `${k.name} ${k.boardId}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -66,7 +74,7 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
         <button type="button" aria-pressed={removed} onClick={() => { setRemoved(true); setConfirm(null); }}>Removed ({items?.filter((k) => k.removedAt !== null).length ?? 0})</button>
       </div>
     </div>
-    {problem ? <p role="alert" className="collection-message">{problem}<button type="button" className="sheet-action" onClick={() => { setProblem(null); void load().catch((error) => setProblem(error instanceof Error ? error.message : "Couldn't load keyboards.")); }}>Try again</button></p> : null}
+    {problem ? <p role="alert" className="collection-message">{problem.text}<button type="button" className="sheet-action" disabled={busy !== null} onClick={problem.retry}>Try again</button></p> : null}
     {note ? <p role="status" className="collection-message">{note}</p> : null}
     <div className="collection-list">
       {items === null && !problem ? <p><LoaderCircle size={16} className="spin" /> Loading your keyboards…</p> : null}

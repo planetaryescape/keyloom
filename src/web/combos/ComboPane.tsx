@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle, MousePointerClick, Trash2, X } from "lucide-react";
+import { ArrowRight, LoaderCircle, MousePointerClick, Plus, Trash2, X } from "lucide-react";
 import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Binding, Combo, Layout } from "../../layout/schema.ts";
@@ -40,6 +40,8 @@ interface ListProps {
   onOpen: (combo: Combo) => void;
   onHover: (id: string | null) => void;
   onClose: () => void;
+  /** Starts a new combo with no keys yet, picking them on the board (R3-23). Absent where the page can't. */
+  onNew?: (() => void) | undefined;
 }
 
 // A combo's keys by what they print on the first layer, the way the board shows them (D-279).
@@ -55,7 +57,7 @@ const layersText = (layout: Layout, layerIds: Combo["layerIds"]) =>
   layerIds === "all" ? "All layers" : layerIds.map((id) => layout.layers.find((layer) => layer.id === id)?.name ?? id).join(", ");
 
 // Every combo in the layout, whatever layer is showing. Hovering a row lights its keys on the board.
-export function ComboList({ layout, onOpen, onHover, onClose }: ListProps) {
+export function ComboList({ layout, onOpen, onHover, onClose, onNew }: ListProps) {
   return (
     <section className="combo-pane" aria-label="Combos">
       <SheetHead
@@ -66,7 +68,15 @@ export function ComboList({ layout, onOpen, onHover, onClose }: ListProps) {
       />
       <div className="sheet-body">
         {layout.combos.length === 0 ? (
-          <p className="sheet-empty">None yet. Shift-click two or more keys on the board, then choose Make a combo.</p>
+          <div className="sheet-empty">
+            <p>None yet. {onNew === undefined ? "Shift-click two or more keys on the board, then choose Make a combo." : "Make one, then click its keys on the board."}</p>
+            {onNew === undefined ? null : (
+              <button type="button" className="sheet-action" onClick={onNew}>
+                <Plus size={14} aria-hidden="true" />
+                New combo
+              </button>
+            )}
+          </div>
         ) : (
           <ul className="sheet-rows">
             {layout.combos.map((combo) => {

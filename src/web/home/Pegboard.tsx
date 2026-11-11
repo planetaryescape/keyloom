@@ -65,7 +65,9 @@ export function Pegboard({ token, layouts, sync, flying, onOpen, onOpenById }: {
 
   return (
     <div className="pegboard-room" data-loaded={loaded}>
-      <section className="pegboard" aria-label="Your keyboards" data-count={hung.length}>
+      <section className="pegboard" aria-labelledby="pegboard-title" data-count={hung.length}>
+        {/* The wall has no visible title in the design; the page still needs one for a screen reader's heading list. */}
+        <h1 id="pegboard-title" className="sr-only">Your keyboards</h1>
         <ul className="peg-grid">
           {hung.map((layout) => {
             const detail = details.get(detailKey(layout));

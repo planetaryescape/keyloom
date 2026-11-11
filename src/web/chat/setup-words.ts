@@ -20,8 +20,8 @@ export const CREDITS_PAGES: Record<KeyProvider, string> = {
 };
 
 /**
- * Where to get the Codex CLI. keyloom can't install it yet (the install job covers Docker and the flashing tools), so a lock to a
- * Codex that isn't installed links here and checks again after.
+ * Where to get the Codex CLI by hand. Where keyloom can install it (Homebrew on a Mac) the setup offers Install Codex through the
+ * install job instead (R3-24); elsewhere a lock to a Codex that isn't installed links here and checks again after.
  */
 export const CODEX_INSTALL_PAGE = "https://developers.openai.com/codex/cli";
 
@@ -37,18 +37,24 @@ export type SetupView =
   /** No key store on this computer: the environment variable is the only way, so the command is shown to copy. */
   | { kind: "env-only"; text: string; command: string; keyPage: string }
   | { kind: "codex-sign-in"; text: string; failed: string | null }
-  /** Codex has to answer (it is locked) but its CLI isn't on this computer. */
-  | { kind: "codex-install"; text: string; page: string }
+  /** Codex has to answer (it is locked) but its CLI isn't on this computer. `canInstall`: keyloom can install it here. */
+  | { kind: "codex-install"; text: string; page: string; canInstall: boolean }
   | { kind: "codex-waiting"; url: string | null };
 
-/** `refused` is true when the provider just turned the key down (a refused key, no credits), so it is no longer shown as Ready. */
-export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "keyStore" | "codexSignIn" | "lockedBy" | "active">, refused = false): SetupView {
+/**
+ * `refused` is true when the provider just turned the key down (a refused key, no credits), so it is no longer shown as Ready.
+ * `desktop` is true in the desktop app, which takes the variable from the shell profile when it opens (D-443), so the way to a new
+ * variable is the profile line and reopening the app, not a terminal `serve` command (R3-07).
+ */
+export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "keyStore" | "codexSignIn" | "lockedBy" | "active">, refused = false, desktop = false): SetupView {
   if (provider.id === "codex") {
     if (status.codexSignIn.state === "waiting") return { kind: "codex-waiting", url: status.codexSignIn.url };
     if (provider.ready) return { kind: "ready", text: "Ready. Signed in to Codex with ChatGPT.", forget: false };
     if (!provider.installed) {
       return lockedProvider(status) === "codex"
-        ? { kind: "codex-install", text: "The Codex CLI isn't installed on this computer. Install it, then check again here.", page: CODEX_INSTALL_PAGE }
+        ? provider.canInstall
+          ? { kind: "codex-install", text: "The Codex CLI isn't installed on this computer. keyloom can install it with Homebrew.", page: CODEX_INSTALL_PAGE, canInstall: true }
+          : { kind: "codex-install", text: "The Codex CLI isn't installed on this computer. Install it, then check again here.", page: CODEX_INSTALL_PAGE, canInstall: false }
         : { kind: "hidden" };
     }
     return {
@@ -61,11 +67,10 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
   const credential = provider.credential;
   if (credential?.source === "environment" && refused) {
     // keyloom can't change a variable it was started with, and a saved key would lose to it; the way out is a new variable.
-    return {
-      kind: "env-only",
-      text: `${PROVIDER_NAMES[id]} didn't accept ${ENV_NAMES[id]} from your environment, ending ${credential.last4}. Start keyloom again with another key in ${ENV_NAMES[id]}.`,
-      command: provider.command, keyPage: KEY_PAGES[id],
-    };
+    const refusedText = `${PROVIDER_NAMES[id]} didn't accept ${ENV_NAMES[id]} from your environment, ending ${credential.last4}.`;
+    return desktop
+      ? { kind: "env-only", text: `${refusedText} ${profileStep(id)}`, command: profileLine(id), keyPage: KEY_PAGES[id] }
+      : { kind: "env-only", text: `${refusedText} Start keyloom again with another key in ${ENV_NAMES[id]}.`, command: provider.command, keyPage: KEY_PAGES[id] };
   }
   if (credential?.source === "environment") {
     return { kind: "ready", text: `Ready. Using ${ENV_NAMES[id]} from your environment, ending ${credential.last4}.`, forget: false };
@@ -74,10 +79,17 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
     return { kind: "ready", text: `Ready. Saved in ${STORE_NAMES[status.keyStore]}, ending ${credential.last4}.`, forget: true };
   }
   if (status.keyStore === null) {
-    return { kind: "env-only", text: `This computer has no keyring keyloom can save to. Start keyloom with ${ENV_NAMES[id]} set.`, command: provider.command, keyPage: KEY_PAGES[id] };
+    const none = "This computer has no keyring keyloom can save to.";
+    return desktop
+      ? { kind: "env-only", text: `${none} ${profileStep(id)}`, command: profileLine(id), keyPage: KEY_PAGES[id] }
+      : { kind: "env-only", text: `${none} Start keyloom with ${ENV_NAMES[id]} set.`, command: provider.command, keyPage: KEY_PAGES[id] };
   }
   return { kind: "paste", note: `keyloom checks the key with ${PROVIDER_NAMES[id]}, then keeps it in ${STORE_NAMES[status.keyStore]}.` };
 }
+
+// The desktop app's way to set a key: a line in the login shell's profile, read when it opens (D-443).
+const profileLine = (id: KeyProvider): string => `export ${ENV_NAMES[id]}=<your key>`;
+const profileStep = (id: KeyProvider): string => `Put this line in your shell profile (such as ~/.zshrc), replacing any ${ENV_NAMES[id]} line there, then quit keyloom and open it again.`;
 
 /**
  * The way round a key store that refuses to save (R2-16): keyloom reads the key from its environment variable instead. The desktop
@@ -86,7 +98,7 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
 export function storeFallback(id: KeyProvider, desktop: boolean): { text: string; command: string } {
   const name = ENV_NAMES[id];
   return desktop
-    ? { text: `If saving keeps failing, keyloom can read the key from ${name}. Add this line to your shell profile (such as ~/.zshrc), then quit keyloom and open it again.`, command: `export ${name}=<your key>` }
+    ? { text: `If saving keeps failing, keyloom can read the key from ${name}. Add this line to your shell profile (such as ~/.zshrc), then quit keyloom and open it again.`, command: profileLine(id) }
     : { text: `If saving keeps failing, keyloom can read the key from ${name}. Start keyloom with it set:`, command: `${name}=<your key> keyloom serve` };
 }
 

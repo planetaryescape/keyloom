@@ -4,8 +4,7 @@ Use the Keebart Corne's knobs for horizontal and vertical pointer movement on Ba
 with volume and brightness turns on Numbers. Keep mute and play/pause on the
 Numbers presses, and use left/right clicks on Base.
 
-**Availability:** requires the D-471 encoder implementation; v0.65.0 does not
-include it. Check your installed version's changelog, or run from this clone.
+**Availability:** shipped in v0.67.0 (D-471). Earlier versions don't have it.
 Source generation and a real build for both halves passed;
 physical pointer behavior has not been tested. This recipe uses synthetic data
 and does not flash a keyboard.

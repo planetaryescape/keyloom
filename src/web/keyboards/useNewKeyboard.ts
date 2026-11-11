@@ -40,6 +40,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [found, setFound] = useState<ApiCandidate[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // A board preview that failed stops the "Reading…" and offers Try again, which reads it again (R3-08).
+  const [previewProblem, setPreviewProblem] = useState<string | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
   const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
@@ -82,17 +85,20 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     if (step.kind !== "confirm" && step.kind !== "review") return;
     const controller = new AbortController();
     setProblem(null);
+    setPreviewProblem(null);
+    // The drawing of the old home row or controller must not stay up while the new one is read, or a failed read would hide behind it.
+    setPreview(null);
     api.previewKeyboard(token, {
       candidate: step.candidate.id,
       ...(step.homeRow === null ? {} : { homeRow: step.homeRow }),
       ...(step.controller === null ? {} : { controller: step.controller }),
     }, controller.signal).then((p) => { if (!controller.signal.aborted) setPreview(p); }, (e) => {
-      if (!controller.signal.aborted) setProblem(message(e));
+      if (!controller.signal.aborted) setPreviewProblem(message(e));
     });
     return () => controller.abort();
-    // The key stands for the step's inputs.
+    // The key stands for the step's inputs; the attempt is Try again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, confirmKey]);
+  }, [token, confirmKey, previewAttempt]);
 
   // What the put would make, mapped, before anything is made.
   const putKey = step.kind === "put" && step.source !== null ? `${step.boardId}|${step.source}|${JSON.stringify(step.choices)}` : null;
@@ -137,7 +143,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setProblem(null); setPreview(null);
       setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null });
     },
-    step, preview, putPreview, busy, problem, waiting, setupWaiting, searchText, found, activities, setActivities,
+    step, preview, previewProblem, putPreview, busy, problem, waiting,
+    /** Reads the board preview again after it failed. */
+    retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));

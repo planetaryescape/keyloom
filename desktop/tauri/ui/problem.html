@@ -127,6 +127,8 @@
     document.getElementById("busy").hidden = !state.busy;
     document.getElementById("detail").textContent = state.detail || "";
     document.getElementById("details").hidden = !state.detail;
+    // The server's last lines are the why, so they show without a click (R3-16).
+    document.getElementById("details").open = Boolean(state.detail);
     const actions = document.getElementById("actions");
     actions.replaceChildren(...state.actions.map((action) => {
       const link = document.createElement("a");

@@ -1,4 +1,4 @@
-import { ArrowLeft, LoaderCircle, Search, Zap } from "lucide-react";
+import { ArrowLeft, LoaderCircle, RefreshCw, Search, Zap } from "lucide-react";
 import { useState } from "react";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import "../review/review.css";
@@ -63,6 +63,17 @@ export function NewBoardPanel({ flow, sources, onMade }: { flow: NewKeyboard; so
   return null;
 }
 
+// A preview that couldn't be read says why and reads it again, instead of "Reading…" for ever (R3-08).
+function Reading({ flow }: { flow: NewKeyboard }) {
+  if (flow.previewProblem === null) return <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Reading…</p>;
+  return (
+    <div className="nb-problem" role="alert">
+      <p>keyloom couldn't draw this board. {flow.previewProblem}</p>
+      <button type="button" className="sheet-action" onClick={flow.retryPreview}><RefreshCw size={13} aria-hidden="true" />Try again</button>
+    </div>
+  );
+}
+
 function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse | null }) {
   const step = flow.step;
   if (step.kind !== "confirm") return null;
@@ -74,10 +85,10 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Candidates</button>
         <h2>Your {preview?.displayName ?? step.candidate.name}, as {step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it</h2>
-        <p className="nb-lead">{preview === null ? "Reading its layout from the firmware's own tree…" : `${preview.keyCount} keys from the firmware's own layout. ${needsController ? "Two things" : "One thing"} can't be read over USB; tell keyloom once.`}</p>
+        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : `${preview.keyCount} keys from the firmware's own layout. ${needsController ? "Two things" : "One thing"} can't be read over USB; tell keyloom once.`}</p>
       </header>
       <div className="nb-panel-body">
-        {preview === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Reading…</p> : (
+        {preview === null ? <Reading flow={flow} /> : (
           <>
             <div className="nb-step">
               <h3><span>1</span>Where do your fingers rest?</h3>
@@ -123,7 +134,7 @@ function Review({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse
         <p className="nb-lead">Each key shows the finger keyloom expects to press it. If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
       </header>
       <div className="nb-panel-body">
-        {board === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Reading…</p> : (
+        {board === null ? <Reading flow={flow} /> : (
           <>
             <dl className="nb-facts">
               <dt>Keys</dt><dd>{board.keys.length}{board.thumbs.length > 0 ? `, ${plural(board.thumbs.length, "thumb key")}` : ""}</dd>

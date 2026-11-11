@@ -11,6 +11,8 @@ Fix:
 - When the half then doesn't come back, say that it may have incomplete firmware, and give that half's bootloader instruction so the user can rewrite it. The rewrite needs no other recovery.
 - Add a test with a fake volume that unmounts mid-copy.
 
+Status update, 2026-11-11: an error from the image write's `open` is no longer taken as done (D-504, v0.74.0). A failed `open` writes nothing; see [uf2-open-failure-taken-as-written](uf2-open-failure-taken-as-written.md). Errors after the open keep the rule below.
+
 Status: fixed in `3a693cd1`, released in v0.53.0 (D-437). A half that doesn't come back is now told its firmware may be incomplete and given its own bootloader instruction to rewrite it, before the cable advice. The copy itself still counts an ENXIO-plus-unmount ending as done, because on 2026-10-16 exactly that ending was a complete write; the post-flash check is what tells the two apart. D-465 later supersedes the part of this rule that refuses an absent peer: a peer absent from USB no longer blocks a restart or write, while a peer present and unidentifiable still does.
 
 

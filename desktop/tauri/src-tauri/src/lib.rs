@@ -33,6 +33,8 @@ pub struct AppState {
     pub server: Mutex<Option<Server>>,
     pub sidecar: Mutex<Option<sidecar::Running>>,
     pub sync_layout: Mutex<Option<String>>,
+    /// The last lines the running server wrote, for the problem window when it keeps stopping (R3-16).
+    pub server_tail: Mutex<std::collections::VecDeque<String>>,
     pub retry: tokio::sync::Notify,
     /// Signalled when the person picks the item that replaces an incompatible server (offered only when the CLI offers it).
     pub replace: tokio::sync::Notify,
@@ -50,7 +52,7 @@ pub struct AppState {
 }
 
 // Open keyloom, the Dock icon and a second launch bring forward the page, or the problem window while there is no page to show.
-fn show_window(app: &AppHandle) {
+pub(crate) fn show_window(app: &AppHandle) {
     if !problem::bring_forward_problem(app) {
         problem::bring_forward(app, "main");
     }
@@ -135,7 +137,7 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
                         reveal = false;
                         continue;
                     }
-                    None => problem::Stop::KeepsStopping { times: restarts.stops() },
+                    None => problem::Stop::KeepsStopping { times: restarts.stops(), output: sidecar::last_output(&app) },
                 }
             }
             Err(failure) => problem::Stop::Failed(failure),
@@ -229,7 +231,7 @@ pub fn run() {
                     move |app, event| match event.id().as_ref() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
-                        id @ (problem::REPLACE | problem::TRY_AGAIN) => problem::act(app, id),
+                        id @ (problem::REPLACE | problem::TRY_AGAIN | problem::DOWNLOAD) => problem::act(app, id),
                         #[cfg(feature = "updater")]
                         "update" => updates::menu_item(app),
                         "login" => {
@@ -256,7 +258,7 @@ pub fn run() {
             });
 
             #[cfg(feature = "updater")]
-            tauri::async_runtime::spawn(updates::watch(handle.clone(), update.clone()));
+            tauri::async_runtime::spawn(updates::watch(handle.clone(), menu.clone(), update.clone()));
 
             // Everything that waits on the server runs off the setup thread so the menu-bar extra shows at once.
             let items = menu_bar::Items { menu, summary, sync_now, lines: Mutex::new(Vec::new()) };

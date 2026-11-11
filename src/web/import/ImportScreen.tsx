@@ -1,10 +1,11 @@
-import { ArrowLeft, Check, Copy, ExternalLink, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, FilePlus2, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
-import { boardTitle } from "../shell/Header.tsx";
-import { ApiError } from "../api.ts";
+import { boardDisplayName, boardTitle } from "../shell/Header.tsx";
+import { createConfig } from "../configs/api-configs.ts";
+import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
-import { acceptsFile, guideFor, importCommand } from "./export-steps.ts";
+import { acceptsFile, firstFreeName, guideFor, importCommand, offersStartBlank } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -17,13 +18,15 @@ interface Props {
   token: string;
   /** Called once the server has saved the layout; the caller shows it. */
   onImported: (result: ImportResponse) => void;
+  /** Called with a blank config's id once it is made, when there was nothing to import (R3-12); the caller opens it. */
+  onStartedBlank: (layoutId: string) => void;
   /** Present when there are layouts to go back to; the first-run screen has none. */
   onBack?: (() => void) | undefined;
 }
 
 // What the app shows with no layouts, and from the layout menu's "Import a layout" (18#states): one card per board, each
 // saying which file to export and taking it by drop, so no terminal is needed. The CLI command stays underneath.
-export function ImportScreen({ token, onImported, onBack }: Props) {
+export function ImportScreen({ token, onImported, onStartedBlank, onBack }: Props) {
   const [boards, setBoards] = useState<Boards>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
@@ -68,7 +71,7 @@ export function ImportScreen({ token, onImported, onBack }: Props) {
         <ul className="board-cards" aria-label="Supported keyboards">
           {inOrder(boards.boards).map((board) => (
             <li key={board.id}>
-              <BoardCard board={board} token={token} onImported={onImported} activities={activities} />
+              <BoardCard board={board} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} />
             </li>
           ))}
         </ul>
@@ -84,13 +87,15 @@ function inOrder(boards: readonly BoardChoice[]): BoardChoice[] {
   return [...boards].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
-function BoardCard({ board, token, onImported, activities }: { board: BoardChoice; token: string; onImported: (result: ImportResponse) => void; activities: ReviewActivity[] }) {
+function BoardCard({ board, token, onImported, onStartedBlank, activities }: { board: BoardChoice; token: string; onImported: (result: ImportResponse) => void; onStartedBlank: (layoutId: string) => void; activities: ReviewActivity[] }) {
   const guide = guideFor(board);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // Saved, but the answer couldn't be read: the page reloads to show it, and the card takes nothing more until then (R2-17).
   const [saved, setSaved] = useState(false);
+  // This Mac has no Karabiner settings: nothing to import, so the card offers a blank config instead (R3-12).
+  const [nothingToRead, setNothingToRead] = useState(false);
   const [copied, setCopied] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
@@ -121,16 +126,33 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
   async function readFromMac() {
     setBusy(true);
     setProblem(null);
+    setNothingToRead(false);
     let file: File;
     try {
       file = await readKarabinerConfig(token);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "keyloom couldn't read Karabiner's settings.");
+      setNothingToRead(error instanceof ApiError && offersStartBlank(error.code));
       return;
     } finally {
       setBusy(false);
     }
     await take([file]);
+  }
+
+  async function startBlank() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      // Config names are unique, so a second Start blank takes the next free "… daily N" rather than failing the same way each time.
+      const taken = (await fetchLayouts(token, new AbortController().signal)).map((layout) => layout.name);
+      const config = await createConfig(token, { from: "blank", name: firstFreeName(`${boardDisplayName(board.name)} daily`, taken), board: board.id });
+      onStartedBlank(config.id);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "keyloom couldn't start a blank config.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function copy() {
@@ -209,6 +231,12 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
         />
       </div>
       {problem === null ? null : <p className="board-card-problem" role="alert"><TriangleAlert size={14} aria-hidden="true" />{problem}</p>}
+      {nothingToRead ? (
+        <button type="button" className="button button-primary board-card-reload" disabled={busy} onClick={() => void startBlank()}>
+          <FilePlus2 size={14} aria-hidden="true" />
+          Start blank
+        </button>
+      ) : null}
       {saved ? (
         <button type="button" className="button button-primary board-card-reload" onClick={() => window.location.reload()}>
           <RefreshCw size={14} aria-hidden="true" />

@@ -123,7 +123,7 @@ export function TopBar({ onHome, boards, boardsAfter, sync, ask, undo, menu, onM
           </button>
         )}
         {ask === undefined ? null : (
-          <button type="button" className="topbar-ask" aria-pressed={ask.open} onClick={ask.onToggle}>
+          <button type="button" className="topbar-ask" aria-label="Ask keyloom" aria-keyshortcuts="Meta+K" aria-pressed={ask.open} onClick={ask.onToggle}>
             <Search size={15} aria-hidden="true" />
             <span className="topbar-ask-text">Ask keyloom</span>
             <kbd>⌘K</kbd>
