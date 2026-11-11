@@ -203,6 +203,20 @@ describe("Host check covers the page and its assets", () => {
     expect(faces).toHaveLength(2);
   });
 
+  test("the page links the app's icon, and /favicon.ico answers with it instead of a 404", async () => {
+    const { port } = start();
+    const host = { host: `127.0.0.1:${port}` };
+    const html = await (await api(port, "/", host)).text();
+    const iconPath = html.match(/<link rel="icon"[^>]*href="(?:\.)?(\/[^"]+\.png)"/)?.[1];
+    expect(iconPath).toBeDefined();
+    const linked = await api(port, iconPath!, host);
+    const ico = await api(port, "/favicon.ico", host);
+    expect(ico.status).toBe(200);
+    expect(ico.headers.get("content-type")).toContain("image/png");
+    expect(new Uint8Array(await ico.arrayBuffer())).toEqual(new Uint8Array(await linked.arrayBuffer()));
+    expect((await api(port, "/favicon.ico", { host: "evil.example" })).status).toBe(403);
+  });
+
   test("an unknown path or a traversal attempt is 403 for a foreign Host, and 404 for the right one", async () => {
     const { port } = start();
     for (const path of ["/nope", "/../../etc/passwd", "/%2e%2e/secret"]) {
