@@ -115,6 +115,7 @@ pub fn install_label(version: &str) -> String {
 }
 
 /// The menu item after a failed install: it installs the same version again.
+#[cfg_attr(not(feature = "updater"), allow(dead_code))]
 pub fn retry_install_label(version: &str) -> String {
     format!("Couldn't install {version}. Try again")
 }
@@ -151,7 +152,7 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
         },
         Stop::Failed(Failure::Incompatible { words, replace: None }) => {
             let download = || action(DOWNLOAD, "Download the latest keyloom");
-            let busy = matches!(updates, Updates::Installing(_));
+            let busy = matches!(updates, Updates::Installing { .. });
             let (note, list) = match updates {
                 Updates::Off => ("Install the latest keyloom app over this one, then open it again.".to_string(), vec![download(), try_again(), show_log()]),
                 Updates::Checking => ("Checking for a newer version of this app…".to_string(), vec![try_again(), show_log()]),
@@ -368,8 +369,8 @@ mod tests {
         assert!(installing.busy);
         assert_eq!(ids(&installing), [SHOW_LOG], "no Install button that does nothing during the download");
         assert!(installing.note.as_deref().unwrap().contains("Downloading version 0.80.0: 40%"));
-        let unsized = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: None });
-        assert!(unsized.note.as_deref().unwrap().contains("Downloading version 0.80.0…"));
+        let no_size = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: None });
+        assert!(no_size.note.as_deref().unwrap().contains("Downloading version 0.80.0…"));
         assert_eq!(ids(&view(&stop, &Updates::UpToDate))[..2], [DOWNLOAD, CHECK_UPDATES]);
         assert_eq!(ids(&view(&stop, &Updates::Failed))[..2], [CHECK_UPDATES, DOWNLOAD]);
     }
