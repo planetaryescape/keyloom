@@ -24,8 +24,8 @@ const MAX_SHOWN = 3;
 
 export const toastLifetime = (kind: ToastKind, hasAction: boolean): number => (hasAction ? Math.max(ACTION_MIN_MS, LIFETIME_MS[kind]) : LIFETIME_MS[kind]);
 
-type Clock = { now: () => number; set: (fn: () => void, ms: number) => unknown; clear: (timer: unknown) => void };
-const realClock: Clock = { now: () => Date.now(), set: (fn, ms) => window.setTimeout(fn, ms), clear: (timer) => window.clearTimeout(timer as number) };
+type Clock = { now: () => number; set: (fn: () => void, ms: number) => number; clear: (timer: number) => void };
+const realClock: Clock = { now: () => Date.now(), set: (fn, ms) => window.setTimeout(fn, ms), clear: (timer) => window.clearTimeout(timer) };
 
 /**
  * A countdown that stops while something holds it: the pointer over the toast, or focus inside it. When the last hold ends it runs on
@@ -34,7 +34,7 @@ const realClock: Clock = { now: () => Date.now(), set: (fn, ms) => window.setTim
 export function dismissTimer(ms: number, onDone: () => void, clock: Clock = realClock) {
   let remaining = ms;
   let started = clock.now();
-  let timer: unknown = clock.set(onDone, ms);
+  let timer: number | undefined = clock.set(onDone, ms);
   const holds = new Set<string>();
   return {
     hold(reason: string): void {
@@ -91,7 +91,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       onMouseLeave={() => timer.current?.release("pointer")}
       onFocus={() => timer.current?.hold("focus")}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) timer.current?.release("focus");
+        const next = event.relatedTarget;
+        if (!(next instanceof Node && event.currentTarget.contains(next))) timer.current?.release("focus");
       }}
     >
       <Icon size={16} aria-hidden="true" />

@@ -15,7 +15,7 @@ function clock() {
       timers.set(next, { at: now + ms, fn });
       return next;
     },
-    clear: (id: unknown) => void timers.delete(id as number),
+    clear: (id: number) => void timers.delete(id),
     tick(ms: number) {
       now += ms;
       for (const [id, t] of [...timers]) {

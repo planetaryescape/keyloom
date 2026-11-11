@@ -2,10 +2,9 @@ import { CircleCheck, Circle, ExternalLink, Info, LoaderCircle, RefreshCw } from
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RemapperSetupResponse } from "../../api/system-remapper.ts";
 import type { SyncApi } from "./useSync.ts";
-import { type SetupActionId, type SetupStep, attentionSteps, setupFailure, setupSteps } from "./remapper-words.ts";
+import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, setupFailure, setupSteps } from "./remapper-words.ts";
 
 type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; message: string };
-type Problem = ReturnType<typeof setupFailure>;
 
 const actionKey = (id: SetupActionId) => (id.kind === "open_settings" ? `pane:${id.pane}` : id.kind);
 // Often enough that Homebrew's lines read as progress, not so often that a long install floods the server.
@@ -22,7 +21,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [problem, setProblem] = useState<SetupFailure | null>(null);
   const { status: readStatus, installKanata, cancelInstall, startKanata, openSettings } = sync.remapperSetup;
 
   const check = useCallback(async () => {
@@ -151,7 +150,7 @@ function LogTail({ lines }: { lines: string[] }) {
   return <pre ref={box} className="sync-setup-log" aria-label="What Homebrew printed last">{text}</pre>;
 }
 
-function ProblemLine({ problem }: { problem: Problem | null }) {
+function ProblemLine({ problem }: { problem: SetupFailure | null }) {
   if (problem === null) return null;
   return (
     <p className="sync-setup-problem" role="alert">

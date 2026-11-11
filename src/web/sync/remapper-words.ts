@@ -152,8 +152,11 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
 /** The steps that still need doing while kanata runs: an update, or setting it up again. */
 export const attentionSteps = (status: RemapperSetupResponse): SetupStep[] => setupSteps(status).filter((s) => s.whileRunning && s.state !== "done");
 
-/** What to say, and where to go, for a setup step that didn't work, from its code. */
-export function setupFailure(code: string, reason: string): { text: string; link: { href: string; label: string } | null } {
+/** What to say, and where to go, for a setup step that didn't work. */
+export type SetupFailure = { text: string; link: SetupStep["link"] };
+
+/** The SetupFailure for a step's code. */
+export function setupFailure(code: string, reason: string): SetupFailure {
   switch (code) {
     case "cancelled": return { text: "You cancelled the password dialog, so kanata didn't start. Press the button again when you're ready.", link: null };
     case "no_kanata": return { text: "Install kanata first.", link: null };

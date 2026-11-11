@@ -139,7 +139,9 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
  * What auto-sync does, for the popover's switch. `name` is what the switch is called: a remapper applies a config, it doesn't sync
  * firmware, so the MacBook's switch and the words that point at it say "Auto-apply" (R2-11).
  */
-export function autoSyncLine(board: BoardSync): { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null } {
+export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canTurnOn: boolean; note: string | null };
+
+export function autoSyncLine(board: BoardSync): AutoSyncLine {
   const a = board.auto;
   return {
     name: board.remapper === true ? "Auto-apply" : "Auto-sync",
