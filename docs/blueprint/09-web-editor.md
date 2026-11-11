@@ -1,6 +1,6 @@
 # 09: Web editor
 
-Status update, 2026-11-02: contextual proposal recovery is built (D-480). Status update, 2026-11-11: Build and flash installs Docker and the flash tool from buttons, gives a board keyloom can't flash its file, and its Try again repeats what failed (D-488 to D-491).
+Status update, 2026-11-02: contextual proposal recovery is built (D-480). Status update, 2026-11-11: Build and flash installs Docker and the flash tool from buttons, gives a board keyloom can't flash its file, and its Try again repeats what failed (D-488 to D-491). A Docker that refuses this account shows how to get access instead of a Start button (D-497).
 
 Recovery keeps the source request and its refining question/answer chain, including after reload; it does not substitute a later unrelated message. Proposed cards use current validation to gate every Apply and native-replacement confirmation. Applied and superseded cards show their saved validation rather than replaying non-idempotent operations against today's head.
 

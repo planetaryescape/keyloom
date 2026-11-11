@@ -186,7 +186,12 @@ describe("refusalNotice", () => {
     expect(refusalNotice("cant_sync", cli).action).toEqual({ id: "open_release", label: "Build and flash…" });
     expect(refusalNotice("foreign_firmware", cli).action).toEqual({ id: "open_release", label: "Build and flash…" });
     expect(refusalNotice("kanata_foreign", cli).action).toEqual({ id: "replace_foreign", label: "Replace it…" });
-    for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running"]) {
+    // An exit-chord check that couldn't read kanata, or found it running, offers the check again rather than a dead end (D-497).
+    expect(refusalNotice("kanata_unreadable", cli)).toMatchObject({ message: "keyloom couldn't tell whether kanata stopped", action: { id: "check_exit_chord", label: "Check again" } });
+    expect(refusalNotice("kanata_still_running", cli).action).toEqual({ id: "check_exit_chord", label: "Check again" });
+    // A stale Replace it has nothing to retry: no button.
+    expect(refusalNotice("kanata_not_foreign", cli).action).toBeUndefined();
+    for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running", "kanata_unreadable", "kanata_not_foreign"]) {
       const n = refusalNotice(code, cli);
       expect(`${n.message} ${n.detail ?? ""}`).not.toContain("keyloom config");
       expect(`${n.message} ${n.detail ?? ""}`).not.toContain("`");

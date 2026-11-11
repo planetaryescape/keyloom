@@ -9,6 +9,7 @@ const missing = (canInstall: boolean): DockerReadinessResponse => ({
   install: canInstall
     ? { engine: "Colima", command: "brew install colima docker", url: "https://colima.run", note: "No app to keep open.", canInstall: true, alternatives: [{ name: "Docker Desktop", url: "https://d" }] }
     : { engine: "Docker Desktop", command: null, url: "https://www.docker.com/products/docker-desktop/", note: "OrbStack works too.", canInstall: false, alternatives: [] },
+  access: null,
 });
 const ready: DockerReadinessResponse = { ok: true, version: "29.0", engine: "Docker", autoStart: true };
 const install = (over: Partial<InstallState>): InstallState => ({ tool: "docker", status: "running", phase: "installing", logTail: ["==> Downloading"], error: null, errorCode: null, ...over });
@@ -29,8 +30,13 @@ describe("dockerView", () => {
   });
 
   test("a stopped engine is a start, not an install, and an unknown one shows its own sentence without backticks", () => {
-    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null }, false, null, null)).toEqual({ kind: "down", engine: "Colima", canStart: true });
-    expect(dockerView({ ok: false, problem: "cli-missing", reason: "its `docker` command isn't on keyloom's PATH", engine: null, canStart: false, autoStart: true, install: null }, false, null, null)).toEqual({ kind: "other", reason: "its docker command isn't on keyloom's PATH" });
+    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "down", engine: "Colima", canStart: true });
+    // A daemon that refuses this account is never a Start button: on Linux the group command to copy, on a Mac the engine to reopen (D-497).
+    const refused = (access: { command: string | null; note: string }): DockerReadinessResponse => ({ ok: false, problem: "no-access", reason: "permission denied", engine: "Colima", canStart: false, autoStart: true, install: null, access });
+    expect(dockerView(refused({ command: "sudo usermod -aG docker $USER", note: "Log out and back in." }), false, null, null)).toEqual({ kind: "no-access", command: "sudo usermod -aG docker $USER", note: "Log out and back in." });
+    expect(dockerView(refused({ command: null, note: "Quit Colima and open it again, then check again." }), false, null, null)).toMatchObject({ kind: "no-access", command: null });
+    expect(buildBlockedReason({ kind: "no-access", command: null, note: "" })).toBe("Give keyloom access to Docker first.");
+    expect(dockerView({ ok: false, problem: "cli-missing", reason: "its `docker` command isn't on keyloom's PATH", engine: null, canStart: false, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "other", reason: "its docker command isn't on keyloom's PATH" });
     expect(dockerView(ready, true, null, null)).toEqual({ kind: "starting", engine: "Docker" });
     expect(dockerView(ready, false, "if it fails, run `colima restart`", null)).toEqual({ kind: "start-failed", reason: "if it fails, run colima restart" });
   });

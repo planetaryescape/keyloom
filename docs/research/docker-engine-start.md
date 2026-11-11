@@ -27,7 +27,7 @@ Docker stays. What changed is that a closed engine is keyloom's problem, not the
 
 ## What was observed
 
-**BK's Mac, 2026-11-10.** `docker context show` says `colima`. `colima status` said "colima is running using macOS Virtualization.Framework", but `docker version` refused: `Cannot connect to the Docker daemon at unix:///Users/bhekanik/.colima/default/docker.sock`, with a stale socket from 2026-11-03. So the VM is up and the daemon inside it is wedged: `colima start` would answer "already running" and change nothing. That is why `detectDockerEngine` asks `colima list --json` and picks `colima restart` for a VM that is already running.
+**BK's Mac, 2026-11-10.** `docker context show` says `colima`. `colima status` said "colima is running using macOS Virtualization.Framework", but `docker version` refused: `Cannot connect to the Docker daemon at unix:///Users/bhekanik/.colima/default/docker.sock`, with a stale socket from 2026-11-03. So the VM is up and the daemon inside it is wedged: `colima start` would answer "already running" and change nothing. That is why `detectDockerEngine` asks `colima list --json` and picks `colima restart` for a VM that is already running. The refusal is the evidence: since D-497 a `docker version` that only times out is asked again until it answers or refuses, because restarting a busy VM would stop what it runs, and a "permission denied" is `no-access`, which no start fixes.
 
 `bun src/cli/main.ts doctor --start-docker --data-dir <scratch>`:
 

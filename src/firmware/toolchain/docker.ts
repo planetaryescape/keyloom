@@ -8,8 +8,12 @@ import { capture, which } from "./run.ts";
 /**
  * `daemon-down` is the one a start fixes; `slow` may still come up. `not-installed` has no engine at all,
  * and `cli-missing` has one whose `docker` command never reached keyloom's PATH: the fix is a link, not an install.
+ * `no-access` is a daemon that is there but refuses this account its socket: a start can't fix that (D-497).
  */
-export type DockerProblem = "not-installed" | "cli-missing" | "daemon-down" | "slow";
+export type DockerProblem = "not-installed" | "cli-missing" | "daemon-down" | "slow" | "no-access";
+
+/** On Linux the daemon's socket belongs to the `docker` group; joining it is Docker's documented fix, and it needs a new login. */
+export const DOCKER_GROUP_COMMAND = "sudo usermod -aG docker $USER";
 
 export type DockerStatus = { ok: true; version: string } | { ok: false; kind: DockerProblem; reason: string };
 
@@ -23,9 +27,25 @@ export async function dockerStatus(timeoutMs = 15_000): Promise<DockerStatus> {
       : { ok: false, kind: "cli-missing", reason: `${app.name} is installed, but its \`docker\` command isn't on keyloom's PATH. ${cliFix(app)}` };
   }
   const r = await capture(["docker", "version", "--format", "{{.Server.Version}}"], { timeoutMs });
-  if (r.timedOut) return { ok: false, kind: "slow", reason: "Docker did not answer within 15 s; it may still be starting." };
-  if (r.exitCode !== 0) return { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
+  if (r.timedOut) return { ok: false, kind: "slow", reason: `Docker did not answer within ${Math.round(timeoutMs / 1000)} s; it may still be starting.` };
+  if (r.exitCode !== 0) return versionFailure(`${r.stderr}\n${r.stdout}`);
   return { ok: true, version: r.stdout.trim() };
+}
+
+/**
+ * Why `docker version` failed, from what it printed: the exit code is 1 for a stopped daemon and for a socket this account may not
+ * open alike. "permission denied" is the CLI's own wording for the second (docs.docker.com/engine/install/linux-postinstall).
+ */
+export function versionFailure(output: string, platform: NodeJS.Platform = process.platform): DockerStatus {
+  // Only the socket's own error counts: the CLI also says "permission denied" when ~/.docker/config.json is unreadable (a root-owned file
+  // after `sudo docker login`), and a stopped daemon behind that warning still needs starting.
+  if (!/(permission denied while trying to connect to the docker|connect: permission denied)/i.test(output)) return { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
+  return {
+    ok: false, kind: "no-access",
+    reason: platform === "linux"
+      ? `Docker is running, but your account isn't allowed to use it. Add yourself to the docker group with \`${DOCKER_GROUP_COMMAND}\`, then log out and back in, and start keyloom again.`
+      : "Docker is running, but keyloom isn't allowed to open its socket. Quit your Docker app and open it again, then check again.",
+  };
 }
 
 export const LOW_DISK_BYTES = 15 * 1024 ** 3;
@@ -316,12 +336,12 @@ export async function findDockerEngine(over: EngineLookup = {}): Promise<EngineF
 }
 
 export type StartDockerOptions = {
-  /** How long the engine may take to answer before keyloom gives up; a cold Docker Desktop takes 15-40 s. */
+  /** The one deadline for the whole start: the launch command and the wait after it share it. A cold Docker Desktop takes 15-40 s. */
   timeoutMs?: number;
   /** How often to ask the daemon again while it starts. */
   pollMs?: number;
-  /** Runs the start command; the real one does. A test passes a fake. */
-  start?: (engine: DockerEngine) => Promise<{ ok: boolean; detail?: string }>;
+  /** Runs the start command within `budgetMs`, what is left of the deadline, and stops it on `signal`; the real one does. A test passes a fake. */
+  start?: (engine: DockerEngine, budgetMs: number, signal?: AbortSignal) => Promise<{ ok: boolean; detail?: string }>;
   /** Asks the daemon; the real one does. */
   status?: () => Promise<DockerStatus>;
   /** Finds the engine; the real one does. */
@@ -343,19 +363,32 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
  * Gets the daemon up: returns at once when it already is, otherwise starts the engine it finds and waits
  * for it. Never hangs longer than `timeoutMs`, and never leaves the person without the reason.
  */
+const MIN_LAUNCH_MS = 5_000;
+
 export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<DockerStartResult> {
   const status = opts.status ?? (() => dockerStatus(5_000));
   const detect = opts.detect ?? (() => findDockerEngine());
-  const start = opts.start ?? ((engine: DockerEngine) => runStart(engine));
+  const start = opts.start ?? runStart;
   const sleep = opts.sleep ?? wait;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_START_TIMEOUT_MS;
   const pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
   const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
 
-  const first = await status();
-  if (first.ok) return { ok: true, version: first.version, engine: "the Docker daemon", waitedMs: 0 };
-  // No engine at all, or one whose CLI never reached the PATH: an install or a link, not a start.
-  if (first.kind === "not-installed" || first.kind === "cli-missing") return { ok: false, engine: null, reason: first.reason };
+  let first = await status();
+  // A daemon that only answered slowly is there and may be busy. Starting it would restart a running Colima VM and stop whatever it was
+  // running, so keyloom asks again until it answers or says it is down; only a daemon that is down is started (D-497).
+  while (!first.ok && first.kind === "slow" && Date.now() < deadline) {
+    if (opts.signal?.aborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())), opts.signal);
+    first = await status();
+  }
+  if (first.ok) return { ok: true, version: first.version, engine: "the Docker daemon", waitedMs: Date.now() - startedAt };
+  if (first.kind === "slow") {
+    return { ok: false, engine: null, reason: `Docker didn't answer within ${Math.round(timeoutMs / 1000)} s. It may be busy, so keyloom didn't restart it. Check again in a minute.` };
+  }
+  // No engine at all, one whose CLI never reached the PATH, or one that refuses this account: an install, a link or a permission, not a start.
+  if (first.kind === "not-installed" || first.kind === "cli-missing" || first.kind === "no-access") return { ok: false, engine: null, reason: first.reason };
 
   const found = await detect();
   if (found.kind !== "engine") {
@@ -365,30 +398,39 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   const engine = found.engine;
   const action = engine.command.includes("restart") ? "restarting" : engine.command.some((part) => part === "start" || part === "-a") ? "starting" : "waking";
   opts.onProgress?.(`keyloom: Docker isn't answering, so ${action} ${engine.name} (a cold start can take half a minute)`);
-  const launched = await start(engine);
+  // With only seconds left, a launch would be killed at once and could leave the engine half started.
+  if (deadline - Date.now() < Math.min(MIN_LAUNCH_MS, timeoutMs / 4)) return { ok: false, engine: engine.name, reason: `Docker didn't answer in time, so keyloom didn't start ${engine.name}. Check again in a minute.` };
+  const launched = await start(engine, deadline - Date.now(), opts.signal);
+  if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped starting ${engine.name}.` };
   if (!launched.ok) {
     return { ok: false, engine: engine.name, reason: `keyloom couldn't start ${engine.name}${launched.detail ? `: ${launched.detail}` : ""}${engine.hint ? `. ${engine.hint}` : ""}` };
   }
 
-  while (Date.now() - startedAt < timeoutMs) {
+  // Asked at least once after the launch, even when the launch used the whole window: `colima start` returns once Docker is up.
+  for (;;) {
     if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped waiting for ${engine.name}.` };
-    await sleep(pollMs, opts.signal);
+    await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())), opts.signal);
     const next = await status();
     if (next.ok) {
       const waitedMs = Date.now() - startedAt;
       opts.onProgress?.(`keyloom: ${engine.name} is up after ${Math.round(waitedMs / 1000)} s`);
       return { ok: true, version: next.version, engine: engine.name, waitedMs };
     }
-    if (next.kind === "not-installed" || next.kind === "cli-missing") return { ok: false, engine: engine.name, reason: next.reason };
+    if (next.kind === "not-installed" || next.kind === "cli-missing" || next.kind === "no-access") return { ok: false, engine: engine.name, reason: next.reason };
+    if (Date.now() >= deadline) break;
   }
   return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s. Open it, wait for it to say it is running, then build again.` };
 }
 
-/** Runs an engine's start command and waits for it, which for `open -a` returns once the app has launched. */
-async function runStart(engine: DockerEngine): Promise<{ ok: boolean; detail?: string }> {
+/**
+ * Runs an engine's start command and waits for it, up to what is left of the start's deadline; `open -a` returns once the app has launched.
+ * A cancelled build stops it too, and a launch stopped that way failed, whatever it exited with.
+ */
+export async function runStart(engine: DockerEngine, budgetMs: number, signal?: AbortSignal): Promise<{ ok: boolean; detail?: string }> {
   const [command, ...args] = engine.command;
   if (command === undefined || which(command) === null) return { ok: false, detail: `${engine.command[0]} is not on PATH` };
-  const r = await capture([command, ...args], { timeoutMs: 60_000 });
+  const r = await capture([command, ...args], { timeoutMs: budgetMs, ...(signal === undefined ? {} : { signal }) });
+  if (r.aborted) return { ok: false, detail: "it was stopped" };
   if (r.exitCode === 0) return { ok: true };
   const said = (r.stderr || r.stdout).trim().split("\n").at(-1);
   return { ok: false, detail: said || (r.timedOut ? "it did not start in time" : `it exited with code ${r.exitCode}`) };

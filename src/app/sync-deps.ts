@@ -7,7 +7,7 @@ import { latestSuccessfulBuildOfRevision } from "../persistence/builds.ts";
 import type { App } from "./context.ts";
 import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash } from "./firmware.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
-import { applyToRemapper, disableRemapperFor } from "./remapper.ts";
+import { applyToRemapper, disableRemapperFor, probeRemapper } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
 import { type DetectedKeyboard, detectKeyboards } from "./keyboard-detect.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
@@ -20,6 +20,11 @@ export type RemapperDeps = {
   apply(a: { layoutId: string; revisionId: string; /** Replace a keyloom.kbd keyloom didn't write, keeping a copy (R1-17). */ overwriteForeign?: boolean }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string }>;
   /** Loads the identity map. Never throws. */
   disable(boardId: string): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Whether kanata is still there. `stopped` only when its port refused the connection; a timeout or any other failed read is
+   * `unreadable`, because kanata may still be running behind it. Never throws.
+   */
+  probe(boardId: string): Promise<"running" | "stopped" | "unreadable">;
 };
 
 export type SyncDeps = {
@@ -68,6 +73,7 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
           return { ok: false, error: message(err) };
         }
       },
+      probe: (boardId) => probeRemapper(boardId, opts.handsFree?.remapper ?? {}),
     },
 
     async build(a) {

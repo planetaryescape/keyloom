@@ -1,7 +1,7 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
-  type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
   dockerInstall, dockerStatus, findDockerEngine, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 
@@ -17,7 +17,36 @@ export type DockerReadiness =
       autoStart: boolean;
       /** What to install, when there is no Docker at all; null otherwise. */
       install: DockerInstall | null;
+      /** How to get this account access, when the daemon refuses it (`no-access`); null otherwise. */
+      access: DockerAccessFix | null;
     };
+
+/**
+ * The way out of `no-access`: a command to paste where the fix needs sudo (keyloom can't answer its password prompt), otherwise a
+ * sentence. Linux joins the docker group and needs a new login. Colima creates its socket readable by its owner only, so a socket
+ * this account can't open belongs to another one, usually root after `sudo colima start`: that copy is stopped, the files given back
+ * and Colima started as the person. The Mac apps run as the person, so reopening one gives the socket back.
+ */
+export type DockerAccessFix = { command: string | null; note: string };
+
+export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
+  if (platform === "linux") {
+    return {
+      command: DOCKER_GROUP_COMMAND,
+      note: "It adds your account to the docker group, which Docker warns grants root-level access to this computer. Log out and back in so the change takes effect, then open keyloom again.",
+    };
+  }
+  if (engine?.command[0] === "colima") {
+    const at = engine.command.indexOf("--profile");
+    const profile = at < 0 ? "" : ` ${engine.command.slice(at, at + 2).join(" ")}`;
+    return {
+      // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
+      command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`,
+      note: "Colima's files belong to another account, usually because Colima was started with sudo. This stops that copy, gives the files back to you and starts Colima as you. Then check again.",
+    };
+  }
+  return { command: null, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
+}
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
 export type ToolchainOverrides = {
@@ -51,13 +80,17 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
 
   // An install or a missing link needs no engine hunt: there is nothing here to start.
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
-  const engine = finding?.kind === "engine" ? finding.engine.name : null;
+  const found = finding?.kind === "engine" ? finding.engine : null;
+  const engine = found?.name ?? null;
   const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
+  const platform = over.platform ?? process.platform;
   return {
     ok: false, problem: now.kind, reason, engine,
-    canStart: autoStart && engine !== null,
+    // A start can't give this account the socket, so it isn't offered for `no-access`.
+    canStart: autoStart && engine !== null && now.kind !== "no-access",
     autoStart,
-    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform, ...(over.has === undefined ? [] : [over.has])) : null,
+    install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
+    access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
   };
 }
 
@@ -86,8 +119,8 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   const status = over.status ?? (() => dockerStatus());
   const now = await status();
   if (now.ok) return { ok: true, started: false, engine: "Docker" };
-  // Nothing to start when there is no engine, or its CLI never reached the PATH: that is an install or a link.
-  if (now.kind === "not-installed" || now.kind === "cli-missing") return { ok: false, engine: null, reason: now.reason };
+  // Nothing to start when there is no engine, its CLI never reached the PATH, or it refuses this account: an install, a link or a permission.
+  if (now.kind === "not-installed" || now.kind === "cli-missing" || now.kind === "no-access") return { ok: false, engine: null, reason: now.reason };
 
   const detect = over.detect ?? findDockerEngine;
   if (!dockerAutoStart(over.env ?? process.env)) {

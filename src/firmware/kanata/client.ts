@@ -4,7 +4,18 @@
 
 export class KanataConnectionError extends Error {
   override name = "KanataConnectionError";
+  /**
+   * The port refused the connection: nothing listens there, which is the one answer that shows kanata has stopped. A timeout or a
+   * dropped connection says only that keyloom couldn't read it.
+   */
+  readonly refused: boolean;
+  constructor(message: string, opts: { refused?: boolean } = {}) {
+    super(message);
+    this.refused = opts.refused ?? false;
+  }
 }
+
+const refusedError = (err: Error): boolean => (err as Error & { code?: unknown }).code === "ECONNREFUSED";
 export class KanataProtocolError extends Error {
   override name = "KanataProtocolError";
 }
@@ -69,10 +80,10 @@ export function kanataRequest(endpoint: KanataEndpoint, command: Json, reply: st
           finish(() => reject(new KanataConnectionError(`kanata closed the connection before answering ${reply}`)));
         },
         connectError(_s, err) {
-          finish(() => reject(new KanataConnectionError(`kanata isn't listening on port ${endpoint.port} (${err.message})`)));
+          finish(() => reject(new KanataConnectionError(`kanata isn't listening on port ${endpoint.port} (${err.message})`, { refused: refusedError(err) })));
         },
       },
-    }).catch((err: Error) => finish(() => reject(new KanataConnectionError(`kanata isn't listening on port ${endpoint.port} (${err.message})`))));
+    }).catch((err: Error) => finish(() => reject(new KanataConnectionError(`kanata isn't listening on port ${endpoint.port} (${err.message})`, { refused: refusedError(err) }))));
   });
 }
 

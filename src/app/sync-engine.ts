@@ -19,7 +19,7 @@ import { transact } from "../persistence/transaction.ts";
 import { latestVerifiedVersionOnBoard } from "../persistence/versions.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
-  type BoardSyncRow, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
+  type BoardSyncRow, type SyncFailure, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
   progressSync, revisionLine, setAutoSyncChoice, setPaused as storePaused,
 } from "../persistence/syncs.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
@@ -122,7 +122,7 @@ const ABSENT: KeyboardReading = { state: "absent" };
  */
 export type SyncRefusalCode =
   | "keyboard_removed" | "archived" | "not_on_keyboard" | "cant_sync" | "not_connected" | "kanata_not_running" | "kanata_foreign"
-  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running";
+  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running" | "kanata_unreadable" | "kanata_not_foreign";
 
 export class SyncRefusal extends UsageError {
   constructor(readonly code: SyncRefusalCode, message: string) {
@@ -133,6 +133,10 @@ export class SyncRefusal extends UsageError {
 const isRemapper = (boardId: string): boolean => showBoard(boardId).definition.firmware === "kanata";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
+
+/** A failed remapper apply's step as a sync failure. Not running is the world changing (retry when it is back); a refused or unreadable config would fail the same way again. */
+const remapperFailure = (step: string): SyncFailure =>
+  step === "not_connected" ? "disconnected" : step === "verify" ? "verify" : step === "reload" || step === "check" || step === "generate" ? "build" : "flash";
 
 /** What the engine knows about one board when it decides. */
 type BoardFacts = { boardId: string; boardName: string; layout: LayoutRow; layouts: LayoutRow[]; reading: KeyboardReading; facts: SyncFacts };
@@ -193,7 +197,10 @@ export class SyncEngine {
     clearTimeout(this.timer);
     const run = this.running;
     if (!run) return;
-    if (run.row.step === "building" || run.row.step === "needs_hand") {
+    // The step as it is now: `run.row` is the row as claimed, whose step is always "building", and aborting once the write has begun
+    // would cut a flash off halfway. A write is waited for, up to the grace period, as setPaused does.
+    const step = findSync(this.app.db, run.row.id)?.step ?? run.row.step;
+    if (step === "building" || step === "needs_hand") {
       run.reason = "stopped";
       run.abort.abort();
       run.flashAbort.abort();
@@ -579,9 +586,7 @@ export class SyncEngine {
           say(`applied in ${applied.ms} ms`);
           return finish({ status: "succeeded" });
         }
-        // Not running is the world changing (retry when it is back); a refused or unreadable config would fail the same way again.
-        const failure = applied.step === "not_connected" ? "disconnected" : applied.step === "verify" ? "verify" : applied.step === "reload" || applied.step === "check" || applied.step === "generate" ? "build" : "flash";
-        return finish({ status: "failed", failure, error: applied.error });
+        return finish({ status: "failed", failure: remapperFailure(applied.step), error: applied.error });
       }
 
       const built = await this.deps.build({
@@ -763,7 +768,44 @@ export class SyncEngine {
       await this.refresh(true);
       const reading = this.readingOf(layout.boardId);
       if (reading.state === "absent") throw new SyncRefusal("kanata_not_running", "kanata isn't running, so there is nothing to replace");
-      const r = await remapper.apply({ layoutId: layout.id, revisionId: layout.headRevisionId, overwriteForeign: true });
+      // The confirm was asked about a foreign config. Anything else now (remapping switched off, keyloom's own file) means it is stale,
+      // and applying would undo what changed since, such as turning remapping back on.
+      if (reading.state !== "other") throw new SyncRefusal("kanata_not_foreign", "kanata no longer runs a config keyloom didn't write, so nothing was replaced");
+      // Claimed like any sync, so no sync here or in another keyloom starts until this write is done: a sync whose reload failed would
+      // otherwise restore its own file over this one. A sync that started after the wait above is busy, not waited for in the queue.
+      const id = newSyncId();
+      const claim = transact(this.app.db, () => keyboardRemoved(this.app.db, layout.boardId) ? null : claimSync(this.app.db, {
+        id, boardId: layout.boardId, layoutId: layout.id, revisionId: layout.headRevisionId, boardRevision: this.boardRevisionOf(layout.boardId),
+        trigger: "manual", logPath: `logs/sync-${id}.log`, appliedAt: layout.updatedAt, owner: this.id, now: this.now(),
+      }, this.alive));
+      if (claim === null) throw new SyncRefusal("keyboard_removed", "this keyboard was removed from your setup; restore it before replacing kanata's config");
+      if ("busy" in claim) throw new SyncRefusal("busy", `another keyloom sync is running (${claim.busy.id}, process ${claim.busy.pid}); replace it when that finishes`);
+      // The replacement is this engine's running sync until its result is recorded, so stop() waits for it before the database closes.
+      const run: Running = { row: claim.claimed, abort: new AbortController(), flashAbort: new AbortController(), reason: undefined, done: undefined as never };
+      this.running = run;
+      const work = (async () => {
+        // Everything after the claim finishes the row on failure, opening the log included: a claim left active makes every later sync busy.
+        let log: LogSink | undefined;
+        try {
+          log = new LogSink(join(this.app.dataDir, claim.claimed.logPath));
+          log.line(`${iso(this.now())} replacing kanata's config with ${layout.headRevisionId} for ${layout.boardId}, keeping a copy of a keyloom.kbd keyloom didn't write`);
+          progressSync(this.app.db, id, { status: "flashing", step: "writing", builtAt: this.now(), flashStartedAt: this.now() });
+          this.publish();
+          const applied = await remapper.apply({ layoutId: layout.id, revisionId: layout.headRevisionId, overwriteForeign: true });
+          finishSync(this.app.db, id, applied.ok ? { status: "succeeded" } : { status: "failed", failure: remapperFailure(applied.step), error: applied.error }, this.now());
+          log.line(`${iso(this.now())} ${applied.ok ? `applied in ${applied.ms} ms` : `failed: ${applied.error}`}`);
+          return applied;
+        } catch (err) {
+          finishSync(this.app.db, id, { status: "failed", failure: "flash", error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` }, this.now());
+          throw err;
+        } finally {
+          log?.close();
+          if (this.running === run) this.running = null;
+        }
+      })();
+      const row = () => findSync(this.app.db, id) as SyncRow;
+      run.done = work.then(row, row);
+      const r = await work;
       await this.refresh(true);
       this.publish();
       if (!r.ok) throw new UsageError(`couldn't replace kanata's config: ${r.error}`);
@@ -771,15 +813,23 @@ export class SyncEngine {
   }
 
   /**
-   * The person held Left Control + Space + Escape and saw kanata stop (D-235, R1-18). It is recorded only while kanata is not answering,
-   * so the button can't stand in for the chord itself.
+   * The person held Left Control + Space + Escape and saw kanata stop (D-235, R1-18). It is recorded only when kanata's port refuses the
+   * connection, so the button can't stand in for the chord itself. A read that timed out or failed proves nothing (D-497): kanata may
+   * still be running behind it, so that is refused too, with its own code.
    */
   async confirmExitChord(boardId: string): Promise<void> {
     if (!isRemapper(boardId)) throw new UsageError(`${showBoard(boardId).definition.name} isn't a software remapper`);
+    const remapper = this.deps.remapper;
+    if (!remapper) throw new UsageError("this copy of keyloom can't reach the remapper");
     await this.exclusive(async () => {
+      // Read first and probe last, so the probe that decides is the newest look: kanata may start while the keyboards are read.
       await this.refresh(true);
-      if (this.readingOf(boardId).state !== "absent") {
+      const probe = this.readingOf(boardId).state === "absent" ? await remapper.probe(boardId) : "running";
+      if (probe === "running") {
         throw new SyncRefusal("kanata_still_running", "kanata is still running, so the chord didn't stop it yet. Hold Left Control, Space and Escape together until the MacBook keyboard types plainly");
+      }
+      if (probe === "unreadable") {
+        throw new SyncRefusal("kanata_unreadable", "keyloom couldn't tell whether kanata stopped: its port didn't answer either way. Nothing was recorded; check again in a moment");
       }
       confirmExitChord(this.app, boardId);
     });
