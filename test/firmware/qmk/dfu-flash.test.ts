@@ -149,6 +149,20 @@ describe("atmel-dfu with a fake dfu-programmer", () => {
     expect(await s.called()).toEqual([]);
   });
 
+  test("a cancel as the bootloader appears says the board is in its bootloader, not that nothing happened", async () => {
+    const s = await setup({ "dfu-programmer": recorder("$CALLS") });
+    const w = world({ bootloaderAfterMs: null });
+    const abort = new AbortController();
+    setTimeout(() => abort.abort(), 100);
+    // The reset is pressed as the cancel lands, after the wait's last look at USB.
+    const usb = async () => (abort.signal.aborted ? [dev("0x03eb", "0x2ff4")] : []);
+    const r = await flashWithDfuTool({ artifactPath: s.artifact, recipe: ATMEL, log: s.log, usb, onState: w.onState, tools: s.paths, signal: abort.signal, pollMs: 20 });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("entered its bootloader");
+    expect(r.error).not.toContain("Nothing was flashed");
+    expect(await s.called()).toEqual([]);
+  });
+
   test("a tool that hangs while writing is stopped at the write timeout", async () => {
     const s = await setup({ "dfu-programmer": `echo "$@" >> "$CALLS"; exec sleep 600` });
     const w = world();

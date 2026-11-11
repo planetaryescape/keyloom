@@ -165,8 +165,30 @@ describe("which port is which half", () => {
       announce: (instruction) => instructions.push(instruction),
       screenLocked: async () => ++checks > 1,
     });
-    expect(result).toEqual({ ok: false, reason: SCREEN_LOCK_MESSAGE });
+    // The touch was sent, so the half may be in its bootloader whatever the wait saw.
+    expect(result).toEqual({ ok: false, reason: SCREEN_LOCK_MESSAGE, touched: true });
     expect(instructions).toContain(SCREEN_LOCK_MESSAGE);
+  });
+
+  test("a restart whose drive never appears says keyloom touched the half; a check that fails before the touch doesn't", async () => {
+    const right = targets.find((t) => t.half.marker === "R");
+    if (!right) throw new Error("Glove80 right half missing");
+    const after = await restartHalf({
+      deps: { serial: async () => ({ list: async () => [port(serialOf(KEY, "R"), 0x16c0, 0x27d9)], touch: async () => {} }), usb: async () => [], pollMs: 5, restartWaitMs: 40 },
+      targets, target: right, findVolume: async () => null, log: () => {},
+    });
+    expect(after).toMatchObject({ ok: false, touched: true });
+    const thrown = await restartHalf({
+      deps: { serial: async () => ({ list: async () => [port(serialOf(KEY, "R"), 0x16c0, 0x27d9)], touch: async () => { throw new Error("port closed mid-touch"); } }), usb: async () => [] },
+      targets, target: right, findVolume: async () => null, log: () => {},
+    });
+    expect(thrown).toEqual({ ok: false, reason: "port closed mid-touch", touched: true });
+    const before = await restartHalf({
+      deps: { serial: async () => ({ list: async () => [], touch: async () => {} }), usb: async () => [] },
+      targets, target: right, findVolume: async () => null, log: () => {},
+    });
+    expect(before.ok).toBe(false);
+    expect(before).not.toHaveProperty("touched");
   });
 
   test("a lock detected immediately before the serial touch prevents the restart", async () => {

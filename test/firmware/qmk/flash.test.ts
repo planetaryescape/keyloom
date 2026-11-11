@@ -316,6 +316,56 @@ describe("flashWithZapp never lets a stop cut off a write (D-506)", () => {
     expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("couldn't read USB, so zapp may be writing");
   }, SLOW_RUNNER_MS);
 
+  test("a cancel that can't read USB holds the write guard while zapp may be writing, so a second Ctrl-C can't orphan it", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 1; exit 0');
+    const c = new AbortController();
+    const held: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      bootloaderPresent: async () => {
+        throw new Error("system_profiler failed");
+      },
+      onLine: (line) => {
+        if (!line.includes("Firmware loaded")) return;
+        setTimeout(() => c.abort(), 100);
+        setTimeout(() => held.push(keyboardWriteInProgress()), 600);
+      },
+    });
+    expect(r.state).toBe("succeeded");
+    expect(held).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("the write guard is released when the flash throws mid-write, so serve still answers Ctrl-C", async () => {
+    const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
+    const thrown = await s.flash({
+      onState: (state) => {
+        if (state === "writing") throw new Error("the state listener broke");
+      },
+    }).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(Error);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
+  test("after a stop, a USB read that fails says keyloom couldn't check, not that nothing was flashed", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    let afterCancel = 0;
+    const r = await s.flash({
+      signal: c.signal,
+      pollMs: 60_000,
+      // keyloom's own look before stopping zapp sees no bootloader; the look after zapp stops can't read USB.
+      bootloaderPresent: async () => {
+        if (c.signal.aborted && ++afterCancel > 1) throw new Error("system_profiler failed");
+        return false;
+      },
+      onLine: (line) => void (line.includes("Firmware loaded") && setTimeout(() => c.abort(), 100)),
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("couldn't read USB to check the keyboard");
+    expect(r.error).not.toContain("Nothing was flashed");
+  }, SLOW_RUNNER_MS);
+
   test("a reset pressed between the USB check and stopping zapp is reported: the keyboard is in its bootloader, not untouched", async () => {
     const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
     const c = new AbortController();

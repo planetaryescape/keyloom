@@ -36,8 +36,10 @@ export type { FlashStep } from "../../boards/recipes.ts";
  * `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it.
  * `attributed`: its drive was already mounted under a label both halves share, and every other half is on USB running
  * firmware, so the drive can only be this half's.
+ * `touched` on a failure: keyloom sent the restart before it failed, so the half may be in its bootloader. A stop then can't say
+ * nothing happened to the keyboard.
  */
-export type EnterResult = { ok: true; alreadyThere?: true; attributed?: true } | { ok: false; reason: string; retry?: boolean };
+export type EnterResult = { ok: true; alreadyThere?: true; attributed?: true } | { ok: false; reason: string; retry?: boolean; touched?: true };
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
@@ -47,7 +49,8 @@ export type StepHooks = {
   /**
    * Gets the half into its bootloader without a keypress. `announce` says what the person should know once a restart is under way.
    * A failure is a reason, and the flash goes on by asking for the key combo. `signal` is the flash's cancel: the hook checks it
-   * before it restarts the half, so a cancel during the check leaves the half typing.
+   * before it restarts the half, so a cancel during the check leaves the half typing. The hook calls `announce` just before it
+   * restarts the half, and from then until it returns keyloom holds the write guard (D-506).
    */
   enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void, signal?: AbortSignal) => Promise<EnterResult>;
   /**
@@ -222,7 +225,30 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let attributed = false;
     let retryRestart = false;
     let restartReason: string | undefined;
-    const cancelled = (): string => (i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
+    // Why keyloom's restart of this half failed after it was sent: the half may be in its bootloader anyway.
+    let touchedReason: string | undefined;
+    // A stop says where the half is. A drive that mounted as the stop landed, or a restart keyloom sent, can leave it in its
+    // bootloader with nothing written, and then it won't type until it is flashed.
+    const cancelled = async (): Promise<string> => {
+      const head = i === 0 ? "Cancelled. Nothing was flashed" : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old";
+      const mounted = await input.findVolume(step.volume).catch(() => null);
+      if (mounted) return `${head}, but ${shared ? `${step.volume} is mounted, so a half is` : `the ${step.label} is`} in its bootloader now and won't type until it is flashed: flash again to put the build on it.`;
+      if (touchedReason !== undefined) return `${head}, but keyloom had already restarted the ${step.label} (${touchedReason.replace(/\.$/, "")}). If it doesn't type, it is in its bootloader: flash again to put the build on it.`;
+      return i === 0 ? `${head}.` : `${head}; flash again to finish.`;
+    };
+    // From the moment the hook says it is restarting the half until it returns, a stop would strand the half in its bootloader
+    // (D-506), so keyloom holds the write guard: a second Ctrl-C then waits instead of ending keyloom.
+    const enterHolding = async (announce: (text: string) => void): Promise<EnterResult> => {
+      let release: (() => void) | undefined;
+      try {
+        return await input.hooks!.enterBootloader!(step, i, (text) => {
+          release ??= holdKeyboardWrite();
+          announce(text);
+        }, signal);
+      } finally {
+        release?.();
+      }
+    };
     // A half keyloom restarted sits in its bootloader and won't type until it is written, so from here this half is written whoever
     // asks to stop, and the app refuses a cancel (D-506). A stop that came during the restart stays refused for the rest of the flash.
     const commit = () => {
@@ -245,10 +271,11 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     }
     if (input.hooks?.enterBootloader && (recovery?.instruction === undefined || shared)) {
       // A cancel while keyloom was checking the halves: nothing is restarted, so the half keeps typing.
-      if (signal?.aborted) return failed(cancelled());
+      if (signal?.aborted) return failed(await cancelled());
       // The unlock message asks something of the person, so it is marked as needing a hand like any other instruction to act.
-      const entered = await input.hooks.enterBootloader(step, i, (text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined), signal);
-      if (!entered.ok && signal?.aborted) return failed(cancelled());
+      const entered = await enterHolding((text) => input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined));
+      if (!entered.ok && entered.touched) touchedReason = entered.reason;
+      if (!entered.ok && signal?.aborted) return failed(await cancelled());
       if (!entered.ok) {
         restartReason = entered.reason;
         retryRestart = entered.retry === true;
@@ -280,7 +307,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let lockWasReported = false;
     for (const deadline = Date.now() + waitMs; Date.now() < deadline; ) {
       if (signal?.aborted) {
-        return failed(cancelled());
+        return failed(await cancelled());
       }
       mount = await input.findVolume(step.volume);
       if (mount) {
@@ -289,13 +316,14 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       }
       if (retryRestart && input.hooks?.enterBootloader) {
         if (signal?.aborted) {
-          return failed(cancelled());
+          return failed(await cancelled());
         }
-        const entered = await input.hooks.enterBootloader(step, i, (text) => {
+        const entered = await enterHolding((text) => {
           instruction = text;
           input.onState("waiting_for_bootloader", text, text === SCREEN_LOCK_MESSAGE ? { needsHand: true } : undefined);
-        }, signal);
-        if (!entered.ok && signal?.aborted) return failed(cancelled());
+        });
+        if (!entered.ok && entered.touched) touchedReason = entered.reason;
+        if (!entered.ok && signal?.aborted) return failed(await cancelled());
         if (entered.ok) {
           restarted = true;
           byKeyloom = entered.alreadyThere !== true;

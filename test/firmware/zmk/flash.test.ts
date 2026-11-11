@@ -577,6 +577,73 @@ describe("a stop never cuts off a half's write (D-506)", () => {
     expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
   });
 
+  test("a stop after keyloom sent the restart, which then failed, says the half may be in its bootloader, not that nothing happened", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      hooks: {
+        enterBootloader: async (_step, _i, announce) => {
+          announce("keyloom is restarting the right half into its bootloader. Don't touch the keyboard.");
+          c.abort();
+          return { ok: false, reason: `${RIGHT} didn't appear within 15 seconds of restarting the right half`, touched: true };
+        },
+      },
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).not.toBe("Cancelled. Nothing was flashed.");
+    expect(r.error).toContain("keyloom had already restarted the right half");
+    expect(r.error).toContain(`${RIGHT} didn't appear within 15 seconds`);
+    expect(r.error).toContain("flash again");
+  });
+
+  test("a stop as the drive mounts says the half is in its bootloader now, not that nothing happened", async () => {
+    const s = await setup();
+    const c = new AbortController();
+    const finder = volumes.volumeFinderAt(s.root);
+    let looks = 0;
+    const r = await s.flash({
+      signal: c.signal, bootloaderWaitMs: 5000,
+      // The person presses the key combo just as the stop lands: the drive mounts after the wait's last look.
+      findVolume: async (label) => {
+        if (++looks === 2) {
+          mkdirSync(join(s.root, RIGHT), { recursive: true });
+          c.abort();
+          return null;
+        }
+        return finder(label);
+      },
+    });
+    expect(r.error).not.toBe("Cancelled. Nothing was flashed.");
+    expect(r.error).toContain("the right half is in its bootloader now");
+    expect(r.error).toContain("flash again");
+  });
+
+  test("keyloom holds the write guard from the moment the hook restarts a half until it returns, so a second Ctrl-C waits", async () => {
+    const s = await setup();
+    const boot = fakeBootloader(s.root);
+    const seen: boolean[] = [];
+    const r = await s.flash({
+      bootloaderWaitMs: 5000,
+      hooks: {
+        enterBootloader: async (step, _i, announce) => {
+          seen.push(keyboardWriteInProgress());
+          announce(`keyloom is restarting the ${step.label} into its bootloader. Don't touch the keyboard.`);
+          seen.push(keyboardWriteInProgress());
+          await Bun.sleep(20);
+          seen.push(keyboardWriteInProgress());
+          mkdirSync(join(s.root, step.volume), { recursive: true });
+          return { ok: true };
+        },
+      },
+    });
+    boot.stop();
+    expect(r.state).toBe("succeeded");
+    // Before the announce nothing is restarted, so a second Ctrl-C can still end keyloom.
+    expect(seen).toEqual([false, true, true, false, true, true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  });
+
   test("a stop during a half's copy lets its drive take the file, then stops before the next half", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root, { delayMs: 100 });

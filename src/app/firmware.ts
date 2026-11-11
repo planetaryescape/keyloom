@@ -94,8 +94,10 @@ const flashTasks = new Map<string, Promise<void>>();
 // What a running flash in this process lets the page do: cancel it until the keyboard is in its bootloader, and name the permission it
 // waits on (D-501). `committed` is set when the flasher writes or says keyloom put the keyboard in its bootloader, and never goes back,
 // so a split board whose first half is written can't be cancelled with its second half waiting (D-506). `onCommit` wakes a cancel
-// that is waiting to hear whether the flasher stopped or went on to write.
-type FlashControl = { abort: AbortController; committed: boolean; cancelled: boolean; problem: FlashPermissionCode | null; onCommit: () => void };
+// that is waiting to hear whether the flasher stopped or went on to write. `writingNow` follows the flasher's latest state, as the
+// sync engine's `committed` does: shutdown cancels a split flash whose next half waits for a hand, so it never holds the stop for
+// that half's whole wait while the desktop app kills a server after 30 s.
+type FlashControl = { abort: AbortController; committed: boolean; writingNow: boolean; cancelled: boolean; problem: FlashPermissionCode | null; onCommit: () => void };
 const flashControls = new Map<string, FlashControl>();
 // Shutdown belongs to one App: serve's stop must not refuse flashes for another App in the same process, such as a test run's.
 const pendingFlashStarts = new WeakMap<App, Set<Promise<void>>>();
@@ -439,7 +441,7 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
 
     const id = newFlashId();
     const row = createFlash(app.db, { id, buildId: build.id, logPath: `logs/flash-${id}.log` });
-    const control: FlashControl = { abort: new AbortController(), committed: false, cancelled: false, problem: null, onCommit: () => undefined };
+    const control: FlashControl = { abort: new AbortController(), committed: false, writingNow: false, cancelled: false, problem: null, onCommit: () => undefined };
     flashControls.set(id, control);
     // A longer wait was asked for, so the first instruction says so rather than the default.
     if (opts.bootloaderWaitMs !== undefined && board) flashInstructions.set(id, driverFor(board).waitingInstruction(board, opts.bootloaderWaitMs));
@@ -469,7 +471,7 @@ export async function drainManualFlashTasks(app: App): Promise<void> {
   // Accepted starts can register tasks after their artifact check; settle them before taking the task snapshot.
   await Promise.allSettled([...(pendingFlashStarts.get(app) ?? [])]);
   for (const control of flashControls.values()) {
-    if (control.committed || control.cancelled) continue;
+    if (control.writingNow || control.cancelled) continue;
     control.cancelled = true;
     control.abort.abort();
   }
@@ -499,6 +501,7 @@ async function runFlash(app: App, row: FlashRow, board: Board, boardRevision: st
       ...(opts.signal ? { signal: opts.signal } : {}),
       onState: (state: FlashState, instruction: string | null, note?: FlashNote) => {
         opts.onFlasherState?.(state, instruction, note);
+        control.writingNow = state === "writing" || note?.inBootloader === true;
         if (state === "writing" || note?.inBootloader) {
           control.committed = true;
           control.onCommit();

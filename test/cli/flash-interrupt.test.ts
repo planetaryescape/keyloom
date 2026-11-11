@@ -2,18 +2,25 @@
 // child process and signal that child's group, as a terminal does, so a flash tool that shares keyloom's group would get the
 // signal too (D-506). The fake zapp and the USB check are files in a temporary directory; nothing here can reach a keyboard.
 import { describe, expect, test } from "bun:test";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WRITE_IN_PROGRESS_MESSAGE } from "../../src/firmware/toolchain/write-guard.ts";
 import { dfuImage, fakeBinDir } from "../helpers/fake-bin.ts";
 import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { combinedUf2, glove80 } from "../helpers/zmk.ts";
+import { zmkRevision } from "../../src/firmware/zmk/board-config.ts";
 
 const SRC = join(import.meta.dir, "../../src");
 
-/** A child that flashes with a fake zapp under the CLI's untilInterrupted; the bootloader is "on USB" once `flag` exists. */
-function flashScript(dir: string): string {
+/**
+ * A child that flashes with a fake zapp under the CLI's untilInterrupted; the bootloader is "on USB" once `flag` exists. With
+ * `usb: "unreadable"` every USB read fails, and short waits let the write timeout end the flash.
+ */
+function flashScript(dir: string, opts: { usb?: "unreadable" } = {}): string {
   const script = join(dir, "flash.ts");
+  const present = opts.usb === "unreadable" ? `async () => { throw new Error("system_profiler failed"); }` : `async () => existsSync(flag)`;
+  const waits = opts.usb === "unreadable" ? "bootloaderWaitMs: 1500, writeTimeoutMs: 1500," : "";
   writeFileSync(script, `
 import { existsSync } from "node:fs";
 import { untilInterrupted } from ${JSON.stringify(join(SRC, "cli/commands/firmware.ts"))};
@@ -21,8 +28,8 @@ import { flashWithZapp } from ${JSON.stringify(join(SRC, "firmware/qmk/flash.ts"
 import { LogSink } from ${JSON.stringify(join(SRC, "firmware/toolchain/run.ts"))};
 const [zapp, artifact, logPath, flag] = process.argv.slice(2);
 const r = await untilInterrupted((signal) => flashWithZapp({
-  artifactPath: artifact, bootloader: "3297:2003", log: new LogSink(logPath), zapp, signal, pollMs: 20,
-  bootloaderPresent: async () => existsSync(flag),
+  artifactPath: artifact, bootloader: "3297:2003", log: new LogSink(logPath), zapp, signal, pollMs: 20, ${waits}
+  bootloaderPresent: ${present},
   onState: (state) => console.log("state " + state),
 }));
 console.log("result " + r.state + " " + (r.error ?? ""));
@@ -50,18 +57,72 @@ function collect(stream: ReadableStream<Uint8Array>) {
   };
 }
 
-async function child(zappBody: (flag: string) => string) {
+async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadable" } = {}) {
   const dir = tempDir();
   const flag = join(dir, "in-bootloader");
   const artifact = join(dir, "build.bin");
   await Bun.write(artifact, dfuImage("3297:2003"));
   const bin = fakeBinDir({ zapp: zappBody(flag) });
   // Its own process group, standing in for the terminal's foreground group that keyloom runs in.
-  const proc = Bun.spawn(["bun", flashScript(dir), join(bin, "zapp"), artifact, join(dir, "flash.log"), flag], { detached: true, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["bun", flashScript(dir, opts), join(bin, "zapp"), artifact, join(dir, "flash.log"), flag], { detached: true, stdout: "pipe", stderr: "pipe" });
   const out = collect(proc.stdout);
   const err = collect(proc.stderr);
   const ctrlC = () => process.kill(-proc.pid, "SIGINT");
-  return { dir, flag, proc, out, err, ctrlC };
+  return { dir, bin, flag, proc, out, err, ctrlC };
+}
+
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A child that flashes a Glove80 into a temporary /Volumes under untilInterrupted. Its restart hook says it is restarting the half,
+ * then takes 1.5 s before the half's drive mounts, as restartHalf's wait for the drive does; a write takes the drive away.
+ */
+async function zmkChild() {
+  const dir = tempDir();
+  const root = join(dir, "Volumes");
+  mkdirSync(root);
+  const artifact = join(dir, "glove80.uf2");
+  await Bun.write(artifact, combinedUf2());
+  const steps = join(dir, "steps.json");
+  writeFileSync(steps, JSON.stringify(zmkRevision((await glove80()).definition).flash.steps));
+  const script = join(dir, "flash-zmk.ts");
+  writeFileSync(script, `
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { untilInterrupted } from ${JSON.stringify(join(SRC, "cli/commands/firmware.ts"))};
+import { flashUf2Drives } from ${JSON.stringify(join(SRC, "firmware/zmk/flash.ts"))};
+import { volumeFinderAt } from ${JSON.stringify(join(SRC, "firmware/zmk/volumes.ts"))};
+import { LogSink } from ${JSON.stringify(join(SRC, "firmware/toolchain/run.ts"))};
+const [root, artifact, logPath, stepsPath] = process.argv.slice(2);
+const r = await untilInterrupted((signal) => flashUf2Drives({
+  artifactPath: artifact, steps: JSON.parse(readFileSync(stepsPath, "utf8")), findVolume: volumeFinderAt(root, { mountedOnly: false }), log: new LogSink(logPath), signal,
+  pollMs: 10, bootloaderWaitMs: 5000, unmountWaitMs: 2000,
+  onState: (state) => console.log("state " + state),
+  writeImage: async (path, bytes) => {
+    writeFileSync(path, bytes);
+    setTimeout(() => rmSync(dirname(path), { recursive: true, force: true }), 30);
+  },
+  hooks: {
+    enterBootloader: async (step, _i, announce) => {
+      announce("keyloom is restarting the " + step.label + " into its bootloader. Don't touch the keyboard.");
+      console.log("restarting " + step.label);
+      await Bun.sleep(1500);
+      mkdirSync(join(root, step.volume), { recursive: true });
+      return { ok: true };
+    },
+  },
+}));
+console.log("result " + r.state + " " + (r.error ?? ""));
+`);
+  const proc = Bun.spawn(["bun", script, root, artifact, join(dir, "flash.log"), steps], { detached: true, stdout: "pipe", stderr: "pipe" });
+  return { proc, out: collect(proc.stdout), err: collect(proc.stderr), ctrlC: () => process.kill(-proc.pid, "SIGINT") };
 }
 
 describe("Ctrl-C during a flash (D-506)", () => {
@@ -95,6 +156,48 @@ describe("Ctrl-C during a flash (D-506)", () => {
       expect(await c.proc.exited).toBe(0);
       await c.out.done;
       expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
+    } finally {
+      c.proc.kill("SIGKILL");
+    }
+  }, SLOW_RUNNER_MS);
+
+  test("two Ctrl-Cs while keyloom can't read USB neither end keyloom nor orphan zapp: the write timeout ends zapp", async () => {
+    const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`, { usb: "unreadable" });
+    const pidFile = () => join(c.bin, "zapp.pid");
+    try {
+      await c.out.until("state waiting_for_bootloader");
+      // zapp's line is read before the cancel, so keyloom has seen it start.
+      await Bun.sleep(300);
+      c.ctrlC();
+      // keyloom tries USB three times before it decides zapp may be writing.
+      await Bun.sleep(400);
+      c.ctrlC();
+      expect(await c.proc.exited).toBe(0);
+      await c.out.done;
+      await c.err.done;
+      expect(c.out.text()).toContain("result failed");
+      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
+      expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
+    } finally {
+      c.proc.kill("SIGKILL");
+      if (existsSync(pidFile())) {
+        try { process.kill(Number(readFileSync(pidFile(), "utf8").trim()), "SIGKILL"); } catch { /* already gone */ }
+      }
+    }
+  }, SLOW_RUNNER_MS);
+
+  test("two Ctrl-Cs while keyloom restarts a ZMK half neither end keyloom: the half keyloom restarted is written", async () => {
+    const c = await zmkChild();
+    try {
+      await c.out.until("restarting right half");
+      c.ctrlC();
+      await Bun.sleep(200);
+      c.ctrlC();
+      expect(await c.proc.exited).toBe(0);
+      await c.out.done;
+      await c.err.done;
+      expect(c.out.text()).toContain("result succeeded");
+      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
     } finally {
       c.proc.kill("SIGKILL");
     }

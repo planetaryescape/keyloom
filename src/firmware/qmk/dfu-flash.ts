@@ -160,6 +160,13 @@ export async function flashWithDfuTool(input: DfuFlashInput): Promise<FlashResul
   }
   if (stopped.reason === "cancelled") {
     cleanup();
+    // A reset pressed as the cancel landed puts the board in a bootloader that nothing will write, so the result says where it is.
+    // Caterina goes back to the firmware by itself after a few seconds, so only a DFU bootloader is looked for.
+    if (recipe.bootloader !== undefined) {
+      const there = await usb().then((devices) => devices.some((d) => isDevice(d, recipe.bootloader as string)), () => undefined);
+      if (there === true) return fail("Cancelled just as the keyboard entered its bootloader. It is still there and won't type until it is flashed: flash again to put the build on it.");
+      if (there === undefined) return fail("Cancelled, and keyloom couldn't read USB to check the keyboard afterwards. If it doesn't type, it is in its bootloader: flash again to put the build on it.");
+    }
     return fail("Cancelled. Nothing was flashed.");
   }
   if (stopped.reason === "bootloader") {

@@ -159,6 +159,8 @@ export async function restartHalf(opts: {
   const label = t.step.label;
   const poll = deps.pollMs ?? 500;
   const waitMs = deps.restartWaitMs ?? RESTART_WAIT_MS;
+  // Set just before the 1200-baud touch: from then a failure may leave the half in its bootloader.
+  let sent = false;
 
   try {
     // Only a distinct label identifies a half that is already in its bootloader.
@@ -221,6 +223,7 @@ export async function restartHalf(opts: {
     }
     if (opts.signal?.aborted) return { ok: false, reason: `the flash was cancelled before keyloom restarted the ${label}` };
     opts.announce?.(`keyloom is restarting the ${label} into its bootloader. Don't touch the keyboard.`);
+    sent = true;
     await transport.touch(touched.path, touched.baud);
     if (opts.waitForVolume === false) return { ok: true };
 
@@ -231,7 +234,7 @@ export async function restartHalf(opts: {
         const after = peers.length ? await transport.list() : [];
         const stayed = await Promise.all(peers.map((other) => peerPresence(deps, other, after)));
         if (stayed.includes("unattributable")) {
-          return { ok: false, reason: `${t.step.volume} could belong to either half; the other half is no longer confirmed running firmware` };
+          return { ok: false, reason: `${t.step.volume} could belong to either half; the other half is no longer confirmed running firmware`, touched: true };
         }
         log(`keyloom: ${t.step.volume} appeared; the ${label} is in its bootloader`);
         return { ok: true };
@@ -250,14 +253,15 @@ export async function restartHalf(opts: {
     if (!lockWasReported && opts.screenLocked) {
       try { lockWasReported = await opts.screenLocked(); } catch { /* The outer probe logs failures and fails open. */ }
     }
-    if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE };
+    if (lockWasReported) return { ok: false, reason: SCREEN_LOCK_MESSAGE, touched: true };
     // A relayed peripheral with no cable of its own goes back to its app after 3 s, which looks the same from here.
     // The reason is shown in a prompt the person can't reply to, so it states the likely cause rather than asking.
     // The caller appends ". " and the instruction, so the reason ends without a full stop.
     const cable = touched.baud === RELAY_BAUD ? `; a half with no USB cable of its own returns to typing after 3 seconds` : "";
-    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}${cable}` };
+    return { ok: false, reason: `${t.step.volume} didn't appear within ${Math.round(waitMs / 1000)} seconds of restarting the ${label}${cable}`, touched: true };
   } catch (err) {
-    return { ok: false, reason: (err as Error).message };
+    // A touch that threw may still have reached the half.
+    return { ok: false, reason: (err as Error).message, ...(sent ? { touched: true as const } : {}) };
   }
 }
 
