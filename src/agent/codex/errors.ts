@@ -10,11 +10,29 @@ export class CodexError extends Error {
 
 export const LOGIN_HINT = "Run `codex login` and sign in with ChatGPT, then send the message again.";
 
-/** The usage-limit wording is from codex-rs/protocol (error_tests.rs); the rest is the usual phrasing of a signed-out client. */
+// codex-rs/protocol/src/error.rs @ f096185f formats the reset as "try again at 3:45 PM." on the day it resets, and as
+// "try again at Nov 12th, 2026 3:45 PM." on a later day, in this computer's time zone (format_retry_timestamp).
+const RESET_AT = /try again at ((?:[A-Z][a-z]{2} \d{1,2}(?:st|nd|rd|th), \d{4} )?\d{1,2}:\d{2} [AP]M)/i;
+
+/** When Codex says the usage limit resets, as Codex wrote it; null when it didn't say ("try again later"). */
+export function codexResetTime(text: string): string | null {
+  return RESET_AT.exec(text)?.[1] ?? null;
+}
+
+/**
+ * The usage-limit wording is from codex-rs/protocol/src/error.rs @ f096185f ("You’ve hit your usage limit…", and the workspace spend cap);
+ * the rest is the usual phrasing of a signed-out client.
+ */
 export function codexErrorFor(message: string): CodexError {
   const text = message.trim() || "Codex failed without saying why";
-  if (/usage limit|rate limit|too many requests|\b429\b/i.test(text)) {
-    return new CodexError("rate_limit", `Codex hit your ChatGPT usage limit: ${text}`);
+  // A used-up plan allowance stays used up until it resets, so Try again alone is no way out: the page offers another provider (R5-04).
+  // Codex's own sentence names upgrade pages and settings for a terminal, so these words are keyloom's, with the reset time when given.
+  if (/usage limit|spend cap/i.test(text)) {
+    const resets = codexResetTime(text);
+    return new CodexError("usage_limit", `Your ChatGPT plan has used up its Codex allowance${resets === null ? ", and Codex didn't say when it resets." : ` until ${resets}.`}`);
+  }
+  if (/rate limit|too many requests|\b429\b/i.test(text)) {
+    return new CodexError("rate_limit", `OpenAI is limiting Codex's requests for now: ${text}`);
   }
   // codex-rs/protocol/src/error.rs words it "ran out of room in the model's context window"; sending it again is refused the same way (R4-11).
   if (/ran out of room in the model's context window|context window exceeded|context_length_exceeded/i.test(text)) {
