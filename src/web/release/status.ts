@@ -18,7 +18,8 @@ export function elapsedOf(job: { startedAt: number; finishedAt: number | null },
 /** One word or two for the header button, from the newest thing that happened to the head revision. */
 export function releaseStatus(build: Build | null, flash: Flash | null, headRevisionId: string, now: number): ReleaseStatus {
   if (build === null || build.revisionId !== headRevisionId) return { label: "Build and flash", tone: "idle" };
-  if (flash !== null && flash.buildId === build.id) {
+  // A cancelled flash wrote nothing, so the build is still the news: ready to flash (D-501).
+  if (flash !== null && flash.buildId === build.id && flash.errorCode !== "cancelled") {
     switch (flash.status) {
       case "waiting_for_bootloader": return { label: "Press reset", tone: "attention" };
       case "writing": return { label: "Flashing", tone: "busy" };

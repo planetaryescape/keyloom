@@ -1,0 +1,86 @@
+// What the release dialog and the proposal card say from the server's codes (D-501, R2-01): a permission opens its pane, Check the
+// keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
+import { describe, expect, test } from "bun:test";
+import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
+import { afterApply, checkOutcome, permissionFix } from "../../src/web/release/flash-words.ts";
+
+const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
+  BoardSyncSchema.parse({
+    boardId: "moergo/glove80", boardName: "Glove80", layoutId: "lay_1", layoutName: "main", headRevisionId: "rev_1", otherLayouts: 0, state: { kind: "in_sync" },
+    auto: { on: true, choice: null, paused: false, proven: true, provenAt: 1, dueAt: null, ...auto }, last: null, ...over,
+  });
+const MACBOOK = { firmware: "kanata", name: "MacBook keyboard" };
+const GLOVE = { firmware: "zmk", name: "Glove80" };
+const macSync = (auto: Partial<BoardSync["auto"]> = {}, over: Partial<BoardSync> = {}) =>
+  synced({ boardId: "apple/macbook-ansi", boardName: "MacBook keyboard", remapper: true, ...over }, auto);
+
+describe("permissionFix", () => {
+  test("each permission code opens its own pane, with a button that says so", () => {
+    expect(permissionFix("permission_files_and_folders")).toMatchObject({ pane: "files_and_folders", button: "Open Files and Folders settings" });
+    expect(permissionFix("permission_input_monitoring")).toMatchObject({ pane: "input_monitoring", button: "Open Input Monitoring settings" });
+    expect(permissionFix(null)).toBeNull();
+    expect(permissionFix(undefined)).toBeNull();
+  });
+
+  test("never names the terminal or a command", () => {
+    for (const code of ["permission_files_and_folders", "permission_input_monitoring"] as const) {
+      expect(permissionFix(code)?.text).not.toMatch(/terminal|sudo|`|System Settings >/i);
+      expect(permissionFix(code)?.failed).not.toMatch(/terminal|sudo|`|System Settings >/i);
+    }
+  });
+});
+
+describe("checkOutcome", () => {
+  test("this build is a success with nothing more to do", () => {
+    expect(checkOutcome("this_build", "Moonlander")).toEqual({ tone: "success", text: "Your Moonlander runs this build. The flash is verified.", next: null });
+  });
+
+  test("a keyboard that can't be seen yet asks to check again; one on the wrong firmware asks to flash again", () => {
+    expect(checkOutcome("absent", "Moonlander").next).toBe("check");
+    expect(checkOutcome("missing_halves", "Glove80").next).toBe("check");
+    for (const found of ["other_build", "bootloader", "other_firmware"] as const) expect(checkOutcome(found, "Moonlander").next).toBe("flash");
+  });
+});
+
+describe("afterApply", () => {
+  test("the MacBook keyboard is never offered Build and flash", () => {
+    const lines = [
+      afterApply(MACBOOK, undefined, "lay_1"),
+      afterApply(MACBOOK, macSync({ on: false }), "lay_1"),
+      afterApply(MACBOOK, macSync({ paused: true }), "lay_1"),
+      afterApply(MACBOOK, macSync(), "lay_1"),
+      afterApply(MACBOOK, macSync({}, { layoutId: "lay_2", layoutName: "other" }), "lay_1"),
+    ];
+    for (const line of lines) {
+      expect(line.action?.id).not.toBe("open_release");
+      expect(`${line.lead} ${line.text} ${line.toast}`).not.toMatch(/Build|flash/);
+    }
+  });
+
+  test("the MacBook keyboard offers Apply now unless auto-apply puts it on by itself", () => {
+    expect(afterApply(MACBOOK, macSync({ on: false }), "lay_1")).toMatchObject({ action: { id: "apply_now", label: "Apply now" } });
+    expect(afterApply(MACBOOK, macSync({ paused: true }), "lay_1").action?.id).toBe("apply_now");
+    expect(afterApply(MACBOOK, undefined, "lay_1").action?.id).toBe("apply_now");
+    expect(afterApply(MACBOOK, macSync(), "lay_1")).toEqual({
+      lead: "Applied.", text: "Auto-apply puts it on your MacBook keyboard in a moment. Undo above the board takes it back.", toast: "Auto-apply puts it on your MacBook keyboard.", action: null,
+    });
+  });
+
+  test("a keyboard running another layout offers to put this one on, not a sync that would be refused", () => {
+    expect(afterApply(MACBOOK, macSync({}, { layoutId: "lay_2", layoutName: "Coding" }), "lay_1")).toMatchObject({
+      text: "Your MacBook keyboard runs “Coding”, so this one isn't on it.", action: { id: "put_on" },
+    });
+  });
+
+  test("a keyboard that auto-syncs says it gets the change by itself, and never claims it isn't on the keyboard", () => {
+    const line = afterApply(GLOVE, synced(), "lay_1");
+    expect(line).toEqual({ lead: "Applied.", text: "Auto-sync builds it and puts it on your Glove80 by itself. Undo above the board takes it back.", toast: "Auto-sync puts it on your Glove80.", action: null });
+  });
+
+  test("auto-sync off or paused, or firmware keyloom didn't build, keeps Build and flash", () => {
+    expect(afterApply(GLOVE, synced({}, { on: false }), "lay_1").action?.id).toBe("open_release");
+    expect(afterApply(GLOVE, synced({}, { paused: true }), "lay_1").action?.id).toBe("open_release");
+    expect(afterApply(GLOVE, synced({ state: { kind: "not_keyloom", detail: "USB serial x" } }), "lay_1").action?.id).toBe("open_release");
+    expect(afterApply(GLOVE, undefined, "lay_1")).toMatchObject({ text: "It isn't on your keyboard yet, and Undo above the board takes it back.", action: { id: "open_release", label: "Build and flash" } });
+  });
+});

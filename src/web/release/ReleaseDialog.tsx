@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, TriangleAlert, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RevisionInfo } from "../../api/http.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
@@ -10,6 +10,7 @@ import { DockerCallout } from "./DockerCallout.tsx";
 import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
+import { checkOutcome, permissionFix } from "./flash-words.ts";
 import "./release.css";
 
 interface Props {
@@ -46,6 +47,22 @@ function Step({ number, title, state, aside, children }: { number: number; title
   );
 }
 
+/** What macOS refused, with the button that opens the pane where it is allowed (D-501). */
+function PermissionFix({ code, release }: { code: Parameters<typeof permissionFix>[0]; release: Release }) {
+  const fix = permissionFix(code);
+  if (fix === null) return null;
+  return (
+    <div className="release-docker" role="status">
+      <span>{fix.text}</span>
+      <button type="button" className="button" onClick={() => release.openSettings(fix.pane)}>
+        <Settings size={14} aria-hidden="true" />
+        {fix.button}
+      </button>
+      {release.settingsProblem === null ? null : <span className="blocked-reason" role="alert">{release.settingsProblem}</span>}
+    </div>
+  );
+}
+
 function Progress({ label }: { label: string }) {
   return (
     <div className="progress" role="progressbar" aria-label={label} aria-busy="true">
@@ -79,7 +96,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
-  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? "failed" : "active";
+  const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? (flash.errorCode === "cancelled" ? "todo" : "failed") : "active";
 
   const confirmBlock = (
     <div className="confirm">
@@ -178,7 +195,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 </p>
                 {release.needsBoardRevision ? (
                   <ChoiceGroup
-                    legend="Which Moonlander is this?"
+                    legend={`Which ${boardName} is this?`}
                     variant="cards"
                     value={release.boardRevision}
                     choices={[
@@ -269,7 +286,18 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     <p className="muted">keyloom is waiting for the keyboard to appear. This continues by itself.</p>
                   </div>
                 </div>
+                <PermissionFix code={flash.instructionCode} release={release} />
                 <Progress label="Waiting for the bootloader" />
+                {/* Offered only before anything is written: once the server says it is writing, Cancel goes (D-501). */}
+                {flash.cancellable === true ? (
+                  <div className="step-actions">
+                    <button type="button" className="button" disabled={release.cancelling} onClick={release.cancelFlash}>
+                      {release.cancelling ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <X size={14} aria-hidden="true" />}
+                      {release.cancelling ? "Cancelling" : "Cancel"}
+                    </button>
+                    <p className="muted">Nothing has been written to the keyboard yet.</p>
+                  </div>
+                ) : null}
               </>
             ) : flash.status === "writing" ? (
               <>
@@ -285,21 +313,40 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     <strong>{flash.verified ? "Flashed and verified." : "Flashed, not verified."}</strong>{" "}
                     {flash.verified
                       ? <>Your {boardName} is running {earlierRevision ? "this earlier revision" : "the latest layout"}: {withFullStop(headline(head.summary))}</>
-                      : <>keyloom wrote the firmware but could not confirm which build your {boardName} is running. Check its connection and the flash log before treating this as complete.</>}
+                      : flash.checkable === true
+                        ? <>keyloom wrote the firmware but couldn't confirm which build your {boardName} runs. Once it has restarted, check it again.</>
+                        : <>keyloom wrote the firmware, but it can't read which build your {boardName} runs. Type on it to check the change.</>}
                     {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>
+                {flash.verified || flash.checkable !== true ? null : <CheckAgain release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} />}
                 <details className="log-details">
                   <summary>Flash log</summary>
                   <LogTail label="Flash log" lines={flash.logTail} />
                 </details>
               </>
+            ) : flash.errorCode === "cancelled" ? (
+              <>
+                <div className="callout callout-warning" role="status">
+                  <TriangleAlert size={18} aria-hidden="true" />
+                  <p>{plain(flash.error ?? "Cancelled. Nothing was written to the keyboard.")}</p>
+                </div>
+                {confirming ? (
+                  confirmBlock
+                ) : (
+                  <button type="button" className="button button-primary" onClick={() => setConfirming(true)}>
+                    <Zap size={14} aria-hidden="true" />
+                    Flash to keyboard
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <div className="callout callout-error" role="alert">
                   <CircleAlert size={18} aria-hidden="true" />
-                  <p>{plain(flash.error ?? "Flashing failed.")}</p>
+                  <p>{permissionFix(flash.errorCode)?.failed ?? plain(flash.error ?? "Flashing failed.")}</p>
                 </div>
+                <PermissionFix code={flash.errorCode} release={release} />
                 <LogTail label="Flash log, last lines" lines={flash.logTail} />
                 {confirming ? (
                   confirmBlock
@@ -312,6 +359,42 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
         </ol>
       </div>
     </dialog>
+  );
+}
+
+/** Check the keyboard again (R1-15): a read of what the keyboard runs, never a build or a flash, then what it found. */
+function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock }: { release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode }) {
+  const { check } = release;
+  const outcome = check.found === null || check.found === "this_build" ? null : checkOutcome(check.found, boardName);
+  return (
+    <>
+      {outcome === null ? null : (
+        <div className="callout callout-warning" role="status">
+          <TriangleAlert size={18} aria-hidden="true" />
+          <p>{outcome.text}</p>
+        </div>
+      )}
+      {check.problem === null ? null : (
+        <div className="callout callout-error" role="alert">
+          <CircleAlert size={18} aria-hidden="true" />
+          <p>{plain(check.problem)}</p>
+        </div>
+      )}
+      {outcome?.next === "flash" && confirming ? confirmBlock : (
+        <div className="step-actions">
+          <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running} onClick={release.checkKeyboard}>
+            {check.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+            {check.running ? "Checking" : "Check the keyboard again"}
+          </button>
+          {outcome?.next === "flash" ? (
+            <button type="button" className="button button-primary" onClick={onFlashAgain}>
+              <Zap size={14} aria-hidden="true" />
+              Flash again
+            </button>
+          ) : null}
+        </div>
+      )}
+    </>
   );
 }
 

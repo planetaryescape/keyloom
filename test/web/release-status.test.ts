@@ -16,4 +16,10 @@ describe("release status", () => {
     expect(releaseStatus(build, flash(true), build.revisionId, 4)).toEqual({ label: "Flashed and verified", tone: "success" });
     expect(releaseStatus(build, flash(false), build.revisionId, 4)).toEqual({ label: "Flashed, not verified", tone: "attention" });
   });
+
+  test("a cancelled flash wrote nothing, so the button says the build is ready again; another failure is a failure (D-501)", () => {
+    const failed = (errorCode: "cancelled" | "permission_files_and_folders") => ({ ...flash(false), status: "failed" as const, error: "x", errorCode });
+    expect(releaseStatus(build, failed("cancelled"), build.revisionId, 4)).toEqual({ label: "Ready to flash", tone: "success" });
+    expect(releaseStatus(build, failed("permission_files_and_folders"), build.revisionId, 4)).toEqual({ label: "Flash failed", tone: "error" });
+  });
 });
