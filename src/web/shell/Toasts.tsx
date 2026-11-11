@@ -16,7 +16,64 @@ interface Toast extends ToastInput {
 const ICONS = { success: CircleCheck, info: Info, error: CircleAlert } as const;
 // 4 s for news (18: toasts disappear after 4 s); an error stays longer because it is what to read next.
 const LIFETIME_MS: Record<ToastKind, number> = { success: 4000, info: 4000, error: 8000 };
+/** A toast with a button stays at least this long, so there is time to read it and reach the button (R2-14). */
+export const ACTION_MIN_MS = 12_000;
+/** After the pointer leaves or focus moves on, a toast stays at least this long, so it doesn't vanish under the hand. */
+export const RELEASE_MIN_MS = 2000;
 const MAX_SHOWN = 3;
+
+export const toastLifetime = (kind: ToastKind, hasAction: boolean): number => (hasAction ? Math.max(ACTION_MIN_MS, LIFETIME_MS[kind]) : LIFETIME_MS[kind]);
+
+type Clock = { now: () => number; set: (fn: () => void, ms: number) => number; clear: (timer: number) => void };
+const realClock: Clock = { now: () => Date.now(), set: (fn, ms) => window.setTimeout(fn, ms), clear: (timer) => window.clearTimeout(timer) };
+
+/**
+ * A countdown that stops while something holds it: the pointer over the toast, or focus inside it. When the last hold ends it runs on
+ * with the time it had left, and never less than RELEASE_MIN_MS.
+ */
+export function dismissTimer(ms: number, onDone: () => void, clock: Clock = realClock) {
+  let remaining = ms;
+  let started = clock.now();
+  let timer: number | undefined = clock.set(onDone, ms);
+  const holds = new Set<string>();
+  return {
+    hold(reason: string): void {
+      if (holds.has(reason)) return;
+      holds.add(reason);
+      if (holds.size > 1 || timer === undefined) return;
+      clock.clear(timer);
+      timer = undefined;
+      remaining -= clock.now() - started;
+    },
+    release(reason: string): void {
+      if (!holds.delete(reason) || holds.size > 0) return;
+      started = clock.now();
+      remaining = Math.max(remaining, RELEASE_MIN_MS);
+      timer = clock.set(onDone, remaining);
+    },
+    stop(): void {
+      if (timer !== undefined) clock.clear(timer);
+      timer = undefined;
+    },
+  };
+}
+
+/**
+ * The toasts after `toast` arrives, at most `max`. A full stack drops its oldest toast without a button first, so a toast with one
+ * isn't pushed out before its 12 s by news that came after it.
+ */
+export function addToast<T extends ToastInput>(all: readonly T[], toast: T, max: number): T[] {
+  if (all.length < max) return [...all, toast];
+  const plain = all.findIndex((t) => t.action === undefined);
+  const drop = plain === -1 ? 0 : plain;
+  return [...all.slice(0, drop), ...all.slice(drop + 1), toast].slice(-max);
+}
+
+/**
+ * Whether focus leaving a toast lets its countdown run again. Focus that moved inside it doesn't, and neither does the window losing
+ * focus to another app: the person is away, so the toast waits until they come back and move on.
+ */
+export const focusLeftToast = (movedInside: boolean, documentFocused: boolean): boolean => !movedInside && documentFocused;
 
 export function useToasts(): { toasts: Toast[]; show: (toast: ToastInput) => void; dismiss: (id: number) => void } {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -25,19 +82,43 @@ export function useToasts(): { toasts: Toast[]; show: (toast: ToastInput) => voi
   const show = useCallback((toast: ToastInput) => {
     next.current += 1;
     const id = next.current;
-    setToasts((all) => [...all.slice(-(MAX_SHOWN - 1)), { ...toast, id }]);
+    setToasts((all) => addToast(all, { ...toast, id }, MAX_SHOWN));
   }, []);
   return { toasts, show, dismiss };
 }
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   const Icon = ICONS[toast.kind];
+  const timer = useRef<ReturnType<typeof dismissTimer> | null>(null);
+  const hasAction = toast.action !== undefined;
+  // The parent passes a new onDismiss each render; the countdown starts once per toast, so a held toast is never restarted underneath.
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
   useEffect(() => {
-    const timer = window.setTimeout(onDismiss, LIFETIME_MS[toast.kind]);
-    return () => window.clearTimeout(timer);
-  }, [toast.kind, onDismiss]);
+    const t = dismissTimer(toastLifetime(toast.kind, hasAction), () => dismiss.current());
+    timer.current = t;
+    // A hidden page (another tab, a minimised window) holds the countdown, so the toast is still there when the person looks again.
+    const onVisibility = () => (document.hidden ? t.hold("hidden") : t.release("hidden"));
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      t.stop();
+    };
+  }, [toast.kind, hasAction]);
   return (
-    <div className="toast" data-kind={toast.kind} role={toast.kind === "error" ? "alert" : "status"}>
+    <div
+      className="toast"
+      data-kind={toast.kind}
+      role={toast.kind === "error" ? "alert" : "status"}
+      onMouseEnter={() => timer.current?.hold("pointer")}
+      onMouseLeave={() => timer.current?.release("pointer")}
+      onFocus={() => timer.current?.hold("focus")}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (focusLeftToast(next instanceof Node && event.currentTarget.contains(next), document.hasFocus())) timer.current?.release("focus");
+      }}
+    >
       <Icon size={16} aria-hidden="true" />
       <p className="toast-text">
         <strong>{toast.message}</strong>

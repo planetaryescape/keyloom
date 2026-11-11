@@ -3,16 +3,18 @@
 import { z } from "zod";
 import type { ApiErrorBody } from "../api/http.ts";
 import {
-  OpenSettingsRequestSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, StartKanataRequestSchema,
-  type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
+  InstallKanataRequestSchema, OpenSettingsRequestSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, StartKanataRequestSchema,
+  type KanataInstallAction, type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
 } from "../api/system-remapper.ts";
 import { checkToken } from "./guard.ts";
 
 /** What the server needs from the computer to set kanata up. The adapter is src/cli/remapper-setup-backend.ts. */
 export interface RemapperSetupBackend {
   status(boardId: string): Promise<RemapperSetupResponse>;
-  /** Repeated calls share one install. */
-  installKanata(): Promise<SetupActionResponse>;
+  /** Starts the install or update and returns at once; `status` follows it. Repeated calls share one install. */
+  installKanata(action: KanataInstallAction): Promise<SetupActionResponse>;
+  /** Stops the running install. */
+  cancelInstall(): Promise<SetupActionResponse>;
   startKanata(boardId: string): Promise<SetupActionResponse>;
   openSettings(pane: SettingsPaneName): Promise<SetupActionResponse>;
 }
@@ -22,10 +24,11 @@ const MAX_BODY_BYTES = 10_000;
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "status" | "install" | "start" | "settings";
+type Action = "status" | "install" | "cancel" | "start" | "settings";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/remapper", action: "status" },
   { method: "POST", path: "/api/system/remapper/install-kanata", action: "install" },
+  { method: "POST", path: "/api/system/remapper/install-kanata/cancel", action: "cancel" },
   { method: "POST", path: "/api/system/remapper/start", action: "start" },
   { method: "POST", path: "/api/system/open-settings", action: "settings" },
 ];
@@ -59,9 +62,14 @@ export async function handleRemapperSetupRoute(request: Request, url: URL, backe
     }
     const body = await readBody(request);
     if (body instanceof Response) return body;
-    if (route.action === "install") {
+    if (route.action === "cancel") {
       if (!EmptyBody.safeParse(body).success) return errorResponse(400, "schema", "The request body must be an empty object.");
-      return Response.json(SetupActionResponseSchema.parse(await backend.installKanata()));
+      return Response.json(SetupActionResponseSchema.parse(await backend.cancelInstall()));
+    }
+    if (route.action === "install") {
+      const parsed = InstallKanataRequestSchema.safeParse(body);
+      if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" | \"reinstall\" }.");
+      return Response.json(SetupActionResponseSchema.parse(await backend.installKanata(parsed.data.action ?? "install")));
     }
     if (route.action === "start") {
       const parsed = StartKanataRequestSchema.safeParse(body);

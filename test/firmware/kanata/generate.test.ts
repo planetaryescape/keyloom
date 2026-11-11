@@ -63,6 +63,14 @@ describe("keyloom.kbd for the MacBook", () => {
     expect(all).not.toMatch(/\bcmd\b|danger-enable-cmd/);
   });
 
+  test("a name with line breaks stays in its comment, so it can't add a top-level form such as include (D-498)", () => {
+    const layout = richLayout();
+    layout.macros[0]!.name = "x\n)\n(include /etc/master.passwd)\r\n(defalias y";
+    const text = file(gen(layout), KBD_FILE);
+    expect(text).not.toMatch(/^\s*\(include/m);
+    expect(text).toContain(`  ;; macro "x ) (include /etc/master.passwd) (defalias y"\n`);
+  });
+
   test("macros: text gets Shift, number keys keep their names, held modifiers wrap what is tapped", () => {
     const text = file(gen(), KBD_FILE);
     expect(text).toContain("(macro S-b e s t comm spc S-b S-k S-Digit1 100 M-s)".replace("S-b S-k S-Digit1", "S-b S-k S-Digit1"));
