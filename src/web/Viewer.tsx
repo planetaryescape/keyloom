@@ -30,6 +30,8 @@ import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
+import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
+import { followApply } from "./proposals/follow-apply.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
@@ -971,11 +973,23 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     );
   }
 
+  // Only the Apply's own refusal is an Apply failure; a new layout that couldn't be read after it is said as applied (R5-08).
   async function labApply(card: ProposalCard) {
     const result = await applyChangeSet(token, card.changeSetId);
     setLabOpen(false);
-    await onProposalApplied(card, result);
+    if (!(await followApply(() => onProposalApplied(card, result), appliedNotShown))) return;
     toasts.show({ kind: "success", message: "Applied", detail: `${card.title}. Type again in a few days to see if it stuck.` });
+  }
+
+  // The change is in the config but the board still shows the old layout: say so, and Show the new layout reads it again. A read that
+  // fails again says so the same way, with the same button (R5-08, R5-09).
+  function appliedNotShown(error: unknown) {
+    toasts.show({
+      kind: "error",
+      message: APPLIED_NOT_SHOWN.words,
+      ...(error instanceof Error && error.message.trim() !== "" ? { detail: error.message } : {}),
+      action: { label: "Show the new layout", run: () => void onChanged().catch(appliedNotShown) },
+    });
   }
 
   function toggleLibrary() {
@@ -1978,7 +1992,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer ?? (waitingCount === 0 || proposalsOpen ? null : (
+            notice={offer ?? (proposalsOpen ? null : waitingFailed ? (
+              // A read that failed is not "nothing waiting": the slot says so and reads again (R5-11).
+              <button type="button" className="sheet-action nb-waiting" onClick={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}>
+                Couldn&apos;t read proposals · Try again
+              </button>
+            ) : waitingCount === 0 ? null : (
               <button type="button" className="sheet-action nb-waiting" onClick={() => { setReviewOpen(false); setProposalsOpen(true); }}>
                 {waitingCount === 1 ? "1 proposal waiting" : `${waitingCount} proposals waiting`} · Show
               </button>
@@ -2352,8 +2371,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onPreview={setHoveredProposal}
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
-                await onProposalApplied(card, result);
                 setWaitingRead((read) => read + 1);
+                // The Apply landed; a layout that couldn't be read afterwards is not "Apply failed" on the card (R5-08).
+                await followApply(() => onProposalApplied(card, result), appliedNotShown);
               }}
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}
