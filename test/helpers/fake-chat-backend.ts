@@ -2,8 +2,11 @@
 // from the rung 3 brief: every message gets three proposals at once, with its assumption in one line. Streaming is word by word with a delay, so the panel can be seen (and screenshotted)
 // mid-reply. Proposals are validated by the real validator and stored in the FakeEditor, so
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
+import type { AgentRunRequest, AgentRunSnapshot } from "../../src/api/agent-runs.ts";
+import { runFailure } from "../../src/app/conversations.ts";
+import { classifiedFailure, type FailureKind } from "./model-failures.ts";
 import type {
-  ChatEvent, ChatOutcome, ChatProviderKey, ChatProviderKeySaved, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
+  ChatPresentation, ChatEvent, ChatOutcome, ChatProviderKey, ChatProviderKeySaved, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
 } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { ChatError, type ChatBackend } from "../../src/server/chat-backend.ts";
@@ -25,6 +28,8 @@ export interface FakeChatOptions {
   busy?: boolean;
   /** keyloom started with --provider codex, and the Codex CLI is installed only once `installed()` says so (R3-24). */
   codexLocked?: { installed: () => boolean } | null;
+  /** Accept each message as a saved run, as the real server does, then fail it that way once the run is under way (R4-02). */
+  failAfterAcceptance?: FailureKind | null;
 }
 
 // Nothing is asked first: every reply acts on the obvious default and says what it assumed, in one line (D-380).
@@ -79,7 +84,7 @@ const ALTERNATIVES: readonly {
   },
 ];
 
-type Conversation = { summary: ConversationSummary; messages: ChatMessage[]; proposals: { id: string; card: ProposalCard }[]; layoutId: string };
+type Conversation = { summary: ConversationSummary; messages: ChatMessage[]; proposals: { id: string; card: ProposalCard }[]; layoutId: string; presentations?: ChatPresentation[] };
 
 export class FakeChat implements ChatBackend {
   private readonly conversations = new Map<string, Conversation>();
@@ -91,7 +96,69 @@ export class FakeChat implements ChatBackend {
     private readonly layoutId = "moonlander-daily",
     options: FakeChatOptions = {},
   ) {
-    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, codexLocked: null, ...options };
+    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, codexLocked: null, failAfterAcceptance: null, ...options };
+    const failure = this.options.failAfterAcceptance;
+    if (failure !== null) this.runs = this.failingRuns(failure);
+  }
+
+  runs?: NonNullable<ChatBackend["runs"]>;
+
+  // The server's own warning on a failed presentation (chat-presentation.ts), so the page shows what it would.
+  private static readonly FAILED_WARNING = "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.";
+
+  /** Saved runs that fail after acceptance: one read step, then the provider's failure, stored with the run as the real app stores it. */
+  private failingRuns(kind: FailureKind): NonNullable<ChatBackend["runs"]> {
+    const runs = new Map<string, AgentRunSnapshot>();
+    const save = (conversation: Conversation, snapshot: AgentRunSnapshot) => {
+      runs.set(snapshot.id, snapshot);
+      if (snapshot.presentation !== null) conversation.presentations = [...(conversation.presentations ?? []).filter((p) => p.userMessageId !== snapshot.userMessageId), snapshot.presentation];
+      return snapshot;
+    };
+    const operation = (status: "running" | "succeeded"): ChatPresentation["operations"][number] => ({
+      id: "op_1", tool: "get_layout", label: "Read layout", status, durationMs: status === "running" ? 0 : 180, validationCodes: [], references: [], accepted: 0, declined: 0,
+    });
+    const find = (id: string) => {
+      const found = runs.get(id);
+      if (found === undefined) throw new ChatError(404, "not_found", `no agent run "${id}"`);
+      return found;
+    };
+    return {
+      start: async (request: AgentRunRequest) => {
+        const prior = [...runs.values()].find((run) => run.requestId === request.requestId);
+        if (prior !== undefined) return prior;
+        if (request.layoutRef !== this.layoutId) throw new ChatError(404, "not_found", `no layout "${request.layoutRef}"`);
+        const message = request.input.message ?? request.input.answer?.text ?? "";
+        const conversation = request.input.conversationId === undefined ? this.open(message) : this.conversations.get(request.input.conversationId);
+        if (conversation === undefined) throw new ChatError(404, "not_found", `no conversation "${request.input.conversationId}"`);
+        const userMessageId = `msg_${++this.counter}`;
+        conversation.messages.push({ id: userMessageId, role: "user", text: message, toolCalls: [], selection: request.input.selection ?? null, createdAt: Date.now() });
+        const running: ChatPresentation = { version: 1, userMessageId, status: "running", operations: [operation("running")], messages: [], effectsMayHaveOccurred: false, warning: null, detailsTruncated: false };
+        const snapshot = save(conversation, {
+          version: 1, id: `run_${++this.counter}`, requestId: request.requestId, conversationId: conversation.summary.id, userMessageId,
+          status: "running", seq: 1, cancelRequested: false, committedPreparations: 0, preparations: [], presentation: running,
+        });
+        setTimeout(() => {
+          const current = find(snapshot.id);
+          if (current.status !== "running") return;
+          save(conversation, {
+            ...current, status: "failed", seq: current.seq + 1,
+            presentation: { ...running, status: "failed", operations: [operation("succeeded")], warning: FakeChat.FAILED_WARNING, failure: runFailure(classifiedFailure(kind)) },
+          });
+        }, this.options.stepMs * 3);
+        return snapshot;
+      },
+      get: async (id) => find(id),
+      latest: async (conversationId) => [...runs.values()].findLast((run) => run.conversationId === conversationId) ?? null,
+      answer: async () => { throw new ChatError(400, "usage", "that question is no longer current"); },
+      cancel: async (id) => {
+        const current = find(id);
+        if (current.status !== "running") return current;
+        const conversation = this.conversations.get(current.conversationId);
+        const stopped: AgentRunSnapshot = { ...current, status: "cancelled", cancelRequested: true, seq: current.seq + 1, presentation: current.presentation === null ? null : { ...current.presentation, status: "cancelled" } };
+        return conversation === undefined ? stopped : save(conversation, stopped);
+      },
+      drain: async () => {},
+    };
   }
 
   // Keys "saved" here (last four only) and a pretend `codex login`, so the setup surface can be driven without a Keychain (D-496).
@@ -176,6 +243,7 @@ export class FakeChat implements ChatBackend {
     return {
       conversation: { ...found.summary, layoutId: found.layoutId, provider: "openrouter", model: "anthropic/claude-opus-5.5" },
       messages: found.messages,
+      ...(found.presentations === undefined ? {} : { presentations: found.presentations }),
       proposals: found.proposals.map(({ id: changeSetId, card }) => ({ ...card, status: this.editor.proposalStatus(changeSetId) ?? card.status })),
       priorities: [],
     };

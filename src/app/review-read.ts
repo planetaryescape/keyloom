@@ -25,7 +25,7 @@ export type BoardReview = {
   trigger: ReviewTrigger;
   checkedAt: number;
   checks: { status: "done"; summary: { layers: number; keys: number; combos: number } };
-  ai: { status: AiStatus; reason: string | null; model: string | null };
+  ai: { status: AiStatus; reason: string | null; model: string | null; code: string | null };
   workload?: ReviewWorkload;
   freshness: { current: boolean; reason: string | null };
   behavior?: Array<BehaviorEvidence & { proposalId: string }>;
@@ -53,7 +53,7 @@ export function toReview(app: App, row: BoardReviewRow): BoardReview {
   return {
     id: row.id, layoutId: row.layoutId, revisionId: row.revisionId, trigger: row.trigger, checkedAt: row.checkedAt,
     checks: { status: "done", summary: row.summary },
-    ai: { status: row.ai.status, reason: row.ai.reason, model: row.ai.model },
+    ai: { status: row.ai.status, reason: row.ai.reason, model: row.ai.model, code: row.ai.code },
     freshness,
     ...(freshness.current ? { behavior: reviewBehavior(app.db, row) } : {}),
     ...(workload && freshness.current ? { workload } : {}),

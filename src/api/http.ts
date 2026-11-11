@@ -478,6 +478,8 @@ export const ChatPresentationSchema = z.object({
   // Typed result cards under the reply (D-467). Absent on older recordings. The list is bounded here; each card is narrowed to
   // `AgentArtifact` where it is shown (`transcript.ts`), so a stored row and this schema stay interchangeable.
   artifacts: z.array(z.unknown()).max(4).optional(),
+  // Why a failed run stopped (D-517): the code the chat maps to its buttons, and the provider's sentence.
+  failure: z.object({ code: z.string().min(1).max(64), message: z.string().max(2000) }).optional(),
   effectsMayHaveOccurred: z.boolean(), warning: z.string().nullable(), detailsTruncated: z.boolean(),
 });
 export type ChatPresentation = z.infer<typeof ChatPresentationSchema>;

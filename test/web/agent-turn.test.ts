@@ -112,7 +112,8 @@ describe("agent turn composition", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(await count(html, ".agent-work-details .chat-problem")).toBe(0);
     expect(await count(html, ".msg-assistant > .proposal-group")).toBe(1);
-    expect(html).toContain("prepared before the reply stopped may remain");
+    // The proposal it prepared stays, and the box says so instead of claiming a rollback (#288 review: preparedWords).
+    expect(html).toContain("Before it stopped, this reply prepared a proposal.");
     expect(html).not.toContain("Nothing was changed");
   });
 
