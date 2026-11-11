@@ -471,6 +471,10 @@ a.menu-item {
   color: var(--color-text-muted);
 }
 
+.toast-action {
+  flex: none;
+}
+
 .toast[data-kind="success"] {
   border-color: var(--color-success);
 }
@@ -1605,4 +1609,44 @@ a.menu-item {
   right: var(--space-4);
   bottom: calc(100% + var(--space-2));
   left: var(--space-4);
+}
+
+/* keyloom stopped answering (D-494): one slim line over the top of the page, never pushing it, gone when keyloom is back. */
+.server-gone {
+  position: fixed;
+  z-index: 60;
+  top: var(--space-2);
+  left: 50%;
+  display: flex;
+  max-width: min(720px, calc(100% - 32px));
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  transform: translateX(-50%);
+}
+
+.server-gone > svg {
+  flex: none;
+  color: var(--pending);
+}
+
+.server-gone-text {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.server-gone-text span {
+  color: var(--ink-2);
+}
+
+.server-gone .command {
+  width: auto;
+  flex: none;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
 }

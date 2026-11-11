@@ -193,7 +193,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placing, setPlacing] = useState<PlaceRequest | null>(null);
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
-  useSyncToasts(sync, toasts.show);
+  // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
+  useSyncToasts(sync, toasts.show, {
+    restore: () => void restoreArchived(summary.id),
+    put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
+    open_release: () => onOpenRelease(),
+    replace_foreign: () => sync.setReplaceAsk(summary.id),
+  });
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
@@ -1366,8 +1372,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
-    (text: string) => matchCommands(text, { configs: configs.live, currentId: summary.id, boardName: boardDisplayName(board.name) }),
-    [configs.live, summary.id, board.name],
+    (text: string) => matchCommands(text, { configs: configs.live, currentId: summary.id, boardName: boardDisplayName(board.name) }).filter((c) => c.kind !== "lab" || board.firmware !== "kanata"),
+    [configs.live, summary.id, board.name, board.firmware],
   );
   const chatCommands = {
     find: findCommands,
@@ -1764,7 +1770,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           editingOther && keyboardConfig !== null ? (
             <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
           ) : (
-            <SyncStatus sync={sync} layoutId={summary.id} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} />
+            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
           )
         }
         ask={{ open: chatOpen, onToggle: toggleChat }}
@@ -1785,7 +1791,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           library: { open: libraryOpen, onToggle: toggleLibrary },
           inspect: { on: inspect, onToggle: toggleInspect },
           showCombos: { on: showCombos, onToggle: toggleCombos },
-          lab: { open: labOpen, onToggle: () => toggleLab() },
+          // The MacBook keyboard's remapper has no key stream, so the lab isn't offered for it (R1-28).
+          ...(board.firmware === "kanata" ? {} : { lab: { open: labOpen, onToggle: () => toggleLab() } }),
           settings: {
             open: settingsOpen,
             onToggle: () => {
@@ -1948,7 +1955,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
             </div>
           ) : null}
-          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} /> : null}
+          {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease() }} /> : null}
           {/* A narrow screen has no column beside the board, so a past session's read-out is a sheet at the stage's foot (D-314). */}
           {labOpen && narrow && lab.phase.kind === "readout" ? (
             <div className="lab-sheet">
@@ -2089,6 +2096,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   layerId={layer.id}
                   layerName={layerNameOf}
                   onBack={() => setComparing(null)}
+                  onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
                   onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then(() => setComparing(null))}
@@ -2285,7 +2293,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
           lines={[
             `keyloom builds ${configDialog.target.name} and puts it on the keyboard, the same press-and-sync as Apply. From then on ${configDialog.target.name} is the config that syncs.`,
-            ...(keyboardConfig === null ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
+            ...(keyboardConfig === null || keyboardConfig.id === configDialog.target.id ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putOn(configDialog.target)}

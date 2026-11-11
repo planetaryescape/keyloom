@@ -4,6 +4,7 @@ import { BoardDevApp } from "./boarddev/BoardDevApp.tsx";
 import { tokenFromSearch } from "./api.ts";
 import { Header } from "./shell/Header.tsx";
 import { ErrorState } from "./shell/States.tsx";
+import { RestartAdvice } from "./shell/ServerGone.tsx";
 import { applyTheme, readTheme } from "./shell/theme.ts";
 import "./fonts/fonts.css";
 import "./tokens.css";
@@ -23,7 +24,7 @@ createRoot(root).render(
       <Header />
       <main className="app-main">
         <ErrorState title="This page needs keyloom's link">
-          Open the link keyloom printed when it started. It includes the token this page needs.
+          <RestartAdvice lead="This address has no token, so keyloom won't answer it." />
         </ErrorState>
       </main>
     </div>

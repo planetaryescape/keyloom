@@ -17,6 +17,10 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const [canRecord, setCanRecord] = useState<{ ok: boolean; why: string | null }>({ ok: true, why: null });
   const [sessions, setSessions] = useState<LabSession[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  // The server's code for the problem, which puts its fix beside it (R1-19), and whether the lab's own lists failed to load.
+  const [problemCode, setProblemCode] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loads, setLoads] = useState(0);
   const [typed, setTyped] = useState("");
   const listening = useRef(false);
 
@@ -24,13 +28,21 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     if (!open) return;
     const controller = new AbortController();
     setProblem(null);
+    setProblemCode(null);
+    setLoadFailed(false);
+    // A failed read says so with Try again, instead of a lab with nothing to choose (R1-28).
+    const failed = (error: unknown) => {
+      if (controller.signal.aborted) return;
+      setLoadFailed(true);
+      setProblem(error instanceof Error ? `keyloom couldn't load the typing lab. ${error.message}` : "keyloom couldn't load the typing lab.");
+    };
     void api.fetchPassages(token, layoutRef, controller.signal).then((r) => {
       setPassages(r.passages);
       setCanRecord({ ok: r.canRecord, why: r.why });
-    }, () => {});
-    void api.fetchSessions(token, layoutRef, controller.signal).then(setSessions, () => {});
+    }, failed);
+    void api.fetchSessions(token, layoutRef, controller.signal).then(setSessions, failed);
     return () => controller.abort();
-  }, [token, layoutRef, open]);
+  }, [token, layoutRef, open, loads]);
 
   // Closing the lab while it listens stops the keyboard's stream; nothing heard is kept.
   useEffect(() => {
@@ -40,10 +52,14 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     setPhase({ kind: "start" });
   }, [open, token]);
 
-  const say = (error: unknown) => setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
+  const say = (error: unknown) => {
+    setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
+    setProblemCode(error instanceof ApiError ? (error.code ?? null) : null);
+  };
 
   const start = useCallback(async (choice: { passageId?: string; text?: string }) => {
     setProblem(null);
+    setProblemCode(null);
     try {
       const r = await api.startRecording(token, layoutRef, choice);
       listening.current = true;
@@ -98,7 +114,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const openFinding = (id: string | null) => setPhase((p) => (p.kind === "readout" ? { ...p, open: id, trying: null } : p));
   const tryFix = (index: number | null) => setPhase((p) => (p.kind === "readout" ? { ...p, trying: index } : p));
 
-  return { phase, passages, canRecord, sessions, problem, typed, setTyped, start, stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }) };
+  return { phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }) };
 }
 
 export type Lab = ReturnType<typeof useLab>;

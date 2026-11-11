@@ -4,6 +4,8 @@ import { afterEach, describe, expect, test, setDefaultTimeout } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { UsageError, applyOps, applyToRemapper } from "../../src/app/index.ts";
 import { findLayoutRow } from "../../src/persistence/layouts.ts";
+import { SyncRefusal } from "../../src/app/sync-engine.ts";
+import { getBoardSync } from "../../src/persistence/syncs.ts";
 import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
 import { macbook, at } from "../helpers/macbook.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
@@ -89,6 +91,8 @@ describe("the MacBook's sync state", () => {
     await e.start();
     expect(kind(e)).toEqual({ kind: "not_connected" });
     await expect(e.syncNow(world.layoutId)).rejects.toThrow(/kanata isn't running/);
+    // The code is what the page acts on (R1-16), so it never has to read that sentence.
+    await expect(e.syncNow(world.layoutId)).rejects.toMatchObject({ code: "kanata_not_running" });
   });
 
   test("a config keyloom didn't write is 'not keyloom's' and is never replaced by Sync now", async () => {
@@ -101,6 +105,33 @@ describe("the MacBook's sync state", () => {
     await e.start();
     expect(kind(e)).toMatchObject({ kind: "not_keyloom" });
     await expect(e.syncNow(world.layoutId)).rejects.toThrow(UsageError);
+    await expect(e.syncNow(world.layoutId)).rejects.toBeInstanceOf(SyncRefusal);
+  });
+
+  test("Replace it puts the head on over a foreign config and keeps the old file beside it (R1-17)", async () => {
+    const world = make();
+    const foreign = "(defsrc a)\n(deflayer base a)\n";
+    writeFileSync(world.paths.kbd, foreign);
+    const { reloadFile } = await import("../../src/firmware/kanata/client.ts");
+    await reloadFile({ port: world.fake.port }, world.paths.kbd);
+    const e = world.engine();
+    await e.start();
+    expect(kind(e)).toMatchObject({ kind: "not_keyloom" });
+    await e.replaceForeignRemapperConfig(world.layoutId);
+    expect(readFileSync(`${world.paths.kbd}.before-keyloom`, "utf8")).toBe(foreign);
+    expect(readFileSync(world.paths.kbd, "utf8")).toContain(`keyloom-${findLayoutRow(world.app.db, world.layoutId)!.headRevisionId}`);
+    expect(world.fake.running()).toBe(world.paths.kbd);
+    expect(kind(e)).toEqual({ kind: "in_sync" });
+  });
+
+  test("Replace it with kanata stopped says so and writes nothing", async () => {
+    const world = make();
+    const before = readFileSync(world.paths.kbd, "utf8");
+    world.fake.stop();
+    const e = world.engine();
+    await e.start();
+    await expect(e.replaceForeignRemapperConfig(world.layoutId)).rejects.toMatchObject({ code: "kanata_not_running" });
+    expect(readFileSync(world.paths.kbd, "utf8")).toBe(before);
   });
 
   test("Disable remapping loads the identity map; auto-apply doesn't undo it, Sync now does", async () => {
@@ -128,6 +159,18 @@ describe("auto-apply", () => {
     const world = make();
     const e = world.engine();
     expect(() => e.setAutoSync(MAC, true)).toThrow(/emergency exit/);
+  });
+
+  test("the exit-chord button is refused while kanata answers, and recorded once it has stopped (R1-18)", async () => {
+    const world = make();
+    const e = world.engine();
+    await e.start();
+    await expect(e.confirmExitChord(MAC)).rejects.toMatchObject({ code: "kanata_still_running" });
+    expect(getBoardSync(world.app.db, MAC).provenAt).toBeNull();
+    world.fake.stop();
+    await e.confirmExitChord(MAC);
+    expect(getBoardSync(world.app.db, MAC).provenAt).not.toBeNull();
+    expect(e.views().find((v) => v.boardId === MAC)?.auto.proven).toBe(true);
   });
 
   test("once proved, an edit is applied by itself after the quiet time", async () => {

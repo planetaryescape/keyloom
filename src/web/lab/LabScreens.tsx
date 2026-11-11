@@ -4,6 +4,7 @@ import type { FingerReadout, LabReadout } from "../../api/lab.ts";
 import type { ProposalCard } from "../../api/http.ts";
 import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
+import { labFixes } from "./lab-words.ts";
 import "./lab.css";
 
 const FINGER_ORDER = ["left-pinky", "left-ring", "left-middle", "left-index", "left-thumb", "right-thumb", "right-index", "right-middle", "right-ring", "right-pinky"];
@@ -15,9 +16,12 @@ const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((m
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Over the stage: choosing a passage, the passage while listening, and reading it back (l1, l2 in the comps).
 
-export function LabStage({ lab, boardName, phone, onClose, onType }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void; onType: (ch: string) => void }) {
+/** What the lab's problem line can do: put keyloom's build on the keyboard, by sync or by Build and flash (R1-19). */
+type LabFixHandlers = { onSync: () => void; onOpenRelease: () => void };
+
+export function LabStage({ lab, boardName, phone, onClose, onType, fixes }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void; onType: (ch: string) => void; fixes: LabFixHandlers }) {
   const { phase } = lab;
-  if (phase.kind === "start") return <StartCard lab={lab} boardName={boardName} phone={phone} onClose={onClose} />;
+  if (phase.kind === "start") return <StartCard lab={lab} boardName={boardName} phone={phone} onClose={onClose} fixes={fixes} />;
   if (phase.kind === "listening") return <Listening lab={lab} boardName={boardName} startedAt={phase.startedAt} text={phase.passage.text} onType={onType} />;
   if (phase.kind === "reading") {
     return (
@@ -29,7 +33,7 @@ export function LabStage({ lab, boardName, phone, onClose, onType }: { lab: Lab;
   return null;
 }
 
-function StartCard({ lab, boardName, phone, onClose }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void }) {
+function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardName: string; phone: boolean; onClose: () => void; fixes: LabFixHandlers }) {
   const [choice, setChoice] = useState<string>("starter");
   const [own, setOwn] = useState("");
   // The built-in passages: the starter, home row rolls and holds, each finger on its own, and BK's own text.
@@ -75,6 +79,18 @@ function StartCard({ lab, boardName, phone, onClose }: { lab: Lab; boardName: st
         </>
       ) : null}
       {lab.problem === null ? null : <p className="lab-problem" role="alert">{lab.problem}</p>}
+      {lab.problem === null ? null : (() => {
+        const shown = labFixes(lab.problemCode, lab.loadFailed);
+        if (shown.length === 0) return null;
+        const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload };
+        return (
+          <div className="lab-fixes">
+            {shown.map((fix, i) => (
+              <button key={fix.id} type="button" className={i === 0 ? "button button-primary" : "button"} onClick={run[fix.id]}>{fix.label}</button>
+            ))}
+          </div>
+        );
+      })()}
       {lab.sessions.length === 0 ? null : (
         <div className="lab-past">
           <h3>Earlier sessions</h3>

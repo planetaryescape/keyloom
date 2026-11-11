@@ -1,5 +1,5 @@
 import { BoardListResponseSchema, ImportResponseSchema, type BoardChoice, type ImportResponse } from "../../api/http.ts";
-import { ApiError } from "../api.ts";
+import { ApiError, UNREACHABLE } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import type { ReviewActivity } from "../../api/review.ts";
 
@@ -19,7 +19,7 @@ export async function uploadLayout(token: string, boardId: string, file: File, a
       body: file,
     });
   } catch {
-    throw new ApiError(0, "Can't reach keyloom. Is it still running in your terminal?");
+    throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
   if (!response.ok) throw await failure(response);
   const parsed = ImportResponseSchema.safeParse(await response.json());

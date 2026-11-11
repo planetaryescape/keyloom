@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -60,11 +60,27 @@ describe("syncLine", () => {
   });
 
   test("a keyboard that runs another layout of the board says so and offers to put this one on it", () => {
-    expect(syncLine(board({ kind: "in_sync" }), "lay_2")).toMatchObject({ label: "Your Glove80 runs “main”", action: { id: "sync_now", label: "Put this layout on it" } });
+    // It opens the put-on confirm (D-300): a plain sync of another config is refused by the engine (R1-02).
+    expect(syncLine(board({ kind: "in_sync" }), "lay_2")).toMatchObject({ label: "Your Glove80 runs “main”", action: { id: "put_on", label: "Put this layout on it" } });
+    expect(syncLine(board({ kind: "behind", changes: 2, why: "waiting", error: null }), "lay_2").action).toEqual({ id: "put_on", label: "Put this layout on it" });
     // Not-keyloom's and not-connected are the same for any layout.
     expect(syncLine(board({ kind: "not_connected" }), "lay_2").label).toBe("Glove80 not connected");
     // No layout on screen for the board: its own state.
     expect(syncLine(board({ kind: "in_sync" }), null).label).toBe("On your Glove80");
+  });
+
+  test("another config on the keyboard offers to put the tracked one on, by name, never a menu to find", () => {
+    const line = syncLine(board({ kind: "behind", changes: null, why: "other_config", error: null }), "lay_1");
+    expect(line.action).toEqual({ id: "put_on", label: "Put “main” on it" });
+    expect(line.detail).not.toContain("config menu");
+  });
+
+  test("a failed build opens Build and flash, where Docker's callout and the log are; other failures sync again", () => {
+    const failed = (failure: string) => board({ kind: "behind", changes: 1, why: "failed", error: "Docker isn't running" }, {
+      last: { id: "syn_1", trigger: "auto", status: "failed", step: "building", revisionId: "rev_1", failure, error: "Docker isn't running", startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } },
+    });
+    expect(syncLine(failed("build"), "lay_1").action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(syncLine(failed("flash"), "lay_1").action).toEqual({ id: "sync_now", label: "Sync now" });
   });
 
   test("every state has a short word for a phone", () => {
@@ -134,23 +150,50 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     const off = syncLine(mac({ kind: "not_connected" }), "lay_1");
     expect(off.label).toBe("kanata isn't running");
     expect(off.detail).not.toMatch(/plug/i);
+    // The popover's checklist is the way forward; the line names no command (R1-05).
+    expect(off.detail).not.toContain("keyloom doctor");
   });
 
   test("remapping off is its own state, and its action turns remapping back on", () => {
     expect(syncLine(mac({ kind: "behind", changes: null, why: "remapping_off", error: null }), "lay_1")).toMatchObject({ label: "Remapping is off", action: { id: "sync_now", label: "Turn remapping on" } });
   });
 
-  test("a config keyloom didn't write offers no flash", () => {
-    expect(syncLine(mac({ kind: "not_keyloom", detail: "kanata is running a config keyloom didn't write" }), "lay_1").action).toBeNull();
+  test("a config keyloom didn't write offers Replace it, never a flash, and says keyloom keeps a copy", () => {
+    const line = syncLine(mac({ kind: "not_keyloom", detail: "kanata is running a config keyloom didn't write" }), "lay_1");
+    expect(line.action).toEqual({ id: "replace_foreign", label: "Replace it…" });
+    expect(line.detail).toContain("keeps a copy");
   });
 
-  test("the auto-apply note names the exit chord, not a flash", () => {
-    expect(autoSyncLine(mac({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } })).note).toContain("emergency exit");
+  test("the auto-apply note names the exit chord and the button, not a command", () => {
+    const note = autoSyncLine(mac({ kind: "in_sync" }, { auto: { on: false, choice: null, paused: false, proven: false, provenAt: null, dueAt: null } })).note;
+    expect(note).toContain("emergency exit");
+    expect(note).not.toContain("keyloom remap");
+    expect(syncLine(mac({ kind: "behind", changes: 1, why: "unproven", error: null }), "lay_1").detail).not.toContain("keyloom remap");
   });
 
   test("a sync under a second says so in milliseconds", () => {
     const last = { id: "syn_1", trigger: "auto" as const, status: "succeeded" as const, step: "done", revisionId: "rev_1", failure: null, error: null, startedAt: 1, finishedAt: 2, timings: { waitMs: 3000, buildMs: null, flashMs: 120, totalMs: 340 } };
     const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" }), mac({ kind: "in_sync" }, { last }));
     expect(notice).toMatchObject({ kind: "success", detail: "340 ms from your change." });
+  });
+});
+
+describe("refusalNotice", () => {
+  test("each refusal code offers the control that fixes it, and never shows the CLI sentence", () => {
+    const cli = "Ergo is archived; restore it first with `keyloom config restore Ergo`";
+    expect(refusalNotice("archived", cli)).toMatchObject({ message: "This config is archived", action: { id: "restore", label: "Restore" } });
+    expect(refusalNotice("not_on_keyboard", cli).action).toEqual({ id: "put_on", label: "Put it on…" });
+    expect(refusalNotice("cant_sync", cli).action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(refusalNotice("foreign_firmware", cli).action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(refusalNotice("kanata_foreign", cli).action).toEqual({ id: "replace_foreign", label: "Replace it…" });
+    for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running"]) {
+      const n = refusalNotice(code, cli);
+      expect(`${n.message} ${n.detail ?? ""}`).not.toContain("keyloom config");
+      expect(`${n.message} ${n.detail ?? ""}`).not.toContain("`");
+    }
+  });
+
+  test("an unknown code keeps the server's sentence, which is all there is", () => {
+    expect(refusalNotice("usage", "the Glove80 can't be synced right now")).toEqual({ message: "keyloom couldn't do that", detail: "the Glove80 can't be synced right now" });
   });
 });

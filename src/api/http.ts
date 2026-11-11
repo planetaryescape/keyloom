@@ -536,6 +536,10 @@ export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
 //   POST /api/sync/auto   AutoSyncRequest -> SyncStatusResponse (400 usage when auto-sync can't be on yet)
 //   POST /api/sync/pause  PauseRequest   -> SyncStatusResponse
 //   POST /api/sync/disable-remapping DisableRemappingRequest -> SyncStatusResponse (400 usage when the board is not a software remapper or kanata is not running)
+//   POST /api/sync/replace-foreign  SyncNowRequest -> SyncStatusResponse  (MacBook: replaces a kanata config keyloom didn't write, keeping a copy; R1-17)
+//   POST /api/sync/confirm-exit-chord DisableRemappingRequest -> SyncStatusResponse (400 kanata_still_running while kanata answers; R1-18)
+// A refused sync answers 400 with a code the page maps to an action (R1-16): archived, not_on_keyboard, cant_sync, not_connected,
+// kanata_not_running, kanata_foreign, foreign_firmware, busy, unproven, keyboard_removed, kanata_still_running; "usage" otherwise.
 //   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
 // A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
 export const SyncStateSchema = z.discriminatedUnion("kind", [

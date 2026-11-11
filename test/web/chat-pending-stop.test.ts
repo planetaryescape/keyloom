@@ -37,7 +37,7 @@ test("held unsent acceptance after explicit Stop cannot execute preparation; los
     // Unknown run cancellation still refuses rather than fabricating a terminal run.
     expect((await handleChatRoute(new Request("http://localhost/api/agent/v1/runs/unknown/cancel", { method: "POST", headers: { "content-type": "application/json", "x-keyloom-token": "test" }, body: '{"version":1}' }), "/api/agent/v1/runs/unknown/cancel", backend, "test"))?.status).toBe(404);
     release.resolve();
-    await expect(accepting).rejects.toThrow(/reach keyloom/);
+    await expect(accepting).rejects.toThrow(/stopped answering/);
     const run = await fetchSavedRun("test", "held-before-transport", new AbortController().signal);
     expect(run).toMatchObject({ status: "cancelled", cancelRequested: true, committedPreparations: 0 });
     expect(calls).toBe(0);
