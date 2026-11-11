@@ -218,7 +218,10 @@ function knownRefusal(code: string | undefined): RefusalNotice | null {
     case "kanata_foreign": return { message: "kanata runs a config keyloom didn't write", detail: "keyloom never replaces it by itself.", action: { id: "replace_foreign", label: "Replace it…" } };
     case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status lists what is missing, with a button for each.", action: { id: "open_status", label: "Open keyboard status" } };
     case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
-    case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
+    case "busy": return { message: "keyloom is already building or flashing", detail: "Try again when it finishes." };
+    // Sync now asks again by itself while the page is open (R3-18, busy-retry.ts), and says so when it stops asking.
+    case "busy_waiting": return { message: "keyloom is already building or flashing", detail: "keyloom syncs this when that finishes." };
+    case "busy_timed_out": return { message: "keyloom is still building or flashing", detail: "It has been busy for 15 minutes, so keyloom stopped waiting. The keyboard's status shows what is running.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then check again.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_not_seen": return { message: "keyloom hasn't seen kanata running lately", detail: "A kanata that stopped long ago, or never started, doesn't show the chord worked. Start kanata, then hold Left Control, Space and Escape and press the button again.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
