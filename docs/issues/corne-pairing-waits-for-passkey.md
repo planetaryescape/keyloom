@@ -1,6 +1,6 @@
 # The Corne waited for a typed passkey on every new pairing
 
-Status: fixed on `fix/corne-no-passkey`. Build `bld_01M7558E6MVMRD0A13S9YH4FHQ` (layout head `rev_01M73MXD214VD6JJAET9RMFN30`, scratch data directory) has `# CONFIG_ZMK_BLE_PASSKEY_ENTRY is not set` and `CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE=y` in both halves' `.config`. Not yet flashed or paired on hardware.
+Status: fixed in `234c5380` (PR #275), released in v0.73.0. Flashed 2026-11-11 as `bld_01M757322H9F4K1B4SPSW6QRF1`; both halves verified (`fl_01M7582CDWT9M1GNYBJH0YG0S1`), and that build's left and right `.config` have `# CONFIG_ZMK_BLE_PASSKEY_ENTRY is not set`. A pairing on hardware is not yet confirmed. The flash itself stranded the right half; see [uf2-open-failure-taken-as-written](uf2-open-failure-taken-as-written.md).
 
 Reported 2026-11-11: "when i try to connect it spins and spins and then just stops spinning". The Corne Choc Pro BT was on an unused profile, the first computer had stopped receiving keys, and the second computer listed the keyboard under nearby devices.
 
@@ -29,4 +29,4 @@ On BK's Corne the digits sit on a layer, so the code is hard to type at all.
 
 ## Verification still to do
 
-Flash both halves, then select an unused profile and pair a computer without typing anything.
+Select an unused profile and pair a computer without typing anything.
