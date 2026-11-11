@@ -51,17 +51,25 @@ export type ConfirmProblem = { message: string; detail?: string; action?: { labe
  * `onConfirm`; the dialog stays open with the reason if it fails. `problemFor` turns a failure into words and a way on; the button
  * closes the dialog and does it. Without one, or when it returns null, the error's own message is shown.
  */
-export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, problemFor }: {
+export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, problemFor, extra, blocked = false }: {
   title: string;
   lines: readonly string[];
   confirmLabel: string;
   onConfirm: () => Promise<void>;
   onClose: () => void;
   problemFor?: (error: unknown) => ConfirmProblem | null;
+  /** Shown under the lines, such as kanata's setup checklist while the confirm can't work yet (R4 residual 1). */
+  extra?: ReactNode;
+  /** The confirm would be refused now, so it is hidden; `extra` says why and how to get past it. A change clears an earlier refusal. */
+  blocked?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ConfirmProblem | null>(null);
+  // A refusal belongs to the state it was refused in: once that changes (kanata started), the confirm is offered again without it.
+  useEffect(() => setProblem(null), [blocked]);
   const go = async () => {
+    // Enter in the dialog submits it too; a hidden confirm must not run that way.
+    if (blocked) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -82,7 +90,7 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Not now</button>
-          {action === undefined ? (
+          {blocked ? null : action === undefined ? (
             <button type="submit" className="bar-apply" disabled={busy} data-autofocus>
               {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               {confirmLabel}
@@ -95,6 +103,7 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
       }
     >
       {lines.map((line) => <p key={line} className="config-dialog-lead">{line}</p>)}
+      {extra}
       {problem === null ? null : (
         <div className="config-problem" role="alert">
           <p>{problem.message}</p>

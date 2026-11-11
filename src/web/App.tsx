@@ -26,6 +26,7 @@ import { useConfigs } from "./configs/useConfigs.ts";
 import { ConfirmDialog } from "./configs/ConfigDialogs.tsx";
 import { type GoBackRefusal, goBackRefusal } from "./shell/mismatch-words.ts";
 import { refusalProblem } from "./sync/useSyncToasts.ts";
+import { RemapperSetup } from "./sync/RemapperSetup.tsx";
 import type { FindingRepairDraft } from "../api/review.ts";
 
 // `gone` is a layout that isn't there (404), which no Try again brings back (R1-08); `waiting` is a keyloom that stopped answering,
@@ -368,7 +369,7 @@ function LayoutPage({
   const page = (release: ReleaseHandle | null, dialog: ReactNode) => (
     <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
-        <MismatchState token={token} summary={summary} kanata={board.firmware === "kanata"} fixable={problem !== null && board.keyCount === geometry.keys.length} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
+        <MismatchState token={token} sync={sync} summary={summary} kanata={board.firmware === "kanata"} fixable={problem !== null && board.keyCount === geometry.keys.length} problem={failure ?? "keyloom couldn't place this layout's keys on its board."} onHome={onHome} onReload={menu.onReload} />
       ) : (
         <Viewer
           detail={detail}
@@ -417,8 +418,16 @@ function findProblem({ document: layout, board, geometry }: LayoutDetail): strin
  * button: History lives in the editor, which can't draw this layout, so the page offers that revision itself (D-502). Otherwise it
  * offers another layout, from the wall or the board switcher in the header, or archiving this one, which keeps its history.
  */
-function MismatchState({ token, summary, kanata, problem, fixable, onHome, onReload }: { token: string; summary: LayoutSummary; kanata: boolean; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
+function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome, onReload }: { token: string; sync: SyncApi; summary: LayoutSummary; kanata: boolean; problem: string; fixable: boolean; onHome?: (() => void) | undefined; onReload?: ((selectId?: string) => void) | undefined }) {
   const [busy, setBusy] = useState(false);
+  // A put-on to a MacBook whose kanata isn't running is refused (R4 residual 1). The dialog shows kanata's setup instead of the confirm
+  // until the sync engine sees kanata answer, whether the sync line said so first or the put-on was refused first.
+  const kanataDown = kanata && sync.boards.find((b) => b.boardId === summary.boardId)?.state.kind === "not_connected";
+  const [kanataRefused, setKanataRefused] = useState(false);
+  useEffect(() => {
+    if (!kanataDown) setKanataRefused(false);
+  }, [kanataDown]);
+  const needsKanata = kanata && (kanataDown || kanataRefused);
   // The config on its keyboard can't be archived (R3-06): the page hides Archive, says why, and offers to put another config on first.
   // A list that failed to load is empty, which keeps Archive; the server refuses it with its reason if it is on the keyboard after all.
   const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.revisionId}`);
@@ -525,11 +534,22 @@ function MismatchState({ token, summary, kanata, problem, fixable, onHome, onRel
           await useConfig(token, other.id);
           configs.reload();
         }}
+        blocked={needsKanata}
+        extra={needsKanata ? (
+          <div className="config-problem" role="status">
+            <p>kanata isn't running, so keyloom can't load {other.name} yet.</p>
+            <p className="config-problem-detail">Finish these steps. Put it on comes back when keyloom sees kanata running.</p>
+            <RemapperSetup sync={sync} boardId={summary.boardId} mode="setup" />
+          </div>
+        ) : null}
         // This page has none of the refusals' fixes, so their button opens the config being put on, whose page has Build and flash and
         // Replace it. Not keyboard status: a config that isn't on the keyboard opens that on the keyboard's config, which is this page.
-        problemFor={(error) => (error instanceof ApiError
-          ? refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }))
-          : null)}
+        // kanata not running is fixed here, by the setup above.
+        problemFor={(error) => {
+          if (!(error instanceof ApiError)) return null;
+          if (error.code === "kanata_not_running") setKanataRefused(true);
+          return refusalProblem(error, {}, (action) => (action === "open_status" || onReload === undefined ? undefined : { name: other.name, open: () => onReload(other.id) }));
+        }}
         onClose={() => setPutting(false)}
       />
     ) : null}
