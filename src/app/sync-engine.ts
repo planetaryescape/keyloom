@@ -31,6 +31,7 @@ import type { App } from "./context.ts";
 import { NotFoundError, UsageError } from "./errors.ts";
 import { confirmExitChord, kanataSeenRecently } from "./remapper.ts";
 import { firmwareBusy } from "./firmware.ts";
+import { commandArg } from "./command-words.ts";
 import type { SyncDeps } from "./sync-deps.ts";
 import { type KeyboardReading, syncSupported, syncableBoards } from "./sync-keyboard.ts";
 import { type SyncFacts, type SyncState, autoSyncDue, deriveState } from "./sync-state.ts";
@@ -725,11 +726,11 @@ export class SyncEngine {
     const layout = findLayoutRow(this.app.db, layoutRef);
     if (!layout) throw new NotFoundError(`no layout "${layoutRef}"`);
     if (keyboardRemoved(this.app.db, layout.boardId)) throw new SyncRefusal("keyboard_removed", `this keyboard was removed from your setup; restore it with \`keyloom keyboard restore ${layout.boardId}\` before syncing`);
-    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${layout.name}\``);
+    if (layout.archivedAt !== null) throw new SyncRefusal("archived", `${layout.name} is archived; restore it first with \`keyloom config restore ${commandArg(layout.name)}\``);
     const onKeyboard = getBoardConfig(this.app.db, layout.boardId);
     if (!put && onKeyboard !== layout.id) {
       const current = onKeyboard === undefined ? undefined : findLayoutRow(this.app.db, onKeyboard);
-      throw new SyncRefusal("not_on_keyboard", `${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${layout.name}\``);
+      throw new SyncRefusal("not_on_keyboard", `${layout.name} isn't the config on your ${showBoard(layout.boardId).definition.name}${current ? ` (${current.name} is)` : ""}; put it on with \`keyloom config use ${commandArg(layout.name)}\``);
     }
     const board = showBoard(layout.boardId);
     const name = board.definition.name;
@@ -745,10 +746,10 @@ export class SyncEngine {
         : new SyncRefusal("not_connected", `no ${name} is attached; plug it in and try again`);
     }
     if (reading.state === "other" && board.definition.firmware === "kanata") {
-      throw new SyncRefusal("kanata_foreign", `kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${layout.name} --overwrite\` to do it deliberately.`);
+      throw new SyncRefusal("kanata_foreign", `kanata is running a config keyloom didn't write (${reading.detail}). keyloom never replaces it by itself: apply with \`keyloom remap apply ${commandArg(layout.name)} --overwrite\` to do it deliberately.`);
     }
     if (reading.state === "other") {
-      throw new SyncRefusal("foreign_firmware", `the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${layout.name}\` and \`keyloom flash --layout ${layout.name}\` to do it deliberately.`);
+      throw new SyncRefusal("foreign_firmware", `the ${name} is running firmware keyloom didn't build (${reading.detail}). keyloom never replaces that by itself: run \`keyloom build ${commandArg(layout.name)}\` and \`keyloom flash --layout ${commandArg(layout.name)}\` to do it deliberately.`);
     }
 
     const run = this.running;
