@@ -17,8 +17,8 @@ import { uf2Image } from "../../helpers/zmk.ts";
 
 const FAKE_DOCKER_WEST = `
 case "$1" in
-  rm) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_RM_FAIL" ] && exit 1; exit 0;;
-  ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_PS_FAIL" ] && { echo "error during connect" >&2; exit 1; }; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
+  rm) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_RM_FAIL" ] && exit 1; [ -n "$FAKE_RM_HANG" ] && { sleep 5 >/dev/null 2>&1 & trap 'kill $!; exit 0' TERM; wait; exit 0; }; exit 0;;
+  ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_PS_FAIL" ] && { echo "error during connect" >&2; exit 1; }; [ -n "$FAKE_PS_HANG" ] && { sleep 5 >/dev/null 2>&1 & trap 'kill $!; exit 0' TERM; wait; exit 0; }; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
 esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
@@ -54,7 +54,7 @@ async function setup() {
       () =>
         buildZmkWest({
           board: board.definition, source, checkoutDir: join(dir, "work"), imageContextDir: join(dir, "image"), artifactPath: join(dir, "out", "bld.zip"),
-          log, containerName: "keyloom-test", onLine: (l) => lines.push(l),
+          log, containerName: "keyloom-test", onLine: (l) => lines.push(l), containerCheckTimeoutMs: 300,
         }),
       { FAKE_MODE: mode, FAKE_DOCKER_LOG: dockerLog, FAKE_UF2: uf2, ...extra },
     );
@@ -146,6 +146,13 @@ describe("buildZmkWest (fake docker)", () => {
     const stuck = await setup();
     await expect(stuck.build("ok", { FAKE_ORPHANS: "0123abcd", FAKE_RM_FAIL: "1" })).rejects.toThrow("couldn't remove the build container an earlier keyloom left");
     expect(await Bun.file(stuck.dockerLog).text()).not.toContain(" --name keyloom-test ");
+    // A command stopped at its timeout that still exits 0 is not an answer either.
+    const slowList = await setup();
+    await expect(slowList.build("ok", { FAKE_PS_HANG: "1" })).rejects.toThrow("docker ps timed out");
+    expect(await Bun.file(slowList.dockerLog).text()).not.toContain(" --name keyloom-test ");
+    const slowRemove = await setup();
+    await expect(slowRemove.build("ok", { FAKE_ORPHANS: "0123abcd", FAKE_RM_HANG: "1" })).rejects.toThrow("docker rm timed out");
+    expect(await Bun.file(slowRemove.dockerLog).text()).not.toContain(" --name keyloom-test ");
   });
 
   test("hashes west.yml and the config files inside the container before west runs, and waits out a stale view", async () => {
