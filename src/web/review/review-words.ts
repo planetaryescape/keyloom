@@ -80,3 +80,30 @@ export function placeWords(positions: readonly number[], rows: Readonly<Record<s
   // A stable sort keeps the board's own row order among places with the same count.
   return [...counts].sort((a, b) => b[1] - a[1]).map(([place, n]) => `${n} ${place}`).join(", ");
 }
+
+/**
+ * Why there are no suggestions, and the one thing to do (R4-10). `unavailable` with no model recorded means none is set up; with a model
+ * recorded, the provider refused the account (a key it rejects, no credits, no access), which is fixed in the model setup, not by trying
+ * again. Anything else that stopped the look can be tried again.
+ */
+export type AiMissing = { words: string; action: "set_up" | "retry"; refused: boolean };
+export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
+  if (ai.status === "unavailable") {
+    const refused = ai.model !== null;
+    return { words: refused ? "The model provider refused this key or account, so there are no suggestions this time." : "Suggestions need a model, and none is set up.", action: "set_up", refused };
+  }
+  return { words: "keyloom's own look didn't finish, so there are no suggestions this time.", action: "retry", refused: false };
+}
+
+/**
+ * Why Apply on a suggestion did not change the config, and the way on (R4-07). A suggestion made for an earlier version, or one the
+ * validator now refuses, can't be applied by asking again, so it offers a fresh review; one that is no longer open says so the same way.
+ * A lost connection or any other refusal can be tried again. By the server's code only, never its text.
+ */
+export type ApplyFailure = { words: string; action: "fresh_review" | "retry" };
+export function applyFailureWords(error: { code: string | undefined; status: number; message: string }): ApplyFailure {
+  if (error.code === "stale_base" || error.code === "validation_failed") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };
+  if (error.code === "not_found" || error.code === "usage") return { words: "This suggestion is no longer open, so nothing was applied.", action: "fresh_review" };
+  if (error.status === 0) return { words: "keyloom couldn't reach its server, so nothing was applied.", action: "retry" };
+  return { words: `Nothing was applied: ${error.message}`, action: "retry" };
+}

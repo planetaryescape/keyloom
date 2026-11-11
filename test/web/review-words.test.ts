@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
 import type { ReviewItem } from "../../src/validation/review-item.ts";
-import { grouped, markerWords, placeOf, placeWords, segments } from "../../src/web/review/review-words.ts";
+import { aiMissingWords, applyFailureWords, grouped, markerWords, placeOf, placeWords, segments } from "../../src/web/review/review-words.ts";
 
 const item = (over: Partial<ReviewItem>): ReviewItem => ({
   id: "x", source: "check", kind: "problem", severity: "warning", code: "c", title: "t", body: "b", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: null, ...over,
@@ -46,3 +46,25 @@ describe("where keys are", () => {
     expect(placeOf(0, { macro: [0] })).toBe("on the macro row");
   });
 });
+
+describe("no suggestions says why and offers the fix (R4-10)", () => {
+  const ai = (status: "unavailable" | "failed", model: string | null) => ({ status, reason: "r", model, startedAt: null });
+  test("no model set up and a refused account both open the setup; only the refused one opens its key", () => {
+    expect(aiMissingWords(ai("unavailable", null))).toEqual({ words: "Suggestions need a model, and none is set up.", action: "set_up", refused: false });
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5"))).toMatchObject({ action: "set_up", refused: true });
+  });
+  test("a look that stopped for another reason tries again", () => {
+    expect(aiMissingWords(ai("failed", "claude-opus-5-5")).action).toBe("retry");
+  });
+});
+
+describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
+  test("a stale or refused suggestion offers a fresh review, never the same Apply", () => {
+    for (const code of ["stale_base", "validation_failed", "not_found", "usage"]) expect(applyFailureWords({ code, status: 409, message: "x" }).action).toBe("fresh_review");
+  });
+  test("a lost connection or other failure tries again", () => {
+    expect(applyFailureWords({ code: undefined, status: 0, message: "Failed to fetch" })).toEqual({ words: "keyloom couldn't reach its server, so nothing was applied.", action: "retry" });
+    expect(applyFailureWords({ code: "busy", status: 409, message: "A build is running." })).toEqual({ words: "Nothing was applied: A build is running.", action: "retry" });
+  });
+});
+

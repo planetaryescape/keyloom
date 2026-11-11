@@ -15,7 +15,7 @@ import type { Command } from "./commands.ts";
 import { ChatStopButton, Composer, type SelectedKeys } from "./Composer.tsx";
 import { AgentMotionToggle } from "./AgentWorking.tsx";
 import { ConversationList } from "./ConversationList.tsx";
-import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
+import { EmptyChat, MissingKey, ProblemNotice, SwitchFailed } from "./ChatStates.tsx";
 import { ModelSetup } from "./ModelSetup.tsx";
 import { CREDITS_PAGES, PROVIDER_NAMES } from "./setup-words.ts";
 import { ProviderPicker } from "./ProviderPicker.tsx";
@@ -139,6 +139,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const reloadProvider = useCallback(() => void provider.reload(), [provider.reload]);
   // Opened by an account failure ("The key was refused"): the setup, with that provider's key field open over the saved one.
   const [setupOpen, setSetupOpen] = useState<keyof typeof PROVIDER_NAMES | null>(null);
+  const [switchFailure, setSwitchFailure] = useState<{ id: keyof typeof PROVIDER_NAMES; message: string; again: () => void } | null>(null);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
   const carried = useMemo(() => {
@@ -463,24 +464,30 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
   const setup = { token, status, onChanged: provider.replace, onReload: reloadProvider };
   // A message refused for a missing key stays in the box; a ready provider takes it in a new conversation, sent when BK is ready.
+  // Every switch says when it fails, and can be asked again (R4-18); until it succeeds nothing else changes.
+  const choose = (id: keyof typeof PROVIDER_NAMES, then: () => void) => {
+    setSwitchFailure(null);
+    void chooseProvider(token, { provider: id }).then((next) => {
+      provider.replace(next);
+      then();
+    }, (error: unknown) => setSwitchFailure({ id, message: error instanceof Error ? error.message : "The switch didn't go through.", again: () => choose(id, then) }));
+  };
   const retry = {
     pinned: transcript.pinned?.provider ?? null,
     onRetry: retryDraft,
-    onSwitch: (id: keyof typeof PROVIDER_NAMES) => void chooseProvider(token, { provider: id }).then((next) => {
-      provider.replace(next);
+    onSwitch: (id: keyof typeof PROVIDER_NAMES) => choose(id, () => {
       chat.newConversation();
       input.current?.focus();
-    }, () => {}),
+    }),
   };
   const switchProvider = (id: string) => {
     const lastAsked = transcript.turns.findLast((turn) => turn.kind === "user");
-    void chooseProvider(token, { provider: id as keyof typeof PROVIDER_NAMES }).then((next) => {
-      provider.replace(next);
+    choose(id as keyof typeof PROVIDER_NAMES, () => {
       chat.newConversation();
       setView("chat");
       setDraft(lastAsked?.kind === "user" ? lastAsked.text : "");
       input.current?.focus();
-    }, () => {});
+    });
   };
 
   const newConversation = () => {
@@ -650,7 +657,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                         key={candidate.id}
                         type="button"
                         className="bar-ready-choice"
-                        onClick={() => void chooseProvider(token, { provider: candidate.id }).then(provider.replace, () => {})}
+                        onClick={() => choose(candidate.id, () => {})}
                       >
                         Use {PROVIDER_NAMES[candidate.id]}
                         <span>{candidate.defaultModel}</span>
@@ -730,6 +737,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
               </section>
             )}
             {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onDismiss={chat.dismissProblem} />}
+            {switchFailure === null ? null : <SwitchFailed to={switchFailure.id} message={switchFailure.message} onRetry={switchFailure.again} onDismiss={() => setSwitchFailure(null)} />}
           </div>
           {commandRows.length === 0 ? null : (
             <ul className="bar-commands" role="listbox" aria-label="Commands">

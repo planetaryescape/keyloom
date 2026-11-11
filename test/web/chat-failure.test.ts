@@ -16,7 +16,7 @@ const failed = (code: string, message: string): AssistantTurn => ({
 const render = (turn: AssistantTurn, switchTo: { id: string; name: string }[] = []) =>
   renderToStaticMarkup(
     createElement(AssistantMessage, {
-      turn, layout, board: board.definition, pinnedId: null, switchTo,
+      turn, layout, board: board.definition, pinnedId: null, switchTo, onSetUpModel: () => {}, onNewConversation: () => {},
       onPreview: () => {}, onPin: () => {}, onApply: async () => {}, onRemovePriority: async () => {}, onAskAgain: () => {}, onOpenRelease: () => {}, onRetry: () => {}, onAnswer: () => {}, onSwitch: () => {},
     }),
   );
@@ -46,4 +46,24 @@ describe("a reply that stopped says why, in comp d2's words (P3)", () => {
   test("anything else keeps the plain title", () => {
     expect(render(failed("stream", "The connection dropped."))).toContain("The reply stopped");
   });
+
+  test("a full conversation offers a new one instead of Try again (R4-11)", () => {
+    const html = render(failed("model_context_full", "This conversation is too long for OpenRouter's model to read in one go."), [{ id: "codex", name: "Codex" }]);
+    expect(html).toContain("This conversation is full");
+    expect(html).toContain("Start a new conversation");
+    expect(html).not.toContain("Try again");
+    expect(html).not.toContain("Switch to");
+  });
+
+  test("a server failure names the service and retries", () => {
+    const html = render(failed("model_server", "OpenRouter server error (500)."));
+    expect(html).toContain("The model&#x27;s service had a problem");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("Change the key");
+  });
+
+  test("a refused key opens the setup", () => {
+    expect(render(failed("model_auth", "OpenRouter rejected the API key (401)."))).toContain("Change the key");
+  });
 });
+

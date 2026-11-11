@@ -105,3 +105,27 @@ export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: P
     </div>
   );
 }
+
+/** Choosing a provider was refused or never arrived (R4-18). The conversation and its provider are as they were; Try again asks once more. */
+export function SwitchFailed({ to, message, onRetry, onDismiss }: { to: ProviderId; message: string; onRetry: () => void; onDismiss: () => void }) {
+  // The switch was pressed higher up the conversation, so the answer is brought into view where it is said.
+  return (
+    <div className="chat-problem" role="alert" ref={(element) => element?.scrollIntoView({ block: "nearest" })}>
+      <TriangleAlert size={18} aria-hidden="true" />
+      <div className="chat-problem-body">
+        <strong>keyloom couldn&apos;t switch to {PROVIDER_NAMES[to]}</strong>
+        <p>{message} Your conversation and its model are unchanged.</p>
+        <div className="chat-problem-actions">
+          <button type="button" className="button" onClick={onRetry}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Try again
+          </button>
+        </div>
+      </div>
+      <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
+        <X size={16} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+

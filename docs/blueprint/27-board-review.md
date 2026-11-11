@@ -1,5 +1,7 @@
 # 27: Board review
 
+Status update, 2026-11-11 (D-518): an account the provider refuses ends the review `unavailable` with **Set up a model**; an Apply that changed nothing says why beside it, with **Run a fresh review** for a suggestion that no longer fits.
+
 Status: engine and screens built (D-340), with scoped repair requests (D-479) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
 
 Follow-up shipped in v0.68.2, 2026-11-02: outdated connected reviews refresh without a button, and unfinished reviews withhold result controls (D-475). The desktop and CLI on PATH were updated and verified; [the receipt](../research/automatic-review-release-v0.68.2.json) records the signed-sidecar CLI source and standalone-asset signature limitation. The app was closed and remained closed.
@@ -68,7 +70,7 @@ The suggestion panel derives its comparison from the linked proposal ops and cur
 - The budget is 10 requests and 14 tool calls. A model past its tool calls is told to submit. The run takes the review first (`claimAi`), so the server and `keyloom review --run` never both pay for one.
 - A run that stops at its limit after saving a fix is `done`, with that fix attached and a reason saying so; with nothing usable saved it is `failed`.
 - A run that finds the layout has moved on fails with that reason and withdraws its proposals; the new revision gets its own review.
-- No provider is `unavailable`, not a failure. A refused, cut-off or erroring run is `failed` with the provider's own words. A later `POST …/review/run` retries either; `force: true` runs a finished one again.
+- No provider is `unavailable`, not a failure. So is a provider that refuses the account (a rejected key, no credits, no access), with the provider's words and the model recorded; the page offers the model setup for both (D-518). A refused, cut-off or erroring run is otherwise `failed` with the provider's own words. A later `POST …/review/run` retries either; `force: true` runs a finished one again.
 
 ## Triggers
 

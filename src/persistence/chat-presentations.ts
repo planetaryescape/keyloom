@@ -50,9 +50,13 @@ export const PresentationSchema = z.object({
   // Typed result cards under the reply (D-467). Persistence does not own the artifact union (the wire schema does, and the module table
   // keeps this folder from importing it), so the stored shape is the bounded list; the API validates each card as it is sent.
   artifacts: z.array(z.unknown()).max(4).optional(),
+  // Why a failed run stopped, by the code the page maps to its way out (`model_<kind>`, `missing_api_key`, `agent_error`), with the provider's
+  // sentence. Absent on runs that did not fail and on recordings from before R4-02 (D-517).
+  failure: z.object({ code: z.string().min(1).max(64), message: z.string().max(2000) }).optional(),
   effectsMayHaveOccurred: z.boolean(), warning: z.string().nullable(), detailsTruncated: z.boolean(),
 });
 export type Presentation = z.infer<typeof PresentationSchema>;
+export type RunFailure = NonNullable<Presentation["failure"]>;
 export const PRESENTATION_BYTES = 64 * 1024;
 
 export function savePresentation(db: Database, conversationId: string, presentation: Presentation): void {

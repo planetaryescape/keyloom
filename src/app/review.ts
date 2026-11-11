@@ -115,6 +115,8 @@ function unavailableReason(err: ModelError): string {
   return err.message;
 }
 
+const ACCOUNT_FAILURES: ReadonlySet<string> = new Set(["auth", "no_credits", "permission", "missing_key"]);
+
 const usageLine = (u: Usage) => ({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens });
 
 /**
@@ -258,6 +260,12 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     const known = model.classifyError(err);
     // A model API failure is something BK can act on, in words. Anything else is a bug: it is logged with its stack and shown plainly.
     if (known === null) console.error("keyloom: board review failed", err);
+    // The account, not the review, failed: like a missing provider it is fixed in the model setup, not by trying again (R4-10). The model
+    // stays recorded, which is how the page tells "this model can't be used" from "none is set up".
+    else if (ACCOUNT_FAILURES.has(known.kind)) {
+      finish("unavailable", known.message, model.model, [], proposed);
+      return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
+    }
     finish("failed", known?.message ?? `keyloom hit an error while reviewing: ${err instanceof Error ? err.message : String(err)}`, model.model, [], proposed);
   }
   return toReview(app, findReview(app.db, row.id) as BoardReviewRow);

@@ -1,4 +1,4 @@
-import { LoaderCircle, X, Zap } from "lucide-react";
+import { LoaderCircle, RefreshCw, X, Zap } from "lucide-react";
 import { useEffect } from "react";
 import type { ProposalCard as Proposal } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -9,8 +9,11 @@ import "./keyboards.css";
 
 // A config's open proposals that no conversation shows (n5, D-336): the ones "Put my config on it" made, and any other made outside the
 // chat. The same card as the chat's, so pinning previews it on the board and Apply is the ordinary apply; applying one retires its sibling.
-export function OpenProposals({ proposals, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease, onPlanRecovery }: {
+export function OpenProposals({ proposals, readFailed = false, onReadAgain, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease, onPlanRecovery }: {
   proposals: readonly Proposal[] | null;
+  /** The proposals could not be read: said with Try again, never as "nothing is waiting" (R4-08). */
+  readFailed?: boolean;
+  onReadAgain?: () => void;
   layout: Layout;
   board: BoardDefinition;
   configName: string;
@@ -42,7 +45,12 @@ export function OpenProposals({ proposals, layout, board, configName, firstFlash
         <button type="button" className="sheet-close" aria-label="Close the proposals" onClick={onClose}><X size={16} aria-hidden="true" /></button>
       </header>
       <div className="nb-panel-body nb-proposals">
-        {proposals === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Loading…</p> : shown === undefined ? (
+        {proposals === null ? <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Loading…</p> : readFailed ? (
+          <div className="nb-problem" role="alert">
+            <p>keyloom couldn&apos;t read this config&apos;s proposals. Nothing was applied or set aside.</p>
+            {onReadAgain === undefined ? null : <button type="button" className="sheet-action" onClick={onReadAgain}><RefreshCw size={13} aria-hidden="true" />Try again</button>}
+          </div>
+        ) : shown === undefined ? (
           <p className="nb-note">Nothing is waiting. Applied and set-aside proposals are in History.</p>
         ) : (
           <div className="nb-proposal">

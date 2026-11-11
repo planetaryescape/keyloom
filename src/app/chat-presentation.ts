@@ -114,8 +114,9 @@ export function chatPresentation(app: App, conversationId: string, userMessageId
       state.artifacts = kept;
       publish();
     },
-    finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string, accounting?: Presentation["accounting"], questionRefines?: string) {
+    finish(status: Presentation["status"], models?: ModelMessage[], stored?: MessageRow[], questionToolUseId?: string, accounting?: Presentation["accounting"], questionRefines?: string, failure?: Presentation["failure"]) {
       if (accounting !== undefined) state.accounting = accounting;
+      if (failure !== undefined) state.failure = { code: failure.code, message: clipPublicText(failure.message, 1500) };
       if (questionToolUseId !== undefined) {
         if (questionToolUseId.length <= 128) state.questionToolUseId = questionToolUseId;
         else state.detailsTruncated = true;

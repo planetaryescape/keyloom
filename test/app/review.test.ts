@@ -191,9 +191,9 @@ describe("the agent's part", () => {
   test("a model that fails is a failed status with the provider's words, and a refusal says it was refused", async () => {
     const w = await reviewWorld();
     const { review } = createReview(w.app, w.layoutId, "manual");
-    const down = scriptedModel([{ blocks: [], error: { status: 401, message: "no auth" } }]);
+    const down = scriptedModel([{ blocks: [], error: { status: 500, message: "upstream broke" } }]);
     const failed = await runReviewAi(w.app, review.id, down.deps);
-    expect(failed.ai).toMatchObject({ status: "failed", reason: expect.stringContaining("rejected the API key") });
+    expect(failed.ai).toMatchObject({ status: "failed", reason: expect.stringContaining("server error (500)") });
     expect(failed.items).toHaveLength(1);
 
     const refuses = scriptedModel([{ blocks: [], stop: "refusal" }]);
@@ -343,6 +343,18 @@ describe("every proposal a run saves is shown or withdrawn", () => {
 
 
 describe("why there is no model", () => {
+  // R4-10: the account, not the review, failed, so the page offers the model setup, not Try again; the model stays recorded to tell it apart.
+  for (const [status, message] of [[401, "no auth"], [402, "Insufficient credits"], [403, "no access to this model"]] as const) {
+    test(`a ${status} from the provider is unavailable with the provider's words and no terminal flag`, async () => {
+      const w = await reviewWorld();
+      const { review } = createReview(w.app, w.layoutId, "manual");
+      const refused = await runReviewAi(w.app, review.id, scriptedModel([{ blocks: [], error: { status, message } }]).deps);
+      expect(refused.ai.status).toBe("unavailable");
+      expect(refused.ai.model).not.toBeNull();
+      expect(refused.ai.reason).not.toContain("--");
+    });
+  }
+
   test("a provider that was chosen but has no key is said so, and is not 'no provider'", async () => {
     const w = await reviewWorld();
     writeAgentConfig(w.dir, { provider: "openrouter" });
