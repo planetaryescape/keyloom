@@ -88,8 +88,14 @@ describe("keyloom generate, build and flash for a Glove80 layout", () => {
     const e = await zmkEnv();
     await e.run(async () => {
       await cli(["build", "glove80", "--data-dir", e.dataDir]);
-      setTimeout(() => process.emit("SIGINT"), 300);
-      const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--wait", "15", "--data-dir", e.dataDir]);
+      // Cancel once the first instruction is out: a fixed delay raced it on a slow CI runner.
+      let cancelled = false;
+      const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--wait", "15", "--data-dir", e.dataDir], (text) => {
+        if (!cancelled && text.includes("keyloom waits")) {
+          cancelled = true;
+          setTimeout(() => process.emit("SIGINT"), 0);
+        }
+      });
       expect(r.code).toBe(8);
       expect(r.err).toContain("keyloom waits 15 minutes");
       expect(r.err).not.toContain("2 minutes");
