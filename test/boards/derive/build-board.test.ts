@@ -1,7 +1,7 @@
 // The board definition assembled from a candidate, geometry and the person's confirmations (22#building-the-board-definition), and the
 // flash recipe each bootloader gets. Every derived definition goes through `boards check`, offline, as a contributed one does.
 import { describe, expect, test } from "bun:test";
-import { DeriveError, deriveBoard, localBoardId } from "../../../src/boards/derive/build-board.ts";
+import { DeriveError, type DeriveErrorCode, deriveBoard, localBoardId } from "../../../src/boards/derive/build-board.ts";
 import { type Candidate } from "../../../src/boards/derive/detect.ts";
 import { qmkFlash, targetId, zmkFlash } from "../../../src/boards/derive/flash-recipe.ts";
 import { checkBoardDir } from "../../../src/boards/check.ts";
@@ -135,11 +135,12 @@ describe("deriveBoard", () => {
 
   // R5-06: every refusal carries a code, so the new-keyboard screen says it in words and never shows the CLI's flags.
   test("each refusal carries its code", () => {
-    const codeOf = (input: Parameters<typeof deriveBoard>[0]): unknown => {
+    const codeOf = (input: Parameters<typeof deriveBoard>[0]): DeriveErrorCode | null => {
       try {
         deriveBoard(input);
       } catch (err) {
-        return err instanceof DeriveError ? err.code : err;
+        if (err instanceof DeriveError) return err.code;
+        throw err;
       }
       return null;
     };

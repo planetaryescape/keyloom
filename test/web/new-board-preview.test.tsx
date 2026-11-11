@@ -10,7 +10,7 @@ import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 // SAFETY: the Confirm panel reads only the candidate's id, name and firmware.
 const candidate = { id: "zmk/corne", name: "Corne", firmware: "zmk" } as ApiCandidate;
 // SAFETY: the Confirm panel reads only these fields of the hook's result; the rest of its API is never called while rendering.
-const flow = (previewProblem: string | null, extra: Partial<Record<keyof NewKeyboard, unknown>> = {}): NewKeyboard => ({
+const flow = (previewProblem: string | null, extra: Partial<NewKeyboard> = {}): NewKeyboard => ({
   step: { kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null },
   preview: null, previewProblem, previewProblemCode: null, problem: null, retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, review: () => {},
   setHomeRow: () => {}, setController: () => {}, setLayout: () => {}, busy: false, ...extra,

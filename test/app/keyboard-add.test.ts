@@ -153,13 +153,13 @@ describe("what the new-keyboard screen is told", () => {
   test("a keyboard whose firmware tree has no key positions is refused with no_key_positions, by preview and add alike", async () => {
     const { app } = world();
     const refusal = { name: "KeyboardAddError", code: "no_key_positions" };
-    expect(await previewKeyboard({ candidate: "zmk:glove80" }, d()).catch((e: unknown) => e)).toMatchObject(refusal);
-    expect(await addKeyboard(app, { candidate: "zmk:glove80", homeRow: 2 }, { ...d(), boards: [] }).catch((e: unknown) => e)).toMatchObject(refusal);
+    await expect(previewKeyboard({ candidate: "zmk:glove80" }, d())).rejects.toMatchObject(refusal);
+    await expect(addKeyboard(app, { candidate: "zmk:glove80", homeRow: 2 }, { ...d(), boards: [] })).rejects.toMatchObject(refusal);
   });
 
   test("a home row the board doesn't have is refused by add with the derive code", async () => {
     const { app } = world();
-    expect(await addKeyboard(app, { candidate: "qmk:atomic", homeRow: 9, layout: "LAYOUT_semi_standard" }, { ...d(), boards: [] }).catch((e: unknown) => e))
-      .toMatchObject({ name: "KeyboardAddError", code: "home_row_out_of_range" });
+    await expect(addKeyboard(app, { candidate: "qmk:atomic", homeRow: 9, layout: "LAYOUT_semi_standard" }, { ...d(), boards: [] }))
+      .rejects.toMatchObject({ name: "KeyboardAddError", code: "home_row_out_of_range" });
   });
 });

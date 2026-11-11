@@ -3,6 +3,7 @@
 // same name, add with its confirmations, and a put previewed, made with a chosen placement, and listed on the config's page.
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { ProposalsResponseSchema } from "../../src/api/configs.ts";
+import { ApiErrorBodySchema } from "../../src/api/http.ts";
 import { AddResponseSchema, DetectResponseSchema, PreviewResponseSchema, PutPreviewResponseSchema, PutResponseSchema } from "../../src/api/keyboards.ts";
 import { detectKeyboards, importLayout, openApp, newConfig } from "../../src/app/index.ts";
 import { unzipSync, strFromU8 } from "fflate";
@@ -117,7 +118,7 @@ describe("a Corne keyloom has never seen", () => {
     const { post } = await serve();
     const noPositions = await post("/api/keyboards/preview", { candidate: "zmk:glove80" });
     expect(noPositions.status).toBe(400);
-    expect(((await noPositions.json()) as { error: { code: string } }).error.code).toBe("no_key_positions");
+    expect(ApiErrorBodySchema.parse(await noPositions.json()).error.code).toBe("no_key_positions");
     const p = PreviewResponseSchema.parse(await (await post("/api/keyboards/preview", { candidate: "zmk:corne" })).json());
     expect(p.layouts).toEqual([]);
     expect(p.boardProblemCode).toBeNull();
