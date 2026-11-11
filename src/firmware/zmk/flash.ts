@@ -21,6 +21,9 @@ export const UNMOUNT_WAIT_MS = 30_000;
 export const WRITE_RETRY_MS = 8_000;
 /** How long a drive may stay listed after a device-gone write error before the error counts as a failed flash. */
 export const GONE_WAIT_MS = 3_000;
+/** How long to wait for a drive that went away before anything was written to mount again, and how many times. */
+export const REMOUNT_WAIT_MS = 60_000;
+const MAX_REMOUNTS = 2;
 export const POLL_MS = 500;
 
 export const ZMK_CHECKING_INSTRUCTION = "keyloom is checking whether it can restart the keyboard's halves into their bootloaders itself.";
@@ -29,8 +32,12 @@ export const WRITING_INSTRUCTION = "Don't unplug or switch off the half. Writing
 
 export type { FlashStep } from "../../boards/recipes.ts";
 
-/** `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it. */
-export type EnterResult = { ok: true; alreadyThere?: true } | { ok: false; reason: string; retry?: boolean };
+/**
+ * `alreadyThere`: the half was in its bootloader before keyloom tried, so keyloom proved nothing about reaching it.
+ * `attributed`: its drive was already mounted under a label both halves share, and every other half is on USB running
+ * firmware, so the drive can only be this half's.
+ */
+export type EnterResult = { ok: true; alreadyThere?: true; attributed?: true } | { ok: false; reason: string; retry?: boolean };
 export type VerifyResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** What hands-free flashing adds to each step (src/firmware/zmk/handsfree-flash.ts); without it the person puts every half in its bootloader. */
@@ -43,8 +50,11 @@ export type StepHooks = {
    * before it restarts the half, so a cancel during the check leaves the half typing.
    */
   enterBootloader?: (step: FlashStep, index: number, announce: (instruction: string) => void, signal?: AbortSignal) => Promise<EnterResult>;
-  /** Confirm every peer sharing this boot-drive label is visibly running firmware before a write. */
-  peersRunning?: (step: FlashStep) => Promise<boolean>;
+  /**
+   * Confirm every peer sharing this boot-drive label is visibly running firmware before a write. `strict` also refuses a peer
+   * that is not on USB: a drive keyloom did not see appear for this half could be that peer in its bootloader.
+   */
+  peersRunning?: (step: FlashStep, strict?: boolean) => Promise<boolean>;
   /** Called with the image just written, after the drive has unmounted: did the half come back running it? A failure stops the flash. */
   verify?: (step: FlashStep, index: number, image: Uint8Array) => Promise<VerifyResult>;
   /** Promote verified images only once the entire flash has passed. */
@@ -75,6 +85,8 @@ export type Uf2FlashInput = {
   writeImage?: (path: string, bytes: Uint8Array) => Promise<void>;
   /** How long to wait for the drive to unmount after a device-gone write error; defaults to GONE_WAIT_MS. */
   goneWaitMs?: number;
+  /** How long to wait for a drive that went away before the file was opened to mount again; defaults to REMOUNT_WAIT_MS. */
+  remountWaitMs?: number;
   writeRetryMs?: number;
   unmountWaitMs?: number;
   pollMs?: number;
@@ -88,6 +100,9 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
     const t = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
   });
+
+/** A write that failed while opening the file put nothing on the drive. Node names the failing call in `syscall`. */
+const notOpened = (err: unknown): boolean => (err as NodeJS.ErrnoException).syscall === "open";
 
 /**
  * What each step writes. A `.zip` artifact is a bundle with one `<target>.uf2` per build target (a split
@@ -204,6 +219,7 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     let instruction = recovery?.instruction ?? instructionFor(step, i, input.steps.length, waitMs);
     let restarted = false;
     let byKeyloom = false;
+    let attributed = false;
     let retryRestart = false;
     let restartReason: string | undefined;
     const cancelled = (): string => (i === 0 ? "Cancelled. Nothing was flashed." : "Cancelled. The halves flashed so far keep the new firmware and the others keep the old; flash again to finish.");
@@ -244,12 +260,14 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       restarted = entered.ok;
       byKeyloom = entered.ok && entered.alreadyThere !== true;
       if (byKeyloom) commit();
+      attributed = entered.ok && entered.attributed === true;
     }
     // A label shared by both halves names no half. It is safe after keyloom restarted this target itself, or, outside
     // recovery, when the drive appears after the prompt and the peers are visibly running firmware at write time. A drive
-    // already mounted before the prompt could be the other half, as after a failed split flash, so it is refused.
-    // Boards without hands-free hooks have no rollback or verification, so they keep the manual flow they always had.
-    if (input.hooks !== undefined && shared && !byKeyloom && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
+    // already mounted before the prompt could be the other half, as after a failed split flash, so it is refused unless every
+    // other half is on USB running firmware. Boards without hands-free hooks have no rollback or verification, so they keep
+    // the manual flow they always had.
+    if (input.hooks !== undefined && shared && !byKeyloom && !attributed && (recovery !== undefined || (await input.findVolume(step.volume)) !== null)) {
       const remedy = sharedDriveRemedy(step, input.steps);
       const error = `Not writing to ${step.volume}: its shared drive could belong to either half. ${restartReason ? `${restartReason}. ` : ""}${remedy}`;
       input.onState("waiting_for_bootloader", error, { needsHand: true });
@@ -315,14 +333,25 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     }
     allRestarted &&= byKeyloom;
 
-    const selectedMount = mount;
-    const selectedIdentity = identity;
+    // A drive that went away before anything was written is rebound when it mounts again, so these can change.
+    let selectedMount = mount;
+    let selectedIdentity = identity;
+    // A drive keyloom attributed by its peers, or one that came back, is this half's only while every peer is seen running.
+    let strictPeers = attributed;
+    const waitForVolume = async (label: string, ms: number): Promise<string | null> => {
+      for (const deadline = Date.now() + ms; Date.now() < deadline && !signal?.aborted; ) {
+        const found = await input.findVolume(label);
+        if (found) return found;
+        await sleep(poll, signal);
+      }
+      return null;
+    };
     const checkMount = async (): Promise<string | undefined> => {
       try {
         if (await input.findVolume(step.volume) !== selectedMount) {
           return `Not writing to ${step.volume}: the selected drive at ${selectedMount} is no longer mounted at that path. ${retryRemedy(input.steps)}`;
         }
-        if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step))) {
+        if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step, strictPeers))) {
           return `Not writing to ${step.volume}: the other half is not confirmed running firmware. ${sharedDriveRemedy(step, input.steps)}`;
         }
         // Check after the asynchronous probes, immediately before opening the selected path.
@@ -345,22 +374,47 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
     holdWrite();
     signal = undefined;
     input.onState("writing", WRITING_INSTRUCTION);
-    const target = join(mount, input.driveFileName ?? "glove80.uf2");
+    const fileOn = (at: string): string => join(at, input.driveFileName ?? "glove80.uf2");
+    let target = fileOn(mount);
+    // Only a failed open of the image write itself means nothing reached the drive; the sync's open comes after a full write.
+    let written = false;
     try {
       // A drive can refuse the first open with EACCES for a few seconds, then take the same write (BK's Glove80 left half,
       // 2026-10-16, most likely the bare mount point that D-439 now skips). Retry a refused open while the drive stays mounted; a
       // lasting refusal is still reported.
       const retryUntil = Date.now() + (recovery ? 0 : input.writeRetryMs ?? WRITE_RETRY_MS);
+      let remounts = 0;
       for (;;) {
         const unsafe = await checkMount();
         if (unsafe) return refuseMount(unsafe);
         try {
           await (input.writeImage ?? writeFile)(target, image);
+          written = true;
           break;
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
-          if ((code !== "EACCES" && code !== "EPERM") || Date.now() >= retryUntil) throw err;
-          say(`keyloom: ${step.volume} refused the write (${code}); trying again`);
+          // A failed open wrote nothing, so the drive going away then is not the bootloader taking the file. BK's Corne right
+          // half, 2026-11-11: EINTR on the open, KEEBART unmounted, and the half stayed in its bootloader without the image.
+          if (notOpened(err) && !(await input.findVolume(step.volume))) {
+            if (remounts >= MAX_REMOUNTS) throw err;
+            remounts += 1;
+            say(`keyloom: ${step.volume} went away before the file was opened (${code}), so nothing was written; waiting for it to mount again`);
+            const back = await waitForVolume(step.volume, input.remountWaitMs ?? REMOUNT_WAIT_MS);
+            if (!back) throw err;
+            // The half that went away is not known to be the one that came back: a peer entering its bootloader mounts
+            // the same shared label. Every peer must be seen running again before the drive is taken as this half's.
+            if (shared && input.hooks?.peersRunning && !(await input.hooks.peersRunning(step, true))) {
+              return refuseMount(`Not writing to ${step.volume}: it went away and mounted again, and keyloom can only tell it is the ${step.label}'s while every other half is on USB running firmware. ${sharedDriveRemedy(step, input.steps)}`);
+            }
+            selectedMount = back;
+            selectedIdentity = statSync(back);
+            target = fileOn(back);
+            strictPeers = true;
+            continue;
+          }
+          const retryable = code === "EACCES" || code === "EPERM" || (code === "EINTR" && notOpened(err));
+          if (!retryable || Date.now() >= retryUntil) throw err;
+          say(code === "EINTR" ? `keyloom: opening the file on ${step.volume} was interrupted; trying again` : `keyloom: ${step.volume} refused the write (${code}); trying again`);
           await sleep(poll, signal);
         }
       }
@@ -386,6 +440,9 @@ export async function flashUf2Drives(input: Uf2FlashInput): Promise<FlashResult>
       if (code === "ENXIO" || code === "ENODEV" || code === "EIO") {
         const goneBy = Date.now() + (input.goneWaitMs ?? GONE_WAIT_MS);
         while (Date.now() < goneBy && (await input.findVolume(step.volume))) await sleep(poll, signal);
+      }
+      if (!written && notOpened(err) && !(await input.findVolume(step.volume))) {
+        return failed(`${step.volume} went away before keyloom could open ${target} (${(err as Error).message}), so nothing was written. The ${step.label} was not flashed and may still be in its bootloader. Flash again: keyloom writes to it once the other half is on USB running firmware.`);
       }
       if (await input.findVolume(step.volume)) {
         // macOS refuses a write to a removable drive from an app without Removable Volumes access, and the raw EACCES doesn't say so.

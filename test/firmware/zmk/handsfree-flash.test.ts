@@ -446,6 +446,29 @@ describe("the Keebart Corne: a flash with only one half on USB", () => {
     expect(r.result.error).toContain("The right half was flashed and the left half was not");
   });
 
+  test("a drive already open is written when the other half is on USB running firmware, since it can only be this half", async () => {
+    // BK's desk, 2026-11-11: a failed copy left the right half in its bootloader while the left half ran its old build.
+    const r = await run(KEEBART, bundle(), (root) => {
+      mkdirSync(join(root, "KEEBART"), { recursive: true });
+      return fakeWorld({ root, halves: [{ ...half("R"), mode: "boot" }, half("L")], portLagMs: 0 });
+    });
+    expect(r.result).toMatchObject({ state: "succeeded", error: null });
+    expect(r.w.flashed).toEqual([{ letter: "R", key: KEY }, { letter: "L", key: KEY }]);
+    // Only the left half needed a restart; the right was already in its bootloader.
+    expect(r.w.touches).toEqual([{ path: "/dev/fake-ttyACM-L", baud: 1200 }]);
+    expect(r.lines.some((l) => l.includes("the other half is on USB running firmware, so it is the right half's boot drive"))).toBe(true);
+  });
+
+  test("a drive already open is still refused when the other half is not on USB, because it may be that half", async () => {
+    const r = await run(KEEBART, bundle(), (root) => {
+      mkdirSync(join(root, "KEEBART"), { recursive: true });
+      return fakeWorld({ root, halves: [{ ...half("L"), mode: "boot" }], portLagMs: 0 });
+    });
+    expect(r.result.state).toBe("failed");
+    expect(r.result.error).toContain("could belong to either half");
+    expect(r.w.flashed).toEqual([]);
+  });
+
   test("a peer on USB that carries no marker is still not ruled out", async () => {
     // The left half is attached, but its firmware shows no marker, so the drive could be its bootloader.
     const r = await run(KEEBART, bundle(), (root) => fakeWorld({ root, halves: [half("R"), { letter: "L", volume: "KEEBART", vendorId: 0x1d50, productId: 0x615e }], portLagMs: 0 }));

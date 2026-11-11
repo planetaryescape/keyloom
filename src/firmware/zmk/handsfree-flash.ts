@@ -163,7 +163,16 @@ export async function restartHalf(opts: {
   try {
     // Only a distinct label identifies a half that is already in its bootloader.
     if (opts.waitForVolume !== false && await opts.findVolume(t.step.volume)) {
-      if (opts.targets.some((other) => other !== t && other.step.volume === t.step.volume)) {
+      const sharing = opts.targets.filter((other) => other !== t && other.step.volume === t.step.volume);
+      if (sharing.length > 0) {
+        // A half in its bootloader shows no firmware on USB, so only a peer seen running proves the drive is not its own.
+        // "absent" is not enough: the open drive may be that very half.
+        const ports = await (await deps.serial()).list();
+        const presence = await Promise.all(sharing.map((other) => peerPresence(deps, other, ports)));
+        if (presence.every((p) => p === "running")) {
+          log(`keyloom: ${t.step.volume} is already mounted, and the other half is on USB running firmware, so it is the ${label}'s boot drive`);
+          return { ok: true, alreadyThere: true, attributed: true };
+        }
         return { ok: false, reason: `${t.step.volume} is already mounted and could belong to either half` };
       }
       log(`keyloom: ${t.step.volume} is already mounted, so the ${label} is already in its bootloader`);
@@ -322,7 +331,7 @@ export function zmkHandsFreeHooks(input: {
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
   const before = new Map<HalfTarget, HalfFirmware>();
   const hooks: StepHooks = {
-    peersRunning: async (step) => {
+    peersRunning: async (step, strict) => {
       const peers = input.steps.filter((other) => other !== step && other.volume === step.volume);
       try {
         const states = await Promise.all(peers.map(async (peer) => {
@@ -330,7 +339,7 @@ export function zmkHandsFreeHooks(input: {
           // An unmapped peer cannot be read, so the drive cannot be attributed to this step.
           return target ? await peerPresence(input.deps, target) : "unattributable" as const;
         }));
-        return states.every((state) => state !== "unattributable");
+        return states.every((state) => (strict ? state === "running" : state !== "unattributable"));
       } catch {
         return false;
       }

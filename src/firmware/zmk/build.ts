@@ -37,6 +37,8 @@ export type ZmkBuildInput = {
   onLine?: (line: string) => void;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** How long the check for, and removal of, a container an earlier keyloom left may take; defaults to a minute each. */
+  containerCheckTimeoutMs?: number;
 };
 
 export type ZmkBuildResult = { artifactPath: string; bytes: number; durationMs: number };
