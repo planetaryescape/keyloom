@@ -2291,11 +2291,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               pinnedId={pinnedProposal?.changeSetId ?? null}
               onPin={pinProposal}
               proposalsFailed={waitingFailed}
-              onReadProposals={() => setWaitingRead((read) => read + 1)}
+              // Nothing to apply until the read answers, so an Apply whose outcome was unknown can't be repeated early (#288 review).
+              onReadProposals={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
-                await onProposalApplied(card, result);
                 setWaitingRead((read) => read + 1);
+                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied".
+                try { await onProposalApplied(card, result); } catch { return { showAgain: onChanged }; }
               }}
               onShowLayer={(id) => setLayerId(id)}
                  onPlanRepair={(item) => {

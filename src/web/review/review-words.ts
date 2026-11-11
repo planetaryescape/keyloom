@@ -102,7 +102,10 @@ export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
  * page couldn't read, or a failure after the Apply landed) leaves the outcome unknown, so the page reads the proposals again before it
  * offers Apply. By the server's code only, never its text.
  */
-export type ApplyFailure = { words: string; action: "fresh_review" | "retry" | "check" };
+export type ApplyFailure = { words: string; action: "fresh_review" | "retry" | "check" | "show" };
+
+/** The Apply landed but the page couldn't read the new layout, so the board still shows the old one (#288 review). */
+export const APPLIED_NOT_SHOWN: ApplyFailure = { words: "Applied. keyloom couldn't show the new layout yet.", action: "show" };
 export function applyFailureWords(error: { code: string | undefined; status: number; message: string }): ApplyFailure {
   if (error.status < 400) return { words: "keyloom didn't confirm this Apply, so it may have gone through. Check before applying it again.", action: "check" };
   if (error.code === "stale_base" || error.code === "validation_failed") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };

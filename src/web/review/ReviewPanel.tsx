@@ -19,7 +19,7 @@ import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { ApiError } from "../api.ts";
-import { type ApplyFailure, aiMissingWords, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -162,7 +162,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   proposals: readonly ProposalCard[] | null;
   pinnedId: string | null;
   onPin: (card: ProposalCard) => void;
-  onApply: (card: ProposalCard) => Promise<void>;
+  /** Rejects when the Apply failed or its outcome is unknown; resolves with `showAgain` when it landed but the new layout couldn't be read. */
+  onApply: (card: ProposalCard) => Promise<void | { showAgain: () => Promise<void> }>;
   onShowLayer: (layerId: string) => void;
   onPlanRepair: (item: ReviewItem) => void;
   onClose: () => void;
@@ -179,11 +180,13 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   // A locked choice (--provider, KEYLOOM_PROVIDER) can't be changed in the picker, so it gets the setup.
   const pickReady = offersPicker(provider.status);
   const [applying, setApplying] = useState<string | null>(null);
-  const [applyFailure, setApplyFailure] = useState<{ itemId: string; view: ApplyFailure } | null>(null);
+  const [applyFailure, setApplyFailure] = useState<{ itemId: string; view: ApplyFailure; showAgain?: () => Promise<void> } | null>(null);
   const apply = (itemId: string, card: ProposalCard) => {
     setApplying(itemId);
     setApplyFailure(null);
-    void onApply(card).catch((error: unknown) => {
+    void onApply(card).then((outcome) => {
+      if (outcome !== undefined) setApplyFailure({ itemId, view: APPLIED_NOT_SHOWN, showAgain: outcome.showAgain });
+    }, (error: unknown) => {
       setApplyFailure({ itemId, view: applyFailureWords(error instanceof ApiError ? error : { code: undefined, status: -1, message: error instanceof Error ? error.message : String(error) }) });
     }).finally(() => setApplying(null));
   };
@@ -251,7 +254,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        {changes === undefined && proposalsFailed ? <p>keyloom couldn&apos;t read this suggestion&apos;s change, so it can&apos;t be shown or applied yet.</p>
+        {changes === undefined && proposals === null ? <p>Reading this suggestion&apos;s change…</p>
+          : changes === undefined && proposalsFailed ? <p>keyloom couldn&apos;t read this suggestion&apos;s change, so it can&apos;t be shown or applied yet.</p>
           : changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
           : sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p>
             : <p>The proposal is valid, but some changed values cannot be fully compared. The unverified details are marked below; preview and Apply are unavailable.</p>}
@@ -279,16 +283,19 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             </button>
           )}
         </div>
-        {applyFailure?.itemId !== item.id || c === undefined ? null : (
+        {/* Kept when the suggestion has left the list: an Apply that landed still has something to say. */}
+        {applyFailure?.itemId !== item.id ? null : (
           <div className="br-apply-failure" role="alert">
             <p>{applyFailure.view.words}</p>
             {applyFailure.view.action === "fresh_review" ? (
               <button type="button" className="sheet-action" disabled={r.busy} onClick={() => { setApplyFailure(null); void r.run(true); }}>Run a fresh review</button>
+            ) : applyFailure.view.action === "show" ? (
+              <button type="button" className="sheet-action" onClick={() => { const showAgain = applyFailure.showAgain; if (showAgain !== undefined) void showAgain().then(() => setApplyFailure(null), () => {}); }}>Show the new layout</button>
             ) : applyFailure.view.action === "check" ? (
               // An Apply that landed takes the suggestion off the list, so reading it again is what tells.
               <button type="button" className="sheet-action" onClick={() => { setApplyFailure(null); onReadProposals?.(); }}>Check again</button>
             ) : (
-              <button type="button" className="sheet-action" disabled={applying !== null || r.busy} onClick={() => apply(item.id, c)}>Try again</button>
+              c === undefined ? null : <button type="button" className="sheet-action" disabled={applying !== null || r.busy} onClick={() => apply(item.id, c)}>Try again</button>
             )}
           </div>
         )}
