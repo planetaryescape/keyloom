@@ -17,8 +17,9 @@ pub enum Mode {
     Replace,
 }
 
-pub struct Running {
-    child: CommandChild,
+// Generic over the child only so the tests can hold one without a Tauri app.
+pub struct Running<C = CommandChild> {
+    child: C,
     exited: std::sync::mpsc::Receiver<()>,
 }
 
@@ -85,7 +86,8 @@ impl std::fmt::Display for Failure {
             Failure::PortInUse => write!(f, "the port keyloom asked for is in use"),
             Failure::Incompatible { words, .. } => write!(f, "{words}"),
             Failure::TimedOut => write!(f, "timed out waiting for keyloom to print its URL"),
-            Failure::Exited { code, output } => write!(f, "keyloom exited early ({code:?}): {}", output.trim()),
+            // The output goes to the log once, through log::server_output, which drops the line that carries the token.
+            Failure::Exited { code, .. } => write!(f, "keyloom exited early ({code:?})"),
             Failure::Other(m) => write!(f, "{m}"),
         }
     }
@@ -109,11 +111,12 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
         .map_err(|e| other(&e))?;
 
     let (exit_tx, exited) = std::sync::mpsc::channel();
+    let pid = child.pid();
     let mut child = Some(child);
     let mut stderr = String::new();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(URL_WAIT_SECS);
     loop {
-        let event = tokio::time::timeout_at(deadline, rx.recv()).await.map_err(|_| Failure::TimedOut)?;
+        let event = within(deadline, pid, rx.recv()).await?;
         match event {
             Some(CommandEvent::Stderr(line)) => {
                 let text = String::from_utf8_lossy(&line).to_string();
@@ -122,8 +125,20 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                     text.split(marker).nth(1).and_then(|r| r.lines().next()).map(|url| (url.trim().to_string(), *marker == "keyloom is running at "))
                 });
                 let Some((url, owned)) = found else { continue };
-                let parsed = url::Url::parse(&url).map_err(|e| other(&e))?;
-                let token = parsed.query_pairs().find(|(k, _)| k == "t").map(|(_, v)| v.into_owned()).ok_or_else(|| Failure::Other("no token in URL".into()))?;
+                // A URL line the shell can't use leaves no way to reach the server it started, so that server is stopped, not left running.
+                let read = url::Url::parse(&url).map_err(|e| other(&e)).and_then(|parsed| {
+                    let token = parsed.query_pairs().find(|(k, _)| k == "t").map(|(_, v)| v.into_owned()).ok_or_else(|| Failure::Other("no token in URL".into()))?;
+                    Ok((parsed, token))
+                });
+                let (parsed, token) = match read {
+                    Ok(read) => read,
+                    Err(failure) => {
+                        if owned {
+                            terminate(pid);
+                        }
+                        return Err(failure);
+                    }
+                };
                 let origin = format!("{}://{}:{}", parsed.scheme(), parsed.host_str().unwrap_or("127.0.0.1"), parsed.port().unwrap_or(80));
                 if owned {
                     remember_port(app, parsed.port().unwrap_or(0));
@@ -145,7 +160,12 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                         }
                     });
                     let running = Running { child: child.take().expect("spawned above"), exited };
-                    *app.state::<AppState>().sidecar.lock().unwrap() = Some(running);
+                    let state = app.state::<AppState>();
+                    if adopt(&state.sidecar, &state.quit, running).is_err() {
+                        // The app began quitting while this server started, and stop() has already looked: stop it here instead.
+                        terminate(pid);
+                        return Err(Failure::Other("keyloom is quitting".into()));
+                    }
                 }
                 return Ok(Server { url, origin, token, owned });
             }
@@ -165,15 +185,42 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
     }
 }
 
+// Waits for the sidecar's next event until the deadline. A launch that runs out of time stops the server it started: the plugin's
+// CommandChild has no kill on drop, and the CLI only watches its stdin once it serves, so a dropped child would keep running and
+// Try again would start a second one beside it.
+async fn within<T>(deadline: tokio::time::Instant, pid: u32, next: impl std::future::Future<Output = T>) -> Result<T, Failure> {
+    tokio::time::timeout_at(deadline, next).await.map_err(|_| {
+        terminate(pid);
+        Failure::TimedOut
+    })
+}
+
 // SIGTERM, not the plugin's kill(): the server finishes a keyboard write that is in progress before it exits
-// (src/cli/main.ts), and a SIGKILL mid-flash is the one outcome the app must avoid. A server the shell did not start is left running.
+// (src/cli/main.ts), and a SIGKILL mid-flash is the one outcome the app must avoid. Only for a child that has not been reaped yet:
+// after that its PID may belong to another process.
+fn terminate(pid: u32) {
+    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+}
+
+// Records the server this shell started, unless the app began quitting. Under the lock stop() takes, so either stop() sees the
+// server, or this sees the quit and hands the server back to be stopped.
+fn adopt<C>(slot: &std::sync::Mutex<Option<Running<C>>>, quit: &crate::restarts::Quit, running: Running<C>) -> Result<(), Running<C>> {
+    let mut slot = slot.lock().unwrap();
+    if quit.is_set() {
+        return Err(running);
+    }
+    *slot = Some(running);
+    Ok(())
+}
+
+// A server the shell did not start is left running.
 pub fn stop(app: &AppHandle) {
     let state = app.state::<AppState>();
     // Set first, so the watcher doesn't start the server again while it is being stopped.
-    state.quitting.store(true, std::sync::atomic::Ordering::Release);
+    state.quit.begin();
     let running = state.sidecar.lock().unwrap().take();
     if let Some(running) = running {
-        unsafe { libc::kill(running.child.pid() as i32, libc::SIGTERM) };
+        terminate(running.child.pid());
         if running.exited.recv_timeout(std::time::Duration::from_secs(30)).is_err() {
             let _ = running.child.kill();
         }
@@ -182,11 +229,18 @@ pub fn stop(app: &AppHandle) {
 
 /// True when the server this shell started has exited (or none is recorded), so the watcher may start it again.
 pub fn exited(app: &AppHandle) -> bool {
-    match app.state::<AppState>().sidecar.lock().unwrap().as_ref() {
-        // The drain task sends once and then drops its sender, so a later look sees Disconnected.
-        Some(running) => matches!(running.exited.try_recv(), Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected)),
-        None => true,
+    take_if_exited(&mut app.state::<AppState>().sidecar.lock().unwrap())
+}
+
+// An exited server is dropped from the state here. Kept, it would sit there through a failed restart or the hours of a
+// keeps-stopping window, and stop() on Quit would SIGTERM its PID, which the system may by then have given to another process.
+fn take_if_exited<C>(slot: &mut Option<Running<C>>) -> bool {
+    // The drain task sends once and then drops its sender, so a later look sees Disconnected.
+    let gone = slot.as_ref().is_none_or(|running| matches!(running.exited.try_recv(), Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected)));
+    if gone {
+        *slot = None;
     }
+    gone
 }
 
 #[cfg(test)]
@@ -214,6 +268,71 @@ mod tests {
         assert!(parse_incompatible("error: port 4477 is in use; pass --port\n").is_none());
         // A marker has to start the line: the CLI's own error text may quote it.
         assert!(parse_incompatible("error: \"keyloom cannot attach: x\"\n").is_none());
+    }
+
+    #[test]
+    fn an_early_exit_logs_its_code_and_not_the_output_that_may_carry_the_token() {
+        let f = Failure::Exited { code: Some(1), output: "keyloom is already running at http://127.0.0.1:1/?t=secret\n".into() };
+        assert_eq!(f.to_string(), "keyloom exited early (Some(1))");
+    }
+
+    fn running() -> (Running<()>, std::sync::mpsc::Sender<()>) {
+        let (tx, exited) = std::sync::mpsc::channel();
+        (Running { child: (), exited }, tx)
+    }
+
+    #[test]
+    fn an_exited_server_is_taken_out_of_the_state_so_quit_never_signals_its_pid() {
+        let (r, tx) = running();
+        let mut slot = Some(r);
+        assert!(!take_if_exited(&mut slot), "still running");
+        assert!(slot.is_some());
+        tx.send(()).unwrap();
+        assert!(take_if_exited(&mut slot));
+        assert!(slot.is_none(), "stop() finds nothing to signal");
+        assert!(take_if_exited(&mut slot));
+    }
+
+    #[test]
+    fn a_drain_task_that_ended_without_a_word_counts_as_exited() {
+        let (r, tx) = running();
+        drop(tx);
+        let mut slot = Some(r);
+        assert!(take_if_exited(&mut slot));
+        assert!(slot.is_none());
+    }
+
+    #[test]
+    fn a_server_that_starts_after_quit_began_is_handed_back_to_be_stopped() {
+        let quit = crate::restarts::Quit::default();
+        let slot = std::sync::Mutex::new(None);
+        assert!(adopt(&slot, &quit, running().0).is_ok());
+        assert!(slot.lock().unwrap().is_some());
+        let slot = std::sync::Mutex::new(None);
+        quit.begin();
+        assert!(adopt(&slot, &quit, running().0).is_err());
+        assert!(slot.lock().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn a_launch_that_times_out_stops_the_server_it_started() {
+        use std::os::unix::process::ExitStatusExt;
+        let mut child = std::process::Command::new("/bin/sleep").arg("30").spawn().expect("sleep runs");
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(50);
+        let waited = within(deadline, child.id(), std::future::pending::<()>()).await;
+        assert!(matches!(waited, Err(Failure::TimedOut)));
+        // SIGTERM, so a server mid keyboard write finishes it first; a SIGKILL would show as signal 9.
+        assert_eq!(child.wait().expect("it ends").signal(), Some(libc::SIGTERM));
+    }
+
+    #[tokio::test]
+    async fn an_event_before_the_deadline_leaves_the_server_running() {
+        let mut child = std::process::Command::new("/bin/sleep").arg("30").spawn().expect("sleep runs");
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        assert_eq!(within(deadline, child.id(), async { 7 }).await.ok(), Some(7));
+        assert!(child.try_wait().expect("readable").is_none(), "not signalled");
+        child.kill().unwrap();
+        child.wait().unwrap();
     }
 
     #[test]

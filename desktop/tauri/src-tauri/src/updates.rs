@@ -84,6 +84,7 @@ pub async fn watch(app: AppHandle, item: MenuItem<Wry>) {
                     continue;
                 }
                 let _ = item.set_text(format!("Installing version {version}…"));
+                set(&app, Updates::Installing(version.clone()));
                 match update.download_and_install(|_, _| {}, || {}).await {
                     Ok(()) => app.request_restart(),
                     Err(err) => {

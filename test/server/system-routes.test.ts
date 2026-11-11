@@ -100,6 +100,10 @@ describe("the Karabiner settings read", () => {
     expect([missing.status, await code(missing)]).toEqual([404, "karabiner_missing"]);
     const large = await (await serveWith(async () => ({ status: "too_large" })))();
     expect([large.status, await code(large)]).toEqual([413, "karabiner_too_large"]);
+    const denied = await (await serveWith(async () => ({ status: "denied" })))();
+    expect([denied.status, await code(denied)]).toEqual([403, "karabiner_denied"]);
+    const notAFile = await (await serveWith(async () => ({ status: "not_a_file" })))();
+    expect([notAFile.status, await code(notAFile)]).toEqual([422, "karabiner_not_a_file"]);
     const unavailable = await (await serveWith(undefined))();
     expect([unavailable.status, await code(unavailable)]).toEqual([404, "karabiner_unavailable"]);
   });

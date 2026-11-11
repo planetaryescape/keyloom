@@ -10,8 +10,7 @@ mod sidecar;
 #[cfg(feature = "updater")]
 mod updates;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use restarts::Restarts;
+use restarts::{Quit, Restarts};
 use std::sync::Mutex;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
@@ -41,13 +40,13 @@ pub struct AppState {
     pub problem: Mutex<Option<problem::Stop>>,
     pub updates: Mutex<problem::Updates>,
     /// Set when the app is quitting, so the supervisor doesn't start the server it is stopping.
-    pub quitting: AtomicBool,
+    pub quit: Quit,
     #[cfg(feature = "updater")]
     pub install_update: tokio::sync::Notify,
     #[cfg(feature = "updater")]
     pub check_updates: tokio::sync::Notify,
     #[cfg(feature = "updater")]
-    pub update_offered: AtomicBool,
+    pub update_offered: std::sync::atomic::AtomicBool,
 }
 
 // Open keyloom, the Dock icon and a second launch bring forward the page, or the problem window while there is no page to show.
@@ -63,15 +62,18 @@ pub fn navigate(app: &AppHandle, url: &str) {
     }
 }
 
-// Shows the server's page: opens the window the first time, and points it at the new server after a restart.
-fn present_main(app: &AppHandle, url: &str) {
+// Shows the server's page: opens the window the first time, and points it at the new server after a restart. `reveal` brings back a
+// window that is hidden; an automatic restart passes false, so a window the person closed stays closed.
+fn present_main(app: &AppHandle, url: &str, reveal: bool) {
     let (handle, url) = (app.clone(), url.to_string());
     // Window creation must happen on the main thread.
     let _ = app.run_on_main_thread(move || {
         let Ok(parsed) = url.parse() else { return };
         if let Some(w) = handle.get_webview_window("main") {
             let _ = w.navigate(parsed);
-            let _ = w.show();
+            if reveal {
+                let _ = w.show();
+            }
             return;
         }
         let built = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed))
@@ -105,24 +107,32 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
     let state = app.state::<AppState>();
     let mut mode = sidecar::Mode::Reuse;
     let mut restarts = Restarts::default();
+    // False only after an automatic restart: the window keeps whatever the person left it as.
+    let mut reveal = true;
     loop {
+        // Quitting stops the server on purpose; starting it again would undo that.
+        if state.quit.is_set() {
+            return;
+        }
         let stop = match sidecar::start(&app, mode).await {
             Ok(server) => {
                 let url = server.url.clone();
                 *state.server.lock().unwrap() = Some(server);
                 problem::close(&app);
-                present_main(&app, &url);
+                present_main(&app, &url, reveal);
                 menu_bar::watch(&app, &tray, &items).await;
-                // Quitting stops the server on purpose; starting it again would undo that.
-                if state.quitting.load(Ordering::Acquire) {
+                if state.quit.is_set() {
                     return;
                 }
                 match restarts.next(std::time::Instant::now()) {
                     Some(delay) => {
                         log::say(&app, &format!("keyloom's server is gone; starting it again in {} s", delay.as_secs()));
                         let _ = items.summary.set_text("keyloom stopped. Starting it again…");
-                        tokio::time::sleep(delay).await;
+                        if !state.quit.wait(delay).await {
+                            return;
+                        }
                         mode = sidecar::Mode::Reuse;
+                        reveal = false;
                         continue;
                     }
                     None => problem::Stop::KeepsStopping { times: restarts.stops() },
@@ -159,8 +169,9 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
             let _ = items.menu.remove(item);
         }
         let _ = items.summary.set_text("Starting");
-        // The person chose to try again, so earlier stops no longer count toward the cap.
+        // The person chose to try again, so earlier stops no longer count toward the cap, and the page they asked for comes back.
         restarts = Restarts::default();
+        reveal = true;
     }
 }
 

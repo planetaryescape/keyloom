@@ -51,14 +51,31 @@ pub fn show(app: &AppHandle) {
 
 /// Hands a file or URL to macOS's `open`: a .log opens in Console, a URL in the default browser.
 pub fn open_external(app: &AppHandle, target: &std::ffi::OsStr) {
-    if let Err(err) = std::process::Command::new("/usr/bin/open").arg(target).spawn() {
-        say(app, &format!("could not open {}: {err}", target.to_string_lossy()));
+    match std::process::Command::new("/usr/bin/open").arg(target).spawn() {
+        Ok(child) => {
+            reap(child);
+        }
+        Err(err) => say(app, &format!("could not open {}: {err}", target.to_string_lossy())),
     }
+}
+
+// `open` hands the target over and exits at once. Waiting on it, off the main thread, reaps it, so each click doesn't leave a zombie.
+fn reap(mut child: std::process::Child) -> std::thread::JoinHandle<std::io::Result<std::process::ExitStatus>> {
+    std::thread::spawn(move || child.wait())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::carries_token;
+    use super::{carries_token, reap};
+
+    #[test]
+    fn an_opened_helper_is_reaped_not_left_a_zombie() {
+        let child = std::process::Command::new("/usr/bin/true").spawn().expect("true runs");
+        let pid = child.id() as libc::pid_t;
+        assert!(reap(child).join().expect("the thread ends").expect("waited").success());
+        // A reaped child is gone from the process table: waitpid no longer knows it.
+        assert_eq!(unsafe { libc::waitpid(pid, std::ptr::null_mut(), libc::WNOHANG) }, -1);
+    }
 
     #[test]
     fn the_url_line_never_reaches_the_log() {

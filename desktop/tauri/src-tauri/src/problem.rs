@@ -62,6 +62,8 @@ pub enum Updates {
     #[cfg_attr(feature = "updater", default)]
     Checking,
     Available(String),
+    /// The person chose to install this version; it is downloading, and the app restarts when it is in.
+    Installing(String),
     UpToDate,
     Failed,
 }
@@ -132,17 +134,20 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
         },
         Stop::Failed(Failure::Incompatible { words, replace: None }) => {
             let download = || action(DOWNLOAD, "Download the latest keyloom");
+            let busy = matches!(updates, Updates::Installing(_));
             let (note, list) = match updates {
                 Updates::Off => ("Install the latest keyloom app over this one, then open it again.".to_string(), vec![download(), try_again(), show_log()]),
                 Updates::Checking => ("Checking for a newer version of this app…".to_string(), vec![try_again(), show_log()]),
                 Updates::Available(version) => (format!("Version {version} of this app is ready to install."), vec![action(INSTALL_UPDATE, install_label(version)), try_again(), show_log()]),
+                // No Install button: a second click would do nothing while the first install runs.
+                Updates::Installing(version) => (format!("Installing version {version}. keyloom restarts when it is done."), vec![show_log()]),
                 Updates::UpToDate => (
                     "This app has no update yet. Install the latest keyloom app over this one, or quit the other keyloom and try again.".to_string(),
                     vec![download(), action(CHECK_UPDATES, "Check for updates"), try_again(), show_log()],
                 ),
                 Updates::Failed => ("keyloom couldn't check for an update.".to_string(), vec![action(CHECK_UPDATES, "Check for updates"), download(), try_again(), show_log()]),
             };
-            View { title: stop.title().into(), body: words.clone(), note: Some(note), detail: None, busy: false, actions: actions(list) }
+            View { title: stop.title().into(), body: words.clone(), note: Some(note), detail: None, busy, actions: actions(list) }
         }
         Stop::Failed(Failure::TimedOut) => View {
             title: couldnt,
@@ -335,6 +340,10 @@ mod tests {
         let available = view(&stop, &Updates::Available("0.80.0".into()));
         assert_eq!(available.actions[0].id, INSTALL_UPDATE);
         assert_eq!(available.actions[0].label, "Install 0.80.0 and restart keyloom");
+        let installing = view(&stop, &Updates::Installing("0.80.0".into()));
+        assert!(installing.busy);
+        assert_eq!(ids(&installing), [SHOW_LOG], "no Install button that does nothing during the download");
+        assert!(installing.note.as_deref().unwrap().contains("Installing version 0.80.0"));
         assert_eq!(ids(&view(&stop, &Updates::UpToDate))[..2], [DOWNLOAD, CHECK_UPDATES]);
         assert_eq!(ids(&view(&stop, &Updates::Failed))[..2], [CHECK_UPDATES, DOWNLOAD]);
     }

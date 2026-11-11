@@ -47,6 +47,7 @@ export type DockerStartResponse = z.infer<typeof DockerStartResponseSchema>;
 
 // Karabiner-Elements' config, read from ~/.config/karabiner/karabiner.json for the MacBook's import card (R1-24). The page uploads
 // it through POST /api/import like a dropped file.
-//   GET  /api/system/karabiner-config   -> KarabinerConfigResponse   (404 karabiner_missing, 413 karabiner_too_large, 404 karabiner_unavailable)
+//   GET  /api/system/karabiner-config   -> KarabinerConfigResponse   (404 karabiner_missing, 413 karabiner_too_large, 403 karabiner_denied,
+//                                                                     422 karabiner_not_a_file, 404 karabiner_unavailable)
 export const KarabinerConfigResponseSchema = z.object({ filename: z.string().min(1), content: z.string() });
 export type KarabinerConfigResponse = z.infer<typeof KarabinerConfigResponseSchema>;

@@ -36,6 +36,8 @@ export async function handleSystemRoute(request: Request, pathname: string, back
       const read = await backend.karabinerConfig();
       if (read.status === "missing") return errorResponse(404, "karabiner_missing", "Karabiner-Elements has no settings file on this Mac, so there is nothing to bring in. Its rules start when you set it up.");
       if (read.status === "too_large") return errorResponse(413, "karabiner_too_large", "karabiner.json on this Mac is too large to be Karabiner's settings.");
+      if (read.status === "denied") return errorResponse(403, "karabiner_denied", "macOS didn't let keyloom read Karabiner's settings. Drop a copy of karabiner.json here instead.");
+      if (read.status === "not_a_file") return errorResponse(422, "karabiner_not_a_file", "~/.config/karabiner/karabiner.json on this Mac isn't a file keyloom can read. Drop a copy of karabiner.json here instead.");
       return Response.json(KarabinerConfigResponseSchema.parse({ filename: read.filename, content: read.content }));
     }
     if (route.action === "installState") {
