@@ -124,7 +124,9 @@ describe("starting it", () => {
     const status = scriptedStatus([up()]);
     let launched = 0;
     const result = await startDockerEngine({ status: status.status, detect: async () => ({ kind: "none" }), start: async () => (launched++, { ok: true }), sleep: async () => {} });
-    expect(result).toEqual({ ok: true, version: "27.4.0", engine: "the Docker daemon", waitedMs: 0 });
+    // waitedMs reads the real clock, which can tick over a millisecond during the call; nothing waited if it is that small.
+    expect(result).toMatchObject({ ok: true, version: "27.4.0", engine: "the Docker daemon" });
+    expect(result.ok && result.waitedMs).toBeLessThan(50);
     expect(launched).toBe(0);
   });
 
@@ -165,11 +167,13 @@ describe("starting it", () => {
       status: scriptedStatus([down]).status,
       detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }),
       start: async () => ({ ok: true }),
-      sleep: async () => {},
-      timeoutMs: 0,
+      // A deadline of 0 could pass before or after the launch check depending on the clock; 40 ms leaves room to launch, then runs out.
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      pollMs: 5,
+      timeoutMs: 40,
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toContain("did not answer within 0 s");
+    if (!result.ok) expect(result.reason).toContain("OrbStack did not answer within 0 s");
   });
 
   test("an engine keyloom can't start leaves the finding's own sentence, and launches nothing", async () => {
