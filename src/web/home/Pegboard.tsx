@@ -160,7 +160,19 @@ function WallBoard({ detail, flying, onOpen }: { detail: LayoutDetail; flying?: 
     return () => cancelAnimationFrame(frameId);
   }, [scale, keys]);
 
-  if (keys === null) return <div className="peg-board peg-board-empty"><span className="peg-missing">Can't draw this board</span></div>;
+  // Opening it is still the way on: the layout page says why it can't be drawn and offers a way back (R3-22).
+  if (keys === null) {
+    return (
+      <div className="peg-board peg-board-empty">
+        <span className="peg-missing">
+          Can't draw this board
+          <span className="peg-missing-actions">
+            <button type="button" className="button" onClick={() => onOpen(null)}>Open {boardDisplayName(board.name)}</button>
+          </span>
+        </span>
+      </div>
+    );
+  }
   return (
     // The drawn keyboard's caps are buttons, so the board can't be one: an open button is laid over it instead.
     <div ref={frame} className="peg-board">
