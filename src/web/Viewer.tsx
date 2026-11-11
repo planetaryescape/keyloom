@@ -53,7 +53,7 @@ import { EditingStatus } from "./configs/EditingStatus.tsx";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { autoOpenTarget } from "./configs/agent-made-configs.ts";
 import { useMadeConfigRefresh } from "./configs/useMadeConfigRefresh.ts";
-import { ComboEditor, ComboList, draftFromCombo, type ComboDraft } from "./combos/ComboPane.tsx";
+import { ComboEditor, ComboList, draftFromCombo, openComboFromElsewhere, type ComboDraft } from "./combos/ComboPane.tsx";
 import { combosOn, newComboId } from "./combos/combo-ops.ts";
 import { bindingSummary, withBinding, type Draft } from "./editor/draft.ts";
 import { draftsForChat, draftsOn, park, slotKey, stillApplying, unpark, type ParkedDrafts } from "./editor/parked-drafts.ts";
@@ -854,13 +854,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             openEditor(slot.position, slot.layerId);
           },
           openCombo: (id) => {
-            // A combo being made or changed would be replaced without asking (#290 review): it is finished or closed first.
-            const open = comboDraft === null ? undefined : layout.combos.find((combo) => combo.id === comboDraft.id);
-            if (comboDraft !== null && comboDraft.id !== id && (open === undefined || JSON.stringify(draftFromCombo(open)) !== JSON.stringify(comboDraft))) {
+            // A combo being made or changed would be replaced without asking (#290 review): it is finished or closed first, and the
+            // same combo shows the card with its edits.
+            const action = openComboFromElsewhere(comboDraft, layout.combos, id);
+            if (action === "blocked") {
               toasts.show({ kind: "info", message: "Apply or close the combo you are editing first" });
               return;
             }
-            openCombo(id);
+            if (action === "open") return openCombo(id);
+            if (draftBlocks()) return;
+            if (editing !== null) closeEditor(false);
+            setChatOpen(false);
+            setCombosOpen(true);
           },
           removeTapDance: (id) => {
             const name = layout.tapDances.find((dance) => dance.id === id)?.name ?? id;
