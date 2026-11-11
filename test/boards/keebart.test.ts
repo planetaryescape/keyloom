@@ -36,7 +36,17 @@ test("every layer carries the encoder bindings and selects the 46-position physi
   // A computer that kept a stale pairing re-pairs over its own entry instead of the keyboard refusing it
   // forever (docs/issues/zmk-repairing-rejected-by-taken-profile.md).
   expect(generated.files[1]!.content).toContain("CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE=y");
+  // ZMK's Kconfig makes that flag imply passkey entry, which made every new pairing wait for a typed code.
+  expect(generated.files[1]!.content).toContain("CONFIG_ZMK_BLE_PASSKEY_ENTRY=n");
   const source = generated.files[0]!.content;
   expect(source).toContain("zmk,physical-layout = <&default_layout>");
   expect(source).toContain("sensor-bindings = <&inc_dec_kp C_VOL_UP C_VOL_DN &inc_dec_kp C_VOL_UP C_VOL_DN &inc_dec_kp C_BRI_UP C_BRI_DN &inc_dec_kp C_BRI_UP C_BRI_DN>");
+});
+
+test("a layout that turns the pairing passkey on overrides the recipe's off", () => {
+  const layout = LayoutSchema.parse({ schemaVersion: 1, boardId: board.definition.id, firmware: "zmk", layers: [{id:"base",name:"Base",bindings:Array.from({length:46},()=>({kind:"key",code:"A"}))}], combos:[], macros:[], tapDances:[], holdTapProfiles:[], conditionalLayers:[], settings:[{ firmware: "zmk", key: "CONFIG_ZMK_BLE_PASSKEY_ENTRY", value: true }], passthrough:[] });
+  const lines = generateZmkSource({ layout, board: board.definition, geometry: board.geometry, revisionId: "test", keymapName: "corne_choc_pro" }).files[1]!.content.split("\n");
+  // A later assignment in a Kconfig fragment wins, so the layout's line must come after the recipe's.
+  expect(lines.lastIndexOf("CONFIG_ZMK_BLE_PASSKEY_ENTRY=y")).toBeGreaterThan(lines.indexOf("CONFIG_ZMK_BLE_PASSKEY_ENTRY=n"));
+  expect(lines.indexOf("CONFIG_ZMK_BLE_PASSKEY_ENTRY=n")).toBeGreaterThanOrEqual(0);
 });

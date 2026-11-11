@@ -101,6 +101,8 @@ Whether both halves boot correctly from the combined file is spike S8. It's how 
 
 Status update, 2026-11-06: the Keebart recipe sets `CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE=y` so a computer that lost its side of a pairing can pair again over its own entry. That build reached both halves (`bld_01M6RKSP483Y1ZQ7P46P9R4FTQ`, whose `.config` carries the symbol) and the keyboard reconnected over Bluetooth afterwards; no new pairing was tried.
 
+Status update, 2026-11-11: that flag turned on passkey pairing too, because ZMK's Kconfig has `BT_SMP_ALLOW_UNAUTH_OVERWRITE` imply `ZMK_BLE_PASSKEY_ENTRY` (`zmk/app/Kconfig` @ `edf5c081`). Every new pairing then waited for a code typed on the keyboard, while the settings page showed "Pairing passkey" as off. The recipe now sets `CONFIG_ZMK_BLE_PASSKEY_ENTRY=n`. A layout's own setting is written after the recipe's lines, so turning the passkey on in settings still wins ([issue](../issues/corne-pairing-waits-for-passkey.md)).
+
 A ZMK keyboard keeps one bonded computer per profile. `ZMK_BLE_PROFILE_COUNT` is `CONFIG_BT_MAX_PAIRED - CONFIG_ZMK_SPLIT_BLE_CENTRAL_PERIPHERALS` (`zmk/app/include/zmk/ble.h`), which is 5 on the Corne: `CONFIG_BT_MAX_PAIRED=6` less the one split peripheral. `&bt BT_SEL n` selects a profile and disconnects the computer using the one that was active. Only keys on the keyboard can do that; nothing a computer sends moves the keyboard to another profile.
 
 Two behaviours in `zmk/app/src/ble.c` (@ the board's pinned `edf5c081`) explain what the computer sees:
