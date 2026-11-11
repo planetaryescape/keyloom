@@ -160,3 +160,39 @@ test("an error from a failed setup is marked as latched, so the lab doesn't offe
   expect(isLatchedSetupFailure(original)).toBe(true);
   expect(isLatchedSetupFailure(new Error("another"))).toBe(false);
 });
+
+test("a helper that dies after every replacement is respawned with a growing wait, and one seen alive resets it (#290 review)", async () => {
+  let clock = 0, connects = 0, dead = true;
+  const owner = new CandidateHidOwner(async () => { connects++; return { transport, shutdown: async () => {}, dead: () => dead }; }, undefined, () => clock);
+  await owner.transport();
+  expect(connects).toBe(1);
+  await owner.transport();
+  expect(connects).toBe(2);
+  // Within the first second the dead child is handed back, not replaced.
+  clock = 999;
+  await owner.transport();
+  expect(connects).toBe(2);
+  clock = 1_000;
+  await owner.transport();
+  expect(connects).toBe(3);
+  // The wait doubles: 2 s after the second replacement.
+  clock = 2_999;
+  await owner.transport();
+  expect(connects).toBe(3);
+  clock = 3_000;
+  await owner.transport();
+  expect(connects).toBe(4);
+  // A child seen alive resets the wait, so the next death after it is replaced once the last wait has passed, and the one after waits 1 s.
+  dead = false;
+  clock = 7_000;
+  await owner.transport();
+  dead = true;
+  await owner.transport();
+  expect(connects).toBe(5);
+  clock = 7_999;
+  await owner.transport();
+  expect(connects).toBe(5);
+  clock = 8_000;
+  await owner.transport();
+  expect(connects).toBe(6);
+});
