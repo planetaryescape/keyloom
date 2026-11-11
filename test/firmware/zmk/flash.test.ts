@@ -319,6 +319,69 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     expect(s.lines.some((l) => l.includes("taken as done"))).toBe(false);
   });
 
+  test("a drive that comes back at another path is written at that path", async () => {
+    const s = await setup();
+    const real = volumes.volumeFinderAt(s.root);
+    const moved = join(s.root, `${RIGHT} 1`);
+    let away = false;
+    const paths: string[] = [];
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    const r = await s.flash({
+      steps: [steps[0] as (typeof steps)[number]],
+      findVolume: async (label) => (label === RIGHT && away ? (existsSync(moved) ? moved : null) : real(label)),
+      writeImage: async (path, bytes) => {
+        paths.push(path);
+        if (paths.length === 1) {
+          rmSync(dirname(path), { recursive: true });
+          away = true;
+          setTimeout(() => mkdirSync(moved, { recursive: true }), 100);
+          throw Object.assign(new Error(`EINTR: interrupted system call, open '${path}'`), { code: "EINTR", syscall: "open" });
+        }
+        await Bun.write(path, bytes);
+        setTimeout(() => rmSync(moved, { recursive: true, force: true }), 30);
+      },
+      remountWaitMs: 1000,
+    });
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(paths).toEqual([join(s.root, RIGHT, "glove80.uf2"), join(moved, "glove80.uf2")]);
+  });
+
+  test("a failed open of the sync after a full write is not taken as nothing written", async () => {
+    const s = await setup();
+    const real = volumes.volumeFinderAt(s.root);
+    mkdirSync(join(s.root, RIGHT), { recursive: true });
+    let wrote = false;
+    let looksAfter = 0;
+    const r = await s.flash({
+      steps: [steps[0] as (typeof steps)[number]],
+      // The write lands but leaves no file, so the sync's open fails; the drive is gone by the time the error is read.
+      writeImage: async () => { wrote = true; },
+      findVolume: async (label) => (wrote && ++looksAfter > 1 ? null : real(label)),
+    });
+    expect(r).toMatchObject({ state: "succeeded", error: null });
+    expect(s.lines.some((l) => l.includes("so the write is taken as done"))).toBe(true);
+    expect(s.lines.some((l) => l.includes("nothing was written"))).toBe(false);
+  });
+
+  test("a shared drive that comes back is refused unless every other half is seen running", async () => {
+    const s = await setup();
+    const shared = steps.map((step) => ({ ...step, volume: "KEEBART" }));
+    mount(s.root, "KEEBART", 50);
+    const r = await s.flash({
+      steps: shared,
+      // The other half is not on USB: enough for a drive that appears after the prompt, not for one that came back.
+      hooks: { peersRunning: async (_step, strict) => strict !== true },
+      writeImage: async (path) => {
+        rmSync(dirname(path), { recursive: true });
+        mount(s.root, "KEEBART", 100);
+        throw Object.assign(new Error(`EINTR: interrupted system call, open '${path}'`), { code: "EINTR", syscall: "open" });
+      },
+      remountWaitMs: 1000,
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("Not writing to KEEBART: it went away and mounted again");
+  });
+
   test("an interrupted open on a drive that is still mounted is tried again", async () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);

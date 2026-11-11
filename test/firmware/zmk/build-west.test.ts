@@ -18,6 +18,7 @@ import { uf2Image } from "../../helpers/zmk.ts";
 const FAKE_DOCKER_WEST = `
 case "$1" in
   rm) echo "$@" >> "$FAKE_DOCKER_LOG"; exit 0;;
+  ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
 esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
@@ -123,6 +124,19 @@ describe("buildZmkWest (fake docker)", () => {
     expect(run).toContain("west build -p always -s zmk/app -d build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/work/config");
     expect(run).toContain("-DSHIELD=board_right");
     expect(run.indexOf("west update")).toBeLessThan(run.indexOf("west build"));
+  });
+
+  test("a container an earlier keyloom left in this checkout is removed before the build, and the build's own is labelled", async () => {
+    const s = await setup();
+    await s.build("ok", { FAKE_ORPHANS: "0123abcd" });
+    const calls = (await Bun.file(s.dockerLog).text()).split("\n");
+    const label = `dev.keyloom.checkout=${join(s.dir, "work")}`;
+    expect(calls.some((l) => l === `ps -aq --filter label=${label}`)).toBe(true);
+    const removed = calls.findIndex((l) => l === "rm -f 0123abcd");
+    expect(removed).toBeGreaterThan(-1);
+    expect(removed).toBeLessThan(calls.findIndex((l) => l.includes(" --name keyloom-test ")));
+    expect(calls.find((l) => l.includes(" --name keyloom-test "))).toContain(`--label ${label}`);
+    expect(s.lines.some((l) => l.includes("removing a build container an earlier keyloom left running in this checkout"))).toBe(true);
   });
 
   test("hashes west.yml and the config files inside the container before west runs, and waits out a stale view", async () => {

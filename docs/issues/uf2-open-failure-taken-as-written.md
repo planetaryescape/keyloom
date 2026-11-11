@@ -1,6 +1,6 @@
 # A copy that failed on open was taken as written, and the stranded half could not be flashed again
 
-Status: fixed in `2a0f2db9` (D-498). Tests cover a drive that comes back, one that does not, an interrupted open on a drive that stays, and an open shared drive with the other half running. Not yet seen on hardware with the fix.
+Status: fixed in `2a0f2db9`, with review fixes in the commit that follows `0dccd61b` on PR #276 (D-498). Tests cover a drive that comes back, one that does not, an interrupted open on a drive that stays, and an open shared drive with the other half running. Not yet seen on hardware with the fix.
 
 Reported 2026-11-11 while flashing the passkey fix to the Keebart Corne (`syn_01M757322D3P4KPQ2EX1VX4P0B`, flash `fl_01M757CB3GQ4MDPX6PNTATECJY`, build `bld_01M757322H9F4K1B4SPSW6QRF1`).
 
@@ -21,5 +21,5 @@ The error came from `open`, so no byte reached the drive. `KEEBART` was mounted 
 
 ## Fix
 
-- A write whose error has `syscall: "open"` wrote nothing. If the drive is gone, keyloom waits up to 60 s for it to mount again, rebinds the mount and its identity, and writes it, at most twice, under the same mount-identity and peer checks. If it does not come back, the flash fails saying nothing was written. An interrupted open on a drive that stays mounted is retried.
+- A write whose error has `syscall: "open"` wrote nothing. If the drive is gone, keyloom waits up to 60 s for it to mount again, rebinds the mount, its identity and the file path, and writes it, at most twice. A shared drive that comes back is written only while every other half is seen running on USB, because a peer entering its bootloader would mount the same label. The sync's open after a full write is not counted. If it does not come back, the flash fails saying nothing was written. An interrupted open on a drive that stays mounted is retried.
 - An open shared drive is attributed to the half being flashed when every other half sharing the label is on USB running firmware. A half that is not on USB still leaves the drive unattributed, because a half in its bootloader shows no firmware.

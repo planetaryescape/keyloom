@@ -328,7 +328,7 @@ export function zmkHandsFreeHooks(input: {
   const forStep = (step: FlashStep): HalfTarget | undefined => targets.find((t) => t.step === step);
   const before = new Map<HalfTarget, HalfFirmware>();
   const hooks: StepHooks = {
-    peersRunning: async (step) => {
+    peersRunning: async (step, strict) => {
       const peers = input.steps.filter((other) => other !== step && other.volume === step.volume);
       try {
         const states = await Promise.all(peers.map(async (peer) => {
@@ -336,7 +336,7 @@ export function zmkHandsFreeHooks(input: {
           // An unmapped peer cannot be read, so the drive cannot be attributed to this step.
           return target ? await peerPresence(input.deps, target) : "unattributable" as const;
         }));
-        return states.every((state) => state !== "unattributable");
+        return states.every((state) => (strict ? state === "running" : state !== "unattributable"));
       } catch {
         return false;
       }

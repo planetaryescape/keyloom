@@ -10,7 +10,7 @@ import { BuildFailure } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
-import { run } from "../toolchain/run.ts";
+import { capture, run } from "../toolchain/run.ts";
 import { describeUf2, inspectUf2, uf2Problem } from "../toolchain/uf2.ts";
 import { zmkRevision } from "./board-config.ts";
 import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from "./build.ts";
@@ -26,6 +26,9 @@ export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDoc
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
 export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/work/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/work/${MODULE_DIR}/${OVERLAY_FILE}`;
 
+/** Docker label naming the checkout a build container works in, so a container left by a keyloom that died can be found. */
+export const CHECKOUT_LABEL = "dev.keyloom.checkout";
+
 /** The conf fragment that gives one half its own USB product name, written beside the keymap's conf. */
 export const targetConfFile = (id: string): string => `keyloom-${id}.conf`;
 
@@ -37,7 +40,8 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "rm -rf build",
     "[ -d .west ] || west init -l config",
     // A build stopped during `west update` leaves git's lock files behind, and every later update then fails on them.
-    // keyloom holds this checkout's lock for the whole build, so no git of ours is running here and any lock is stale.
+    // keyloom holds this checkout's lock for the whole build and has removed any container an earlier keyloom left in it, so
+    // no git is running here and any lock is stale.
     `west list -f '{abspath}' 2>/dev/null | while read -r p; do find "$p/.git" -name '*.lock' -print -delete 2>/dev/null | sed 's/^/keyloom: removed a stale git lock /' || true; done`,
     "west update --fetch-opt=--filter=tree:0",
     "west zephyr-export",
@@ -78,6 +82,15 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, "-e", "HOME=/tmp",
         "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*",
       ];
+      // `--rm` is the docker client's job, so a keyloom killed mid-build can leave its container running in this checkout.
+      // This build holds the checkout's lock, so such a container is orphaned; stop it before the script clears git's locks.
+      const orphans = await capture(["docker", "ps", "-aq", "--filter", `label=${CHECKOUT_LABEL}=${input.checkoutDir}`], { timeoutMs: 60_000 });
+      const ids = orphans.exitCode === 0 ? orphans.stdout.split("\n").map((id) => id.trim()).filter((id) => /^[0-9a-f]+$/.test(id)) : [];
+      if (ids.length > 0) {
+        say(`keyloom: removing ${ids.length === 1 ? "a build container" : `${ids.length} build containers`} an earlier keyloom left running in this checkout`);
+        await run({ cmd: ["docker", "rm", "-f", ...ids], log: input.log, timeoutMs: 60_000 });
+      }
+
       // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
       const visible = await run({ cmd: [...base, build.image, "test", "-f", "config/west.yml"], log: input.log, timeoutMs: 5 * 60_000 });
       if (visible.exitCode !== 0) {
@@ -102,7 +115,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       const output: string[] = [];
       say(`keyloom: building ${build.targets.map((t) => (t.shield ?? t.board ?? build.board)).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);
       const result = await run({
-        cmd: [...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
+        cmd: [...base.slice(0, 3), "--name", input.containerName, "--label", `${CHECKOUT_LABEL}=${input.checkoutDir}`, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
         log: input.log,
         timeoutMs: input.timeoutMs ?? BUILD_TIMEOUT_MS,
         ...(input.signal ? { signal: input.signal } : {}),
