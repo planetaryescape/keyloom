@@ -305,9 +305,21 @@ export const ChatProviderStatusSchema = z.object({
   active: z.object({ provider: ChatProviderIdSchema, model: z.string().min(1), effort: z.string().min(1) }).nullable(),
   // Set when something outranks the config file, so the picker can say why a choice would not apply: the --provider flag or KEYLOOM_PROVIDER.
   lockedBy: z.enum(["--provider", "KEYLOOM_PROVIDER"]).nullable().default(null),
+  // Where a pasted key is saved (D-496); null on a computer with none, where the setup shows the environment variable instead.
+  keyStore: z.enum(["keychain", "secret-service"]).nullable().default(null),
+  // A `codex login` the server started: waiting until the browser sign-in ends, then idle, or failed with a reason.
+  codexSignIn: z.discriminatedUnion("state", [
+    z.object({ state: z.literal("idle") }),
+    z.object({ state: z.literal("waiting"), url: z.string().url().nullable() }),
+    z.object({ state: z.literal("failed"), reason: z.string().min(1) }),
+  ]).default({ state: "idle" }),
   providers: z.array(z.object({
     id: ChatProviderIdSchema,
     label: z.string().min(1),
+    // Where the key comes from, with its last four characters only. Never the key.
+    credential: z.object({ source: z.enum(["environment", "keychain", "secret-service"]), last4: z.string().max(4) }).nullable().default(null),
+    // False only for Codex when its CLI isn't installed, so signing in isn't offered.
+    installed: z.boolean().default(true),
     // What a conversation on this provider uses when the config names no model.
     defaultModel: z.string().min(1),
     ready: z.boolean(),
@@ -318,6 +330,8 @@ export const ChatProviderStatusSchema = z.object({
   })),
 });
 export type ChatProviderStatus = z.infer<typeof ChatProviderStatusSchema>;
+// What a backend may answer: the setup fields have defaults, so a backend that predates them still parses.
+export type ChatProviderStatusInput = z.input<typeof ChatProviderStatusSchema>;
 
 //   POST /api/chat/provider   ChatProviderChoice -> ChatProviderStatus   (writes <data dir>/config.json; the next conversation uses it)
 export const ChatProviderChoiceSchema = z.object({
@@ -326,6 +340,18 @@ export const ChatProviderChoiceSchema = z.object({
   model: z.string().trim().min(1).optional(),
 });
 export type ChatProviderChoice = z.infer<typeof ChatProviderChoiceSchema>;
+
+// Setting up a provider from the app (D-496). Each answers with the ChatProviderStatus the next message sees.
+//   POST   /api/chat/provider/key              ChatProviderKey -> ChatProviderKeySaved  (400 key_malformed | key_rejected, 409 key_from_environment, 503 key_store_unavailable, 502 key_store_failed)
+//   DELETE /api/chat/provider/key/<provider>   -> ChatProviderStatus
+//   POST   /api/chat/provider/codex-login      -> ChatProviderStatus  (starts `codex login`; poll the status until codexSignIn is no longer waiting)
+//   DELETE /api/chat/provider/codex-login      -> ChatProviderStatus  (stops waiting)
+export const ChatKeyProviderSchema = z.enum(["anthropic", "openrouter"]);
+export const ChatProviderKeySchema = z.object({ provider: ChatKeyProviderSchema, key: z.string().min(1).max(1024) });
+export type ChatProviderKey = z.infer<typeof ChatProviderKeySchema>;
+// `checked` is false when the provider couldn't be asked (no network): the key is saved, and the first message tells.
+export const ChatProviderKeySavedSchema = z.object({ status: ChatProviderStatusSchema, checked: z.boolean() });
+export type ChatProviderKeySaved = z.infer<typeof ChatProviderKeySavedSchema>;
 
 export const ChatUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),

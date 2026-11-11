@@ -3,7 +3,7 @@
 // mid-reply. Proposals are validated by the real validator and stored in the FakeEditor, so
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
 import type {
-  ChatEvent, ChatOutcome, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
+  ChatEvent, ChatOutcome, ChatProviderKey, ChatProviderKeySaved, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
 } from "../../src/api/http.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { ChatError, type ChatBackend } from "../../src/server/chat-backend.ts";
@@ -92,13 +92,62 @@ export class FakeChat implements ChatBackend {
     this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, ...options };
   }
 
+  // Keys "saved" here (last four only) and a pretend `codex login`, so the setup surface can be driven without a Keychain (D-496).
+  private readonly saved = new Map<"anthropic" | "openrouter", string>();
+  private codexSignedIn = false;
+  private signIn: ChatProviderStatus["codexSignIn"] = { state: "idle" };
+  private signInTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private ready(id: "anthropic" | "openrouter" | "codex"): boolean {
+    if (id === "codex") return this.codexSignedIn;
+    return this.saved.has(id) || (id === "openrouter" && !this.options.missingKey);
+  }
+
   async provider(): Promise<ChatProviderStatus> {
+    const credential = (id: "anthropic" | "openrouter") => {
+      const last4 = this.saved.get(id);
+      if (last4 !== undefined) return { source: "keychain" as const, last4 };
+      return id === "openrouter" && !this.options.missingKey ? { source: "environment" as const, last4: "9f3a" } : null;
+    };
     const providers: ChatProviderStatus["providers"] = [
-      { id: "anthropic", label: "Anthropic API key", defaultModel: "claude-opus-5-5", ready: false, setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve" },
-      { id: "openrouter", label: "OpenRouter API key", defaultModel: "anthropic/claude-opus-5.5", ready: !this.options.missingKey, setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve" },
-      { id: "codex", label: "Codex (ChatGPT login)", defaultModel: "gpt-6.1-sol", ready: false, setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login" },
+      { id: "anthropic", label: "Anthropic API key", defaultModel: "claude-opus-5-5", ready: this.ready("anthropic"), setup: "Start keyloom with ANTHROPIC_API_KEY set.", command: "ANTHROPIC_API_KEY=<your key> keyloom serve", credential: credential("anthropic"), installed: true },
+      { id: "openrouter", label: "OpenRouter API key", defaultModel: "anthropic/claude-opus-5.5", ready: this.ready("openrouter"), setup: "Start keyloom with OPENROUTER_API_KEY set.", command: "OPENROUTER_API_KEY=<your key> keyloom serve", credential: credential("openrouter"), installed: true },
+      { id: "codex", label: "Codex (ChatGPT login)", defaultModel: "gpt-6.1-sol", ready: this.ready("codex"), setup: "Sign in once with the Codex CLI, then start keyloom.", command: "codex login", credential: null, installed: true },
     ];
-    return { active: this.options.missingKey ? null : { provider: this.chosen.provider, model: this.chosen.model, effort: "medium" }, lockedBy: null, providers };
+    const anyReady = providers.some((p) => p.ready);
+    // With nothing ready there is no active provider; once one is set up, the first ready one answers unless one was chosen.
+    const active = !anyReady ? null : this.ready(this.chosen.provider) ? this.chosen : { provider: providers.find((p) => p.ready)!.id, model: providers.find((p) => p.ready)!.defaultModel };
+    return { active: active === null ? null : { ...active, effort: "medium" }, lockedBy: null, keyStore: "keychain", codexSignIn: this.signIn, providers };
+  }
+
+  async saveKey({ provider, key }: ChatProviderKey): Promise<ChatProviderKeySaved> {
+    const name = provider === "anthropic" ? "Anthropic" : "OpenRouter";
+    if (key.trim().length < 20) throw new ChatError(400, "key_malformed", `That doesn't look like an ${name} key. Copy the whole key and paste it again.`);
+    if (/bad|wrong/i.test(key)) throw new ChatError(400, "key_rejected", `${name} refused this key.`);
+    this.saved.set(provider, key.trim().slice(-4));
+    return { status: await this.provider(), checked: true };
+  }
+
+  async forgetKey(provider: "anthropic" | "openrouter"): Promise<ChatProviderStatus> {
+    this.saved.delete(provider);
+    return this.provider();
+  }
+
+  async codexSignIn(action: "start" | "cancel"): Promise<ChatProviderStatus> {
+    if (this.signInTimer !== null) clearTimeout(this.signInTimer);
+    this.signInTimer = null;
+    if (action === "cancel") {
+      this.signIn = { state: "idle" };
+      return this.provider();
+    }
+    this.signIn = { state: "waiting", url: "https://auth.openai.com/oauth/authorize?client_id=fake" };
+    // KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the waiting state for screenshots; the default finishes quickly.
+    const ms = Number(process.env.KEYLOOM_FAKE_CODEX_SIGNIN_MS ?? 1500);
+    this.signInTimer = setTimeout(() => {
+      this.signIn = { state: "idle" };
+      this.codexSignedIn = true;
+    }, ms);
+    return this.provider();
   }
 
   private chosen: { provider: "anthropic" | "openrouter" | "codex"; model: string } = { provider: "openrouter", model: "anthropic/claude-opus-5.5" };
@@ -130,7 +179,7 @@ export class FakeChat implements ChatBackend {
 
   async send(ref: string, request: ChatRequest, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
     if (ref !== this.layoutId) throw new ChatError(404, "not_found", `no layout "${ref}"`);
-    if (this.options.missingKey) {
+    if (this.options.missingKey && !this.ready(this.chosen.provider) && this.saved.size === 0 && !this.codexSignedIn) {
       throw new ChatError(503, "missing_api_key", "ANTHROPIC_API_KEY is not set. Start keyloom with it set to use the chat.");
     }
     if (this.options.busy) throw new ChatError(409, "busy", "This conversation is still answering the last message.");

@@ -1,6 +1,6 @@
 // The chat panel's routes (rung 3). startServer calls `handleChatRoute` for every /api request
 // after its Host check and before its own routing, and serves the Response when one comes back.
-import { ChatProviderChoiceSchema, ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ObservedChatEvent } from "../api/http.ts";
+import { ChatKeyProviderSchema, ChatProviderChoiceSchema, ChatProviderKeySavedSchema, ChatProviderKeySchema, ChatProviderStatusSchema, ChatRequestSchema, ConversationDetailSchema, ConversationListResponseSchema, type ApiErrorBody, type ObservedChatEvent } from "../api/http.ts";
 import { type ChatBackend, ChatError } from "./chat-backend.ts";
 import { checkToken } from "./guard.ts";
 import { agentRunRoute } from "./agent-run-routes.ts";
@@ -12,7 +12,7 @@ const PRIORITIES = "/api/priorities/";
 const PROVIDER = "/api/chat/provider";
 const HEARTBEAT_MS = 5_000;
 
-type Match = { kind: "provider" } | { kind: "choose-provider" } | { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string } | { kind: "retire"; id: string };
+type Match = { kind: "provider" } | { kind: "choose-provider" } | { kind: "save-key" } | { kind: "forget-key"; provider: string } | { kind: "codex-login"; action: "start" | "cancel" } | { kind: "send"; ref: string } | { kind: "list"; ref: string } | { kind: "get"; id: string } | { kind: "retire"; id: string };
 
 function decode(raw: string): string | null {
   if (raw.length === 0 || raw.includes("/")) return null;
@@ -25,6 +25,13 @@ function decode(raw: string): string | null {
 
 function match(method: string, pathname: string): Match | "wrong-method" | null {
   if (pathname === PROVIDER) return method === "GET" ? { kind: "provider" } : method === "POST" ? { kind: "choose-provider" } : "wrong-method";
+  if (pathname === `${PROVIDER}/key`) return method === "POST" ? { kind: "save-key" } : "wrong-method";
+  if (pathname.startsWith(`${PROVIDER}/key/`)) {
+    const provider = decode(pathname.slice(`${PROVIDER}/key/`.length));
+    if (provider === null) return null;
+    return method === "DELETE" ? { kind: "forget-key", provider } : "wrong-method";
+  }
+  if (pathname === `${PROVIDER}/codex-login`) return method === "POST" ? { kind: "codex-login", action: "start" } : method === "DELETE" ? { kind: "codex-login", action: "cancel" } : "wrong-method";
   if (pathname.startsWith(LAYOUTS)) {
     const parts = pathname.slice(LAYOUTS.length).split("/");
     const ref = decode(parts[0] ?? "");
@@ -80,6 +87,17 @@ export async function handleChatRoute(request: Request, pathname: string, backen
   try {
     if (found.kind === "provider") return Response.json(ChatProviderStatusSchema.parse(await backend.provider()));
     if (found.kind === "choose-provider") return await chooseProvider(request, backend);
+    if (found.kind === "save-key") return await saveKey(request, backend);
+    if (found.kind === "forget-key") {
+      const provider = ChatKeyProviderSchema.safeParse(found.provider);
+      if (!provider.success) return errorResponse(404, "not_found", `no key to forget for "${found.provider}"`);
+      if (!backend.forgetKey) return errorResponse(503, "key_store_unavailable", "This keyloom can't save keys.");
+      return Response.json(ChatProviderStatusSchema.parse(await backend.forgetKey(provider.data)));
+    }
+    if (found.kind === "codex-login") {
+      if (!backend.codexSignIn) return errorResponse(409, "codex_missing", "This keyloom can't start a Codex sign-in.");
+      return Response.json(ChatProviderStatusSchema.parse(await backend.codexSignIn(found.action)));
+    }
     if (found.kind === "list") {
       const conversations = await backend.list(found.ref);
       if (conversations === null) return errorResponse(404, "not_found", `no layout "${found.ref}"`);
@@ -115,6 +133,23 @@ async function chooseProvider(request: Request, backend: ChatBackend): Promise<R
   const parsed = ChatProviderChoiceSchema.safeParse(json);
   if (!parsed.success) return errorResponse(400, "usage", parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
   return Response.json(ChatProviderStatusSchema.parse(await backend.chooseProvider(parsed.data)));
+}
+
+// The body holds the key, so nothing here echoes it: a bad body gets a fixed message, never the parser's view of the value.
+async function saveKey(request: Request, backend: ChatBackend): Promise<Response> {
+  if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
+    return errorResponse(415, "content_type", "Send this request as application/json.");
+  }
+  if (!backend.saveKey) return errorResponse(503, "key_store_unavailable", "This keyloom can't save keys.");
+  let json: unknown;
+  try {
+    json = await request.json();
+  } catch {
+    return errorResponse(400, "usage", "the request body is not JSON");
+  }
+  const parsed = ChatProviderKeySchema.safeParse(json);
+  if (!parsed.success) return errorResponse(400, "usage", "Send { provider: \"anthropic\" | \"openrouter\", key }.");
+  return Response.json(ChatProviderKeySavedSchema.parse(await backend.saveKey(parsed.data)));
 }
 
 async function send(request: Request, ref: string, backend: ChatBackend): Promise<Response> {

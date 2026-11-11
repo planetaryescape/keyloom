@@ -1,4 +1,4 @@
-import type { ObservedChatEvent, ChatProviderChoice, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary } from "../api/http.ts";
+import type { ObservedChatEvent, ChatProviderChoice, ChatProviderKey, ChatProviderKeySaved, ChatProviderStatus, ChatProviderStatusInput, ChatRequest, ConversationDetail, ConversationSummary } from "../api/http.ts";
 import type { AgentRunRequest, AgentRunSnapshot, AgentRequestCancellation } from "../api/agent-runs.ts";
 import type { ViewAck, ViewResult } from "../api/open-view.ts";
 
@@ -22,9 +22,14 @@ export interface ChatBackend {
    */
   send(ref: string, request: ChatRequest, emit: (event: ObservedChatEvent) => void, signal: AbortSignal): Promise<void>;
   /** Which provider the next new conversation uses, and what each still needs. */
-  provider(): Promise<ChatProviderStatus>;
+  provider(): Promise<ChatProviderStatusInput>;
   /** Saves the provider and model the next new conversation starts on; a conversation already going keeps its own (D-111). */
-  chooseProvider(choice: ChatProviderChoice): Promise<ChatProviderStatus>;
+  chooseProvider(choice: ChatProviderChoice): Promise<ChatProviderStatusInput>;
+  /** Checks a pasted key, saves it in the system key store and uses it from the next message (D-496). Absent on a fake. */
+  saveKey?(request: ChatProviderKey): Promise<ChatProviderKeySaved>;
+  forgetKey?(provider: ChatProviderKey["provider"]): Promise<ChatProviderStatus>;
+  /** Starts or stops a `codex login` the server waits on. */
+  codexSignIn?(action: "start" | "cancel"): Promise<ChatProviderStatus>;
   list(ref: string): Promise<ConversationSummary[] | null>;
   get(id: string): Promise<ConversationDetail | null>;
   /** Retires a priority from its chip; false when there is no such priority. */

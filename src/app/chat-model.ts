@@ -1,12 +1,16 @@
 // Where the app gets its model (19): the provider is chosen by the --provider flag, then the
 // KEYLOOM_PROVIDER variable, then the data directory's config, then the first provider that has a
-// credential. Keys come from the environment and are never stored (03#model-and-sdk).
+// credential. Keys come from the environment, or from the system key store when keyloom saved one there (D-496); the
+// environment wins. Neither the key nor any part but its last four characters leaves this process.
 import { type AgentModel } from "../agent/model.ts";
 import { DEFAULT_EFFORT, anthropicModel, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { LOGIN_HINT } from "../agent/codex/errors.ts";
 import { checkCodexLogin } from "../agent/codex/login.ts";
 import { DEFAULT_MODELS, PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 import { type AgentConfig, readAgentConfig, writeAgentConfig } from "./agent-config.ts";
+import { type CredentialOutcome, verifyCredential } from "./credential-check.ts";
+import { type CredentialSource, KEY_ENV, type KeyProvider, KeyStoreError, type StoreKind, credentials, isKeyShaped } from "./credentials.ts";
+import { codexSignIn, type CodexSignInState } from "./codex-signin.ts";
 import { ModelError, UsageError } from "./errors.ts";
 
 type Env = Record<string, string | undefined>;
@@ -19,8 +23,8 @@ export type ModelChoice = {
 };
 
 const MISSING: Record<"anthropic" | "openrouter", string> = {
-  anthropic: "ANTHROPIC_API_KEY is not set. keyloom reads your Anthropic key from that environment variable only, for example: op run -- keyloom chat <layout>",
-  openrouter: "OPENROUTER_API_KEY is not set. keyloom reads your OpenRouter key from that environment variable only, for example: op run -- keyloom chat <layout> --provider openrouter",
+  anthropic: "ANTHROPIC_API_KEY is not set and no Anthropic key is saved. Save one with `keyloom provider key set anthropic`, or set ANTHROPIC_API_KEY, for example: op run -- keyloom chat <layout>",
+  openrouter: "OPENROUTER_API_KEY is not set and no OpenRouter key is saved. Save one with `keyloom provider key set openrouter`, or set OPENROUTER_API_KEY, for example: op run -- keyloom chat <layout> --provider openrouter",
 };
 
 const hasEnv = (env: Env, name: string) => Boolean(env[name]?.trim());
@@ -47,11 +51,13 @@ export async function chooseProvider(choice: ModelChoice, config: AgentConfig, e
   if ((await checkCodexLogin(env)).ready) return "codex";
   throw new ModelError(
     "missing_key",
-    `No model provider is set up. Set ANTHROPIC_API_KEY, set OPENROUTER_API_KEY, or run \`codex login\`, for example: op run -- keyloom chat <layout>`,
+    `No model provider is set up. Save a key with \`keyloom provider key set anthropic\`, set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run \`codex login\`.`,
   );
 }
 
-export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): Promise<AgentModel> {
+export async function defaultAgentModel(dataDir: string, choice: ModelChoice = {}, baseEnv: Env = process.env): Promise<AgentModel> {
+  // Read at each call, not at startup, so a key saved a moment ago answers the next message (D-496).
+  const env = await credentials().env(baseEnv);
   const config = readAgentConfig(dataDir);
   const provider = await chooseProvider(choice, config, env);
   // A pinned conversation keeps its model; otherwise the config's model applies only to the provider it was written for.
@@ -86,7 +92,17 @@ export type ProviderStatus = {
   active: { provider: ProviderId; model: string; effort: string } | null;
   /** What outranks the config file, so a choice made in the picker would not apply; null when nothing does. */
   lockedBy: "--provider" | "KEYLOOM_PROVIDER" | null;
-  providers: Array<{ id: ProviderId; label: string; defaultModel: string; ready: boolean; setup: string; command: string }>;
+  /** Where a pasted key can be saved; null on a computer with none, where only the environment works. */
+  keyStore: StoreKind | null;
+  /** A `codex login` keyloom started and is waiting on. */
+  codexSignIn: CodexSignInState;
+  providers: Array<{
+    id: ProviderId; label: string; defaultModel: string; ready: boolean; setup: string; command: string;
+    /** Where the key comes from and its last four characters; null for Codex and for a provider with no key. */
+    credential: CredentialSource | null;
+    /** False only for Codex when its CLI is not on this computer, so signing in can't be offered. */
+    installed: boolean;
+  }>;
 };
 
 const SETUP: Record<ProviderId, { label: string; setup: string; command: string }> = {
@@ -96,10 +112,13 @@ const SETUP: Record<ProviderId, { label: string; setup: string; command: string 
 };
 
 /** For the chat panel: which provider answers, and what each one still needs. Never throws on a missing credential. */
-export async function providerStatus(dataDir: string, choice: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
+export async function providerStatus(dataDir: string, choice: ModelChoice = {}, baseEnv: Env = process.env): Promise<ProviderStatus> {
+  const env = await credentials().env(baseEnv);
+  const sources = await credentials().sources(baseEnv);
   const config = readAgentConfig(dataDir);
   const ready = new Set<ProviderId>(keyedProviders(env));
-  if ((await checkCodexLogin(env)).ready) ready.add("codex");
+  const codex = await checkCodexLogin(env);
+  if (codex.ready) ready.add("codex");
   let active: ProviderStatus["active"] = null;
   try {
     const provider = await chooseProvider(choice, config, env);
@@ -110,7 +129,14 @@ export async function providerStatus(dataDir: string, choice: ModelChoice = {}, 
     if (!(err instanceof ModelError)) throw err;
   }
   const lockedBy = choice.provider ? "--provider" : hasEnvProvider(env) ? "KEYLOOM_PROVIDER" : null;
-  return { active, lockedBy, providers: PROVIDERS.map((id) => ({ id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id] })) };
+  return {
+    active, lockedBy, keyStore: credentials().store?.kind ?? null, codexSignIn: codexSignIn().current(),
+    providers: PROVIDERS.map((id) => ({
+      id, defaultModel: DEFAULT_MODELS[id], ready: ready.has(id), ...SETUP[id],
+      credential: id === "codex" ? null : sources[id],
+      installed: id !== "codex" || codex.ready || codex.reason !== "not_installed",
+    })),
+  };
 }
 
 // A bad KEYLOOM_PROVIDER already surfaces as a UsageError from chooseProvider; the lock only needs to know whether a valid one is set.
@@ -119,5 +145,70 @@ const hasEnvProvider = (env: Env): boolean => isProviderId(env.KEYLOOM_PROVIDER?
 /** The picker's save: validated by the caller's schema, written to the data directory's config, and applied from the next conversation (D-111). */
 export async function chooseNextProvider(dataDir: string, choice: { provider: ProviderId; model?: string | undefined }, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
   writeAgentConfig(dataDir, choice);
+  return providerStatus(dataDir, current, env);
+}
+
+/** Why a pasted key was not saved. The message never holds the key. */
+export class CredentialError extends Error {
+  override name = "CredentialError";
+  constructor(readonly code: "key_malformed" | "key_rejected" | "key_from_environment" | "key_store_unavailable" | "key_store_failed" | "codex_missing", message: string) {
+    super(message);
+  }
+}
+
+const KEY_NAMES: Record<KeyProvider, string> = { anthropic: "Anthropic", openrouter: "OpenRouter" };
+
+export type SaveKeyOptions = {
+  /** The API read that tells a good key from a refused one; the real one spends no tokens. */
+  verify?: (provider: KeyProvider, env: Env) => Promise<CredentialOutcome>;
+  env?: Env;
+};
+
+/**
+ * Checks a pasted key with one read, saves it to the key store, and returns the status the next message sees. A refused key
+ * is not saved. A key that can't be checked (no network) is saved: the first message says whether it works.
+ */
+export async function saveProviderKey(dataDir: string, provider: KeyProvider, pasted: string, current: ModelChoice = {}, opts: SaveKeyOptions = {}): Promise<{ status: ProviderStatus; checked: boolean }> {
+  const env = opts.env ?? process.env;
+  const name = KEY_NAMES[provider];
+  if (credentials().store === null) throw new CredentialError("key_store_unavailable", "This computer has no key store keyloom can use.");
+  if (env[KEY_ENV[provider]]?.trim()) {
+    throw new CredentialError("key_from_environment", `${KEY_ENV[provider]} is set where keyloom started, and it outranks a saved key.`);
+  }
+  const key = pasted.trim();
+  if (!isKeyShaped(key)) throw new CredentialError("key_malformed", `That doesn't look like an ${name} key. Copy the whole key and paste it again.`);
+  const outcome = await (opts.verify ?? verifyCredential)(provider, { [KEY_ENV[provider]]: key });
+  if (outcome.status === "rejected") throw new CredentialError("key_rejected", `${name} refused this key.`);
+  try {
+    await credentials().save(provider, key);
+  } catch (err) {
+    if (err instanceof KeyStoreError) throw new CredentialError("key_store_failed", `keyloom couldn't save the key: ${err.message}.`);
+    throw err;
+  }
+  return { status: await providerStatus(dataDir, current, env), checked: outcome.status === "ok" };
+}
+
+/** Removes a key keyloom saved. A key from the environment is not keyloom's to remove. */
+export async function forgetProviderKey(dataDir: string, provider: KeyProvider, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
+  if (credentials().store === null) throw new CredentialError("key_store_unavailable", "This computer has no key store keyloom can use.");
+  try {
+    await credentials().forget(provider);
+  } catch (err) {
+    if (err instanceof KeyStoreError) throw new CredentialError("key_store_failed", `keyloom couldn't remove the key: ${err.message}.`);
+    throw err;
+  }
+  return providerStatus(dataDir, current, env);
+}
+
+/** Starts `codex login`, which opens the browser; the status's `codexSignIn` says when it ends. */
+export async function startCodexSignIn(dataDir: string, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
+  const login = await checkCodexLogin(env);
+  if (!login.ready && login.reason === "not_installed") throw new CredentialError("codex_missing", "The Codex CLI is not installed on this computer.");
+  if (!login.ready) codexSignIn().start(env);
+  return providerStatus(dataDir, current, env);
+}
+
+export async function cancelCodexSignIn(dataDir: string, current: ModelChoice = {}, env: Env = process.env): Promise<ProviderStatus> {
+  codexSignIn().cancel();
   return providerStatus(dataDir, current, env);
 }
