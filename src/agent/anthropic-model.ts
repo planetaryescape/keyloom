@@ -224,6 +224,16 @@ const toWire = (m: ModelMessage): BetaMessageParam => ({ role: m.role, content: 
 
 // Anthropic reports an empty balance as a 400 whose text says so; OpenRouter uses 402 "Insufficient credits".
 const NO_CREDITS = /credit balance is too low|insufficient credits|billing_error/i;
+// Anthropic answers an oversized conversation with a 400 "prompt is too long: N tokens > M maximum"; OpenRouter relays the upstream
+// "maximum context length" wording. Either way the same request can never succeed, so it is not a generic `request` failure (R4-11).
+const CONTEXT_FULL = /prompt is too long|maximum context length|context window/i;
+
+/** The provider's own sentence. The SDK's `message` is "<status> <raw JSON body>", which reads as noise beside the page's buttons. */
+const ProviderErrorBody = z.object({ error: z.object({ message: z.string().trim().min(1) }) });
+function providerText(err: InstanceType<typeof Anthropic.APIError>): string {
+  const body = ProviderErrorBody.safeParse(err.error);
+  return body.success ? body.data.error.message : err.message;
+}
 
 /** Maps an SDK failure to the few kinds BK acts on; null when it isn't a model API failure, so a bug stays a bug. */
 export function classifyModelError(err: unknown, provider: AnthropicFamily = "anthropic"): { kind: ModelErrorKind; message: string } | null {
@@ -231,17 +241,21 @@ export function classifyModelError(err: unknown, provider: AnthropicFamily = "an
   if (err instanceof Anthropic.APIUserAbortError) return null;
   if (err instanceof Anthropic.APIError && (err.status === 402 || (err.status === 400 && NO_CREDITS.test(err.message)))) {
     const where = provider === "openrouter" ? "Add credits at openrouter.ai/credits" : "Add credits in the Anthropic console (Plans & Billing)";
-    return { kind: "no_credits", message: `${name} says the account is out of credits. ${where}, or switch provider with --provider.` };
+    // The page shows this beside Add credits and Switch to; the CLI adds its own `--provider` line (R4-10).
+    return { kind: "no_credits", message: `${name} says the account is out of credits. ${where}.` };
+  }
+  if (err instanceof Anthropic.APIError && err.status === 400 && CONTEXT_FULL.test(err.message)) {
+    return { kind: "context_full", message: `This conversation is too long for ${name}'s model to read in one go.` };
   }
   // Both places a key comes from (R3-11). The page shows this beside its Set up model button, so it names no command; the CLI adds one.
   if (err instanceof Anthropic.AuthenticationError) return { kind: "auth", message: `${name} rejected the API key (401). If ${KEY_NAME[provider]} is set where keyloom started, fix it there; otherwise save a new key.` };
-  if (err instanceof Anthropic.PermissionDeniedError) return { kind: "permission", message: `${name} denied the request (403): ${err.message}` };
+  if (err instanceof Anthropic.PermissionDeniedError) return { kind: "permission", message: `${name} denied the request (403): ${providerText(err)}` };
   if (err instanceof Anthropic.RateLimitError) return { kind: "rate_limit", message: `${name} rate limit reached (429). Wait a moment and send the message again.` };
   if (err instanceof Anthropic.APIConnectionError) return { kind: "connection", message: `Could not reach the ${name} API: ${err.message}` };
   if (err instanceof Anthropic.APIError) {
     if (err.status === 529) return { kind: "overloaded", message: `${name} is overloaded (529). Send the message again shortly.` };
-    if (err.status !== undefined && err.status >= 500) return { kind: "server", message: `${name} server error (${err.status}): ${err.message}` };
-    return { kind: "request", message: `${name} rejected the request (${err.status ?? "no status"}): ${err.message}` };
+    if (err.status !== undefined && err.status >= 500) return { kind: "server", message: `${name} server error (${err.status}): ${providerText(err)}` };
+    return { kind: "request", message: `${name} rejected the request (${err.status ?? "no status"}): ${providerText(err)}` };
   }
   return null;
 }

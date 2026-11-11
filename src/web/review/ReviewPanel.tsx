@@ -18,7 +18,9 @@ import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
-import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { CREDITS_PAGES } from "../chat/setup-words.ts";
+import { ApiError } from "../api.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -148,7 +150,7 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose }: {
+export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose, proposalsFailed = false, onReadProposals }: {
   token: string;
   review: Review;
   layout: Layout;
@@ -161,10 +163,15 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   proposals: readonly ProposalCard[] | null;
   pinnedId: string | null;
   onPin: (card: ProposalCard) => void;
-  onApply: (card: ProposalCard) => Promise<void>;
+  /** Rejects when the Apply failed or its outcome is unknown; resolves with `showAgain` when it landed but the new layout couldn't be read. */
+  onApply: (card: ProposalCard) => Promise<void | { showAgain: () => Promise<void> }>;
   onShowLayer: (layerId: string) => void;
   onPlanRepair: (item: ReviewItem) => void;
   onClose: () => void;
+  /** The config's proposals could not be read, so suggestions have no change to show or apply until they are read again (R4-08). */
+  proposalsFailed?: boolean;
+  /** Reads the proposals again: after a failed read, and after an Apply whose outcome is unknown. */
+  onReadProposals?: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
   const [details, setDetails] = useState(false);
@@ -174,7 +181,21 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   // A locked choice (--provider, KEYLOOM_PROVIDER) can't be changed in the picker, so it gets the setup.
   const pickReady = offersPicker(provider.status);
   const [applying, setApplying] = useState<string | null>(null);
+  const [applyFailure, setApplyFailure] = useState<{ itemId: string; view: ApplyFailure; showAgain?: () => Promise<void> } | null>(null);
+  const apply = (itemId: string, card: ProposalCard) => {
+    setApplying(itemId);
+    setApplyFailure(null);
+    void onApply(card).then((outcome) => {
+      if (outcome !== undefined) setApplyFailure({ itemId, view: APPLIED_NOT_SHOWN, showAgain: outcome.showAgain });
+    }, (error: unknown) => {
+      setApplyFailure({ itemId, view: applyFailureWords(error instanceof ApiError ? error : { code: undefined, status: -1, message: error instanceof Error ? error.message : String(error) }) });
+    }).finally(() => setApplying(null));
+  };
   const review = r.review;
+  const missing = review === null ? null : aiMissingWords(review.ai);
+  // The billing page of the provider the review runs on; Codex sells no credits, so it has none.
+  const activeProvider = provider.status?.active?.provider;
+  const creditsUrl = activeProvider === "anthropic" || activeProvider === "openrouter" ? CREDITS_PAGES[activeProvider] : undefined;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
   const readFailed = loading && r.problem !== null;
   const now = Date.now();
@@ -237,7 +258,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        {changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
+        {changes === undefined && proposals === null ? <p>Reading this suggestion&apos;s change…</p>
+          : changes === undefined && proposalsFailed ? <p>keyloom couldn&apos;t read this suggestion&apos;s change, so it can&apos;t be shown or applied yet.</p>
+          : changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
           : sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p>
             : <p>The proposal is valid, but some changed values cannot be fully compared. The unverified details are marked below; preview and Apply are unavailable.</p>}
         {changes && c ? <ProposalChangeDetails changes={changes} before={layout} board={board} ops={c.ops} /> : null}
@@ -247,7 +270,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           {b.checks.map((check) => <p key={check.name}><ReviewText text={check.name} layout={layout} rows={rows} />: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
           {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
         </details>)}
-        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : changes === undefined ? <span>change unavailable or invalid for this version</span> : <span>comparison incomplete</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : changes === undefined ? <span>{proposalsFailed ? "change not read" : "change unavailable or invalid for this version"}</span> : <span>comparison incomplete</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" disabled={r.stale || !sourceChecked} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
@@ -257,16 +280,29 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             <button
               type="button"
               className="bar-apply"
-              disabled={applying !== null || r.busy || !sourceChecked || r.stale || review.ai.status === "running"}
-              onClick={() => {
-                setApplying(item.id);
-                void onApply(c).finally(() => setApplying(null));
-              }}
+              disabled={applying !== null || r.busy || !sourceChecked || r.stale || review.ai.status === "running" || (applyFailure?.itemId === item.id && applyFailure.view.action === "check")}
+              onClick={() => apply(item.id, c)}
             >
               {applying === item.id ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Apply
             </button>
           )}
         </div>
+        {/* Kept when the suggestion has left the list: an Apply that landed still has something to say. */}
+        {applyFailure?.itemId !== item.id ? null : (
+          <div className="br-apply-failure" role="alert">
+            <p>{applyFailure.view.words}</p>
+            {applyFailure.view.action === "fresh_review" ? (
+              <button type="button" className="sheet-action" disabled={r.busy} onClick={() => { setApplyFailure(null); void r.run(true); }}>Run a fresh review</button>
+            ) : applyFailure.view.action === "show" ? (
+              <button type="button" className="sheet-action" onClick={() => { const showAgain = applyFailure.showAgain; if (showAgain !== undefined) void showAgain().then(() => setApplyFailure(null), () => {}); }}>Show the new layout</button>
+            ) : applyFailure.view.action === "check" ? (
+              // An Apply that landed takes the suggestion off the list, so reading it again is what tells.
+              <button type="button" className="sheet-action" onClick={() => { setApplyFailure(null); onReadProposals?.(); }}>Check again</button>
+            ) : (
+              c === undefined ? null : <button type="button" className="sheet-action" disabled={applying !== null || r.busy} onClick={() => apply(item.id, c)}>Try again</button>
+            )}
+          </div>
+        )}
       </article>
     );
   };
@@ -321,6 +357,13 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       {head}
       <div className="br-body">
         {r.stale ? <div className="br-actions"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run(true)}>Run a fresh review</button></div> : null}
+        {proposalsFailed && onReadProposals !== undefined ? (
+          // The suggestions' changes live in the config's proposals; an unread list is not a missing one (R4-08).
+          <div className="br-apply-failure" role="alert">
+            <p>keyloom couldn&apos;t read this config&apos;s proposals, so suggestions can&apos;t be applied yet.</p>
+            <button type="button" className="sheet-action" onClick={onReadProposals}>Try again</button>
+          </div>
+        ) : null}
         {!r.stale && nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">
             <Check size={14} aria-hidden="true" /> No findings from these source checks of {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos. This does not establish runtime behavior or better typing.
@@ -334,28 +377,32 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
         {r.stale ? null : review.ai.status === "done" && review.ai.reason !== null ? (
           // A look that stopped early still shows what it found; say so, quietly, so a short list isn't read as all there is.
           <p className="br-quiet">{review.ai.reason}</p>
-        ) : review.ai.status === "unavailable" || review.ai.status === "failed" ? (
+        ) : (review.ai.status === "unavailable" || review.ai.status === "failed") && missing !== null ? (
           // Plain words and the one thing to do; the engine's reason is for whoever wants it, behind Details.
           <div className="br-ai-missing">
-            <p className="br-ai-words">
-              {review.ai.status === "unavailable" ? "Suggestions need a model, and none is set up." : "keyloom's own look didn't finish, so there are no suggestions this time."}
-            </p>
+            <p className="br-ai-words">{missing.words}</p>
             <div className="br-actions br-actions-start">
-              {review.ai.status === "unavailable" ? (
+              {missing.actions.includes("credits") && creditsUrl !== undefined ? (
+                <a className="sheet-action" href={creditsUrl} target="_blank" rel="noreferrer">Add credits</a>
+              ) : null}
+              {missing.actions.includes("set_up") ? (
                 <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
-              ) : (
+              ) : null}
+              {missing.actions.includes("retry") ? (
                 <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
-              )}
+              ) : null}
               {review.ai.reason === null ? null : (
                 <button type="button" className="sheet-action" aria-expanded={details} onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "Details"}</button>
               )}
             </div>
             {details && review.ai.reason !== null ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
-            {picking && !pickReady ? (
-              // Nothing is set up: the same setup the chat uses (D-496). A key saved here is used by the review at once.
+            {picking && (!pickReady || missing.refused) ? (
+              // Nothing is set up, or the provider refused the account: the same setup the chat uses (D-496), with the refused provider's
+              // key field open. A key saved here is used by the review at once.
               <ModelSetup
                 token={token}
                 status={provider.status}
+                replacing={missing.refused ? provider.status?.active?.provider ?? null : null}
                 onReload={() => void provider.reload()}
                 onChanged={(next) => {
                   provider.replace(next);

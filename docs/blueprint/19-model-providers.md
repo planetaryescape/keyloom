@@ -61,7 +61,7 @@ Codex's loop isn't keyloom's, so the guarantee can't depend on the loop. It rest
 
 ## One seam, three adapters
 
-- **`AgentModel` keeps its shape.** Its result gains `provider` and an optional `costUsd`. Each adapter exports its own error classifier, so each SDK stays imported in one file. `ModelErrorKind` gains `no_credits`, which also fixes today's credit error showing as a generic failure.
+- **`AgentModel` keeps its shape.** Its result gains `provider` and an optional `costUsd`. Each adapter exports its own error classifier, so each SDK stays imported in one file. `ModelErrorKind` gains `no_credits`, which also fixes today's credit error showing as a generic failure. It later gains `context_full` for a prompt too long for the model, which no retry fixes; Codex's "ran out of room in the model's context window" maps to it too (D-517). The classifier's sentences are shared with the page, so they name no CLI flag; the CLI adds its own (D-512, D-518).
 - **Stored blocks become provider-neutral:** `text`, `tool_use`, `tool_result`, plus opaque `providerData` for thinking blocks that only the same provider can replay. Today's store holds the Anthropic SDK's own blocks (`src/agent/anthropic-model.ts`, `toStored`).
 - **A conversation is pinned to the provider and model that started it** (D-111). Switching provider starts a new conversation. Replaying a transcript as text would lose tool results and thinking blocks, and Codex can't take a foreign history at all.
 

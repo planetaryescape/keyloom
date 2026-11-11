@@ -81,7 +81,8 @@ export type ModelResult = {
   costUsd?: number;
 };
 
-export type ModelErrorKind = "missing_key" | "auth" | "no_credits" | "permission" | "rate_limit" | "overloaded" | "connection" | "request" | "server";
+/** `context_full`: the conversation no longer fits the model's context window, so sending it again fails the same way (R4-11). */
+export type ModelErrorKind = "missing_key" | "auth" | "no_credits" | "permission" | "rate_limit" | "overloaded" | "connection" | "request" | "server" | "context_full";
 
 export interface AgentModel {
   /** Recorded in the per-turn log. */

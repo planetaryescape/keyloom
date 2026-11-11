@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, Keyboard, KeyRound, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, Keyboard, KeyRound, MapPin, MessageSquarePlus, RefreshCw, ShieldCheck } from "lucide-react";
 import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -17,6 +17,7 @@ import { ConfigCardList, type ConfigCards } from "./ConfigCards.tsx";
 import type { AgentWorkStatus, AgentWorkView } from "./work-view.ts";
 import { presentationView } from "./presentation-view.ts";
 import { TurnUsage } from "./TurnUsage.tsx";
+import { type FailureAction, type FailureView, type Prepared, failureView, preparedWords } from "./failure-words.ts";
 
 export function UserMessage({ turn, layout, context, onSelectKeys }: { turn: UserTurn; layout: Layout; context?: string; onSelectKeys?: (selection: ChatSelection) => void }) {
   const { selection } = turn;
@@ -241,18 +242,6 @@ const ENDINGS: Record<string, string> = {
   iteration_limit: "keyloom stopped after too many steps. Ask again, or narrow what you want.",
 };
 
-// What went wrong, by the server's code (model_<ModelErrorKind>), in the words of comp d2. Anything else stays "The reply stopped".
-const FAILURE_TITLES: Record<string, string> = {
-  model_no_credits: "Out of credits",
-  model_auth: "The key was refused",
-  model_permission: "The key can't use this model",
-  model_rate_limit: "The model is busy",
-  model_overloaded: "The model is busy",
-  model_connection: "Can't reach the model",
-};
-// Failures that another provider would not have: the account, not the request. Only these offer a switch.
-const ACCOUNT_FAILURES = new Set(["model_no_credits", "model_auth", "model_permission"]);
-
 interface Props {
   turn: AssistantTurn;
   layout: Layout;
@@ -381,45 +370,64 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       ))}
       {/* After the proposal it refines: the proposal is on the board first, and the question asks about it (D-452). */}
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
-      {turn.failure === null ? null : (
-        <div className="chat-problem chat-problem-inline" role="alert">
-          <CircleAlert size={18} aria-hidden="true" />
-          <div className="chat-problem-body">
-            <strong>{FAILURE_TITLES[turn.failure.code] ?? "The reply stopped"}</strong>
-            <p>
-              {turn.failure.message} Configs or proposals prepared before the reply stopped may remain. Check them before trying again.
-            </p>
-            <div className="chat-problem-actions">
-              {turn.failure.code === "model_no_credits" && creditsUrl !== undefined ? (
-                <a className="button button-primary" href={creditsUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink size={14} aria-hidden="true" />
-                  Add credits
-                </a>
-              ) : null}
-              {ACCOUNT_FAILURES.has(turn.failure.code) && onSetUpModel !== undefined ? (
-                <button type="button" className={turn.failure.code === "model_no_credits" ? "button" : "button button-primary"} onClick={onSetUpModel}>
-                  <KeyRound size={14} aria-hidden="true" />
-                  {turn.failure.code === "model_no_credits" ? "Use another key" : "Change the key"}
-                </button>
-              ) : null}
-              {ACCOUNT_FAILURES.has(turn.failure.code) && onSwitch !== undefined
-                ? switchTo.map((other) => (
-                    <button key={other.id} type="button" className="button" onClick={() => onSwitch(other.id)}>
-                      <ArrowRightLeft size={14} aria-hidden="true" />
-                      Switch to {other.name}
-                    </button>
-                  ))
-                : null}
-              <button type="button" className="button" onClick={onRetry}>
-                <RefreshCw size={14} aria-hidden="true" />
-                Try again
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {turn.failure === null ? null : <FailureBox view={failureView(turn.failure)} prepared={{ proposals: turn.proposals.length, priorities: turn.priorities.length, mayHave: turn.presentation?.effectsMayHaveOccurred ?? null }} busy={busy} onRetry={onRetry} switchTo={switchTo} onSwitch={onSwitch} onSetUpModel={onSetUpModel} creditsUrl={creditsUrl} onNewConversation={onNewConversation} />}
       {streaming ? null : <AgentWorking view={work} motionPaused={motionPaused} />}
       {streaming ? null : <TurnUsage accounting={turn.accounting} />}
+    </div>
+  );
+}
+
+// Every button here starts or changes a request, so none works while a reply is running; Add credits and the setup leave the request alone.
+function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUpModel, creditsUrl, onNewConversation }: {
+  view: FailureView; prepared: Prepared; busy: boolean; onRetry: () => void; switchTo: readonly { id: string; name: string }[];
+  onSwitch: ((id: string) => void) | undefined; onSetUpModel: (() => void) | undefined; creditsUrl: string | undefined; onNewConversation: (() => void) | undefined;
+}) {
+  const offers = (action: FailureAction) => view.actions.includes(action);
+  const credits = offers("credits") && creditsUrl !== undefined;
+  const { note, retryLabel } = preparedWords(prepared, offers("retry"));
+  return (
+    <div className="chat-problem chat-problem-inline" role="alert">
+      <CircleAlert size={18} aria-hidden="true" />
+      <div className="chat-problem-body">
+        <strong>{view.title}</strong>
+        <p>
+          {view.message}{note === null ? "" : ` ${note}`}
+        </p>
+        <div className="chat-problem-actions">
+          {credits ? (
+            <a className="button button-primary" href={creditsUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={14} aria-hidden="true" />
+              Add credits
+            </a>
+          ) : null}
+          {offers("set_up_model") && onSetUpModel !== undefined ? (
+            <button type="button" className={credits ? "button" : "button button-primary"} onClick={onSetUpModel}>
+              <KeyRound size={14} aria-hidden="true" />
+              {view.setUpLabel}
+            </button>
+          ) : null}
+          {offers("switch") && onSwitch !== undefined
+            ? switchTo.map((other) => (
+                <button key={other.id} type="button" className="button" disabled={busy} onClick={() => onSwitch(other.id)}>
+                  <ArrowRightLeft size={14} aria-hidden="true" />
+                  Switch to {other.name}
+                </button>
+              ))
+            : null}
+          {offers("new_conversation") && onNewConversation !== undefined ? (
+            <button type="button" className={offers("retry") ? "button" : "button button-primary"} disabled={busy} onClick={onNewConversation}>
+              <MessageSquarePlus size={14} aria-hidden="true" />
+              Start a new conversation
+            </button>
+          ) : null}
+          {offers("retry") ? (
+            <button type="button" className="button" disabled={busy} onClick={onRetry}>
+              <RefreshCw size={14} aria-hidden="true" />
+              {retryLabel}
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

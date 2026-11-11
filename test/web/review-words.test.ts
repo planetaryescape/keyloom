@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
 import type { ReviewItem } from "../../src/validation/review-item.ts";
-import { grouped, markerWords, placeOf, placeWords, segments } from "../../src/web/review/review-words.ts";
+import { aiMissingWords, applyFailureWords, grouped, markerWords, placeOf, placeWords, segments } from "../../src/web/review/review-words.ts";
 
 const item = (over: Partial<ReviewItem>): ReviewItem => ({
   id: "x", source: "check", kind: "problem", severity: "warning", code: "c", title: "t", body: "b", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: null, ...over,
@@ -46,3 +46,41 @@ describe("where keys are", () => {
     expect(placeOf(0, { macro: [0] })).toBe("on the macro row");
   });
 });
+
+describe("no suggestions says why and offers the fix (R4-10)", () => {
+  const ai = (status: "unavailable" | "failed", model: string | null, code: string | null = null) => ({ status, reason: "r", model, code });
+  test("no model set up opens the setup only: trying again can't help until one is", () => {
+    expect(aiMissingWords(ai("unavailable", null))).toEqual({ words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false });
+  });
+  test("a refused account opens its key and can run again once it is fixed at the provider (#288 review)", () => {
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5", "auth"))).toMatchObject({ actions: ["set_up", "retry"], refused: true });
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5", "permission")).actions).toEqual(["set_up", "retry"]);
+    // A review from before the code was kept is still a refusal.
+    expect(aiMissingWords(ai("unavailable", "claude-opus-5-5")).actions).toEqual(["set_up", "retry"]);
+  });
+  test("an account out of credits offers Add credits first, by its code", () => {
+    const view = aiMissingWords(ai("unavailable", "claude-opus-5-5", "no_credits"));
+    expect(view).toMatchObject({ actions: ["credits", "set_up", "retry"], refused: true });
+    expect(view.words).toContain("out of credits");
+  });
+  test("a look that stopped for another reason tries again", () => {
+    expect(aiMissingWords(ai("failed", "claude-opus-5-5")).actions).toEqual(["retry"]);
+  });
+});
+
+describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
+  test("a stale or refused suggestion offers a fresh review, never the same Apply", () => {
+    for (const code of ["stale_base", "validation_failed", "not_found", "usage"]) expect(applyFailureWords({ code, status: 409, message: "x" }).action).toBe("fresh_review");
+  });
+  test("another refusal tries again", () => {
+    expect(applyFailureWords({ code: "busy", status: 409, message: "A build is running." })).toEqual({ words: "Nothing was applied: A build is running.", action: "retry" });
+  });
+  test("no answer, or a failure after the answer, never claims nothing was applied; the page checks first (#288 review)", () => {
+    for (const status of [0, 200, -1]) {
+      const view = applyFailureWords({ code: undefined, status, message: "x" });
+      expect(view.action).toBe("check");
+      expect(view.words).not.toContain("nothing was applied");
+    }
+  });
+});
+

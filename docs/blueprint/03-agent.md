@@ -2,6 +2,8 @@
 
 Source update, 2026-11-01: encoder edits use the same checked proposals as key edits (D-471). `get_layout` includes effective per-layer sensor bindings and their press positions; `find_function` includes understood encoder turns and accepts firmware aliases and media labels. Invalid calls carry public failure codes, not proof of a keyboard limitation (D-472).
 
+Status update, 2026-11-11 (D-517): a run the provider fails after acceptance saves `failure: { code, message }` on its presentation, so a watched or reopened run shows the same reason and buttons as a streamed failure. A prompt too long for the model is `context_full`.
+
 Status update, 2026-11-01: D-469 adds `open_view` for four existing views. App/CLI tests and CI pass. BK approved release with independent review and Computer Use/visual checks waived, not passed; [evidence and limits](../research/ui-audit/d-open-view/README.md).
 
 Revision, 2026-10-29: D-452 replaced D-020's alternatives. `propose_changes` takes one proposal and `supersedes`, and `ask_user` takes considerations and a step; the tool table and the loop below say how. D-458 lets a question be answered after the layout head moves, behind a note to the model. D-460 implements whole-config adaptation in a target-owned conversation, keeping ordinary writes scoped to one layout.

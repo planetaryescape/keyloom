@@ -28,6 +28,8 @@ export const BoardReviewSchema = z.object({
     /** In words, when the agent's part is unavailable or failed: "No model provider is set up." */
     reason: z.string().nullable(),
     model: z.string().nullable(),
+    /** The model error kind of a refused look (`no_credits`, `auth`, `permission`, `missing_key`); null otherwise. Absent from older servers. */
+    code: z.string().nullable().optional(),
   }),
   workload: ReviewWorkloadSchema.optional(),
   freshness: z.object({ current: z.boolean(), reason: z.string().nullable() }),

@@ -1,7 +1,7 @@
 // Use cases for talking to the agent: send a message, list and show conversations (03, 10).
 import { conversationCopyContext, copyHandoff } from "./copy-context.ts";
 import type { AgentView, ViewResult } from "../agent/open-view.ts";
-import type { ViewIntent } from "../persistence/chat-presentations.ts";
+import type { RunFailure, ViewIntent } from "../persistence/chat-presentations.ts";
 import type { CopyHandoff, PutInput, PutResult } from "../agent/ports.ts";
 import { type AgentModel, type ContentBlock, type ModelMessage } from "../agent/model.ts";
 import { neutralBlock } from "../agent/blocks.ts";
@@ -326,8 +326,10 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
         },
       });
     } catch (err) {
-      presentation.finish(input.signal?.aborted ? "cancelled" : "failed");
       const known = model.classifyError(err);
+      // The reason is kept with the run, so a page that watches the saved run, or reopens it later, shows the same way out as a live stream (D-517).
+      if (input.signal?.aborted) presentation.finish("cancelled");
+      else presentation.finish("failed", undefined, undefined, undefined, undefined, undefined, runFailure(known));
       logTurn(app, { ...logBase, messageIds: [userMessage.id] }, started, {
         status: "error", error: known?.kind ?? (err instanceof Error ? err.name : "unknown"),
       });
@@ -389,6 +391,15 @@ export async function runPreparedMessage(app: App, prepared: PreparedMessage, in
   } finally {
     answering.delete(conversation.id);
   }
+}
+
+/**
+ * The code a failed turn is shown with: the same `model_<kind>` (or `missing_api_key`) the chat route sends for a refusal, so the page has one
+ * map from code to button. A failure that is not the model's is a keyloom bug; its text is not shown, so no internal detail leaks into the page.
+ */
+export function runFailure(known: { kind: string; message: string } | null): RunFailure {
+  if (known === null) return { code: "agent_error", message: "keyloom hit an unexpected problem while working on this reply." };
+  return { code: known.kind === "missing_key" ? "missing_api_key" : `model_${known.kind}`, message: known.message };
 }
 
 /** What came of a conversation, so the list can tell two about the same thing apart: the change applied, options left open, or talk. */

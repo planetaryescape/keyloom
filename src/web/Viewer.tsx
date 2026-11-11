@@ -417,11 +417,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const proposalsOpen = sidebar === "proposals";
   const setProposalsOpen = sidebarSetter("proposals");
   const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
+  // A read that failed is said, with Try again, never shown as "nothing is waiting" (R4-08); bumping `waitingRead` reads again.
+  const [waitingFailed, setWaitingFailed] = useState(false);
+  const [waitingRead, setWaitingRead] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenProposals(token, layoutRef, controller.signal).then(setWaiting, () => setWaiting([]));
+    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, () => {
+      if (controller.signal.aborted) return;
+      setWaiting([]);
+      setWaitingFailed(true);
+    });
     return () => controller.abort();
-  }, [token, layoutRef, revision.id]);
+  }, [token, layoutRef, revision.id, waitingRead]);
   // The board review (D-340): read without being asked, its marker by the config name, its marks on the caps and the strip.
   const boardReview = useReview(token, summary.id, revision.id, sync.lastReview);
   const reviewOpen = sidebar === "review";
@@ -2292,10 +2299,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               proposals={waiting}
               pinnedId={pinnedProposal?.changeSetId ?? null}
               onPin={pinProposal}
+              proposalsFailed={waitingFailed}
+              // Nothing to apply until the read answers, so an Apply whose outcome was unknown can't be repeated early (#288 review).
+              onReadProposals={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
-                await onProposalApplied(card, result);
-                setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
+                setWaitingRead((read) => read + 1);
+                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied".
+                try { await onProposalApplied(card, result); } catch { return { showAgain: onChanged }; }
               }}
               onShowLayer={(id) => setLayerId(id)}
                  onPlanRepair={(item) => {
@@ -2321,6 +2332,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           <div className={narrow ? "lab-sheet nb-sheet" : "nb-column"}>
             <OpenProposals
               proposals={waiting}
+              readFailed={waitingFailed}
+              onReadAgain={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}
               layout={layout}
               board={board}
               configName={summary.name}
@@ -2331,7 +2344,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
                 await onProposalApplied(card, result);
-                setWaiting(await fetchOpenProposals(token, layoutRef).catch(() => []));
+                setWaitingRead((read) => read + 1);
               }}
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}
