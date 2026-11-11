@@ -18,16 +18,35 @@ export class LockTimeoutError extends Error {
   override name = "LockTimeoutError";
 }
 
+/** The caller stopped waiting, such as a cancelled build queued behind another build in the same checkout. */
+export class LockAbortedError extends Error {
+  override name = "LockAbortedError";
+}
+
+/** Sleeps, but wakes as soon as the signal fires, so a cancel isn't held up by a poll interval. */
+const pause = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
+
 export async function withLock<T>(
   dir: string,
   fn: () => Promise<T>,
-  opts: { timeoutMs: number; onWait?: (heldBy: number | undefined) => void; pollMs?: number },
+  opts: { timeoutMs: number; onWait?: (heldBy: number | undefined) => void; pollMs?: number; signal?: AbortSignal },
 ): Promise<T> {
   const deadline = Date.now() + opts.timeoutMs;
   let announced = false;
   // The first build on a machine has no cache directory yet; only the lock itself must be created atomically.
   await mkdir(dirname(dir), { recursive: true });
   for (;;) {
+    // Checked before each try, so a cancel never takes the lock and leaves the next build waiting on work that won't run.
+    if (opts.signal?.aborted) throw new LockAbortedError(`stopped waiting for ${dir}`);
     try {
       await mkdir(dir);
       break;
@@ -45,7 +64,7 @@ export async function withLock<T>(
       opts.onWait?.(Number.isInteger(owner) ? owner : undefined);
     }
     if (Date.now() > deadline) throw new LockTimeoutError(`${dir} is held by another keyloom process (pid ${Number.isInteger(owner) ? owner : "unknown"})`);
-    await Bun.sleep(opts.pollMs ?? 500);
+    await pause(opts.pollMs ?? 500, opts.signal);
   }
   try {
     await writeFile(join(dir, "pid"), String(process.pid));

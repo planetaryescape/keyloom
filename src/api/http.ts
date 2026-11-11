@@ -62,7 +62,7 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   POST /api/layouts/:ref/undo         UndoRequest   -> UndoResponse      (409 when the head moved)
 //   POST /api/layouts/:ref/builds       BuildRequest  -> Build             (202; poll GET /api/builds/:id; 400 board_revision_needed when no keyboard says which revision)
 //   GET  /api/builds/:id                              -> Build
-//   POST /api/builds/:id/cancel         {}            -> Build             (R3-10; answers once the build has stopped; 409 build_finished
+//   POST /api/builds/:id/cancel         {}            -> Build             (R3-10; 202 at once, poll GET /api/builds/:id for the stop; 409 build_finished
 //                                                                           when it ended, or runs in another keyloom; a build never flashes)
 //   POST /api/builds/:id/flashes        {}            -> Flash             (202; poll GET /api/flashes/:id)
 //   GET  /api/flashes/:id                             -> Flash

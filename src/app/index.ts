@@ -39,7 +39,7 @@ export {
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
-  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelBuild, cancelFlash,
+  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelBuild, cancelFlash, waitForBuild,
 } from "./firmware.ts";
 export { type FlashCheck, type FlashCheckFound, checkFlashAgain } from "./flash-check.ts";
 export {

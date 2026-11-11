@@ -283,10 +283,11 @@ async function fittingRevision(backend: EditorBackend, ref: string): Promise<Res
   return Response.json(FittingRevisionResponseSchema.parse({ revision: await backend.fittingRevision(ref) }));
 }
 
-// Answers once the build has stopped, so the page's next state is the Build firmware step, not a build still running (R3-10).
+// Answers 202 as soon as the stop is asked for, with the build as it is now; the page's poll sees it end as stopped (R3-10). Waiting here
+// for a container to be removed on a busy VM would hold the request open for as long as that takes.
 async function cancelBuild(backend: EditorBackend, buildId: string, request: Request): Promise<Response> {
   const body = await readBody(request, EmptyBody);
   if (body instanceof Response) return body;
   if (backend.cancelBuild === undefined) return unsupported();
-  return Response.json(BuildSchema.parse(await backend.cancelBuild(buildId)));
+  return Response.json(BuildSchema.parse(await backend.cancelBuild(buildId)), { status: 202 });
 }

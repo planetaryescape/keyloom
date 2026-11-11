@@ -8,7 +8,7 @@ export function cancelFlash(token: string, id: string): Promise<Flash> {
   return request("POST", `/api/flashes/${encodeURIComponent(id)}/cancel`, token, FlashSchema, undefined, {});
 }
 
-/** Stops a running build (R3-10); answers once it has stopped. A build never flashes. */
+/** Asks a running build to stop (R3-10); answers at once, and the poll sees it end. A build never flashes. */
 export function cancelBuild(token: string, id: string): Promise<Build> {
   return request("POST", `/api/builds/${encodeURIComponent(id)}/cancel`, token, BuildSchema, undefined, {});
 }

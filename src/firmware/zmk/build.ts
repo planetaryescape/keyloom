@@ -157,6 +157,6 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${"problem" in info ? "" : `, ${describeUf2(info)}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
     },
-    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) },
+    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }

@@ -177,16 +177,20 @@ export function useRelease(token: string, layoutRef: string): Release {
     const asked = buildId;
     setStoppingBuild(true);
     setBuildCancelProblem(null);
+    // The cancel answers at once; "Stopping" stays until the poll sees the build end, which clears it below.
     cancelBuild(token, asked)
       .then(setBuild)
       .catch((e: unknown) => {
+        setStoppingBuild(false);
         const code = e instanceof ApiError ? e.code : undefined;
         // It ended before the cancel arrived: the build as it is now says where it got to.
         if (code === "build_finished") refreshBuild();
         else setBuildCancelProblem(buildCancelProblem(code));
-      })
-      .finally(() => setStoppingBuild(false));
+      });
   }, [token, buildId, buildRunning, refreshBuild]);
+  useEffect(() => {
+    if (!buildRunning) setStoppingBuild(false);
+  }, [buildRunning]);
 
   const flashId = flash?.id;
   // The flash on screen now, so a check or a cancel that answers after another flash started can't replace it.

@@ -8,7 +8,7 @@ import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
-import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
+import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
@@ -292,7 +292,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
       appendLog(app.dataDir, { event: "build", buildId: row.id, layoutId: view.layout.id, revisionId: row.revisionId, boardId: view.board.definition.id, status: "failed", error: BUILD_STOPPED });
       return;
     }
-    const known = err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError;
+    const known = err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError || err instanceof LockAbortedError;
     if (!known) log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     const message = known ? (err as Error).message : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
     log.line(`keyloom: build failed: ${message}`);
@@ -318,8 +318,9 @@ export async function getBuild(app: App, id: string): Promise<BuildView> {
 }
 
 /**
- * Stops a build running in this process (R3-10): its Docker start, checkout or container is stopped, and the container removed by the
- * driver's own cleanup. Resolves once the build has ended, as stopped, or as whatever it reached first if it finished at that moment.
+ * Stops a build running in this process (R3-10): its Docker start, checkout, wait for another build's lock or container is stopped, and
+ * the container removed by the driver's own cleanup. Answers at once with the build as it is now: removing a container on a busy VM can
+ * take longer than a request should wait, so the poll (or waitForBuild) sees it end as stopped.
  */
 export async function cancelBuild(app: App, id: string): Promise<BuildView> {
   const row = findBuild(app.db, id);
@@ -329,7 +330,6 @@ export async function cancelBuild(app: App, id: string): Promise<BuildView> {
     throw new BuildNotCancellableError(row.status === "running" ? `build ${id} runs in another keyloom, so it can't be stopped from here` : `build ${id} has already finished, so there is nothing to stop`);
   }
   control.abort();
-  await buildTasks.get(id);
   return getBuild(app, id);
 }
 

@@ -146,6 +146,6 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${rev.flash.kind === "zapp" ? `, DFU ${rev.flash.bootloader}` : `, ${kind}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
     },
-    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) },
+    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }
