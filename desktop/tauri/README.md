@@ -33,6 +33,7 @@ The app and its `keyloom` sidecar are one release. `fetch-sidecar.sh` with no ar
 - The shell logs to `~/Library/Logs/dev.planetaryescape.keyloom/keyloom.log` (its own lines and the server's output, never the URL with its token). **Show log** opens it.
 - Closing a window hides it; the menu-bar extra and Dock icon stay. Quit (menu bar or Cmd-Q) sends SIGTERM to a server it started and waits up to 30 seconds, so a keyboard write in progress finishes.
 - Launch at login is a menu-bar checkbox and is off until it is ticked.
+- A link to another site opens in the default browser and the window keeps keyloom; a download goes to Downloads, never over an existing file, and Finder shows it (D-515, `src/external.rs`).
 
 ## Notarisation (needs BK)
 

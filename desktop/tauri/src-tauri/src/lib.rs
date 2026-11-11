@@ -1,6 +1,7 @@
 // Native shell around the unchanged `keyloom serve`: runs (or attaches to) the server, shows its page in a window, and puts the
 // sync line in the menu bar. No product logic lives here (chapter 26); the server words every string about keyboards. When there is
 // no server to show, the shell's problem window says why and offers the way out (problem.rs).
+mod external;
 mod log;
 mod login_path;
 mod menu_bar;
@@ -47,6 +48,9 @@ pub struct AppState {
     pub install_update: tokio::sync::Notify,
     #[cfg(feature = "updater")]
     pub check_updates: tokio::sync::Notify,
+    /// Stop download, in the menu bar or the problem window, while an update downloads (R4-06).
+    #[cfg(feature = "updater")]
+    pub stop_update: tokio::sync::Notify,
     #[cfg(feature = "updater")]
     pub update_offered: std::sync::atomic::AtomicBool,
 }
@@ -78,7 +82,8 @@ fn present_main(app: &AppHandle, url: &str, reveal: bool) {
             }
             return;
         }
-        let built = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed))
+        // Links to other sites open in the browser and downloads land in Downloads; without these the page's links did nothing (R4-01).
+        let built = external::attach(&handle, WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed)))
             .title("keyloom")
             .inner_size(1440.0, 900.0)
             .min_inner_size(900.0, 600.0)
@@ -151,7 +156,9 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
         if let Some(label) = stop.replace_label() {
             added.extend(MenuItem::with_id(&app, problem::REPLACE, label, true, None::<&str>).ok());
         }
-        added.extend(MenuItem::with_id(&app, problem::TRY_AGAIN, "Try starting keyloom again", true, None::<&str>).ok());
+        if stop.can_retry() {
+            added.extend(MenuItem::with_id(&app, problem::TRY_AGAIN, "Try starting keyloom again", true, None::<&str>).ok());
+        }
         for item in &added {
             let _ = items.menu.insert(item, 1);
         }
@@ -231,7 +238,7 @@ pub fn run() {
                     move |app, event| match event.id().as_ref() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
-                        id @ (problem::REPLACE | problem::TRY_AGAIN | problem::DOWNLOAD) => problem::act(app, id),
+                        id @ (problem::REPLACE | problem::TRY_AGAIN | problem::DOWNLOAD | problem::STOP_DOWNLOAD) => problem::act(app, id),
                         #[cfg(feature = "updater")]
                         "update" => updates::menu_item(app),
                         "login" => {
