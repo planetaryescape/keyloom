@@ -210,7 +210,7 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
   }
   // Turn remapping on that was refused leaves the state `remapping_off`, so the file is checked before the failed state is.
   if (was === "syncing" && now.kind === "behind" && after.remapper === true && foreignFile(after)) {
-    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: { id: "replace_foreign", label: "Replace it…" } };
+    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: REPLACE_FOREIGN };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
     if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: { id: "open_release", label: "Build and flash…" } };

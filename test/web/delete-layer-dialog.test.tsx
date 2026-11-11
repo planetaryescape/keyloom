@@ -5,7 +5,7 @@ import { DeleteLayerDialog, referenceAction } from "../../src/web/layers/DeleteL
 
 const dialog = (references: Parameters<typeof DeleteLayerDialog>[0]["references"]) =>
   renderToStaticMarkup(
-    <DeleteLayerDialog layerName="Nav" references={references} goesWith={[]} onDelete={async () => ({ ok: true }) as never} nameFunction={(fn) => fn}
+    <DeleteLayerDialog layerName="Nav" references={references} goesWith={[]} onDelete={async () => ({ ok: true as const, warnings: [] })} nameFunction={(fn) => fn}
       onOpenKey={() => {}} onOpenCombo={() => {}} onClose={() => {}} />,
   );
 

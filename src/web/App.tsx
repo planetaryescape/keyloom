@@ -427,7 +427,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
   useEffect(() => {
     if (!kanataDown) setKanataRefused(false);
   }, [kanataDown]);
-  const needsKanata = kanata && (kanataDown || kanataRefused);
+  const needsKanata = kanataDown || kanataRefused;
   // The config on its keyboard can't be archived (R3-06): the page hides Archive, says why, and offers to put another config on first.
   // A list that failed to load is empty, which keeps Archive; the server refuses it with its reason if it is on the keyboard after all.
   const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.revisionId}`);
