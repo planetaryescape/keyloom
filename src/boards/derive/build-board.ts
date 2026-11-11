@@ -9,8 +9,20 @@ import { qmkFlash, targetId, zmkFlash, zmkControllersWithBootDrive } from "./fla
 import { deriveFingers, deriveHands, deriveMirror, deriveRowGroups, guessHomeRow, rowNames } from "./heuristics.ts";
 import { PINNED_SOURCES, QMK_IMAGE, ZMK_IMAGE } from "./pins.ts";
 
+/**
+ * Why a board can't be derived, for a screen to say in its own words (R5-06). The message is the CLI's and may name flags.
+ * - `controller_unknown`: a ZMK shield needs a controller and none was given (the CLI's --controller; the screen offers only the ones that fit).
+ * - `boot_drive_unknown`: keyloom doesn't know the controller's boot drive, so it can't write the flash steps.
+ * - `layout_macro_missing`: a QMK board was given no layout macro.
+ * - `home_row_out_of_range`: the home row isn't one of the board's rows.
+ */
+export type DeriveErrorCode = "controller_unknown" | "boot_drive_unknown" | "layout_macro_missing" | "home_row_out_of_range";
+
 export class DeriveError extends Error {
   override name = "DeriveError";
+  constructor(readonly code: DeriveErrorCode, message: string) {
+    super(message);
+  }
 }
 
 export type DerivedBoard = {
@@ -63,7 +75,7 @@ function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlash
   const { candidate: c } = input;
   if (c.entry.kind === "qmk") {
     const e = c.entry.qmk;
-    if (input.layout === undefined) throw new DeriveError("a QMK board needs the layout macro its keymaps are written with");
+    if (input.layout === undefined) throw new DeriveError("layout_macro_missing", "a QMK board needs the layout macro its keymaps are written with");
     const { flash, artifact, manualReason } = qmkFlash(e.bootloader, e.bootInstructions, e.processor);
     return {
       manualFlashReason: manualReason ?? null,
@@ -82,12 +94,12 @@ function revisionFor(input: DeriveInput): { revision: BoardRevision; manualFlash
   }
   const e = c.entry.zmk;
   if (e.requires && e.requires.length > 0 && input.controller === undefined) {
-    throw new DeriveError(`${e.name} needs a controller board that provides ${e.requires.join(", ")}; choose one with --controller. Ones keyloom knows the boot drive of: ${zmkControllersWithBootDrive().join(", ")}`);
+    throw new DeriveError("controller_unknown", `${e.name} needs a controller board that provides ${e.requires.join(", ")}; choose one with --controller. Ones keyloom knows the boot drive of: ${zmkControllersWithBootDrive().join(", ")}`);
   }
   const controller = input.controller ?? e.siblings[0] ?? e.id;
   const flash = zmkFlash(controller, e.siblings);
   if (flash === undefined) {
-    throw new DeriveError(`keyloom doesn't know the name of ${controller}'s boot drive, so it can't write the flash steps. Ones it does: ${zmkControllersWithBootDrive().join(", ")}`);
+    throw new DeriveError("boot_drive_unknown", `keyloom doesn't know the name of ${controller}'s boot drive, so it can't write the flash steps. Ones it does: ${zmkControllersWithBootDrive().join(", ")}`);
   }
   const split = e.siblings.length > 1;
   const nice = controller === "nice_nano//zmk" && flash.kind === "uf2-drives";
@@ -159,7 +171,7 @@ export function deriveBoard(input: DeriveInput): DerivedBoard {
   const found = deriveFingers(keys, hands);
   const groups = deriveRowGroups(keys, found);
   if (input.homeRow < 1 || input.homeRow > groups.length) {
-    throw new DeriveError(`home row ${input.homeRow} isn't one of this board's ${groups.length} rows; count from the top row, 1 to ${groups.length}`);
+    throw new DeriveError("home_row_out_of_range", `home row ${input.homeRow} isn't one of this board's ${groups.length} rows; count from the top row, 1 to ${groups.length}`);
   }
   const names = rowNames(groups.length, input.homeRow);
   const rowOf = new Map(groups.flatMap((g, i) => g.map((p) => [p, names[i] as string] as const)));

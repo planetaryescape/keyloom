@@ -1,14 +1,16 @@
-import { ArrowLeft, LoaderCircle, RefreshCw, Search, Zap } from "lucide-react";
+import { ArrowLeft, BookOpen, LoaderCircle, RefreshCw, Search, Zap } from "lucide-react";
 import { useState } from "react";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import "../review/review.css";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
-import type { NewKeyboard } from "./useNewKeyboard.ts";
+import { layoutUnpicked, type NewKeyboard } from "./useNewKeyboard.ts";
 import "./keyboards.css";
 import { isOnePiece } from "../../boards/one-piece.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import "../editor/editor.css";
+import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
+import { CONTRIBUTION_GUIDE } from "./search-words.ts";
 
 export type PutSource = { id: string; name: string; boardName: string; note: string | null };
 
@@ -18,6 +20,12 @@ function rowWord(row: number, rows: number): string {
   if (rows === 3) return ["Top row", "Middle row", "Bottom row"][row - 1] ?? `Row ${row}`;
   if (row === rows) return "Bottom row";
   return ROW_WORDS[row - 1] ?? `Row ${row}`;
+}
+
+/** The Review step's way back names every question the Confirm step asked: "Home row", "Home row and layout", "Home row, layout and controller". */
+export function reviewBackLabel(layout: boolean, controller: boolean): string {
+  const asked = ["Home row", ...(layout ? ["layout"] : []), ...(controller ? ["controller"] : [])];
+  return asked.length === 1 ? asked[0] as string : `${asked.slice(0, -1).join(", ")} and ${asked.at(-1) as string}`;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -63,9 +71,25 @@ export function NewBoardPanel({ flow, sources, onMade }: { flow: NewKeyboard; so
   return null;
 }
 
-// A preview that couldn't be read says why and reads it again, instead of "Reading…" for ever (R3-08).
-function Reading({ flow }: { flow: NewKeyboard }) {
+/** A keyboard keyloom can't add yet (R5-06): why, in words, the contribution guide that says how it learns one, and another keyboard. */
+function CantAdd({ flow, problem }: { flow: NewKeyboard; problem: DeriveProblem }) {
+  return (
+    <div className="nb-problem nb-cant" role="alert">
+      <p>{problem.text}</p>
+      <p className="nb-actions">
+        <a className="sheet-action" href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener"><BookOpen size={13} aria-hidden="true" />Open the contribution guide</a>
+        <button type="button" className="sheet-action" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Pick another keyboard</button>
+      </p>
+    </div>
+  );
+}
+
+// A preview that couldn't be read says why and reads it again, instead of "Reading…" for ever (R3-08). One that can't work for this
+// keyboard says why without a Try again that would fail the same way (R5-06).
+function Reading({ flow, name }: { flow: NewKeyboard; name: string }) {
   if (flow.previewProblem === null) return <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Reading…</p>;
+  const known = deriveProblem(flow.previewProblemCode, name);
+  if (known?.blocked === true) return <CantAdd flow={flow} problem={known} />;
   return (
     <div className="nb-problem" role="alert">
       <p>keyloom couldn't draw this board. {flow.previewProblem}</p>
@@ -80,18 +104,39 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
   const rows = preview?.rows.length ?? 0;
   const homeRow = step.homeRow ?? preview?.guessedHomeRow ?? null;
   const needsController = (preview?.controllers.length ?? 0) > 0;
+  const layouts = preview?.layouts ?? [];
+  const asked = 1 + (layouts.length > 1 ? 1 : 0) + (needsController ? 1 : 0);
+  const name = preview?.displayName ?? step.candidate.name;
+  const problem = preview === null ? null : deriveProblem(preview.boardProblemCode, name);
+  // The board is drawn on keyloom's guess until the person picks a layout, and a guess is never added (D-525).
+  const layoutPending = preview !== null && layoutUnpicked(step, preview);
+  const cantAdd = problem?.blocked === true || (preview === null && deriveProblem(flow.previewProblemCode, name)?.blocked === true);
+  let number = 0;
   return (
     <section className="nb-panel" aria-label="Confirm the keyboard">
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Candidates</button>
         <h2>Your {preview?.displayName ?? step.candidate.name}, as {step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it</h2>
-        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : `${preview.keyCount} keys from the firmware's own layout. ${needsController ? "Two things" : "One thing"} can't be read over USB; tell keyloom once.`}</p>
+        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : cantAdd ? `${preview.keyCount} keys from the firmware's own layout.` : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>
       </header>
       <div className="nb-panel-body">
-        {preview === null ? <Reading flow={flow} /> : (
+        {preview === null ? <Reading flow={flow} name={name} /> : cantAdd && problem !== null ? (
+          // Nothing asked here could get this keyboard added, so the questions wait until keyloom can (R5-06).
+          <CantAdd flow={flow} problem={problem} />
+        ) : (
           <>
+            {layouts.length > 1 ? (
+              // A third of QMK's keyboards have several layouts and no default (R5-06): the person picks theirs, by its key count.
+              <div className="nb-step">
+                <h3><span>{++number}</span>Which layout is yours?</h3>
+                <p>QMK lists {layouts.length} layouts for the {step.candidate.name}. Pick the one with your number of keys; the board shows each one as you pick it.{preview.guessedLayout === null ? "" : " keyloom's guess is marked."}</p>
+                <ChoiceGroup legend="Layout" legendHidden variant="list" value={step.layout ?? (layoutPending ? null : preview.layout)}
+                  choices={layouts.map((l) => ({ value: l.name, label: `${l.name} · ${plural(l.keys, "key")}${l.name === preview.guessedLayout ? " · guess" : ""}` }))}
+                  onChange={flow.setLayout} />
+              </div>
+            ) : null}
             <div className="nb-step">
-              <h3><span>1</span>Where do your fingers rest?</h3>
+              <h3><span>{++number}</span>Where do your fingers rest?</h3>
               <p>Click any key in that row on the board, or pick it here. keyloom's guess is marked.</p>
               <ChoiceGroup legend="Home row" legendHidden variant="pills" value={homeRow === null ? null : String(homeRow)}
                 choices={preview.rows.map((r) => ({ value: String(r.row), label: `${rowWord(r.row, rows)}${r.row === preview.guessedHomeRow ? " · guess" : ""}` }))}
@@ -99,22 +144,25 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
             </div>
             {needsController ? (
               <div className="nb-step">
-                <h3><span>2</span>Which controller is in it?</h3>
+                <h3><span>{++number}</span>Which controller is in it?</h3>
                 <p>The {step.candidate.name} is a shield: a separate board runs it. Its name is printed on the chip under each half.</p>
                 <ChoiceGroup legend="Controller" legendHidden variant="list" value={step.controller}
                   choices={preview.controllers.map((c) => ({ value: c.id, label: c.name }))} onChange={flow.setController} />
               </div>
             ) : null}
-            {preview.boardProblem === null ? null : <p className="nb-problem" role="alert">{preview.boardProblem}</p>}
+            {preview.boardProblem === null ? null : <p className="nb-problem" role="alert">{problem?.text ?? preview.boardProblem}</p>}
           </>
         )}
         {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       </div>
       <footer className="nb-panel-foot">
         <button type="button" className="sheet-action" onClick={flow.notNow}>Not now</button>
-        <button type="button" className="bar-apply" disabled={preview === null || preview.board === null || (needsController && step.controller === null)} onClick={flow.review}>
-          {needsController && step.controller === null ? "Pick the controller" : "Show me the board"}
-        </button>
+        {/* A keyboard keyloom can't add yet has no next step; the problem above offers the guide and another keyboard (R5-06). */}
+        {cantAdd ? null : (
+          <button type="button" className="bar-apply" disabled={preview === null || preview.board === null || layoutPending || (needsController && step.controller === null)} onClick={flow.review}>
+            {layoutPending ? "Pick your layout" : needsController && step.controller === null ? "Pick the controller" : "Show me the board"}
+          </button>
+        )}
       </footer>
     </section>
   );
@@ -129,17 +177,18 @@ function Review({ flow, preview }: { flow: NewKeyboard; preview: PreviewResponse
   return (
     <section className="nb-panel" aria-label={`How keyloom reads your ${name}`}>
       <header className="nb-panel-head">
-        <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />Home row{controller === null ? "" : " and controller"}</button>
+        <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />{reviewBackLabel((preview?.layouts.length ?? 0) > 1, controller !== null)}</button>
         <h2>How keyloom reads your {name}</h2>
         <p className="nb-lead">Each key shows the finger keyloom expects to press it. If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
       </header>
       <div className="nb-panel-body">
-        {board === null ? <Reading flow={flow} /> : (
+        {board === null ? <Reading flow={flow} name={name} /> : (
           <>
             <dl className="nb-facts">
               <dt>Keys</dt><dd>{board.keys.length}{board.thumbs.length > 0 ? `, ${plural(board.thumbs.length, "thumb key")}` : ""}</dd>
               <dt>Body</dt><dd>{isOnePiece({ hands: board.hands }, board.keys) ? "One piece" : `Split: ${board.hands.left.length} and ${board.hands.right.length} keys`}</dd>
               <dt>Home row</dt><dd>{rowWord(board.homeRow, preview?.rows.length ?? 0)} (you said)</dd>
+              {(preview?.layouts.length ?? 0) > 1 && step.layout !== null ? (<><dt>Layout</dt><dd>{step.layout}</dd></>) : null}
               {controller === null ? null : (<><dt>Controller</dt><dd>{controller}</dd></>)}
               <dt>Firmware</dt><dd>{step.candidate.firmware === "zmk" ? "ZMK" : "QMK"}, from its own tree</dd>
             </dl>
@@ -196,6 +245,13 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           ))}
         </div>
         {sources.length === 0 ? <div className="nb-blank"><p>Start a config for this keyboard, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
+        {/* With configs to copy, starting from the board's own keys is still a way on, for when none of them maps (R5-16). */}
+        {sources.length === 0 ? null : (
+          <p className="nb-note nb-start">
+            Or start a config from the {step.boardName}&rsquo;s own keys.{" "}
+            <button type="button" className="sheet-action" disabled={flow.busy} onClick={() => void start()}>Start a config</button>
+          </p>
+        )}
         {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
           <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Mapping it…</p>
         ) : (

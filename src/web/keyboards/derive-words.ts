@@ -1,0 +1,35 @@
+// What the new-keyboard steps say when keyloom can't add a keyboard (R5-06), from the server's code (DeriveErrorCode, KeyboardAddCode).
+// The server's own sentence is the CLI's and names flags such as --controller, so the page never shows it for these codes.
+
+export type DeriveProblem = {
+  text: string;
+  /** keyloom can't add this keyboard until someone teaches it: the page offers the contribution guide and another keyboard, not Try again. */
+  blocked: boolean;
+};
+
+/** Plain words for a code, or null for a code that isn't one of these, which the caller says in its own way. */
+export function deriveProblem(code: string | null | undefined, name: string): DeriveProblem | null {
+  switch (code) {
+    case "controller_unknown":
+      return {
+        text: `keyloom doesn't know a controller for the ${name} yet. It's a shield, so a separate controller board runs it, and keyloom knows none that fits it and that it can flash. Until one is added, keyloom can't add this keyboard.`,
+        blocked: true,
+      };
+    case "boot_drive_unknown":
+      return {
+        text: `keyloom doesn't know the boot drive of the ${name}'s controller yet, so it can't write the steps to flash it. Until that is added, keyloom can't add this keyboard.`,
+        blocked: true,
+      };
+    case "layout_macro_missing":
+      return { text: `keyloom doesn't know which layout the ${name}'s keymaps are written for yet, so it can't add this keyboard.`, blocked: true };
+    case "no_key_positions":
+      return {
+        text: `The ${name}'s firmware files don't give the position of each key, so keyloom can't draw it. Until someone adds its drawing, keyloom can't add this keyboard.`,
+        blocked: true,
+      };
+    case "home_row_out_of_range":
+      return { text: "That row isn't on this layout. Pick the home row again.", blocked: false };
+    default:
+      return null;
+  }
+}

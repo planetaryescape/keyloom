@@ -6,7 +6,7 @@ import type { Layout } from "../../layout/schema.ts";
 import type { GeometryKey } from "../../boards/schema.ts";
 import { boardBounds } from "./geometry.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
-import { DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
+import { type ComboOpenRefusal, DeleteLayerDialog } from "../layers/DeleteLayerDialog.tsx";
 import { alsoOnWords, goingWithLayer, turnedOnBy } from "../layers/conditional-ops.ts";
 import { LayerMenu } from "../layers/LayerMenu.tsx";
 import "../layers/layers.css";
@@ -26,7 +26,7 @@ export interface LayerActions {
   condition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
   nameFunction: (fn: string) => string;
   openKey: (slot: Slot) => void;
-  openCombo: (comboId: string) => void;
+  openCombo: (comboId: string) => ComboOpenRefusal | null;
   removeTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   notify: (message: string) => void;
 }
