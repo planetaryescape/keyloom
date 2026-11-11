@@ -2290,6 +2290,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               proposals={waiting}
               pinnedId={pinnedProposal?.changeSetId ?? null}
               onPin={pinProposal}
+              proposalsFailed={waitingFailed}
+              onReadProposals={() => setWaitingRead((read) => read + 1)}
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
                 await onProposalApplied(card, result);

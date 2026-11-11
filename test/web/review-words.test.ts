@@ -62,9 +62,15 @@ describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
   test("a stale or refused suggestion offers a fresh review, never the same Apply", () => {
     for (const code of ["stale_base", "validation_failed", "not_found", "usage"]) expect(applyFailureWords({ code, status: 409, message: "x" }).action).toBe("fresh_review");
   });
-  test("a lost connection or other failure tries again", () => {
-    expect(applyFailureWords({ code: undefined, status: 0, message: "Failed to fetch" })).toEqual({ words: "keyloom couldn't reach its server, so nothing was applied.", action: "retry" });
+  test("another refusal tries again", () => {
     expect(applyFailureWords({ code: "busy", status: 409, message: "A build is running." })).toEqual({ words: "Nothing was applied: A build is running.", action: "retry" });
+  });
+  test("no answer, or a failure after the answer, never claims nothing was applied; the page checks first (#288 review)", () => {
+    for (const status of [0, 200, -1]) {
+      const view = applyFailureWords({ code: undefined, status, message: "x" });
+      expect(view.action).toBe("check");
+      expect(view.words).not.toContain("nothing was applied");
+    }
   });
 });
 

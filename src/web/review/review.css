@@ -422,7 +422,7 @@
   font-size: var(--text-sm);
 }
 
-.br-item .br-apply-failure p {
+.br-body .br-apply-failure p {
   margin: 0;
   color: var(--bad);
 }

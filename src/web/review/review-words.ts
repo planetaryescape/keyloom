@@ -96,14 +96,16 @@ export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
 }
 
 /**
- * Why Apply on a suggestion did not change the config, and the way on (R4-07). A suggestion made for an earlier version, or one the
- * validator now refuses, can't be applied by asking again, so it offers a fresh review; one that is no longer open says so the same way.
- * A lost connection or any other refusal can be tried again. By the server's code only, never its text.
+ * Why Apply on a suggestion did not change the config, and the way on (R4-07). Only an answer of 400 or more proves nothing was applied.
+ * A suggestion made for an earlier version, or one the validator now refuses, can't be applied by asking again, so it offers a fresh
+ * review; one that is no longer open says so the same way; any other refusal can be tried again. Anything else (no answer, an answer the
+ * page couldn't read, or a failure after the Apply landed) leaves the outcome unknown, so the page reads the proposals again before it
+ * offers Apply. By the server's code only, never its text.
  */
-export type ApplyFailure = { words: string; action: "fresh_review" | "retry" };
+export type ApplyFailure = { words: string; action: "fresh_review" | "retry" | "check" };
 export function applyFailureWords(error: { code: string | undefined; status: number; message: string }): ApplyFailure {
+  if (error.status < 400) return { words: "keyloom didn't confirm this Apply, so it may have gone through. Check before applying it again.", action: "check" };
   if (error.code === "stale_base" || error.code === "validation_failed") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };
   if (error.code === "not_found" || error.code === "usage") return { words: "This suggestion is no longer open, so nothing was applied.", action: "fresh_review" };
-  if (error.status === 0) return { words: "keyloom couldn't reach its server, so nothing was applied.", action: "retry" };
   return { words: `Nothing was applied: ${error.message}`, action: "retry" };
 }

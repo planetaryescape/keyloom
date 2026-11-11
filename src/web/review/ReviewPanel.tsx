@@ -149,7 +149,7 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose }: {
+export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose, proposalsFailed = false, onReadProposals }: {
   token: string;
   review: Review;
   layout: Layout;
@@ -166,6 +166,10 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   onShowLayer: (layerId: string) => void;
   onPlanRepair: (item: ReviewItem) => void;
   onClose: () => void;
+  /** The config's proposals could not be read, so suggestions have no change to show or apply until they are read again (R4-08). */
+  proposalsFailed?: boolean;
+  /** Reads the proposals again: after a failed read, and after an Apply whose outcome is unknown. */
+  onReadProposals?: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
   const [details, setDetails] = useState(false);
@@ -247,7 +251,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     return (
       <article key={item.id} className="br-item" data-kind="suggestion" data-pinned={(c !== undefined && pinnedId === c.changeSetId) || undefined} data-stale={stale}>
         <h4><i className="br-kind" data-kind="suggestion" aria-hidden="true" /><ReviewText text={item.title} layout={layout} rows={rows} /></h4>
-        {changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
+        {changes === undefined && proposalsFailed ? <p>keyloom couldn&apos;t read this suggestion&apos;s change, so it can&apos;t be shown or applied yet.</p>
+          : changes === undefined ? <p>The proposal is unavailable or no longer valid for this config, so its changes cannot be verified.</p>
           : sourceChecked ? <p>These source changes can be previewed on the board. Source values do not establish runtime behavior or typing outcomes.</p>
             : <p>The proposal is valid, but some changed values cannot be fully compared. The unverified details are marked below; preview and Apply are unavailable.</p>}
         {changes && c ? <ProposalChangeDetails changes={changes} before={layout} board={board} ops={c.ops} /> : null}
@@ -257,7 +262,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
           {b.checks.map((check) => <p key={check.name}><ReviewText text={check.name} layout={layout} rows={rows} />: {check.status}{check.reason ? ` — ${check.reason}` : ""}</p>)}
           {b.limitations.map((limit) => <p key={limit}>{limit}</p>)}
         </details>)}
-        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : changes === undefined ? <span>change unavailable or invalid for this version</span> : <span>comparison incomplete</span>}</div>
+        <div className="br-meta"><span className="br-src">keyloom</span>{sourceChecked ? <span>source checked</span> : changes === undefined ? <span>{proposalsFailed ? "change not read" : "change unavailable or invalid for this version"}</span> : <span>comparison incomplete</span>}</div>
         <div className="br-actions">
           {c === undefined ? null : (
             <button type="button" className="sheet-action" disabled={r.stale || !sourceChecked} aria-pressed={pinnedId === c.changeSetId} onClick={() => onPin(c)}>{pinnedId === c.changeSetId ? "On the board" : "Show it on the board"}</button>
@@ -267,7 +272,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             <button
               type="button"
               className="bar-apply"
-              disabled={applying !== null || r.busy || !sourceChecked || r.stale || review.ai.status === "running"}
+              disabled={applying !== null || r.busy || !sourceChecked || r.stale || review.ai.status === "running" || (applyFailure?.itemId === item.id && applyFailure.view.action === "check")}
               onClick={() => apply(item.id, c)}
             >
               {applying === item.id ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}Apply
@@ -279,6 +284,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             <p>{applyFailure.view.words}</p>
             {applyFailure.view.action === "fresh_review" ? (
               <button type="button" className="sheet-action" disabled={r.busy} onClick={() => { setApplyFailure(null); void r.run(true); }}>Run a fresh review</button>
+            ) : applyFailure.view.action === "check" ? (
+              // An Apply that landed takes the suggestion off the list, so reading it again is what tells.
+              <button type="button" className="sheet-action" onClick={() => { setApplyFailure(null); onReadProposals?.(); }}>Check again</button>
             ) : (
               <button type="button" className="sheet-action" disabled={applying !== null || r.busy} onClick={() => apply(item.id, c)}>Try again</button>
             )}
@@ -338,6 +346,13 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       {head}
       <div className="br-body">
         {r.stale ? <div className="br-actions"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run(true)}>Run a fresh review</button></div> : null}
+        {proposalsFailed && onReadProposals !== undefined ? (
+          // The suggestions' changes live in the config's proposals; an unread list is not a missing one (R4-08).
+          <div className="br-apply-failure" role="alert">
+            <p>keyloom couldn&apos;t read this config&apos;s proposals, so suggestions can&apos;t be applied yet.</p>
+            <button type="button" className="sheet-action" onClick={onReadProposals}>Try again</button>
+          </div>
+        ) : null}
         {!r.stale && nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">
             <Check size={14} aria-hidden="true" /> No findings from these source checks of {review.checks.summary.layers} layers, {review.checks.summary.keys} keys and {review.checks.summary.combos} combos. This does not establish runtime behavior or better typing.

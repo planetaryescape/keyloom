@@ -140,6 +140,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // Opened by an account failure ("The key was refused"): the setup, with that provider's key field open over the saved one.
   const [setupOpen, setSetupOpen] = useState<keyof typeof PROVIDER_NAMES | null>(null);
   const [switchFailure, setSwitchFailure] = useState<{ id: keyof typeof PROVIDER_NAMES; message: string; again: () => void } | null>(null);
+  // A failed switch belongs to the conversation it was pressed in; another conversation drops its Try again.
+  useEffect(() => setSwitchFailure(null), [chat.transcript.conversationId]);
   const { transcript, streaming } = chat;
   // Coming back to the config a thread was about, its own conversation is found again here: show each reply once.
   const carried = useMemo(() => {
@@ -485,7 +487,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     choose(id as keyof typeof PROVIDER_NAMES, () => {
       chat.newConversation();
       setView("chat");
-      setDraft(lastAsked?.kind === "user" ? lastAsked.text : "");
+      // A retried switch can land after BK has typed something new: his newer words stay.
+      setDraft((current) => current.trim() !== "" ? current : lastAsked?.kind === "user" ? lastAsked.text : "");
       input.current?.focus();
     });
   };
