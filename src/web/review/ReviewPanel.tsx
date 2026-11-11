@@ -179,7 +179,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const readFailed = loading && r.problem !== null;
   const now = Date.now();
   const card = (item: ReviewItem) => (item.proposalId === null ? undefined : proposals?.find((p) => p.changeSetId === item.proposalId && p.status === "proposed"));
-  const workloadTests = <WorkloadTests key={JSON.stringify(r.activities)} activities={r.activities} evidence={review?.workload} busy={r.busy || review?.ai.status === "running"} onRun={(activities) => void r.run(true, activities)} />;
+  const workloadTests = <WorkloadTests key={JSON.stringify(r.activities)} token={token} firmware={board.firmware} activities={r.activities} evidence={review?.workload} busy={r.busy || review?.ai.status === "running"} onRun={(activities) => void r.run(true, activities)} />;
 
   const head = (
     <header className="br-head">

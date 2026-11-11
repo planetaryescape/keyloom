@@ -6,7 +6,7 @@ import { finished, scriptedModel, submit } from "../helpers/review-world.ts";
 import { key, replayResult, tinyLayout, workloadApp } from "../helpers/workload.ts";
 import type { WorkloadDeps } from "../../src/app/workload.ts";
 import { importLayout } from "../../src/app/layouts.ts";
-import { saveReviewActivities } from "../../src/app/review-workloads.ts";
+import { type ReviewWorkloadDeps, saveReviewActivities } from "../../src/app/review-workloads.ts";
 
 async function cli(dir: string, args: string[], workload?: WorkloadDeps) {
   let out = ""; let err = "";
@@ -105,5 +105,15 @@ test("import and its selected profile commit together or leave neither behind", 
     await expect(importLayout(w.app, { board: "zsa/moonlander", source: path, name: "Must roll back", reviewActivities: ["prose"] })).rejects.toThrow("synthetic profile write failure");
     expect(w.app.db.query("SELECT count(*) AS n FROM layouts").get()).toEqual(count);
     expect(w.app.db.query("SELECT count(*) AS n FROM review_workload_profiles").get()).toEqual({ n: 0 });
+  } finally { w.app.db.close(); }
+});
+
+test("tests stopped by Docker carry the docker code, so the page shows its Docker fix (R1-12)", async () => {
+  const w = workloadApp();
+  try {
+    const noDocker: ReviewWorkloadDeps = { ensureDocker: async () => ({ ok: false, reason: "Docker is not on this computer." }) };
+    const run = await cli(w.dir, ["review", "workload-test", "--run", "--activities", "prose"], noDocker);
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.out).review.workload).toMatchObject({ status: "unavailable", reasonCode: "docker", reason: "Workload tests need Docker: Docker is not on this computer." });
   } finally { w.app.db.close(); }
 });

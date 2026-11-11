@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerStatus, adoptBundledDockerCli, bundledDockerCli, colimaEngine, dockerInstall, findDockerEngine, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerStatus, adoptBundledDockerCli, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -87,6 +87,17 @@ describe("what keyloom says when it can't start it", () => {
       expect(found.detail).toContain("mytool");
       expect(found.detail).toContain("doesn't know what starts the engine");
     }
+  });
+
+  test("a docker CLI still on the default socket, beside Colima and no app, is Colima's: its first start never switched the context (R2-02)", async () => {
+    const colimaHere = (c: string) => c === "colima" || c === "docker";
+    const found = await findDockerEngine({ platform: "darwin", installed: () => false, has: colimaHere, context: at("default", "unix:///var/run/docker.sock"), colimaRunning: async () => false });
+    expect(found).toEqual({ kind: "engine", engine: expect.objectContaining({ name: "Colima", command: ["colima", "start"] }) });
+    // An installed app still comes first, and an unknown socket under another context name is still named, not given to Colima.
+    expect(await findDockerEngine({ platform: "darwin", installed: (app) => app === "OrbStack.app", has: colimaHere, context: at("default", "unix:///var/run/docker.sock") })).toMatchObject({ kind: "engine", engine: { name: "OrbStack" } });
+    expect(await findDockerEngine({ platform: "darwin", installed: () => false, has: colimaHere, context: at("mytool", "unix:///Users/you/.mytool/docker.sock") })).toMatchObject({ kind: "unknown" });
+    // Without Colima the default socket is still unknown.
+    expect(await findDockerEngine({ platform: "darwin", installed: () => false, has: (c) => c === "docker", context: at("default", "unix:///var/run/docker.sock") })).toMatchObject({ kind: "unknown" });
   });
 
   test("a computer with nothing at all finds nothing", async () => {
@@ -285,5 +296,131 @@ describe("what to install", () => {
       process.env.PATH = before;
     }
     expect(adoptBundledDockerCli(() => null)).toBeNull();
+  });
+});
+
+describe("an app whose CLI isn't set up (R2-07)", () => {
+  const missing: DockerStatus = { ok: false, kind: "cli-missing", app: "OrbStack", reason: "OrbStack is installed, but its `docker` command isn't on keyloom's PATH." };
+
+  test("a start opens the app and waits through its setup until the CLI answers", async () => {
+    const status = scriptedStatus([missing, missing, missing, up("28.1")]);
+    const launched: string[][] = [];
+    const result = await startDockerEngine({ platform: "darwin", status: status.status, detect: async () => { throw new Error("no hunt for an app it already knows"); }, start: async (engine) => (launched.push(engine.command), { ok: true }), sleep: async () => {} });
+    expect(launched).toEqual([["open", "-a", "OrbStack"]]);
+    expect(result).toMatchObject({ ok: true, engine: "OrbStack", version: "28.1" });
+  });
+
+  test("an app that never sets its CLI up ends with what to finish, not a terminal command", async () => {
+    let now = 0;
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      const result = await startDockerEngine({ platform: "darwin", timeoutMs: 10_000, status: async () => missing, start: async () => ({ ok: true }), sleep: async (ms) => { now += ms; } });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toContain("Finish OrbStack's setup");
+        expect(result.reason).not.toContain("`");
+      }
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test("Podman Desktop, which brings no docker command, names no app to open, so nothing waits for a CLI that never comes", async () => {
+    const podman = cliMissing({ name: "Podman Desktop", clis: [] });
+    expect(podman).toMatchObject({ ok: false, kind: "cli-missing" });
+    expect(podman).not.toHaveProperty("app");
+    if (!podman.ok) expect(podman.reason).toContain("doesn't come with a `docker` command");
+    expect(cliMissing({ name: "OrbStack", clis: ["/x/docker"] })).toMatchObject({ app: "OrbStack" });
+    let launched = 0;
+    const result = await startDockerEngine({ platform: "darwin", status: async () => podman, start: async () => (launched++, { ok: true }), sleep: async () => {} });
+    expect(result).toMatchObject({ ok: false });
+    expect(launched).toBe(0);
+  });
+
+  test("off a Mac, or with no app named, it stays a link and nothing is opened", async () => {
+    let launched = 0;
+    const start = async () => (launched++, { ok: true });
+    expect(await startDockerEngine({ platform: "linux", status: async () => missing, start, sleep: async () => {} })).toMatchObject({ ok: false });
+    expect(await startDockerEngine({ platform: "darwin", status: async () => ({ ok: false, kind: "cli-missing", reason: "x" }), start, sleep: async () => {} })).toMatchObject({ ok: false, reason: "x" });
+    expect(launched).toBe(0);
+  });
+
+  test("the bundled CLI is found in the app, then in the folder its setup fills", () => {
+    expect(bundledDockerCli("darwin", (app) => app === "OrbStack.app", (path) => path.endsWith("/.orbstack/bin/docker"))).toEndWith("/.orbstack/bin/docker");
+    // The app's own copy comes first.
+    expect(bundledDockerCli("darwin", (app) => app === "OrbStack.app", () => true)).toBe("/Applications/OrbStack.app/Contents/MacOS/bin/docker");
+  });
+});
+
+describe("restarting a Mac app that refuses this account (R2-07)", () => {
+  const orbstack = { name: "OrbStack", command: ["open", "-a", "OrbStack"] };
+  const refused: DockerStatus = { ok: false, kind: "no-access", reason: "refused" };
+
+  test("quits it, waits until it has closed, opens it and waits for Docker", async () => {
+    const calls: string[] = [];
+    const control = { quit: async (app: string) => (calls.push(`quit ${app}`), { ok: true }), waitClosed: async (app: string) => (calls.push(`closed ${app}`), true) };
+    const status = scriptedStatus([down, up("28.2")]);
+    const result = await restartDockerApp(orbstack, { control, status: status.status, start: async (engine) => (calls.push(engine.command.join(" ")), { ok: true }), sleep: async () => {} });
+    expect(calls).toEqual(["quit OrbStack", "closed OrbStack", "open -a OrbStack"]);
+    expect(result).toMatchObject({ ok: true, engine: "OrbStack" });
+  });
+
+  test("it opens the app again even while the socket still refuses or answers slowly, and waits through that (#277 review)", async () => {
+    const calls: string[] = [];
+    const control = { quit: async () => ({ ok: true }), waitClosed: async () => true };
+    // The first answer after the quit is the old refusal, then a slow one: neither may leave the app quit.
+    const status = scriptedStatus([refused, { ok: false, kind: "slow", reason: "slow" }, refused, up("28.3")]);
+    const result = await restartDockerApp(orbstack, { control, status: status.status, start: async (engine) => (calls.push(engine.command.join(" ")), { ok: true }), sleep: async () => {} });
+    expect(calls).toEqual(["open -a OrbStack"]);
+    expect(result).toMatchObject({ ok: true, engine: "OrbStack", version: "28.3" });
+  });
+
+  test("an app that still refuses after the restart says the restart didn't fix it, not to restart it", async () => {
+    let now = 0;
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      const control = { quit: async () => ({ ok: true }), waitClosed: async () => true };
+      const result = await restartDockerApp(orbstack, { control, timeoutMs: 10_000, status: async () => refused, start: async () => ({ ok: true }), sleep: async (ms) => { now += ms; } });
+      expect(result).toMatchObject({ ok: false, engine: "OrbStack" });
+      if (!result.ok) {
+        expect(result.reason).toContain("keyloom restarted OrbStack, but Docker still refuses");
+        expect(result.reason).not.toContain("Quit");
+      }
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test("AppleScript quits a known app by its bundle id, and anything else by name", () => {
+    expect(appleScriptApp("Docker Desktop")).toBe('application id "com.docker.docker"');
+    expect(appleScriptApp("OrbStack")).toBe('application id "dev.kdrag0n.MacVirt"');
+    expect(appleScriptApp("Rancher Desktop")).toBe('application id "io.rancherdesktop.app"');
+    expect(appleScriptApp("Podman Desktop")).toBe('application id "io.podmandesktop.PodmanDesktop"');
+    expect(appleScriptApp("Something")).toBe('application "Something"');
+  });
+
+  test("an app that won't quit is left alone, with what to do instead", async () => {
+    let opened = 0;
+    const result = await restartDockerApp(orbstack, { control: { quit: async () => ({ ok: false, detail: "User canceled." }), waitClosed: async () => true }, status: async () => refused, start: async () => (opened++, { ok: true }), sleep: async () => {} });
+    expect(result).toMatchObject({ ok: false, engine: "OrbStack" });
+    if (!result.ok) expect(result.reason).toContain("Quit it from its menu");
+    expect(opened).toBe(0);
+  });
+
+  test("an app that is still quitting after the wait isn't opened over itself", async () => {
+    let opened = 0;
+    const result = await restartDockerApp(orbstack, { control: { quit: async () => ({ ok: true }), waitClosed: async () => false }, status: async () => refused, start: async () => (opened++, { ok: true }), sleep: async () => {} });
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) expect(result.reason).toContain("still quitting");
+    expect(opened).toBe(0);
+  });
+
+  test("only an app is restarted, and the test preload refuses a real osascript", async () => {
+    expect(await restartDockerApp({ name: "Colima", command: ["colima", "start"] })).toMatchObject({ ok: false });
+    const result = await restartDockerApp(orbstack, { status: async () => refused, start: async () => ({ ok: true }), sleep: async () => {} });
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) expect(result.reason).toContain("refusing");
   });
 });

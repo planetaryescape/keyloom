@@ -3,7 +3,9 @@ import { z } from "zod";
 // The computer keyloom is running on. Firmware is built in Docker, and the person should never have to work
 // out that a closed Docker Desktop is why a build stopped, so this asks and starts it (D-486, D-487).
 //   GET  /api/system/docker           -> DockerReadinessResponse
-//   POST /api/system/docker/start     -> DockerStartResponse   (starts the engine and waits, up to about two minutes)
+//   POST /api/system/docker/start     -> DockerStartResponse   (starts the engine and waits, up to about two minutes; for
+//                                       `cli-missing` it opens the app named in `engine`, whose setup puts its CLI in place)
+//   POST /api/system/docker/restart   -> DockerStartResponse   (quits and reopens the Mac app named in `access.restartApp`)
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
@@ -33,7 +35,8 @@ export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
     // What to install, when there is no Docker at all; null otherwise.
     install: DockerInstallSchema.nullable(),
     // How to get this account access when the problem is `no-access`: a command to copy (Linux) or null, and a note; null otherwise.
-    access: z.object({ command: z.string().min(1).nullable(), note: z.string().min(1) }).nullable(),
+    // `restartApp` is the Mac app keyloom can quit and reopen to give the socket back (R2-07), or null.
+    access: z.object({ command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable() }).nullable(),
   }),
 ]);
 export type DockerReadinessResponse = z.infer<typeof DockerReadinessResponseSchema>;

@@ -57,10 +57,11 @@ const chat = new FakeChat(fake, "moonlander-daily", {
 });
 
 // Docker is always up here; an install finishes after a few seconds and, for Zapp, puts it in the build's flash plan.
-let installs = new Map<string, { startedAt: number }>();
+let installs = new Map<string, { startedAt: number; cancelled: boolean }>();
 const installState = (tool: InstallState["tool"]): InstallState => {
   const started = installs.get(tool);
   if (started === undefined) return { tool, status: "idle", phase: null, logTail: [], error: null, errorCode: null };
+  if (started.cancelled) return { tool, status: "cancelled", phase: null, logTail: [`keyloom: brew install ${tool}`, "keyloom: stopping the install"], error: null, errorCode: null };
   const done = Date.now() - started.startedAt > 4000;
   if (done && tool === "zapp") Object.assign(flashPlan, zappPlan(true));
   return { tool, status: done ? "succeeded" : "running", phase: done ? null : "installing", logTail: [`keyloom: brew install ${tool}`, `==> Pouring ${tool}--1.0.2.arm64_sequoia.bottle.tar.gz`], error: null, errorCode: null };
@@ -75,10 +76,16 @@ const system: SystemBackend = {
     : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
   startDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
   install: async (tool) => {
-    if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now() }]]);
+    if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false }]]);
     return installState(tool);
   },
   installState: async (tool) => installState(tool),
+  cancelInstall: async (tool) => {
+    const started = installs.get(tool);
+    if (started !== undefined && installState(tool).status === "running") started.cancelled = true;
+    return installState(tool);
+  },
+  restartDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
 };
 
 const server = startServer({ port, source: fake.source(), editor: fake, chat, system, token: "dev-editor-token" });

@@ -18,13 +18,13 @@ export type FirmwareCommandDeps = {
 export async function untilInterrupted<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort();
-  process.once("SIGINT", abort);
-  process.once("SIGTERM", abort);
+  // SIGHUP too: a closed terminal must stop what runs in its own process group, such as Homebrew, which never hears the hangup itself.
+  const signals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+  for (const signal of signals) process.once(signal, abort);
   try {
     return await fn(controller.signal);
   } finally {
-    process.off("SIGINT", abort);
-    process.off("SIGTERM", abort);
+    for (const signal of signals) process.off(signal, abort);
   }
 }
 
