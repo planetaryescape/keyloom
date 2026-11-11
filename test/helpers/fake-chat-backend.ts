@@ -4,7 +4,7 @@
 // applying one goes through POST /api/change-sets/:id/apply like the real thing.
 import type { AgentRunRequest, AgentRunSnapshot } from "../../src/api/agent-runs.ts";
 import { runFailure } from "../../src/app/conversations.ts";
-import { classifiedFailure, type FailureKind } from "./model-failures.ts";
+import { classifiedFailure, type ShownFailureKind } from "./model-failures.ts";
 import type {
   ChatPresentation, ChatEvent, ChatOutcome, ChatProviderKey, ChatProviderKeySaved, ChatProviderStatus, ChatRequest, ConversationDetail, ConversationSummary, ChatMessage, ProposalCard, QuestionCard,
 } from "../../src/api/http.ts";
@@ -29,7 +29,7 @@ export interface FakeChatOptions {
   /** keyloom started with --provider codex, and the Codex CLI is installed only once `installed()` says so (R3-24). */
   codexLocked?: { installed: () => boolean } | null;
   /** Accept each message as a saved run, as the real server does, then fail it that way once the run is under way (R4-02). */
-  failAfterAcceptance?: FailureKind | null;
+  failAfterAcceptance?: ShownFailureKind | null;
 }
 
 // Nothing is asked first: every reply acts on the obvious default and says what it assumed, in one line (D-380).
@@ -107,7 +107,7 @@ export class FakeChat implements ChatBackend {
   private static readonly FAILED_WARNING = "Work did not finish. Preparation may already have completed; inspect configs and proposals before retrying. Stop is not rollback. Reconnecting does not resend this request.";
 
   /** Saved runs that fail after acceptance: one read step, then the provider's failure, stored with the run as the real app stores it. */
-  private failingRuns(kind: FailureKind): NonNullable<ChatBackend["runs"]> {
+  private failingRuns(kind: ShownFailureKind): NonNullable<ChatBackend["runs"]> {
     const runs = new Map<string, AgentRunSnapshot>();
     const save = (conversation: Conversation, snapshot: AgentRunSnapshot) => {
       runs.set(snapshot.id, snapshot);

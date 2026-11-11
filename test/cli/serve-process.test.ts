@@ -2,8 +2,9 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { DESKTOP_PROTOCOL } from "../../src/api/desktop-protocol.ts";
+import { RESTART_EXIT_CODE } from "../../src/api/restart.ts";
 import { databasePath } from "../../src/persistence/paths.ts";
 import { tempDir } from "../helpers/tmp.ts";
 import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
@@ -70,6 +71,58 @@ describe("keyloom serve for the desktop app", () => {
       } finally {
         first.kill("SIGTERM");
         await first.exited;
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "the desktop app's server restarts on request: it answers, then exits with the restart code (R5-15)",
+    async () => {
+      const dir = tempDir();
+      const proc = spawnServe(dir, "--port", "0", "--exit-on-stdin-close", "--client-protocol", String(DESKTOP_PROTOCOL));
+      try {
+        const url = new URL(await firstLine(proc, /http:\/\/127\.0\.0\.1:\d+\/\?t=\S+/));
+        const token = url.searchParams.get("t") ?? "";
+        const info = await fetch(new URL("/api/restart", url), { headers: { "x-keyloom-token": token } });
+        expect(await info.json()).toMatchObject({ canRestart: true });
+        const asked = await fetch(new URL("/api/restart", url), { method: "POST", body: "{}", headers: { "x-keyloom-token": token, "content-type": "application/json" } });
+        expect(asked.status).toBe(202);
+        // The whole answer arrives before the stop closes the connection, so the page reads it.
+        expect(await asked.json()).toEqual({ restarting: true });
+        expect(await proc.exited).toBe(RESTART_EXIT_CODE);
+        expect(existsSync(join(dir, "serve.json"))).toBe(false);
+      } finally {
+        if (proc.exitCode === null) proc.kill("SIGTERM");
+        await proc.exited;
+      }
+    },
+    SLOW_RUNNER_MS,
+  );
+
+  test(
+    "a server started in a terminal refuses a restart and keeps running, even with --client-protocol alone (R5-15)",
+    async () => {
+      const dir = tempDir();
+      // Only the desktop app passes --exit-on-stdin-close beside it, and only the app starts keyloom again. The data directory is given
+      // relative to the terminal's folder.
+      const proc = Bun.spawn(["bun", MAIN, "--data-dir", basename(dir), "serve", "--no-open", "--port", "0", "--client-protocol", String(DESKTOP_PROTOCOL)], { cwd: dirname(dir), stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+      const url = new URL(await firstLine(proc, /http:\/\/127\.0\.0\.1:\d+\/\?t=\S+/));
+      const token = url.searchParams.get("t") ?? "";
+      try {
+        // The line to run there names the data directory absolutely, so it opens the same database from any folder.
+        const info = (await (await fetch(new URL("/api/restart", url), { headers: { "x-keyloom-token": token } })).json()) as { canRestart: boolean; command: string };
+        expect(info.canRestart).toBe(false);
+        const given = /--data-dir (\S+) serve/.exec(info.command)?.[1] ?? "";
+        expect(isAbsolute(given)).toBe(true);
+        expect(basename(given)).toBe(basename(dir));
+        const asked = await fetch(new URL("/api/restart", url), { method: "POST", body: "{}", headers: { "x-keyloom-token": token, "content-type": "application/json" } });
+        expect(asked.status).toBe(409);
+        expect(((await asked.json()) as { error: { code: string } }).error.code).toBe("restart_unsupervised");
+        expect(proc.exitCode).toBeNull();
+      } finally {
+        proc.kill("SIGTERM");
+        expect(await proc.exited).toBe(0);
       }
     },
     SLOW_RUNNER_MS,

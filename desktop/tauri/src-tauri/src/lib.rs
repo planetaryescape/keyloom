@@ -41,6 +41,8 @@ pub struct AppState {
     pub replace: tokio::sync::Notify,
     /// Why there is no server, while the supervisor waits for Try again or replace; the first click takes it (problem::act).
     pub problem: Mutex<Option<problem::Stop>>,
+    /// Set when the server this shell started exited because the page or the menu bar asked for a restart (sidecar::RESTART_EXIT_CODE).
+    pub restart_asked: std::sync::atomic::AtomicBool,
     pub updates: Mutex<problem::Updates>,
     /// Set when the app is quitting, so the supervisor doesn't start the server it is stopping.
     pub quit: Quit,
@@ -84,6 +86,9 @@ fn present_main(app: &AppHandle, url: &str, reveal: bool) {
         }
         // Links to other sites open in the browser and downloads land in Downloads; without these the page's links did nothing (R4-01).
         let built = external::attach(&handle, WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed)))
+            // Tauri's own drag-and-drop handler takes every drag for Tauri drag events, which nothing here listens to, so a file dropped
+            // on the import card and a dragged layer tab never reached the page (R5-01). Without it WKWebView gives the page its drags.
+            .disable_drag_drop_handler()
             .title("keyloom")
             .inner_size(1440.0, 900.0)
             .min_inner_size(900.0, 600.0)
@@ -124,12 +129,21 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
         let stop = match sidecar::start(&app, mode).await {
             Ok(server) => {
                 let url = server.url.clone();
+                menu_bar::offer_restart(&items, server.owned);
                 *state.server.lock().unwrap() = Some(server);
                 problem::close(&app);
                 present_main(&app, &url, reveal);
                 menu_bar::watch(&app, &tray, &items).await;
                 if state.quit.is_set() {
                     return;
+                }
+                // A restart the person asked for is not a stop: it starts again at once and doesn't count toward the cap (R5-15).
+                if state.restart_asked.swap(false, std::sync::atomic::Ordering::AcqRel) {
+                    log::say(&app, "keyloom's server stopped to restart, as asked; starting it again");
+                    let _ = items.summary.set_text("Restarting keyloom…");
+                    mode = sidecar::Mode::Reuse;
+                    reveal = false;
+                    continue;
                 }
                 match restarts.next(std::time::Instant::now()) {
                     Some(delay) => {
@@ -151,6 +165,7 @@ async fn supervise(app: AppHandle, tray: TrayIcon, items: menu_bar::Items) {
         hide_main(&app);
         let _ = items.summary.set_text(stop.title());
         let _ = items.sync_now.set_enabled(false);
+        menu_bar::offer_restart(&items, false);
         // The menu-bar way back, beside the window's: the window can be closed, the menu bar stays.
         let mut added = Vec::new();
         if let Some(label) = stop.replace_label() {
@@ -203,6 +218,7 @@ pub fn run() {
             let summary = MenuItem::with_id(&handle, "summary", "Starting", false, None::<&str>)?;
             let sync_now = MenuItem::with_id(&handle, "sync_now", "Sync now", false, None::<&str>)?;
             let open = MenuItem::with_id(&handle, "open", "Open keyloom", true, None::<&str>)?;
+            let restart = MenuItem::with_id(&handle, menu_bar::RESTART, menu_bar::RESTART_LABEL, false, None::<&str>)?;
             #[cfg(feature = "updater")]
             let update = MenuItem::with_id(&handle, "update", "Checking for updates…", false, None::<&str>)?;
             // Off until BK turns it on: nothing registers a login item by itself.
@@ -216,6 +232,7 @@ pub fn run() {
                     &menu_bar::separator(&handle)?,
                     &sync_now,
                     &open,
+                    &restart,
                     &update,
                     &login,
                     &menu_bar::separator(&handle)?,
@@ -225,7 +242,7 @@ pub fn run() {
             #[cfg(not(feature = "updater"))]
             let menu = Menu::with_items(
                 &handle,
-                &[&summary, &menu_bar::separator(&handle)?, &sync_now, &open, &login, &menu_bar::separator(&handle)?, &quit],
+                &[&summary, &menu_bar::separator(&handle)?, &sync_now, &open, &restart, &login, &menu_bar::separator(&handle)?, &quit],
             )?;
 
             let tray = TrayIconBuilder::with_id("tray")
@@ -238,6 +255,7 @@ pub fn run() {
                     move |app, event| match event.id().as_ref() {
                         "open" => show_window(app),
                         "sync_now" => menu_bar::sync_now(app),
+                        menu_bar::RESTART => menu_bar::restart(app),
                         id @ (problem::REPLACE | problem::TRY_AGAIN | problem::DOWNLOAD | problem::STOP_DOWNLOAD) => problem::act(app, id),
                         #[cfg(feature = "updater")]
                         "update" => updates::menu_item(app),
@@ -268,7 +286,7 @@ pub fn run() {
             tauri::async_runtime::spawn(updates::watch(handle.clone(), menu.clone(), update.clone()));
 
             // Everything that waits on the server runs off the setup thread so the menu-bar extra shows at once.
-            let items = menu_bar::Items { menu, summary, sync_now, lines: Mutex::new(Vec::new()) };
+            let items = menu_bar::Items { menu, summary, sync_now, restart, lines: Mutex::new(Vec::new()) };
             tauri::async_runtime::spawn(supervise(handle, tray, items));
             Ok(())
         })

@@ -74,6 +74,10 @@ const URL_WAIT_SECS: u64 = 135;
 // TAKEOVER_TIMEOUT_MS is 120_000 in src/server/replace-server.ts; test/api/desktop-protocol.test.ts checks this pair too.
 const _: () = assert!(URL_WAIT_SECS > 120, "the shell must wait longer than the CLI's 120 s takeover budget");
 
+// `serve` exits with this after the page or the menu bar asked it to restart (RESTART_EXIT_CODE in src/api/restart.ts; a test checks the
+// two match). The supervisor starts it again at once and doesn't count it as a stop.
+pub const RESTART_EXIT_CODE: i32 = 11;
+
 const CANNOT_ATTACH: &str = "keyloom cannot attach: ";
 const CAN_REPLACE: &str = "keyloom can replace it: ";
 
@@ -180,6 +184,10 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                                 }
                                 CommandEvent::Terminated(p) => {
                                     crate::log::say(&log_app, &format!("keyloom's server exited (code {:?}, signal {:?})", p.code, p.signal));
+                                    // Before the exit is reported, so the supervisor sees why when it looks.
+                                    if p.code == Some(RESTART_EXIT_CODE) {
+                                        log_app.state::<AppState>().restart_asked.store(true, std::sync::atomic::Ordering::Release);
+                                    }
                                     let _ = exit_tx.send(());
                                     break;
                                 }

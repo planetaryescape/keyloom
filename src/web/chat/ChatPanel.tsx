@@ -723,6 +723,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
                     onSetUpModel={() => setSetupOpen(usedProvider ?? "anthropic")}
+                    onSetUpOther={() => setSetupOpen(usedProvider === "anthropic" ? "openrouter" : "anthropic")}
+                    onOpenHistory={showHistory}
                     onNewConversation={startOverWithLastMessage}
                     creditsUrl={usedProvider === "anthropic" || usedProvider === "openrouter" ? CREDITS_PAGES[usedProvider] : undefined}
                     compact={variant === "bar"}

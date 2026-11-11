@@ -317,7 +317,7 @@ Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the 
 
 ## Serving beside another keyloom
 
-One server serves a data directory (D-323). `serve --reuse` attaches to a live one and exits 0 (the desktop app uses it). `serve --replace` stops it with SIGTERM, waits for its process to exit (it finishes a keyboard write first; it is never killed; the lock wait and this wait share two minutes), and serves from this keyloom; it is refused when the live server is newer, and `--reuse` and `--replace` are exclusive. `serve --client-protocol N` is the desktop app saying which protocol it was built for (`DESKTOP_PROTOCOL`, 1): a keyloom that speaks another refuses to start, and `--reuse` with it refuses a live server whose `serve.json` `protocol` differs, or is missing, by printing `keyloom cannot attach: …` (and `keyloom can replace it: …` when the server is older or unknown) and exiting 10. Without `--client-protocol`, `--reuse` attaches to any live server. Every `serve` first takes a lock in the data directory (`serve.lock`) until its server has announced itself, so concurrent starts take turns. `serve.json` records `version` and `protocol`.
+One server serves a data directory (D-323). `serve --reuse` attaches to a live one and exits 0 (the desktop app uses it). `serve --replace` stops it with SIGTERM, waits for its process to exit (it finishes a keyboard write first; it is never killed; the lock wait and this wait share two minutes), and serves from this keyloom; it is refused when the live server is newer, and `--reuse` and `--replace` are exclusive. `serve --client-protocol N` is the desktop app saying which protocol it was built for (`DESKTOP_PROTOCOL`, 1): a keyloom that speaks another refuses to start, and `--reuse` with it refuses a live server whose `serve.json` `protocol` differs, or is missing, by printing `keyloom cannot attach: …` (and `keyloom can replace it: …` when the server is older or unknown) and exiting 10. Without `--client-protocol`, `--reuse` attaches to any live server. With both `--client-protocol` and `--exit-on-stdin-close`, the page and the menu bar can restart the server through `POST /api/restart`: it stops the way Ctrl-C does and exits 11, and the desktop app starts it again (D-521). Without both, that route answers 409 `restart_unsupervised`. Every `serve` first takes a lock in the data directory (`serve.lock`) until its server has announced itself, so concurrent starts take turns. `serve.json` records `version` and `protocol`.
 
 ## Exit codes
 
@@ -334,6 +334,7 @@ One server serves a data directory (D-323). `serve --reuse` attaches to a live o
 | 8 | Flash failed or timed out waiting for the bootloader |
 | 9 | Model API error: auth, rate limit or refusal after fallback |
 | 10 | Incompatible keyloom: the data directory's database was migrated by a newer keyloom (`schema_too_new`), `serve --client-protocol` names a protocol this keyloom doesn't speak (`client_protocol_mismatch`), or the server already running can't be used (`server_incompatible`) (D-454, D-455) |
+| 11 | `serve` stopped because the page or the menu bar asked it to restart; the desktop app starts it again. Kept when the keyboard helper cleanup then fails, which still prints `cleanup_unconfirmed` (D-521) |
 
 ## Agent skill
 

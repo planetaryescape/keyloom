@@ -124,7 +124,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const tryFix = (index: number | null) => setPhase((p) => (p.kind === "readout" ? { ...p, trying: index } : p));
 
   return {
-    phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, retry: () => start(lastChoice.current),
+    token, phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, retry: () => start(lastChoice.current),
     stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }),
   };
 }
