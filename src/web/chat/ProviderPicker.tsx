@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
-import { PROVIDER_NAMES } from "./setup-words.ts";
+import { PROVIDER_NAMES, lockedProvider } from "./setup-words.ts";
 import type { Pinned } from "./transcript.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
@@ -116,7 +116,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
 
   function start() {
     // Starts from what the next conversation would use, so Save without a change is a no-op rather than a surprise.
-    setProvider(status?.active?.provider ?? status?.providers[0]?.id ?? "anthropic");
+    setProvider((status === null ? null : lockedProvider(status)) ?? status?.active?.provider ?? status?.providers[0]?.id ?? "anthropic");
     setModel(status?.active?.model ?? "");
     setProblem(null);
     setSaved(null);
@@ -184,7 +184,8 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
           <div className="provider-picker-content">
           <fieldset disabled={saving || locked !== null}>
             <legend>Model for the next conversation</legend>
-            {status.providers.filter((candidate) => candidate.installed || candidate.ready || candidate.id === status.active?.provider).map((candidate) => (
+            {/* A lock leaves one provider that answers, so only it is listed (R2-04); ModelSetup below says why. */}
+            {status.providers.filter((candidate) => locked === null ? candidate.installed || candidate.ready || candidate.id === status.active?.provider : candidate.id === lockedProvider(status)).map((candidate) => (
               <label key={candidate.id} className="provider-choice" data-ready={candidate.ready}>
                 <input
                   type="radio"
@@ -206,20 +207,17 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
               <input value={model} placeholder={chosen?.defaultModel ?? ""} spellCheck={false} onChange={(event) => setModel(event.target.value)} />
             </label>
           </fieldset>
-          {locked === null ? null : (
-            <p className="chat-inline-error" role="status">
-              keyloom was started with {locked === "--provider" ? "--provider" : "KEYLOOM_PROVIDER"}, which outranks this choice. Restart it without that to choose here.
-            </p>
-          )}
-          {chosen === undefined || locked !== null ? null : (
+          {chosen === undefined ? null : (
             // Set it up, or replace or forget its saved key, right here; the choice below then saves a provider that works (D-496).
+            // Under a lock this is the locked provider's setup, with the reason only it is listed.
             <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={onReload} />
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
           </div>
           <div className="provider-actions">
-            <button type="button" className="button" onClick={close}>Cancel</button>
-            <button type="submit" className="button button-primary" disabled={saving || locked !== null}>Use for new conversations</button>
+            <button type="button" className="button" onClick={close}>{locked === null ? "Cancel" : "Close"}</button>
+            {/* Nothing to choose under a lock, so no choice to save. */}
+            {locked === null ? <button type="submit" className="button button-primary" disabled={saving}>Use for new conversations</button> : null}
           </div>
         </form>, document.body
       )}
