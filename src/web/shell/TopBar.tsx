@@ -205,12 +205,14 @@ function Item({ icon: Icon, label, hint, checked, disabled = false, role = "menu
 // revision, so redo puts back the change the last undo took away.
 function UndoButtons({ canUndo, canRedo, busy, blockedReason, summary, onUndo }: UndoState) {
   const blocked = busy || blockedReason !== null;
+  // The reason is said under the button while it applies, as the toolbar does, not only in a hover title (R4-17).
   return (
-    <>
-      <button type="button" className="topbar-icon" aria-label="Undo" title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
+    <span className="toolbar-undo">
+      <button type="button" className="topbar-icon" aria-label="Undo" aria-describedby={blockedReason === null ? undefined : "topbar-undo-why"} title={blockedReason ?? (canUndo ? `Undo: ${summary} (⌘Z)` : "Nothing to undo")} disabled={!canUndo || blocked} onClick={onUndo}>
         {busy ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : <Undo2 size={17} aria-hidden="true" />}
       </button>
-    </>
+      {blockedReason === null || !canUndo ? null : <span id="topbar-undo-why" className="toolbar-why" role="status">{blockedReason}</span>}
+    </span>
   );
 }
 

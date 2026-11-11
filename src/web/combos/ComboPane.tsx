@@ -290,12 +290,14 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
           </button>
           {picking
             ? draft.positions.map((position) => (
-                <button key={position} type="button" className="card-chip" disabled={tooFew} title={tooFew ? "A combo needs at least two keys" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
+                <button key={position} type="button" className="card-chip" disabled={tooFew} aria-describedby={tooFew ? "combo-too-few" : undefined} onClick={() => onDraft({ ...draft, positions: draft.positions.filter((candidate) => candidate !== position) })}>
                   Remove this key
                 </button>
               ))
             : null}
         </div>
+        {/* Said beside the chips, not only in a hover title (R4-17). */}
+        {picking && tooFew && draft.positions.length > 0 ? <p id="combo-too-few" className="card-note">A combo needs at least two keys. Click another key on the board to add it before you remove one.</p> : null}
 
         <div className="card-picker combo-sends" hidden={!pickerOpen && !canToggleTapMods(pickerDraft)}>
           {pickerOpen ? (
