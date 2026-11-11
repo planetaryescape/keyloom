@@ -37,6 +37,12 @@ export type RunOptions = {
   onLine?: (line: string, stream: "stdout" | "stderr") => void;
   /** Runs once when the runner kills the process, before the signal: stops things SIGTERM to the client won't, such as a Docker container. */
   onKill?: () => void | Promise<void>;
+  /**
+   * Starts it in its own process group and signals the whole group (POSIX), so a child that outlives it, such as the `curl` a
+   * `brew install` runs, can't keep its output open after a stop (R2-08). The caller then owns stopping it: a terminal's Ctrl-C
+   * no longer reaches the group.
+   */
+  processGroup?: boolean;
 };
 
 export type RunResult = {
@@ -85,6 +91,7 @@ export async function run(opts: RunOptions): Promise<RunResult> {
     stdin: opts.stdin === undefined ? "ignore" : "pipe",
     stdout: "pipe",
     stderr: "pipe",
+    ...(opts.processGroup ? { detached: true } : {}),
   });
   if (opts.stdin !== undefined) {
     proc.stdin?.write(opts.stdin);
@@ -94,6 +101,17 @@ export async function run(opts: RunOptions): Promise<RunResult> {
   let timedOut = false;
   let aborted = false;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const send = (signal: "SIGTERM" | "SIGKILL") => {
+    if (opts.processGroup && process.platform !== "win32") {
+      try {
+        process.kill(-proc.pid, signal);
+        return;
+      } catch {
+        // The group is already gone; the process itself may still need its signal.
+      }
+    }
+    proc.kill(signal);
+  };
   const kill = async () => {
     if (proc.exitCode !== null || proc.signalCode !== null) return;
     try {
@@ -101,8 +119,8 @@ export async function run(opts: RunOptions): Promise<RunResult> {
     } catch {
       // Best effort: the process still gets its signal.
     }
-    proc.kill("SIGTERM");
-    killTimer = setTimeout(() => proc.kill("SIGKILL"), opts.killGraceMs ?? DEFAULT_GRACE_MS);
+    send("SIGTERM");
+    killTimer = setTimeout(() => send("SIGKILL"), opts.killGraceMs ?? DEFAULT_GRACE_MS);
   };
   const timeout = opts.timeoutMs === undefined ? undefined : setTimeout(() => {
     timedOut = true;

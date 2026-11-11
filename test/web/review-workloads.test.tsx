@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityChoices, SuggestionTestResults, WorkloadTests } from "../../src/web/review/WorkloadTests.tsx";
+import { ActivityChoices, SuggestionTestResults, WorkloadTests, testsNeedDocker } from "../../src/web/review/WorkloadTests.tsx";
 import { ReviewWorkloadSchema } from "../../src/layout/review-workload.ts";
 
 const baseline = { id: "prose-prose", status: "verified" as const, requestedOutputs: 21, physicalKeydowns: 22, maxSimultaneousKeys: 2, layerEntries: 1, modifierEntries: 0, busyKeys: [] };
@@ -21,7 +21,7 @@ test("review evidence rejects an unknown task status", () => {
 });
 
 test("no selection explains the opt-in, Docker cost and test limits", () => {
-  const html = renderToStaticMarkup(createElement(WorkloadTests, { activities: [], evidence: undefined, busy: false, onRun: () => {} }));
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: [], evidence: undefined, busy: false, onRun: () => {} }));
   expect(html).toContain("No activities assumed");
   expect(html).toContain("Uses Docker");
   expect(html).toContain("Never types on or flashes");
@@ -30,7 +30,7 @@ test("no selection explains the opt-in, Docker cost and test limits", () => {
 });
 
 test("a selected profile awaiting its first review is not reported as unselected", () => {
-  const html = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
   expect(html).toContain("Selected activities will be tested");
   expect(html).not.toContain("No activities assumed");
 });
@@ -38,10 +38,10 @@ test("a selected profile awaiting its first review is not reported as unselected
 test("orphaned pending/running evidence does not announce active testing", () => {
   for (const status of ["pending", "running"] as const) {
     const evidence = ReviewWorkloadSchema.parse({ status, activities: ["prose"], reason: null, identity: null, baseline: [], comparisons: [] });
-    const stopped = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence, busy: false, onRun: () => {} }));
+    const stopped = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence, busy: false, onRun: () => {} }));
     expect(stopped).not.toContain("Testing this version");
     expect(stopped).toContain("not running");
-    const active = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose"], evidence, busy: true, onRun: () => {} }));
+    const active = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence, busy: true, onRun: () => {} }));
     expect(active).toContain("Testing this version");
   }
 });
@@ -49,7 +49,7 @@ test("orphaned pending/running evidence does not announce active testing", () =>
 test("persisted profiles fold choices, show verified coverage and retain unavailable tasks", () => {
   const evidence = ReviewWorkloadSchema.parse({ status: "done", activities: ["prose", "shortcuts"], reason: "Some tasks are unverified.", identity: null,
     baseline: [baseline, { ...baseline, id: "shortcuts-navigation", status: "no-route-within-supported-subset", physicalKeydowns: null, maxSimultaneousKeys: null }], comparisons: [] });
-  const html = renderToStaticMarkup(createElement(WorkloadTests, { activities: ["prose", "shortcuts"], evidence, busy: false, onRun: () => {} }));
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose", "shortcuts"], evidence, busy: false, onRun: () => {} }));
   expect(html).toContain("1 of 2 tasks verified");
   expect(html).toContain("no route within supported subset");
   expect(html).toContain("Turn off tests");
@@ -63,4 +63,22 @@ test("suggestion results show baseline to candidate costs without making up miss
   const unknown = renderToStaticMarkup(createElement(SuggestionTestResults, { baseline: [baseline], result: { ...result, verdict: "inconclusive", tasks: [{ ...candidate, status: "output-mismatch", physicalKeydowns: null, maxSimultaneousKeys: null }] } }));
   expect(unknown).toContain("verified → output mismatch");
   expect(unknown).not.toContain("→ 0 presses");
+});
+
+test("a kanata board has no activity tests to offer (R1-13)", () => {
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "kanata" as const, activities: [], evidence: undefined, busy: false, onRun: () => {} }));
+  expect(html).toBe("");
+});
+
+test("tests that stopped for Docker show the Docker callout from the code, not the sentence (R1-12)", () => {
+  const evidence = ReviewWorkloadSchema.parse({ status: "unavailable", activities: ["prose"], reason: "Workload tests need Docker: Docker is not on this computer.", reasonCode: "docker", identity: null, baseline: [], comparisons: [] });
+  expect(testsNeedDocker(evidence)).toBe(true);
+  // The same sentence without the code is shown as it is: the page never parses it.
+  expect(testsNeedDocker({ ...evidence, reasonCode: undefined })).toBe(false);
+  expect(testsNeedDocker({ ...evidence, status: "failed" })).toBe(false);
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence, busy: false, onRun: () => {} }));
+  expect(html).toContain("Activity tests run in Docker");
+  expect(html).not.toContain("Workload tests need Docker:");
+  // Rows stored before the code existed still read.
+  expect(ReviewWorkloadSchema.safeParse({ status: "unavailable", activities: ["prose"], reason: "x", identity: null, baseline: [], comparisons: [] }).success).toBe(true);
 });

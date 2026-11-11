@@ -11,6 +11,24 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-11 round 2: Docker and tools never strand anyone
+
+### D-500: An install can be cancelled, and the CLI runs the same install. Extends D-488 and D-489. (Claude, from the round-2 dead-ends review, R2-08, R2-13 and CLI parity)
+
+- **Cancel.** `DELETE /api/system/install?tool=` aborts the install job's `AbortController`. The signal reaches `brew install` through `run()` and, for Docker, the Colima start through `startDockerEngine({ signal })` and the runner. The job stays `running` in phase `stopping` until Homebrew has exited, so a second Install click can't start a second `brew` beside the dying one. Homebrew runs in its own process group (`run({ processGroup: true })`), and Cancel signals the whole group: a `curl` that `brew` started would otherwise keep the output pipe open and hold the job in `stopping` until it finished. Then it is `cancelled`, which the page treats as no install: the not-installed view comes back with "You stopped the install." A cancel during Colima's first start leaves Docker installed, so the page offers **Start it now** (D-499).
+- **Install log polling is quiet.** A missed poll no longer says "keyloom stopped answering while it installed". The server-gone banner says that once, for the whole page; the next poll carries on.
+- **CLI parity (D-030).** `keyloom doctor --install-docker` runs `installTool("docker")`, the job the button runs, with Homebrew's lines on stderr, then the doctor checks. Ctrl-C reaches Homebrew through the same signal, because its own process group no longer gets the terminal's. It is a doctor flag, not a new `keyloom install` command, because it sits beside `--start-docker`: each fixes what the docker check reports, and the check runs after it. `--restart-docker` does the same for D-499's restart.
+- **Rejected:** treating a cancelled install as `failed`. The person chose to stop, so a red "Docker didn't install" with Try again would describe a failure that didn't happen.
+
+### D-499: Every Docker state ends at a button that fixes it. Extends D-487, D-488 and D-497. (Claude, from the round-2 dead-ends review, R2-02, R2-05, R2-07, R1-12 and R1-13)
+
+- **A first start that fails after a good install** (`start_failed`) is no longer an install failure. The page drops back to readiness, which now says "Docker is installed, but Colima didn't start." with the reason and **Start it now**. Build is not blocked: a build starts the engine itself.
+- **A failed install** keeps **Try again**, and adds **Download Docker Desktop** with OrbStack as a link (the readiness' `alternatives`). A failed Zapp or DFU install adds **Get {tool}**, the tool's own page.
+- **`cli-missing`** names its app (`DockerStatus.app`). On a Mac the page offers **Open {app}**: `POST /api/system/docker/start` runs D-487's `open -a` path and waits while the status stays `cli-missing`, because the app's first run puts its CLI in place. keyloom now also looks for the CLI in the per-user folders those setups fill (`~/.docker/bin`, `~/.orbstack/bin`, `~/.rd/bin`). Build says "Install Docker's command line tools first." The OrbStack line no longer asks for `orb setup`. A build never opens the app by itself (`canStart` stays false).
+- **`no-access` from a Mac app** gets **Restart {app}**: `POST /api/system/docker/restart` quits it with `osascript -e 'quit app "…"'`, waits until `application "…" is running` is false, and opens it again on the D-487 path. A Mac app runs as the person, so a fresh start gives the socket back (D-497). Colima keeps its copy-the-command fix, because that needs sudo. `doctor`'s no-access line is engine-aware: Colima's commands, the Linux group, or the app to restart.
+- **An engine keyloom can't start** (`elsewhere`, `unknown`) keeps its own sentence and Check again, and Build says "Start your Docker engine first." A daemon that only answered slowly doesn't block Build, because a build waits for it.
+- **Activity tests** stopped by Docker carry `reasonCode: "docker"` on the review evidence, and the review shows the release dialog's `DockerCallout` from that code, with **Test again** once Docker answers. The page never reads the sentence. A kanata board shows no activity tests, in the review or the new-board flow, because kanata has no firmware to replay them on.
+
 ## 2026-11-11 follow-up: build and flash never strand anyone
 
 ### D-497: Privileged and proof-recording steps act only on evidence that can't be faked or misread. Follows the review of #270 (D-486, D-493, D-495). (Claude, from CodeRabbit's review of #270)

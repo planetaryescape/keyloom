@@ -1,0 +1,27 @@
+// The server's system backend over the app: a second click joins the restart already running, and Cancel reaches the install job.
+import { describe, expect, test } from "bun:test";
+import type { InstallRunner } from "../../src/app/tool-install.ts";
+import { appSystemBackend } from "../../src/cli/system-backend.ts";
+
+describe("appSystemBackend", () => {
+  test("two restart clicks share one quit and reopen (R2-07)", async () => {
+    let restarts = 0;
+    const done = Promise.withResolvers<void>();
+    const backend = appSystemBackend({}, { restart: async () => { restarts += 1; await done.promise; return { ok: true, version: "28", engine: "OrbStack", waitedMs: 1 }; } });
+    const first = backend.restartDocker();
+    const second = backend.restartDocker();
+    done.resolve();
+    expect(await first).toEqual({ ok: true, version: "28", engine: "OrbStack", waitedMs: 1 });
+    expect(await second).toEqual(await first);
+    expect(restarts).toBe(1);
+  });
+
+  test("Cancel stops the install the page started (R2-08)", async () => {
+    const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
+    const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });
+    await backend.install("zapp");
+    expect(await backend.cancelInstall("zapp")).toMatchObject({ status: "running", phase: "stopping" });
+    await Bun.sleep(5);
+    expect(await backend.installState("zapp")).toMatchObject({ status: "cancelled" });
+  });
+});

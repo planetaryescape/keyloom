@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   requireCommandSupport, type App, type ImportOutcome, type WorkloadDeps, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, startDocker, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, restartDocker, startDocker, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -13,12 +13,13 @@ import { registerEmulateCommand } from "./commands/emulate.ts";
 import { registerWorkloadCommands } from "./commands/workload.ts";
 import { type KeyboardCliDeps, registerKeyboardCommands } from "./commands/keyboard.ts";
 import { type LabCliDeps, registerLabCommands } from "./commands/lab.ts";
-import { registerFirmwareCommands } from "./commands/firmware.ts";
+import { registerFirmwareCommands, untilInterrupted as abortOnInterrupt } from "./commands/firmware.ts";
 import { registerSyncCommands } from "./commands/sync.ts";
 import { registerVersionCommands } from "./commands/version.ts";
 import { registerRemapCommands } from "./commands/remap.ts";
 import { registerReviewCommand } from "./commands/review.ts";
 import { registerProviderCommands } from "./commands/provider.ts";
+import { installDockerWithProgress } from "./install-docker.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, serve, serveBoardDev } from "./serve.ts";
 import { announceServer } from "../server/running-server.ts";
@@ -363,10 +364,26 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .description("check the database, device helper, model credential and firmware toolchain")
     .option("--device-helper-only", "check only the installed helper pair, without device discovery or network/toolchain probes")
     .option("--start-docker", "start Docker Desktop (or whatever runs the daemon here) when it isn't running, then check the toolchain")
-    .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean }) => {
+    // Flags on doctor rather than an `install` command: like --start-docker, each fixes what the docker check reports, and the check runs after.
+    .option("--install-docker", "install Docker (Colima, with Homebrew on a Mac) and start it, then check the toolchain")
+    .option("--restart-docker", "quit and reopen the Mac app that runs Docker, when it refuses this account its socket, then check the toolchain")
+    .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean; installDocker?: boolean; restartDocker?: boolean }) => {
       const helper = await runDeviceHelperCheck();
       // Progress goes to stderr, so `--format json` stays one document on stdout.
-      if (options.startDocker && !options.deviceHelperOnly) await startDocker({ onProgress: (line) => io.err(`${line}\n`) });
+      const say = (line: string) => io.err(`${line}\n`);
+      if (options.installDocker && !options.deviceHelperOnly) {
+        // Homebrew runs in its own process group, so Ctrl-C reaches it through this signal rather than the terminal.
+        const outcome = await abortOnInterrupt((signal) => installDockerWithProgress(say, {}, signal));
+        if (!outcome.ok && outcome.code === "cancelled") {
+          state.exitCode = EXIT.toolchain;
+          return;
+        }
+      }
+      if (options.restartDocker && !options.deviceHelperOnly) {
+        const restarted = await restartDocker({ onProgress: say });
+        if (!restarted.ok) say(`keyloom: ${restarted.reason}`);
+      }
+      if (options.startDocker && !options.deviceHelperOnly) await startDocker({ onProgress: say });
       const checks = options.deviceHelperOnly ? [helper] : [
         helper,
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),

@@ -15,7 +15,8 @@ export type DockerProblem = "not-installed" | "cli-missing" | "daemon-down" | "s
 /** On Linux the daemon's socket belongs to the `docker` group; joining it is Docker's documented fix, and it needs a new login. */
 export const DOCKER_GROUP_COMMAND = "sudo usermod -aG docker $USER";
 
-export type DockerStatus = { ok: true; version: string } | { ok: false; kind: DockerProblem; reason: string };
+/** `app` names the engine app whose CLI is missing (`cli-missing` only), so the UI can offer to open it. */
+export type DockerStatus = { ok: true; version: string } | { ok: false; kind: DockerProblem; reason: string; app?: string };
 
 const hasCommand = (command: string): boolean => which(command) !== null;
 
@@ -24,7 +25,7 @@ export async function dockerStatus(timeoutMs = 15_000): Promise<DockerStatus> {
     const app = installedEngineApp();
     return app === null
       ? { ok: false, kind: "not-installed", reason: `Docker is not on this computer. ${installSentence()}` }
-      : { ok: false, kind: "cli-missing", reason: `${app.name} is installed, but its \`docker\` command isn't on keyloom's PATH. ${cliFix(app)}` };
+      : { ok: false, kind: "cli-missing", app: app.name, reason: `${app.name} is installed, but its \`docker\` command isn't on keyloom's PATH. ${cliFix(app)}` };
   }
   const r = await capture(["docker", "version", "--format", "{{.Server.Version}}"], { timeoutMs });
   if (r.timedOut) return { ok: false, kind: "slow", reason: `Docker did not answer within ${Math.round(timeoutMs / 1000)} s; it may still be starting.` };
@@ -157,11 +158,14 @@ function installSentence(platform: NodeJS.Platform = process.platform, has: (com
  * macOS runs Docker inside an app, and some of them install their `docker` command outside keyloom's PATH
  * (a GUI launch, a shell that never opened the app's setup). Naming the app turns "install Docker" into a link.
  */
-const ENGINE_APPS: ReadonlyArray<{ name: string; app: string; contexts: readonly string[]; hosts: RegExp; cli?: string }> = [
-  { name: "Docker Desktop", app: "Docker.app", contexts: ["desktop-linux"], hosts: /\/\.docker\/run\/docker\.sock$|^unix:\/\/\/var\/run\/docker\.sock$|Docker\.app/, cli: "/Applications/Docker.app/Contents/Resources/bin/docker" },
-  { name: "OrbStack", app: "OrbStack.app", contexts: ["orbstack"], hosts: /\/\.orbstack\//, cli: "/Applications/OrbStack.app/Contents/MacOS/bin/docker" },
-  { name: "Rancher Desktop", app: "Rancher Desktop.app", contexts: ["rancher-desktop"], hosts: /\/\.rd\//, cli: "/Applications/Rancher Desktop.app/Contents/Resources/resources/darwin/bin/docker" },
-  { name: "Podman Desktop", app: "Podman Desktop.app", contexts: ["podman", "podman-desktop"], hosts: /podman\.sock$/ },
+// `clis` are where each app puts its `docker`: inside the bundle, then the per-user folder its setup fills when it is told not to
+// write to /usr/local/bin (Docker Desktop's "User" CLI setting, ~/.orbstack/bin, Rancher's ~/.rd/bin). The second only exists
+// once the app has been opened, which is what the Open button for `cli-missing` is for.
+const ENGINE_APPS: ReadonlyArray<{ name: string; app: string; contexts: readonly string[]; hosts: RegExp; clis: readonly string[] }> = [
+  { name: "Docker Desktop", app: "Docker.app", contexts: ["desktop-linux"], hosts: /\/\.docker\/run\/docker\.sock$|^unix:\/\/\/var\/run\/docker\.sock$|Docker\.app/, clis: ["/Applications/Docker.app/Contents/Resources/bin/docker", join(homedir(), ".docker/bin/docker")] },
+  { name: "OrbStack", app: "OrbStack.app", contexts: ["orbstack"], hosts: /\/\.orbstack\//, clis: ["/Applications/OrbStack.app/Contents/MacOS/bin/docker", join(homedir(), ".orbstack/bin/docker")] },
+  { name: "Rancher Desktop", app: "Rancher Desktop.app", contexts: ["rancher-desktop"], hosts: /\/\.rd\//, clis: ["/Applications/Rancher Desktop.app/Contents/Resources/resources/darwin/bin/docker", join(homedir(), ".rd/bin/docker")] },
+  { name: "Podman Desktop", app: "Podman Desktop.app", contexts: ["podman", "podman-desktop"], hosts: /podman\.sock$/, clis: [] },
 ];
 
 /** A macOS app is installed when one of the two Applications folders holds it. */
@@ -186,7 +190,9 @@ export function bundledDockerCli(
 ): string | null {
   if (platform !== "darwin") return null;
   for (const entry of ENGINE_APPS) {
-    if (entry.cli !== undefined && installed(entry.app) && exists(entry.cli)) return entry.cli;
+    if (!installed(entry.app)) continue;
+    const cli = entry.clis.find((path) => exists(path));
+    if (cli !== undefined) return cli;
   }
   return null;
 }
@@ -202,10 +208,9 @@ export function adoptBundledDockerCli(find: () => string | null = () => bundledD
   return which("docker") === null ? null : cli;
 }
 
-/** What to do about an engine whose CLI keyloom couldn't find, even bundled in the app. */
+/** What to do about an engine whose CLI keyloom couldn't find, even bundled in the app: opening the app sets its CLI up (R2-07). */
 function cliFix(app: (typeof ENGINE_APPS)[number]): string {
-  if (app.name === "OrbStack") return "Open OrbStack once and run `orb setup`, or add ~/.orbstack/bin to your PATH, then try again.";
-  return "Open it and install its command line tools, then try again.";
+  return `Open ${app.name} and let it finish setting up its command line tools, then try again.`;
 }
 
 /**
@@ -352,7 +357,11 @@ export type StartDockerOptions = {
   signal?: AbortSignal;
   /** Injected waiting, so a test does not sleep. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** What "this computer" is; only a Mac opens an app for its CLI. */
+  platform?: NodeJS.Platform;
 };
+
+const platformIsMac = (opts: StartDockerOptions): boolean => (opts.platform ?? process.platform) === "darwin";
 
 const DEFAULT_START_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_MS = 1_500;
@@ -387,10 +396,12 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
   if (first.kind === "slow") {
     return { ok: false, engine: null, reason: `Docker didn't answer within ${Math.round(timeoutMs / 1000)} s. It may be busy, so keyloom didn't restart it. Check again in a minute.` };
   }
-  // No engine at all, one whose CLI never reached the PATH, or one that refuses this account: an install, a link or a permission, not a start.
-  if (first.kind === "not-installed" || first.kind === "cli-missing" || first.kind === "no-access") return { ok: false, engine: null, reason: first.reason };
+  // An app whose CLI isn't set up yet is opened: its first run puts the CLI where keyloom looks, and it starts the daemon too (R2-07).
+  const opening = first.kind === "cli-missing" && first.app !== undefined && platformIsMac(opts) ? first.app : null;
+  // No engine at all, or one that refuses this account: an install or a permission, not a start.
+  if (opening === null && (first.kind === "not-installed" || first.kind === "cli-missing" || first.kind === "no-access")) return { ok: false, engine: null, reason: first.reason };
 
-  const found = await detect();
+  const found: EngineFinding = opening === null ? await detect() : { kind: "engine", engine: { name: opening, command: ["open", "-a", opening] } };
   if (found.kind !== "engine") {
     // `elsewhere` and `unknown` name what would fix it; `none` falls back to the daemon's own sentence.
     return { ok: false, engine: null, reason: found.kind === "none" ? first.reason : found.detail };
@@ -416,8 +427,12 @@ export async function startDockerEngine(opts: StartDockerOptions = {}): Promise<
       opts.onProgress?.(`keyloom: ${engine.name} is up after ${Math.round(waitedMs / 1000)} s`);
       return { ok: true, version: next.version, engine: engine.name, waitedMs };
     }
-    if (next.kind === "not-installed" || next.kind === "cli-missing" || next.kind === "no-access") return { ok: false, engine: engine.name, reason: next.reason };
-    if (Date.now() >= deadline) break;
+    // An app being opened for its CLI stays `cli-missing` until its setup finishes, so that keeps the wait going.
+    if (next.kind === "not-installed" || (next.kind === "cli-missing" && opening === null) || next.kind === "no-access") return { ok: false, engine: engine.name, reason: next.reason };
+    if (Date.now() >= deadline) {
+      if (next.kind === "cli-missing") return { ok: false, engine: engine.name, reason: `${engine.name} is open, but keyloom still can't find its docker command. Finish ${engine.name}'s setup, including its command line tools, then check again.` };
+      break;
+    }
   }
   return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s. Open it, wait for it to say it is running, then build again.` };
 }
@@ -432,6 +447,58 @@ export async function runStart(engine: DockerEngine, budgetMs: number, signal?: 
   const r = await capture([command, ...args], { timeoutMs: budgetMs, ...(signal === undefined ? {} : { signal }) });
   if (r.aborted) return { ok: false, detail: "it was stopped" };
   if (r.exitCode === 0) return { ok: true };
-  const said = (r.stderr || r.stdout).trim().split("\n").at(-1);
-  return { ok: false, detail: said || (r.timedOut ? "it did not start in time" : `it exited with code ${r.exitCode}`) };
+  return { ok: false, detail: lastLine(r) || (r.timedOut ? "it did not start in time" : `it exited with code ${r.exitCode}`) };
+}
+
+/** The last line a command printed, which is where a launcher puts why it failed. */
+const lastLine = (r: { stdout: string; stderr: string }): string => (r.stderr || r.stdout).trim().split("\n").at(-1) ?? "";
+
+/** Quitting and asking about a Mac app; the real one is osascript, and a test passes a fake so nothing quits. */
+export type AppControl = {
+  /** Asks the app to quit; resolves once it has answered. */
+  quit: (app: string, signal?: AbortSignal) => Promise<{ ok: boolean; detail?: string }>;
+  /** Waits up to `timeoutMs` for the app to stop running; false when it still runs. */
+  waitClosed: (app: string, timeoutMs: number, signal?: AbortSignal) => Promise<boolean>;
+};
+
+const osascript = async (lines: string[], timeoutMs: number, signal?: AbortSignal) => {
+  // The test preload sets this, so a forgotten fake fails its test instead of quitting an app on the machine.
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to run osascript in a test");
+  return capture(["osascript", ...lines.flatMap((line) => ["-e", line])], { timeoutMs, ...(signal === undefined ? {} : { signal }) });
+};
+
+// The names come from ENGINE_APPS; JSON quoting is also a valid AppleScript string literal for them.
+export const osascriptAppControl: AppControl = {
+  quit: async (app, signal) => {
+    const r = await osascript([`quit app ${JSON.stringify(app)}`], 30_000, signal);
+    return r.exitCode === 0 ? { ok: true } : { ok: false, detail: lastLine(r) || `osascript exited with code ${r.exitCode}` };
+  },
+  // One script that waits in place: `application "X" is running` asks without launching it, so polling stays inside AppleScript.
+  waitClosed: async (app, timeoutMs, signal) => {
+    const r = await osascript([`repeat while application ${JSON.stringify(app)} is running`, "delay 0.5", "end repeat"], timeoutMs, signal);
+    return r.exitCode === 0;
+  },
+};
+
+const QUIT_WAIT_MS = 30_000;
+
+/**
+ * Quits a Mac engine app and opens it again, then waits for Docker (R2-07). A Mac app runs as the person, so a fresh start gives this
+ * account its socket back, which is the fix for `no-access` there (D-497). Only an engine started with `open -a` is an app.
+ */
+export async function restartDockerApp(engine: DockerEngine, opts: StartDockerOptions & { control?: AppControl } = {}): Promise<DockerStartResult> {
+  if (engine.command[0] !== "open") return { ok: false, engine: engine.name, reason: `${engine.name} isn't an app keyloom can restart. Restart it yourself, then check again.` };
+  const control = opts.control ?? osascriptAppControl;
+  opts.onProgress?.(`keyloom: quitting ${engine.name} so it starts again with access for this account`);
+  let quit: { ok: boolean; detail?: string };
+  try {
+    quit = await control.quit(engine.name, opts.signal);
+  } catch (err) {
+    quit = { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+  if (!quit.ok) return { ok: false, engine: engine.name, reason: `keyloom couldn't quit ${engine.name}${quit.detail ? ` (${quit.detail})` : ""}. Quit it from its menu, open it again, then check again.` };
+  const closed = await control.waitClosed(engine.name, QUIT_WAIT_MS, opts.signal).catch(() => false);
+  if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped restarting ${engine.name}.` };
+  if (!closed) return { ok: false, engine: engine.name, reason: `${engine.name} is still quitting. Wait until it has closed, then restart it again.` };
+  return startDockerEngine({ ...opts, detect: async () => ({ kind: "engine", engine }) });
 }

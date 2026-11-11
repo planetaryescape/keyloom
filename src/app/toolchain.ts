@@ -2,7 +2,7 @@
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
   DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
-  dockerInstall, dockerStatus, findDockerEngine, startDockerEngine,
+  dockerInstall, dockerStatus, findDockerEngine, restartDockerApp, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 
 /** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
@@ -25,14 +25,15 @@ export type DockerReadiness =
  * The way out of `no-access`: a command to paste where the fix needs sudo (keyloom can't answer its password prompt), otherwise a
  * sentence. Linux joins the docker group and needs a new login. Colima creates its socket readable by its owner only, so a socket
  * this account can't open belongs to another one, usually root after `sudo colima start`: that copy is stopped, the files given back
- * and Colima started as the person. The Mac apps run as the person, so reopening one gives the socket back.
+ * and Colima started as the person. The Mac apps run as the person, so reopening one gives the socket back, and `restartApp` names
+ * the app keyloom can restart itself (R2-07).
  */
-export type DockerAccessFix = { command: string | null; note: string };
+export type DockerAccessFix = { command: string | null; note: string; restartApp: string | null };
 
 export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
   if (platform === "linux") {
     return {
-      command: DOCKER_GROUP_COMMAND,
+      command: DOCKER_GROUP_COMMAND, restartApp: null,
       note: "It adds your account to the docker group, which Docker warns grants root-level access to this computer. Log out and back in so the change takes effect, then open keyloom again.",
     };
   }
@@ -41,11 +42,12 @@ export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine 
     const profile = at < 0 ? "" : ` ${engine.command.slice(at, at + 2).join(" ")}`;
     return {
       // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
-      command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`,
+      command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`, restartApp: null,
       note: "Colima's files belong to another account, usually because Colima was started with sudo. This stops that copy, gives the files back to you and starts Colima as you. Then check again.",
     };
   }
-  return { command: null, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
+  const app = platform === "darwin" && engine?.command[0] === "open" ? engine.name : null;
+  return { command: null, restartApp: app, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
 }
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
@@ -53,6 +55,8 @@ export type ToolchainOverrides = {
   status?: () => Promise<DockerStatus>;
   detect?: () => Promise<EngineFinding>;
   startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
+  /** Quits and reopens a Mac engine app; the real one runs osascript and `open -a`. */
+  restartApp?: typeof restartDockerApp;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
@@ -78,16 +82,16 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const now = await status();
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", autoStart };
 
-  // An install or a missing link needs no engine hunt: there is nothing here to start.
+  // An install or a missing link needs no engine hunt: there is nothing here to start. A missing link names its app, which a click opens.
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
   const found = finding?.kind === "engine" ? finding.engine : null;
-  const engine = found?.name ?? null;
+  const engine = now.kind === "cli-missing" ? now.app ?? null : found?.name ?? null;
   const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
   const platform = over.platform ?? process.platform;
   return {
     ok: false, problem: now.kind, reason, engine,
-    // A start can't give this account the socket, so it isn't offered for `no-access`.
-    canStart: autoStart && engine !== null && now.kind !== "no-access",
+    // A start can't give this account the socket, so it isn't offered for `no-access`; a build doesn't open an app for its CLI.
+    canStart: autoStart && engine !== null && now.kind !== "no-access" && now.kind !== "cli-missing",
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
     access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
@@ -101,6 +105,25 @@ export async function startDocker(opts: { onProgress?: (line: string) => void; s
   return start({
     ...(over.status === undefined ? {} : { status: over.status }),
     ...(over.detect === undefined ? {} : { detect: over.detect }),
+    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  });
+}
+
+/**
+ * Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (`no-access`, R2-07). Anything that isn't a
+ * Mac app keeps its own fix, so this says so instead of guessing.
+ */
+export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  const over = opts.overrides ?? {};
+  const finding = await (over.detect ?? findDockerEngine)();
+  const engine = finding.kind === "engine" ? finding.engine : null;
+  // restartDockerApp itself refuses an engine that isn't an app.
+  if (engine === null || (over.platform ?? process.platform) !== "darwin") {
+    return { ok: false, engine: engine?.name ?? null, reason: "keyloom can only restart a Docker app on a Mac, and it didn't find one here. Restart your Docker engine yourself, then check again." };
+  }
+  return (over.restartApp ?? restartDockerApp)(engine, {
+    ...(over.status === undefined ? {} : { status: over.status }),
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
   });

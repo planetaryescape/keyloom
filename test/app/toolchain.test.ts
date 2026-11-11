@@ -1,7 +1,8 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -54,6 +55,11 @@ describe("readiness", () => {
     const readiness = await dockerReadiness({ status: async () => ({ ok: false, kind: "cli-missing", reason: "Docker Desktop is installed, but its `docker` command isn't on keyloom's PATH." }), env: {} });
     expect(readiness).toMatchObject({ ok: false, problem: "cli-missing", install: null, canStart: false });
   });
+
+  test("an app whose CLI isn't set up is named, so the page can offer to open it; a build still doesn't open it (R2-07)", async () => {
+    const readiness = await dockerReadiness({ status: async () => ({ ok: false, kind: "cli-missing", app: "OrbStack", reason: "OrbStack is installed, but its `docker` command isn't on keyloom's PATH." }), env: {} });
+    expect(readiness).toMatchObject({ ok: false, problem: "cli-missing", engine: "OrbStack", canStart: false });
+  });
 });
 
 describe("a daemon that refuses this account (D-497)", () => {
@@ -66,7 +72,30 @@ describe("a daemon that refuses this account (D-497)", () => {
     // The command is a privilege grant, so the note says what it grants before the person pastes it.
     if (!linux.ok) expect(linux.access?.note).toContain("root-level access");
     const mac = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }), env: {}, platform: "darwin" });
-    expect(mac).toMatchObject({ ok: false, problem: "no-access", engine: "Docker Desktop", canStart: false, access: { command: null, note: "Quit Docker Desktop and open it again, then check again." } });
+    expect(mac).toMatchObject({ ok: false, problem: "no-access", engine: "Docker Desktop", canStart: false, access: { command: null, note: "Quit Docker Desktop and open it again, then check again.", restartApp: "Docker Desktop" } });
+    if (!linux.ok) expect(linux.access?.restartApp).toBeNull();
+  });
+
+  test("a restart goes to the Mac engine found; no engine, or not a Mac, says what to do instead (R2-07)", async () => {
+    const restarted: string[] = [];
+    const restartApp = async (engine: { name: string }) => (restarted.push(engine.name), { ok: true as const, version: "28", engine: engine.name, waitedMs: 1 });
+    const app = await restartDocker({ overrides: { platform: "darwin", detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }), restartApp } });
+    expect(app).toMatchObject({ ok: true, engine: "OrbStack" });
+    // Colima is refused by restartDockerApp itself (docker-start.test.ts); with no engine at all nothing is restarted.
+    expect(await restartDocker({ overrides: { platform: "darwin", detect: async () => ({ kind: "none" }), restartApp } })).toMatchObject({ ok: false, engine: null });
+    const linux = await restartDocker({ overrides: { platform: "linux", detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }), restartApp } });
+    expect(linux.ok).toBe(false);
+    expect(restarted).toEqual(["OrbStack"]);
+  });
+
+  test("doctor says the engine's own fix: Colima's commands, the Linux group, or the app to restart (#274)", () => {
+    const colima = dockerAccessDetail(dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }));
+    expect(colima).toContain('Run `sudo env HOME="$HOME" colima stop');
+    expect(colima).not.toContain("Quit");
+    const app = dockerAccessDetail(dockerAccessFix("darwin", { name: "OrbStack", command: ["open", "-a", "OrbStack"] }));
+    expect(app).toContain("Quit OrbStack and open it again");
+    expect(app).toContain("keyloom doctor --restart-docker");
+    expect(dockerAccessDetail(dockerAccessFix("linux", null))).toContain("Run `sudo usermod -aG docker $USER`");
   });
 
   test("Colima, which has no app to reopen, gets the commands that give its socket back, for its own profile", async () => {
