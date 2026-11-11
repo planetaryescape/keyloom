@@ -10,7 +10,7 @@ const servers: Array<{ stop: (force?: boolean) => void }> = [];
 afterAll(() => servers.forEach((s) => s.stop(true)));
 
 const backend: SystemBackend = {
-  docker: async () => ({ ok: false, problem: "daemon-down", reason: "the docker daemon isn't running", engine: "Docker Desktop", canStart: true, autoStart: true }),
+  docker: async () => ({ ok: false, problem: "daemon-down", reason: "the docker daemon isn't running", engine: "Docker Desktop", canStart: true, autoStart: true, install: null }),
   startDocker: async () => ({ ok: true, version: "28.0.1", engine: "Docker Desktop", waitedMs: 21_000 }),
 };
 

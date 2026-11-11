@@ -11,6 +11,18 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-11 follow-up
+
+### D-487: Start the engine the person actually runs, and say plainly when it is not one keyloom can start. Extends D-486. (BK: "what if a user doesn't have colima but is using another docker engine? what happens if a user installs and they don't have docker at all on their computer?")
+
+D-486 asked the `docker` CLI for its context and knew four answers: Docker Desktop, OrbStack, Colima and systemd. Everything else was treated as "nothing to start", which is where "another engine" and "no Docker" got the same treatment.
+
+- **The context decides.** `docker context inspect <name>` gives `Endpoints.docker.Host`, and that socket is the fingerprint: `~/.docker/run/docker.sock` and `desktop-linux` are Docker Desktop, `~/.orbstack/` is OrbStack, `~/.colima/<profile>/` is Colima, `~/.rd/` and `rancher-desktop` are Rancher Desktop, `podman.sock` is Podman, `~/.lima/<vm>/sock/docker.sock` is Lima. Each starts through its own launcher: `open -a <app>` for the apps, `podman machine start`, `limactl start <vm>`, `colima start` or `colima restart`, `systemctl start docker` or `systemctl --user start docker-desktop` on Linux.
+- **A context on another machine is not started from here.** `ssh://`, `tcp://` (other than loopback), `http(s)://` and `npipe://` come back as `elsewhere`, and the sentence names the address. A local socket from a tool keyloom has never launched comes back as `unknown`, naming the context and socket. Neither is guessed at; an invented command is worse than a sentence.
+- **No Docker at all is an install, not a start.** `dockerInstall(platform)` returns the command that works on this computer (`brew install --cask docker` on a Mac with Homebrew, `winget install --id Docker.DockerDesktop -e` on Windows, the distribution's page on Linux) and a lighter alternative. Build and flash shows the command and the link; `keyloom doctor` says the same sentence.
+- **An engine whose CLI never reached the PATH is a link, not an install.** A GUI launch, or an app that was never told to install its command line tools, leaves `/Applications/Docker.app` in place with no `docker` on the PATH. `dockerStatus` answers `cli-missing` with the `sudo ln -sf … /usr/local/bin/docker` line instead of telling the person to install what they already have.
+- **Verification.** Unit tests cover every signature and every sentence, and BK's Mac still resolves to Colima through `restart`. The `not-installed` callout with the Homebrew command and the remote-engine callout were driven through a real `keyloom serve` with fake `docker` and `brew` on the PATH (screenshots in [../research/docker-engine-start.md](../research/docker-engine-start.md#the-engines-keyloom-does-not-ship)). Docker Desktop, OrbStack, Rancher Desktop, Podman, Lima and the Linux services are matched by their documented sockets and started by their documented commands; none of them was launched on a machine that has them.
+
 ## 2026-11-10 follow-up
 
 ### D-486: keyloom starts the Docker engine itself, and says where it can't, instead of stopping at "Docker isn't running". (BK: "there could be a button here that the user can just click to resolve it, or better yet, since this is so integral to the functioning of the app, just start the daemon yourself… Do we really need docker? there's no other way to do it?")

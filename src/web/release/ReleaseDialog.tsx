@@ -77,14 +77,34 @@ function DockerNote({ docker }: { docker: Docker }) {
   }
   if (readiness === null || readiness.ok) return null;
 
-  if (readiness.problem === "not-installed") {
+  // No Docker at all: the one case a click can't fix here, so it names the command or the page instead (D-487).
+  if (readiness.problem === "not-installed" && readiness.install !== null) {
+    const install = readiness.install;
     return (
       <div className="callout callout-warning" role="alert">
         <TriangleAlert size={18} aria-hidden="true" />
         <p>
-          Firmware is built in Docker, and keyloom can't find it on this computer. Install{" "}
-          <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noreferrer">Docker Desktop</a>, then come back here.
+          Firmware is built in Docker, and there is none on this computer. Install{" "}
+          {install.command === null
+            ? <a href={install.url} target="_blank" rel="noreferrer">{install.engine}</a>
+            : <>{install.engine} with <code>{install.command}</code>{" "}
+                (<a href={install.url} target="_blank" rel="noreferrer">{install.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>)
+              </>}
+          , then come back here.
         </p>
+        <p className="callout-note">{install.note}</p>
+        <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+      </div>
+    );
+  }
+
+  // An engine keyloom can't start: on another machine, a tool it has never seen, or a CLI that missed the PATH.
+  // Its own sentence says what to do, so this doesn't pretend to know a command.
+  if (readiness.engine === null) {
+    return (
+      <div className="callout callout-warning" role="alert">
+        <TriangleAlert size={18} aria-hidden="true" />
+        <p>{readiness.reason}</p>
         <button type="button" className="button" onClick={docker.refresh}>Check again</button>
       </div>
     );

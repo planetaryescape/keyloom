@@ -1,19 +1,33 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
-// the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486).
-import { type DockerEngine, type DockerProblem, type DockerStartResult, type DockerStatus, detectDockerEngine, dockerStatus, startDockerEngine } from "../firmware/toolchain/docker.ts";
+// the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
+import {
+  type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  dockerInstall, dockerStatus, findDockerEngine, startDockerEngine,
+} from "../firmware/toolchain/docker.ts";
 
 /** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
 export type DockerReadiness =
   | { ok: true; version: string; engine: string; autoStart: boolean }
-  | { ok: false; problem: DockerProblem; reason: string; engine: string | null; canStart: boolean; autoStart: boolean };
+  | {
+      ok: false; problem: DockerProblem; reason: string;
+      /** The engine keyloom would start, or null when it found none it knows how to start. */
+      engine: string | null;
+      /** Whether a start from keyloom could help, given the engine it found and the person's setting. */
+      canStart: boolean;
+      autoStart: boolean;
+      /** What to install, when there is no Docker at all; null otherwise. */
+      install: DockerInstall | null;
+    };
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
 export type ToolchainOverrides = {
   status?: () => Promise<DockerStatus>;
-  detect?: () => Promise<DockerEngine | null>;
+  detect?: () => Promise<EngineFinding>;
   startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
+  /** What "this computer" is, for the install advice. */
+  platform?: NodeJS.Platform;
 };
 
 /**
@@ -32,13 +46,16 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const autoStart = dockerAutoStart(over.env ?? process.env);
   const now = await status();
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", autoStart };
-  // An engine keyloom knows how to start is named only when starting could help: a missing docker CLI is an install.
-  const engine = now.kind === "not-installed" ? null : await (over.detect ?? detectDockerEngine)();
+
+  // An install or a missing link needs no engine hunt: there is nothing here to start.
+  const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();
+  const engine = finding?.kind === "engine" ? finding.engine.name : null;
+  const reason = finding !== null && (finding.kind === "elsewhere" || finding.kind === "unknown") ? finding.detail : now.reason;
   return {
-    ok: false, problem: now.kind, reason: now.reason,
-    engine: engine?.name ?? null,
+    ok: false, problem: now.kind, reason, engine,
     canStart: autoStart && engine !== null,
     autoStart,
+    install: now.kind === "not-installed" ? dockerInstall(over.platform ?? process.platform) : null,
   };
 }
 
@@ -67,18 +84,22 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   const status = over.status ?? (() => dockerStatus());
   const now = await status();
   if (now.ok) return { ok: true, started: false, engine: "Docker" };
-  // Nothing to start when the docker CLI isn't there at all: that is an install, not a wake-up.
-  if (now.kind === "not-installed") return { ok: false, engine: null, reason: now.reason };
+  // Nothing to start when there is no engine, or its CLI never reached the PATH: that is an install or a link.
+  if (now.kind === "not-installed" || now.kind === "cli-missing") return { ok: false, engine: null, reason: now.reason };
+
+  const detect = over.detect ?? findDockerEngine;
   if (!dockerAutoStart(over.env ?? process.env)) {
-    return {
-      ok: false, engine: null,
-      reason: `${now.reason.replace(/\.$/, "")}, and keyloom is set not to start it (KEYLOOM_DOCKER_AUTOSTART=0). Start it, then build again.`,
-    };
+    const finding = await detect();
+    const reason = finding.kind === "elsewhere" || finding.kind === "unknown"
+      ? `${finding.detail} Starting Docker automatically is off (KEYLOOM_DOCKER_AUTOSTART=0).`
+      : `${now.reason.replace(/\.$/, "")}, and keyloom is set not to start it (KEYLOOM_DOCKER_AUTOSTART=0). Start it, then build again.`;
+    return { ok: false, engine: null, reason };
   }
+
   const start = over.startEngine ?? startDockerEngine;
   const result = await start({
     status,
-    ...(over.detect === undefined ? {} : { detect: over.detect }),
+    detect,
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
   });

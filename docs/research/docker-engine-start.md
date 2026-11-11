@@ -46,9 +46,34 @@ The daemon that had been unreachable since 3 November answered after the restart
 - [note-1440x900.png](docker-start/note-1440x900.png) and [note-390x844.png](docker-start/note-390x844.png): "Docker isn't answering. keyloom starts Colima when you build." with Start it now. The line wraps under the text on a phone rather than squeezing it.
 - [missing-1440x900.png](docker-start/missing-1440x900.png): with no docker on PATH at all, the callout says firmware is built in Docker, links the install, and offers Check again.
 
+## The engines keyloom does not ship (D-487)
+
+The first version knew Docker Desktop, OrbStack, Colima and systemd, and treated anything else as "nothing to start". The `docker` CLI's context is the fingerprint instead: `docker context inspect <name> --format {{.Endpoints.docker.Host}}` names the socket, and the socket names the engine.
+
+| Context or socket | Engine | What keyloom runs |
+|---|---|---|
+| `desktop-linux`, `~/.docker/run/docker.sock`, `/var/run/docker.sock` | Docker Desktop | `open -a Docker`; `systemctl --user start docker-desktop` on Linux |
+| `orbstack`, `~/.orbstack/run/docker.sock` | OrbStack | `open -a OrbStack` |
+| `colima`, `~/.colima/<profile>/docker.sock` | Colima | `colima start`, or `colima restart` when the VM is up |
+| `rancher-desktop`, `~/.rd/docker.sock` | Rancher Desktop | `open -a "Rancher Desktop"` |
+| `podman`, `…/podman/machine/podman.sock` | Podman | `podman machine start`, or `open -a "Podman Desktop"` |
+| `~/.lima/<vm>/sock/docker.sock` | Lima | `limactl start <vm>` |
+| `default` on Linux | the Docker service | `systemctl start docker` |
+| `ssh://`, non-loopback `tcp://`, `http(s)://`, `npipe://` | another machine | nothing; the sentence names the address |
+| any other local socket | a tool keyloom has never launched | nothing; the sentence names the context and socket |
+
+Where there is no engine at all, the answer is an install rather than a start: `dockerInstall(platform)` returns `brew install --cask docker` on a Mac with Homebrew, `winget install --id Docker.DockerDesktop -e` on Windows, or the distribution's page on Linux. An engine whose app is installed but whose `docker` command never reached the PATH is a third case, `cli-missing`, and its sentence names the symlink instead of asking for an install that already happened.
+
+- [install-1440x900.png](docker-start/install-1440x900.png): no Docker, with Homebrew present. The command is one unbroken token, the page is linked, and OrbStack is offered as the lighter alternative.
+- [remote-1440x900.png](docker-start/remote-1440x900.png): a context pointing at `ssh://builder@build.example.com`. keyloom says where the engine is and that it starts only the one on this computer, rather than pretending to start something.
+
+Both were taken through a real `keyloom serve` on a scratch data directory with a fake `docker` (refusing `version`, naming a remote context) and a fake `brew` on the PATH.
+
+The `cli-missing` callout has no screenshot: it needs a macOS app bundle that is absent here.
+
 ## What was not observed
 
-- A cold start of Docker Desktop or OrbStack: neither is installed on BK's Mac. Their path is `open -a <app>`, chosen by the docker context, and it is unit-tested but not run on a machine that has them.
+- A cold start of Docker Desktop, OrbStack, Rancher Desktop, Podman or Lima: none is installed on BK's Mac. Their paths are `open -a <app>`, `podman machine start` and `limactl start`, matched by the sockets in the table above, and are unit-tested but never run on a machine that has them.
 - `systemctl start docker` on Linux, including the permission failure the hint names.
 - A build that starts an engine and then finishes: the engine start is proven on its own, and the build path is proven with fake toolchains in `test/app/firmware.test.ts` and `test/app/firmware-zmk.test.ts`.
 - Windows: builds are refused there (D-435), so the engine is not started either.

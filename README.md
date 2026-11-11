@@ -76,7 +76,7 @@ keyloom web
 
 This opens the web app at `http://127.0.0.1:4477`. `keyloom serve` is the same command. Use `--port` to change the port and `--no-open` to skip opening the browser. Once you have a config, the app opens on a pegboard wall that holds up to four of your most recently used keyboards. Pick one to open it in the editor; the home button in the top bar takes you back to the wall.
 
-Building firmware needs Docker. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both, along with the bundled device helper.
+Building firmware needs Docker: Docker Desktop, OrbStack, Colima or the Linux `docker` service all work. If it isn't running, keyloom starts it itself (Docker Desktop and OrbStack here, Colima through `colima start` or `colima restart`, the service through `systemctl`; `KEYLOOM_DOCKER_AUTOSTART=0` turns that off). If you have no Docker yet, Build and flash says which command to run on your computer (`brew install --cask docker` on a Mac with Homebrew, `winget` on Windows) or links the install page, and `keyloom doctor` says the same. Flashing a Moonlander needs [Zapp](https://github.com/zsa/zapp). `keyloom doctor` checks both, along with the bundled device helper. `keyloom doctor --start-docker` starts the engine before it checks.
 
 To check only the installed helper, without device discovery, credentials or Docker:
 

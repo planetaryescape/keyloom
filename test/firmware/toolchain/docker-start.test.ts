@@ -1,10 +1,11 @@
-// Starting the engine a build needs (D-486): keyloom finds what runs the daemon here and waits for it, so a
-// closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a real daemon.
+// Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
+// it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerStatus, colimaEngine, detectDockerEngine, startDockerEngine } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerStatus, colimaEngine, dockerInstall, findDockerEngine, startDockerEngine } from "../../../src/firmware/toolchain/docker.ts";
 
-const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "the docker daemon isn't running; start Docker Desktop" };
+const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
 const up = (version = "27.4.0"): DockerStatus => ({ ok: true, version });
+const at = (name: string, host: string | null) => (): Promise<DockerContext> => Promise.resolve({ name, host });
 
 /** Answers `states` in order, repeating the last one, so a test writes "still down, then up". */
 function scriptedStatus(states: DockerStatus[]): { calls: number; status: () => Promise<DockerStatus> } {
@@ -17,38 +18,79 @@ function scriptedStatus(states: DockerStatus[]): { calls: number; status: () => 
   };
 }
 
-describe("finding the engine", () => {
+describe("finding the engine a context names", () => {
   const none = () => false;
-  const dockerDesktop = (app: string) => app === "Docker.app";
+  const both = (app: string) => app === "Docker.app" || app === "OrbStack.app";
+  const engineOf = async (over: Parameters<typeof findDockerEngine>[0]) => {
+    const found = await findDockerEngine(over);
+    return found.kind === "engine" ? found.engine : found;
+  };
 
-  test("macOS starts the app the docker context points at, and falls back to the bundle it finds", async () => {
-    const both = { platform: "darwin" as const, installed: (app: string) => app === "Docker.app" || app === "OrbStack.app", has: none };
-    expect(await detectDockerEngine({ ...both, context: async () => "orbstack" })).toEqual({ name: "OrbStack", command: ["open", "-a", "OrbStack"] });
-    expect(await detectDockerEngine({ ...both, context: async () => "desktop-linux" })).toEqual({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] });
-    expect(await detectDockerEngine({ ...both, context: async () => null })).toEqual({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] });
-    expect(await detectDockerEngine({ platform: "darwin", installed: dockerDesktop, has: none, context: async () => "colima" })).toEqual({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] });
+  test("Docker Desktop and OrbStack are started through their app, named by the context the CLI points at", async () => {
+    expect(await engineOf({ platform: "darwin", installed: both, has: none, context: at("orbstack", "unix:///Users/you/.orbstack/run/docker.sock") })).toEqual({ name: "OrbStack", command: ["open", "-a", "OrbStack"] });
+    expect(await engineOf({ platform: "darwin", installed: both, has: none, context: at("desktop-linux", "unix:///Users/you/.docker/run/docker.sock") })).toEqual({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] });
+    // A default context says nothing about which app made it; the apps installed here decide, Docker Desktop first.
+    expect(await engineOf({ platform: "darwin", installed: both, has: none, context: at("default", "unix:///var/run/docker.sock") })).toEqual({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] });
+    expect(await engineOf({ platform: "darwin", installed: (app: string) => app === "OrbStack.app", has: none, context: at("default", "unix:///var/run/docker.sock") })).toEqual({ name: "OrbStack", command: ["open", "-a", "OrbStack"] });
+  });
+
+  test("an engine keyloom doesn't ship is still started by its own launcher: Rancher Desktop, Podman, Lima", async () => {
+    const rancher = { name: "Rancher Desktop", app: "Rancher Desktop.app" };
+    expect(await engineOf({ platform: "darwin", installed: (a: string) => a === rancher.app, has: none, context: at("rancher-desktop", "unix:///Users/you/.rd/docker.sock") }))
+      .toEqual({ name: "Rancher Desktop", command: ["open", "-a", "Rancher Desktop"] });
+    // Podman Desktop with the podman CLI installed is started by its machine, not by the app.
+    expect(await engineOf({ platform: "darwin", installed: none, has: (c: string) => c === "podman", context: at("podman", "unix:///Users/you/.local/share/containers/podman/machine/podman.sock") }))
+      .toEqual({ name: "Podman", command: ["podman", "machine", "start"] });
+    expect(await engineOf({ platform: "darwin", installed: none, has: (c: string) => c === "limactl", context: at("lima-docker", "unix:///Users/you/.lima/docker/sock/docker.sock") }))
+      .toEqual({ name: "Lima", command: ["limactl", "start", "docker"] });
   });
 
   test("Colima runs where no app bundle does, and Linux names the service with what to do about a password", async () => {
-    const colima = await detectDockerEngine({
-      platform: "darwin", installed: none, has: none, context: async () => "colima",
-      colima: async () => ({ name: "Colima", command: ["colima", "start"] }),
+    const colima = await engineOf({
+      platform: "darwin", installed: none, has: (c: string) => c === "colima", context: at("colima", "unix:///Users/you/.colima/default/docker.sock"),
+      colimaRunning: async () => false,
     });
     expect(colima).toMatchObject({ name: "Colima", command: ["colima", "start"] });
-    const linux = await detectDockerEngine({ platform: "linux", installed: none, has: (c: string) => c === "systemctl", context: async () => null });
-    expect(linux?.command).toEqual(["systemctl", "start", "docker"]);
-    expect(linux?.hint).toContain("sudo systemctl start docker");
-    expect(await detectDockerEngine({ platform: "linux", installed: none, has: none, context: async () => null, colima: async () => null })).toBeNull();
+    const linux = await engineOf({ platform: "linux", installed: none, has: (c: string) => c === "systemctl", context: at("default", "unix:///var/run/docker.sock") });
+    expect(linux).toMatchObject({ name: "the Docker service", command: ["systemctl", "start", "docker"] });
+    expect((linux as { hint: string }).hint).toContain("sudo systemctl start docker");
+    // Docker Desktop for Linux is a user service, not the system one.
+    const desktopLinux = await engineOf({ platform: "linux", installed: none, has: (c: string) => c === "systemctl", context: at("desktop-linux", "unix:///Users/you/.docker/desktop/docker.sock") });
+    expect(desktopLinux).toMatchObject({ name: "Docker Desktop", command: ["systemctl", "--user", "start", "docker-desktop"] });
   });
 
   test("a Colima VM that is up gets restarted, because start on a wedged daemon changes nothing", async () => {
-    const socket = "unix:///Users/you/.colima/pbs/docker.sock";
-    const stopped = await colimaEngine("colima", { has: () => true, host: async () => socket, running: async () => false });
-    expect(stopped?.command).toEqual(["colima", "start", "--profile", "pbs"]);
-    const wedged = await colimaEngine("colima", { has: () => true, host: async () => "unix:///Users/you/.colima/default/docker.sock", running: async () => true });
+    const wedged = await colimaEngine({ name: "colima", host: "unix:///Users/you/.colima/default/docker.sock" }, { has: () => true, running: async () => true });
     expect(wedged?.command).toEqual(["colima", "restart"]);
     expect(wedged?.hint).toContain("colima restart");
-    expect(await colimaEngine("colima", { has: () => false })).toBeNull();
+    const pbs = await colimaEngine({ name: "colima", host: "unix:///Users/you/.colima/pbs/docker.sock" }, { has: () => true, running: async () => false });
+    expect(pbs?.command).toEqual(["colima", "start", "--profile", "pbs"]);
+    expect(await colimaEngine(null, { has: () => false })).toBeNull();
+  });
+});
+
+describe("what keyloom says when it can't start it", () => {
+  test("a context on another machine is not started from here, and the sentence says where it lives", async () => {
+    const found = await findDockerEngine({ platform: "darwin", installed: () => true, has: () => false, context: at("remote", "ssh://builder.example.com") });
+    expect(found.kind).toBe("elsewhere");
+    if (found.kind === "elsewhere") {
+      expect(found.detail).toContain("ssh://builder.example.com");
+      expect(found.detail).toContain("another machine");
+    }
+  });
+
+  test("a local socket from a tool keyloom has never seen is named, not guessed at", async () => {
+    const found = await findDockerEngine({ platform: "darwin", installed: () => false, has: () => false, context: at("mytool", "unix:///Users/you/.mytool/docker.sock") });
+    expect(found.kind).toBe("unknown");
+    if (found.kind === "unknown") {
+      expect(found.detail).toContain("mytool");
+      expect(found.detail).toContain("doesn't know what starts the engine");
+    }
+  });
+
+  test("a computer with nothing at all finds nothing", async () => {
+    expect(await findDockerEngine({ platform: "darwin", installed: () => false, has: () => false, context: async () => null })).toEqual({ kind: "none" });
+    expect(await findDockerEngine({ platform: "win32", installed: () => true, has: () => true, context: at("desktop-linux", null) })).toEqual({ kind: "none" });
   });
 });
 
@@ -56,7 +98,7 @@ describe("starting it", () => {
   test("a daemon already up is not started, and nothing waits", async () => {
     const status = scriptedStatus([up()]);
     let launched = 0;
-    const result = await startDockerEngine({ status: status.status, detect: async () => null, start: async () => (launched++, { ok: true }), sleep: async () => {} });
+    const result = await startDockerEngine({ status: status.status, detect: async () => ({ kind: "none" }), start: async () => (launched++, { ok: true }), sleep: async () => {} });
     expect(result).toEqual({ ok: true, version: "27.4.0", engine: "the Docker daemon", waitedMs: 0 });
     expect(launched).toBe(0);
   });
@@ -66,7 +108,7 @@ describe("starting it", () => {
     const lines: string[] = [];
     const result = await startDockerEngine({
       status: status.status,
-      detect: async () => ({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] }),
+      detect: async () => ({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } }),
       start: async () => ({ ok: true }),
       sleep: async () => {},
       pollMs: 1,
@@ -82,7 +124,7 @@ describe("starting it", () => {
   test("a start command that fails gives the reason, and the engine's hint when it has one", async () => {
     const result = await startDockerEngine({
       status: scriptedStatus([down]).status,
-      detect: async () => ({ name: "the Docker service", command: ["systemctl", "start", "docker"], hint: "if it asked for a password, run `sudo systemctl start docker`" }),
+      detect: async () => ({ kind: "engine", engine: { name: "the Docker service", command: ["systemctl", "start", "docker"], hint: "if it asked for a password, run `sudo systemctl start docker`" } }),
       start: async () => ({ ok: false, detail: "permission denied" }),
       sleep: async () => {},
     });
@@ -96,7 +138,7 @@ describe("starting it", () => {
   test("an engine that never answers is given up on, with what to do", async () => {
     const result = await startDockerEngine({
       status: scriptedStatus([down]).status,
-      detect: async () => ({ name: "OrbStack", command: ["open", "-a", "OrbStack"] }),
+      detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }),
       start: async () => ({ ok: true }),
       sleep: async () => {},
       timeoutMs: 0,
@@ -105,16 +147,33 @@ describe("starting it", () => {
     if (!result.ok) expect(result.reason).toContain("did not answer within 0 s");
   });
 
-  test("a computer without docker is not told to start something, and no engine is launched", async () => {
+  test("an engine keyloom can't start leaves the finding's own sentence, and launches nothing", async () => {
     let launched = 0;
-    const result = await startDockerEngine({
-      status: scriptedStatus([{ ok: false, kind: "not-installed", reason: "docker is not on PATH; install Docker Desktop or OrbStack" }]).status,
-      detect: async () => null,
+    const remote = await startDockerEngine({
+      status: scriptedStatus([down]).status,
+      detect: async () => ({ kind: "elsewhere", detail: "Your Docker context \"remote\" points at ssh://builder, which runs on another machine." }),
       start: async () => (launched++, { ok: true }),
       sleep: async () => {},
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toContain("install Docker Desktop");
+    expect(remote).toEqual({ ok: false, engine: null, reason: "Your Docker context \"remote\" points at ssh://builder, which runs on another machine." });
     expect(launched).toBe(0);
+  });
+
+  test("a computer without docker is told what to install, and no engine is launched", async () => {
+    let launched = 0;
+    const missing: DockerStatus = { ok: false, kind: "not-installed", reason: "Docker is not on this computer. Install Docker Desktop with `brew install --cask docker` (https://www.docker.com/products/docker-desktop/), then build again." };
+    const result = await startDockerEngine({ status: scriptedStatus([missing]).status, detect: async () => ({ kind: "none" }), start: async () => (launched++, { ok: true }), sleep: async () => {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("brew install --cask docker");
+    expect(launched).toBe(0);
+  });
+});
+
+describe("what to install", () => {
+  test("Homebrew where it exists, the download page where it doesn't, and the distribution's engine on Linux", () => {
+    expect(dockerInstall("darwin", (c) => c === "brew")).toMatchObject({ engine: "Docker Desktop", command: "brew install --cask docker", url: "https://www.docker.com/products/docker-desktop/" });
+    expect(dockerInstall("darwin", () => false)).toMatchObject({ engine: "Docker Desktop", command: null });
+    expect(dockerInstall("linux", (c) => c === "apt-get")).toMatchObject({ engine: "Docker Engine", url: "https://docs.docker.com/engine/install/" });
+    expect(dockerInstall("win32", (c) => c === "winget")).toMatchObject({ command: "winget install --id Docker.DockerDesktop -e" });
   });
 });
