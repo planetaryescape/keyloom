@@ -131,7 +131,12 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
           return { ok: false, flashId, error: gaveUp };
         } else if (world.flashGate) {
           a.onFlasherState("writing", "Don't unplug the keyboard.", undefined);
-          await world.flashGate.promise;
+          // Like zapp and the DFU tools, an abort here kills the write: the engine must never send one once writing has begun.
+          const cut = new Promise<"aborted">((resolve) => a.signal.addEventListener("abort", () => resolve("aborted"), { once: true }));
+          if ((await Promise.race([world.flashGate.promise.then(() => "done" as const), cut])) === "aborted") {
+            finishFlash(app.db, flashId, { error: "The write was cut off." });
+            return { ok: false, flashId, error: "The write was cut off." };
+          }
         }
         const fail = (error: string): FlashOutcome => {
           finishFlash(app.db, flashId, { error });

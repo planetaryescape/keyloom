@@ -405,6 +405,21 @@ describe("pause", () => {
     await waitFor(() => lastSyncOfBoard(w.app.db, BOARD)?.status === "succeeded", "the flash to finish");
   });
 
+  test("stopping during a flash waits for it instead of cancelling it: the step is read now, not from when the sync began", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.flashGate = gate();
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await waitFor(() => w.calls.flashes.length === 1, "the flash");
+    const stopped = e.stop({ flashGraceMs: 5_000 });
+    await Bun.sleep(60);
+    w.world.flashGate.open();
+    await stopped;
+    expect(lastSyncOfBoard(w.app.db, BOARD)?.status).toBe("succeeded");
+  });
+
   test("Sync now works while paused", async () => {
     const w = await world();
     w.flashed();

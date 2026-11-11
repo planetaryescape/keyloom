@@ -197,7 +197,10 @@ export class SyncEngine {
     clearTimeout(this.timer);
     const run = this.running;
     if (!run) return;
-    if (run.row.step === "building" || run.row.step === "needs_hand") {
+    // The step as it is now: `run.row` is the row as claimed, whose step is always "building", and aborting once the write has begun
+    // would cut a flash off halfway. A write is waited for, up to the grace period, as setPaused does.
+    const step = findSync(this.app.db, run.row.id)?.step ?? run.row.step;
+    if (step === "building" || step === "needs_hand") {
       run.reason = "stopped";
       run.abort.abort();
       run.flashAbort.abort();
