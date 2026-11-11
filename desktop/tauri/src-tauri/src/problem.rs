@@ -29,16 +29,23 @@ impl Stop {
         }
     }
 
-    /// True when the way out is a newer app: another keyloom that this one may not replace is serving the data directory.
+    /// True when the way out is a newer app: another keyloom that this one may not replace is serving the data directory, or a newer
+    /// keyloom has upgraded it.
     #[cfg_attr(not(feature = "updater"), allow(dead_code))]
     pub fn wants_update(&self) -> bool {
-        matches!(self, Stop::Failed(Failure::Incompatible { replace: None, .. }))
+        matches!(self, Stop::Failed(Failure::Incompatible { replace: None, .. } | Failure::DataTooNew))
+    }
+
+    /// False when starting again can't work: a database a newer keyloom upgraded stays upgraded, so only a newer app opens it.
+    pub fn can_retry(&self) -> bool {
+        !matches!(self, Stop::Failed(Failure::DataTooNew))
     }
 
     /// The window's heading, and the menu-bar line.
     pub fn title(&self) -> &'static str {
         match self {
             Stop::Failed(Failure::Incompatible { .. }) => "Another keyloom is running",
+            Stop::Failed(Failure::DataTooNew) => "This app is older than your keyloom data",
             Stop::Failed(_) => "keyloom couldn't start",
             Stop::KeepsStopping { .. } => "keyloom keeps stopping",
         }
@@ -64,7 +71,7 @@ pub enum Updates {
     Checking,
     Available(String),
     /// The person chose to install this version; it is downloading (`percent` when the server said how big it is), and the app
-    /// restarts when it is in.
+    /// restarts when it is in. Stop download ends it as InstallFailed.
     Installing { version: String, percent: Option<u8> },
     /// The install of this version failed, for this reason; it is still offered, so it can be tried again (R3-15).
     InstallFailed { version: String, reason: String },
@@ -95,6 +102,7 @@ pub const CHECK_UPDATES: &str = "check-updates";
 pub const INSTALL_UPDATE: &str = "install-update";
 pub const DOWNLOAD: &str = "download";
 pub const SHOW_LOG: &str = "show-log";
+pub const STOP_DOWNLOAD: &str = "stop-download";
 
 pub const RESTART_WINDOW_WORDS: &str = "10 minutes";
 
@@ -137,6 +145,43 @@ fn tail(output: &str) -> Option<String> {
     Some(lines[lines.len().saturating_sub(12)..].join("\n"))
 }
 
+/// The note and buttons when a newer app is the way out. `retry` adds Try again, for the case where quitting the other keyloom helps.
+fn update_way_out(updates: &Updates, retry: bool) -> (String, Vec<Action>) {
+    let download = || action(DOWNLOAD, "Download the latest keyloom");
+    // Every case but a running download ends with Try again (when it can help) and Show log.
+    let with = |mut list: Vec<Action>| {
+        if retry {
+            list.push(action(TRY_AGAIN, "Try again"));
+        }
+        list.push(action(SHOW_LOG, "Show log"));
+        list
+    };
+    match updates {
+        Updates::Off => ("Install the latest keyloom app over this one, then open it again.".into(), with(vec![download()])),
+        Updates::Checking => ("Checking for a newer version of this app…".into(), with(if retry { vec![] } else { vec![download()] })),
+        Updates::Available(version) => (format!("Version {version} of this app is ready to install."), with(vec![action(INSTALL_UPDATE, install_label(version))])),
+        // No Install button: a second click would do nothing while the first install runs. Stop download is the way out of a slow one.
+        Updates::Installing { version, percent } => (
+            format!("{}. keyloom restarts when it is in.", installing_words(version, *percent)),
+            vec![action(STOP_DOWNLOAD, "Stop download"), action(SHOW_LOG, "Show log")],
+        ),
+        Updates::InstallFailed { version, reason } => (
+            format!("Version {version} didn't install: {reason}"),
+            with(vec![action(INSTALL_UPDATE, format!("Try installing {version} again")), download()]),
+        ),
+        Updates::UpToDate => (
+            if retry {
+                "This app has no update yet. Install the latest keyloom app over this one, or quit the other keyloom and try again."
+            } else {
+                "This app has no update yet. Install the latest keyloom app over this one."
+            }
+            .into(),
+            with(vec![download(), action(CHECK_UPDATES, "Check for updates")]),
+        ),
+        Updates::Failed => ("keyloom couldn't check for an update.".into(), with(vec![action(CHECK_UPDATES, "Check for updates"), download()])),
+    }
+}
+
 pub fn view(stop: &Stop, updates: &Updates) -> View {
     let try_again = || action(TRY_AGAIN, "Try again");
     let show_log = || action(SHOW_LOG, "Show log");
@@ -150,26 +195,16 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
             busy: false,
             actions: actions(vec![action(REPLACE, label.clone()), try_again(), show_log()]),
         },
-        Stop::Failed(Failure::Incompatible { words, replace: None }) => {
-            let download = || action(DOWNLOAD, "Download the latest keyloom");
-            let busy = matches!(updates, Updates::Installing { .. });
-            let (note, list) = match updates {
-                Updates::Off => ("Install the latest keyloom app over this one, then open it again.".to_string(), vec![download(), try_again(), show_log()]),
-                Updates::Checking => ("Checking for a newer version of this app…".to_string(), vec![try_again(), show_log()]),
-                Updates::Available(version) => (format!("Version {version} of this app is ready to install."), vec![action(INSTALL_UPDATE, install_label(version)), try_again(), show_log()]),
-                // No Install button: a second click would do nothing while the first install runs.
-                Updates::Installing { version, percent } => (format!("{}. keyloom restarts when it is in.", installing_words(version, *percent)), vec![show_log()]),
-                Updates::InstallFailed { version, reason } => (
-                    format!("Version {version} didn't install: {reason}"),
-                    vec![action(INSTALL_UPDATE, format!("Try installing {version} again")), download(), try_again(), show_log()],
-                ),
-                Updates::UpToDate => (
-                    "This app has no update yet. Install the latest keyloom app over this one, or quit the other keyloom and try again.".to_string(),
-                    vec![download(), action(CHECK_UPDATES, "Check for updates"), try_again(), show_log()],
-                ),
-                Updates::Failed => ("keyloom couldn't check for an update.".to_string(), vec![action(CHECK_UPDATES, "Check for updates"), download(), try_again(), show_log()]),
+        // A newer app is the way out. A newer server in the way may be quit, so Try again stays; an upgraded database stays upgraded,
+        // so it goes (R4-05).
+        Stop::Failed(failure @ (Failure::Incompatible { replace: None, .. } | Failure::DataTooNew)) => {
+            let body = match failure {
+                Failure::Incompatible { words, .. } => words.clone(),
+                _ => "A newer version of keyloom has upgraded your keyboards' data. This app can't open it without misreading it.".into(),
             };
-            View { title: stop.title().into(), body: words.clone(), note: Some(note), detail: None, busy, actions: actions(list) }
+            let (note, list) = update_way_out(updates, stop.can_retry());
+            let busy = matches!(updates, Updates::Installing { .. });
+            View { title: stop.title().into(), body, note: Some(note), detail: None, busy, actions: actions(list) }
         }
         Stop::Failed(Failure::TimedOut) => View {
             title: couldnt,
@@ -321,6 +356,8 @@ pub fn act(app: &AppHandle, id: &str) {
             }
         }
         SHOW_LOG => log::show(app),
+        #[cfg(feature = "updater")]
+        STOP_DOWNLOAD => crate::updates::stop(app),
         DOWNLOAD => log::open_external(app, std::ffi::OsStr::new(RELEASES)),
         #[cfg(feature = "updater")]
         CHECK_UPDATES => crate::updates::check_now(app),
@@ -367,7 +404,8 @@ mod tests {
         assert_eq!(available.actions[0].label, "Install 0.80.0 and restart keyloom");
         let installing = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: Some(40) });
         assert!(installing.busy);
-        assert_eq!(ids(&installing), [SHOW_LOG], "no Install button that does nothing during the download");
+        assert_eq!(ids(&installing), [STOP_DOWNLOAD, SHOW_LOG], "no Install button that does nothing during the download, and a way to stop it");
+        assert_eq!(installing.actions[0].label, "Stop download");
         assert!(installing.note.as_deref().unwrap().contains("Downloading version 0.80.0: 40%"));
         let no_size = view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: None });
         assert!(no_size.note.as_deref().unwrap().contains("Downloading version 0.80.0…"));
@@ -376,10 +414,31 @@ mod tests {
     }
 
     #[test]
+    fn a_database_a_newer_keyloom_upgraded_offers_the_update_and_never_try_again() {
+        let stop = Stop::Failed(Failure::DataTooNew);
+        assert!(stop.wants_update());
+        assert!(!stop.can_retry());
+        assert_eq!(stop.title(), "This app is older than your keyloom data");
+        let off = view(&stop, &Updates::Off);
+        assert!(off.body.contains("newer version of keyloom has upgraded"));
+        assert_eq!(ids(&off), [DOWNLOAD, SHOW_LOG]);
+        assert_eq!(ids(&view(&stop, &Updates::Checking)), [DOWNLOAD, SHOW_LOG]);
+        assert_eq!(ids(&view(&stop, &Updates::Available("0.80.0".into()))), [INSTALL_UPDATE, SHOW_LOG]);
+        assert_eq!(ids(&view(&stop, &Updates::Installing { version: "0.80.0".into(), percent: None })), [STOP_DOWNLOAD, SHOW_LOG]);
+        assert_eq!(ids(&view(&stop, &Updates::InstallFailed { version: "0.80.0".into(), reason: "you stopped the download".into() })), [INSTALL_UPDATE, DOWNLOAD, SHOW_LOG]);
+        let up_to_date = view(&stop, &Updates::UpToDate);
+        assert_eq!(ids(&up_to_date), [DOWNLOAD, CHECK_UPDATES, SHOW_LOG]);
+        assert!(!up_to_date.note.as_deref().unwrap().contains("try again"));
+        assert_eq!(ids(&view(&stop, &Updates::Failed)), [CHECK_UPDATES, DOWNLOAD, SHOW_LOG]);
+    }
+
+    #[test]
     fn only_a_newer_server_asks_for_an_update() {
         assert!(!Stop::Failed(Failure::Incompatible { words: "x".into(), replace: Some("r".into()) }).wants_update());
         assert!(!Stop::Failed(Failure::TimedOut).wants_update());
         assert!(!Stop::KeepsStopping { times: 3, output: String::new() }.wants_update());
+        assert!(Stop::Failed(Failure::TimedOut).can_retry());
+        assert!(Stop::Failed(Failure::Incompatible { words: "x".into(), replace: None }).can_retry());
     }
 
     #[test]

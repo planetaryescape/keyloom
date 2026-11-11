@@ -7,6 +7,7 @@ import { Silhouette } from "../shell/TopBar.tsx";
 import "./collection.css";
 
 const GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
+const CONTRIBUTION_FILE = "keyloom-board-contribution.zip";
 
 export function KeyboardCollection({ token, choices, active, onChanged, onClose, onAdd, initiallyRemoved = false }: {
   token: string; choices: readonly BoardChoice[]; active: string | null; onChanged: (layoutId?: string) => void; onClose: () => void; onAdd: () => void;
@@ -58,9 +59,10 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       const response = await fetch("/api/keyboards/contribute", { method: "POST", headers: { "x-keyloom-token": token, "content-type": "application/json" }, body: JSON.stringify({ board: keyboard.boardId }) });
       if (!response.ok) throw await failure(response);
       const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a"); link.href = url; link.download = "keyloom-board-contribution.zip"; link.click();
+      const link = document.createElement("a"); link.href = url; link.download = CONTRIBUTION_FILE; link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNote("Downloaded board data and CONTRIBUTION.md. No personal layouts are included. Nothing was published.");
+      // The desktop app saves it to Downloads and shows it in Finder (desktop/tauri/src-tauri/src/external.rs), so the name finds it.
+      setNote(`Downloaded ${CONTRIBUTION_FILE}: board data and CONTRIBUTION.md. No personal layouts are included. Nothing was published.`);
     } catch (error) { setProblem(error instanceof Error ? error.message : "Couldn't prepare the contribution.", () => void download(keyboard)); }
     finally { setBusy(null); }
   };
