@@ -27,6 +27,8 @@ export type ReviewWorkloadComparison = z.infer<typeof ReviewWorkloadComparisonSc
 export const ReviewWorkloadSchema = z.object({
   status: z.enum(["pending", "running", "done", "unavailable", "failed"]),
   activities: ReviewActivitiesSchema, reason: z.string().nullable(),
+  // Why the tests couldn't run, for the page to map to its fix (R1-12): `docker` shows the Docker callout. Absent on older rows.
+  reasonCode: z.enum(["docker"]).optional(),
   identity: z.object({
     revisionId: z.string(), layoutHash: z.string(), boardHash: z.string(), boardRevision: z.string(),
     suiteHash: z.string(), policyHash: z.string(), sourceHash: z.string().nullable(),

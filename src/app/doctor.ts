@@ -25,7 +25,7 @@ import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.
 import { keyedProviders } from "./chat-model.ts";
 import { type CredentialOutcome, type KeyedProvider, verifyCredential } from "./credential-check.ts";
 import { credentials } from "./credentials.ts";
-import { dockerReadiness } from "./toolchain.ts";
+import { type DockerAccessFix, dockerReadiness } from "./toolchain.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean; deviceHelper?: HelperDiagnostic };
@@ -138,6 +138,13 @@ function unavailableOnWindows(name: string): DoctorCheck {
   return { name, ok: true, warn: true, detail: `not available on Windows yet; see ${WINDOWS_ROADMAP}` };
 }
 
+/** `no-access` in the engine's own terms (#274): Colima's sudo copy, the Linux group, or the Mac app to restart. */
+export function dockerAccessDetail(access: DockerAccessFix): string {
+  const how = access.command === null ? "" : ` Run \`${access.command}\`.`;
+  const restart = access.restartApp === null ? "" : ` \`keyloom doctor --restart-docker\` does that for you.`;
+  return `Docker is running, but this account can't open its socket.${how} ${access.note}${restart}`;
+}
+
 /** Docker, its disk, Zapp and the pinned checkouts. A missing Zapp is a warning: building works without it. */
 export async function runToolchainChecks(): Promise<DoctorCheck[]> {
   if (windowsUnavailable()) return [unavailableOnWindows("Docker builds and flashing")];
@@ -145,7 +152,9 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
   const readiness = await dockerReadiness();
   const docker = readiness.ok
     ? { ok: true as const, detail: `running, server ${readiness.version}` }
-    : {
+    : readiness.access !== null
+      ? { ok: false, detail: dockerAccessDetail(readiness.access) }
+      : {
         ok: false,
         detail: readiness.canStart
           ? `${readiness.reason}; keyloom starts ${readiness.engine} by itself when a build needs it`

@@ -12,4 +12,8 @@ export interface SystemBackend {
   install: (tool: InstallableTool) => Promise<InstallState>;
   /** Where an install of the tool has got to. */
   installState: (tool: InstallableTool) => Promise<InstallState>;
+  /** Stops a running install of the tool (R2-08); returns where it has got to. */
+  cancelInstall: (tool: InstallableTool) => Promise<InstallState>;
+  /** Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07). Repeated calls share one attempt. */
+  restartDocker: () => Promise<DockerStartResponse>;
 }

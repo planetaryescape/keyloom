@@ -97,6 +97,8 @@ keyloom
   remap <subcommand>                        MacBook kanata setup and management; see remap --help (21)
   doctor [--device-helper-only]            installed helper; normally also Docker, checkouts, keyboards, API key and database
   doctor --start-docker                    the same, starting Docker Desktop, Colima or the service first when it isn't running
+  doctor --install-docker                  the same, installing Docker first (Colima, with Homebrew on a Mac) and starting it, only where there is no Docker (D-500)
+  doctor --restart-docker                  the same, quitting and reopening the Mac app that refuses this account Docker's socket; a working Docker is left alone (D-499)
 ```
 
 `<board>` is a board ID, such as `zsa/moonlander` or `moergo/glove80`. `<layout>` takes the `lay_` ID or the layout's name, provided the name is unique.

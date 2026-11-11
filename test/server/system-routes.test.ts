@@ -15,7 +15,11 @@ const backend: SystemBackend = {
   startDocker: async () => ({ ok: true, version: "28.0.1", engine: "Docker Desktop", waitedMs: 21_000 }),
   install: async (tool) => ({ tool, status: "running", phase: "installing", logTail: [], error: null, errorCode: null }),
   installState: async (tool) => ({ tool, status: "succeeded", phase: null, logTail: ["==> Pouring zapp"], error: null, errorCode: null }),
+  cancelInstall: async (tool) => { cancelled.push(tool); return { tool, status: "running", phase: "stopping", logTail: ["keyloom: stopping the install"], error: null, errorCode: null }; },
+  restartDocker: async () => { restarts += 1; return { ok: true, version: "28.0.1", engine: "OrbStack", waitedMs: 4_000 }; },
 };
+const cancelled: string[] = [];
+let restarts = 0;
 
 async function serve() {
   const server = Bun.serve({ port: 0, fetch: async (r) => (await handleSystemRoute(r, new URL(r.url).pathname, backend, TOKEN)) ?? new Response("not a system route", { status: 404 }) });
@@ -45,6 +49,17 @@ describe("the install routes (D-488, D-489)", () => {
     expect((await call("/api/system/install?tool=zapp", {}, null)).status).toBe(401);
     expect((await call("/api/system/install", { method: "PUT" })).status).toBe(405);
   });
+
+  test("a DELETE stops the named install, and names only a tool keyloom knows (R2-08)", async () => {
+    const { call } = await serve();
+    const response = await call("/api/system/install?tool=docker", { method: "DELETE" });
+    expect(response.status).toBe(200);
+    expect(InstallStateSchema.parse(await response.json())).toMatchObject({ tool: "docker", status: "running", phase: "stopping" });
+    expect(cancelled).toEqual(["docker"]);
+    expect((await call("/api/system/install?tool=curl", { method: "DELETE" })).status).toBe(400);
+    expect((await call("/api/system/install?tool=docker", { method: "DELETE" }, null)).status).toBe(401);
+    expect(cancelled).toEqual(["docker"]);
+  });
 });
 
 describe("the Docker routes", () => {
@@ -60,6 +75,18 @@ describe("the Docker routes", () => {
     const response = await post("/api/system/docker/start");
     expect(response.status).toBe(200);
     expect(DockerStartResponseSchema.parse(await response.json())).toMatchObject({ ok: true, engine: "Docker Desktop" });
+  });
+
+  test("a restart is a POST that answers like a start, behind the same guard (R2-07)", async () => {
+    const { call, post } = await serve();
+    const response = await post("/api/system/docker/restart");
+    expect(response.status).toBe(200);
+    expect(DockerStartResponseSchema.parse(await response.json())).toMatchObject({ ok: true, engine: "OrbStack" });
+    expect(restarts).toBe(1);
+    expect((await call("/api/system/docker/restart", { method: "POST", body: "{}", headers: { "content-type": "application/json" } }, null)).status).toBe(401);
+    expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
+    expect((await call("/api/system/docker/restart")).status).toBe(405);
+    expect(restarts).toBe(1);
   });
 
   test("the guard: a token on every route, JSON on the write, and the method named when it is wrong", async () => {

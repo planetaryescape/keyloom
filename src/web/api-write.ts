@@ -26,7 +26,7 @@ import type { ValidationResult } from "../validation/result.ts";
 import { ApiError, TOKEN_REJECTED, UNREACHABLE } from "./api.ts";
 
 export async function request<T>(
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   token: string,
   schema: z.ZodType<T>,
