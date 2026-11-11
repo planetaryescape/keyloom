@@ -13,31 +13,6 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 
 ## 2026-11-11 follow-up: build and flash never strand anyone
 
-### D-491: A build failure says why as a code, and the page never shows a terminal command as the fix. Claude, in the blueprint; from BK's dead-ends request ("I don't want dead ends in the app… Like saying Docker is not installed without offering a way or a button to install it.")
-
-- **Codes, not sentences.** A build that stops at Docker finishes with `errorCode: "docker_unavailable"` (stored in `builds.error_code`, migration 0019) as well as its sentence. The release dialog maps the code to the Docker callout, so it never parses the sentence, and `BuildFailedError.code` carries the same code to the sync engine for the pill. A flash refused because its tool is missing answers 409 `flash_tool_missing`.
-- **Try again repeats what failed.** The release dialog remembers its last action: a build or flash that failed to start is sent again, and only a poll that gave up polls again (R1-10).
-- **A bundled docker CLI is adopted, not linked.** When `docker` is missing from the PATH but an installed Docker Desktop, OrbStack or Rancher Desktop bundles one, keyloom puts that folder on its own PATH and carries on. This replaces D-487's `sudo ln -sf` line, which asked for an admin password to fix something keyloom already knew how to find.
-- **Backticks stay in the terminal.** Server sentences keep their `code` spans for the CLI; the page strips them.
-
-### D-490: A board keyloom can't flash gets its file, not a Flash button that always fails. Claude, in the blueprint.
-
-Every build now carries a `flashPlan`: the board's manual steps when its recipe is `manual`, the tool a flash runs (`zapp`, `dfu-util`, `dfu-programmer`, `avrdude`) and whether it is installed, and whether the file can be shown in Finder. For a manual board the flash step shows the board's steps with **Download firmware** (`GET /api/builds/:id/artifact`) and, on macOS, **Show in Finder** (`POST /api/builds/:id/reveal`, which runs `open -R`). Only the file a successful build row names, inside the data directory's `artifacts/` folder, is served or revealed; a row edited to point elsewhere is a 404. The CLI keeps its sentence with the file path.
-
-### D-489: Flash tools are checked before the flash, and installed with a button. Claude, in the blueprint.
-
-The build's flash plan says whether Zapp (or the board's DFU tool) is on this computer before anyone clicks Flash. If it isn't, the flash step shows **Install Zapp**, which runs `brew install zapp` through the same install job as Docker, follows its output, and re-reads the build when it finishes, so the Flash button appears without another click. `zapp` is in homebrew-core (`brew info --json=v2 zapp`: tap `homebrew/core`, 1.0.2, checked 2026-11-11), so the command the code already printed was right. `startFlash` refuses before it creates a flash row (`FlashToolMissingError`), so a missing tool is an install to do, not a failed flash. Without Homebrew the button is **Get Zapp**, linking the tool's page.
-
-### D-488: Install Docker is a button: Homebrew installs Colima, and keyloom starts it. Extends D-486 and D-487. BK's call, through the dead-ends brief.
-
-On a Mac with Homebrew, **Install Docker** runs `brew install colima docker`, then starts Colima on the D-486 path (`startDockerEngine`, with Colima named as the engine because a fresh docker CLI points at no known socket) and waits for `docker version` to answer. Colima is headless, open source, needs no admin password and no app to click through, and keyloom already starts and restarts it. Docker Desktop's cask can ask for `sudo`, which a server can't answer, so it stays a link: the callout ends "Prefer an app? Docker Desktop · OrbStack". The install runs as one in-memory job per tool (`POST /api/system/install`, polled with `GET /api/system/install?tool=`), streams Homebrew's last lines in place, and ends in "Docker is installed and running" or in the failure with Homebrew's output and Try again. Without Homebrew, or on Linux and Windows, the primary button is **Download Docker Desktop** (or the engine docs page). While the dialog is open and Docker is missing, it asks again every four seconds, so a Docker installed some other way shows up without a click; Check again stays as a secondary button. **Build firmware** is disabled with "Install Docker first." beside it while there is no Docker.
-
-- **No buildx.** keyloom's only `docker build` is the Glove80 image (`src/firmware/zmk/image.ts`), whose Dockerfile uses no BuildKit-only syntax. Without the buildx plugin the docker CLI falls back to the legacy builder with a deprecation warning, and errors only when `DOCKER_BUILDKIT=1` is set (docker/cli `cmd/docker/builder.go`), which keyloom never sets. So `docker-buildx` is not installed, and `~/.docker/config.json` is not touched. Revisit when the legacy builder is removed.
-- **Safety.** No test runs Homebrew or opens Finder: every runner is injected, and the test preload sets `KEYLOOM_REFUSE_SYSTEM_ACTIONS=1`, which makes the real runner refuse.
-- **Not done yet:** a CLI command for the install (D-030). `keyloom doctor` still prints the command.
-
-## 2026-11-11 follow-up
-
 ### D-495: Refusals and failures carry codes the web app turns into the action that fixes them; the CLI keeps its own words. (Claude, in the dead-ends round, from BK: "I don't want dead ends in the app, or places where a user is just told that something is wrong without being offered a way out")
 
 - **Sync refusals.** `SyncRefusal` (a `UsageError`, so CLI exit codes are unchanged) carries `archived`, `not_on_keyboard`, `cant_sync`, `not_connected`, `kanata_not_running`, `kanata_foreign`, `foreign_firmware`, `busy`, `unproven`, `keyboard_removed` or `kanata_still_running`; `/api/sync` answers 400 with that code. The toast maps it (`refusalNotice` in `src/web/sync/words.ts`) to Restore, Put it on…, Build and flash… or Replace it…, and never shows the server's sentence, which names CLI commands. Toasts gained an optional action button.
@@ -63,6 +38,31 @@ On a Mac with Homebrew, **Install Docker** runs `brew install colima docker`, th
 ### D-492: keyloom opens System Settings at the right pane itself. (BK's brief for the dead-ends round)
 
 - `POST /api/system/open-settings {pane}` takes a name from an allowlist (`input_monitoring`, `accessibility`, `files_and_folders`, `full_disk_access`, `login_items`), never a URL, and runs `open x-apple.systempreferences:…` on macOS only. Anything else is a 400 before the computer is asked. The UI shows these buttons only on macOS. R1-A's next round can use it for Files and Folders.
+
+### D-491: A build failure says why as a code, and the page never shows a terminal command as the fix. Claude, in the blueprint; from BK's dead-ends request ("I don't want dead ends in the app… Like saying Docker is not installed without offering a way or a button to install it.")
+
+- **Codes, not sentences.** A build that stops at Docker finishes with `errorCode: "docker_unavailable"` (stored in `builds.error_code`, migration 0019) as well as its sentence. The release dialog maps the code to the Docker callout, so it never parses the sentence, and `BuildFailedError.code` carries the same code to the sync engine for the pill. A flash refused because its tool is missing answers 409 `flash_tool_missing`.
+- **Try again repeats what failed.** The release dialog remembers its last action: a build or flash that failed to start is sent again, and only a poll that gave up polls again (R1-10).
+- **A bundled docker CLI is adopted, not linked.** When `docker` is missing from the PATH but an installed Docker Desktop, OrbStack or Rancher Desktop bundles one, keyloom puts that folder on its own PATH and carries on. This replaces D-487's `sudo ln -sf` line, which asked for an admin password to fix something keyloom already knew how to find.
+- **Backticks stay in the terminal.** Server sentences keep their `code` spans for the CLI; the page strips them.
+
+### D-490: A board keyloom can't flash gets its file, not a Flash button that always fails. Claude, in the blueprint.
+
+Every build now carries a `flashPlan`: the board's manual steps when its recipe is `manual`, the tool a flash runs (`zapp`, `dfu-util`, `dfu-programmer`, `avrdude`) and whether it is installed, and whether the file can be shown in Finder. For a manual board the flash step shows the board's steps with **Download firmware** (`GET /api/builds/:id/artifact`) and, on macOS, **Show in Finder** (`POST /api/builds/:id/reveal`, which runs `open -R`). Only the file a successful build row names, inside the data directory's `artifacts/` folder, is served or revealed; a row edited to point elsewhere is a 404. The CLI keeps its sentence with the file path.
+
+### D-489: Flash tools are checked before the flash, and installed with a button. Claude, in the blueprint.
+
+The build's flash plan says whether Zapp (or the board's DFU tool) is on this computer before anyone clicks Flash. If it isn't, the flash step shows **Install Zapp**, which runs `brew install zapp` through the same install job as Docker, follows its output, and re-reads the build when it finishes, so the Flash button appears without another click. `zapp` is in homebrew-core (`brew info --json=v2 zapp`: tap `homebrew/core`, 1.0.2, checked 2026-11-11), so the command the code already printed was right. `startFlash` refuses before it creates a flash row (`FlashToolMissingError`), so a missing tool is an install to do, not a failed flash. Without Homebrew the button is **Get Zapp**, linking the tool's page.
+
+### D-488: Install Docker is a button: Homebrew installs Colima, and keyloom starts it. Extends D-486 and D-487. BK's call, through the dead-ends brief.
+
+On a Mac with Homebrew, **Install Docker** runs `brew install colima docker`, then starts Colima on the D-486 path (`startDockerEngine`, with Colima named as the engine because a fresh docker CLI points at no known socket) and waits for `docker version` to answer. Colima is headless, open source, needs no admin password and no app to click through, and keyloom already starts and restarts it. Docker Desktop's cask can ask for `sudo`, which a server can't answer, so it stays a link: the callout ends "Prefer an app? Docker Desktop · OrbStack". The install runs as one in-memory job per tool (`POST /api/system/install`, polled with `GET /api/system/install?tool=`), streams Homebrew's last lines in place, and ends in "Docker is installed and running" or in the failure with Homebrew's output and Try again. Without Homebrew, or on Linux and Windows, the primary button is **Download Docker Desktop** (or the engine docs page). While the dialog is open and Docker is missing, it asks again every four seconds, so a Docker installed some other way shows up without a click; Check again stays as a secondary button. **Build firmware** is disabled with "Install Docker first." beside it while there is no Docker.
+
+- **No buildx.** keyloom's only `docker build` is the Glove80 image (`src/firmware/zmk/image.ts`), whose Dockerfile uses no BuildKit-only syntax. Without the buildx plugin the docker CLI falls back to the legacy builder with a deprecation warning, and errors only when `DOCKER_BUILDKIT=1` is set (docker/cli `cmd/docker/builder.go`), which keyloom never sets. So `docker-buildx` is not installed, and `~/.docker/config.json` is not touched. Revisit when the legacy builder is removed.
+- **Safety.** No test runs Homebrew or opens Finder: every runner is injected, and the test preload sets `KEYLOOM_REFUSE_SYSTEM_ACTIONS=1`, which makes the real runner refuse.
+- **Not done yet:** a CLI command for the install (D-030). `keyloom doctor` still prints the command.
+
+## 2026-11-11 follow-up
 
 ### D-487: Start the engine the person actually runs, and say plainly when it is not one keyloom can start. Extends D-486. (BK: "what if a user doesn't have colima but is using another docker engine? what happens if a user installs and they don't have docker at all on their computer?")
 
