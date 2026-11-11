@@ -1,7 +1,7 @@
 import { Download, Keyboard as KeyboardIcon, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CollectionResponseSchema, CollectionKeyboardSchema, type CollectionKeyboard } from "../../api/keyboards.ts";
-import type { BoardChoice } from "../../api/http.ts";
+import { SyncStatusResponseSchema, type BoardChoice } from "../../api/http.ts";
 import { request, failure } from "../api-write.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
 import "./collection.css";
@@ -21,6 +21,9 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
   // A problem carries its Try again: the action that failed, not a reload of the list (R3-23).
   const [problem, setProblemState] = useState<{ text: string; retry: () => void } | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // A restored keyboard stays paused until the person resumes it (restoreKeyboard): the note offers that here (R4-13).
+  // Kept with the note it belongs to, so a later note (a download) doesn't carry the button.
+  const [resumable, setResumable] = useState<{ keyboard: CollectionKeyboard; note: string } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     const result = await request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, signal);
     if (!signal?.aborted) setItems(result.keyboards);
@@ -38,14 +41,25 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
     // setProblem is rebuilt each render; the load is what this effect follows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
+  const resume = async (keyboard: CollectionKeyboard) => {
+    setBusy(keyboard.boardId); setProblem(null);
+    try {
+      await request("POST", "/api/sync/pause", token, SyncStatusResponseSchema, undefined, { boardId: keyboard.boardId, paused: false });
+      setResumable(null);
+      setNote(`${keyboard.name} restored, and syncing is on again.`);
+    } catch (error) { setProblem(error instanceof Error ? error.message : "Couldn't resume syncing.", () => void resume(keyboard)); }
+    finally { setBusy(null); }
+  };
   const change = async (keyboard: CollectionKeyboard, action: "remove" | "restore") => {
-    setBusy(keyboard.boardId); setProblem(null); setNote(null);
+    setBusy(keyboard.boardId); setProblem(null); setNote(null); setResumable(null);
     try {
       const result = await request("POST", `/api/keyboards/${action}`, token, CollectionKeyboardSchema, undefined, { board: keyboard.boardId });
       setItems((current) => current?.map((item) => item.boardId === result.boardId ? result : item) ?? [result]);
       setConfirm(null);
       if (action === "restore") setRemoved(false);
-      setNote(action === "remove" ? `${keyboard.name} removed. Configs and history are kept under Removed.` : `${keyboard.name} restored. Syncing stays paused until you resume it.`);
+      const said = action === "remove" ? `${keyboard.name} removed. Configs and history are kept under Removed.` : `${keyboard.name} restored. Syncing stays paused until you resume it.`;
+      setNote(said);
+      if (action === "restore") setResumable({ keyboard: result, note: said });
       onChanged();
       try { await load(); }
       catch { setProblem("The keyboard was updated, but the collection couldn't refresh. Try again to reload the list."); }
@@ -75,7 +89,7 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       </div>
     </div>
     {problem ? <p role="alert" className="collection-message">{problem.text}<button type="button" className="sheet-action" disabled={busy !== null} onClick={problem.retry}>Try again</button></p> : null}
-    {note ? <p role="status" className="collection-message">{note}</p> : null}
+    {note ? <p role="status" className="collection-message">{note}{resumable === null || resumable.note !== note ? null : <button type="button" className="sheet-action" disabled={busy !== null} onClick={() => void resume(resumable.keyboard)}>Resume syncing</button>}</p> : null}
     <div className="collection-list">
       {items === null && !problem ? <p><LoaderCircle size={16} className="spin" /> Loading your keyboards…</p> : null}
       {items !== null && matches.length === 0 ? <p className="collection-empty">{query ? "No keyboards match your search." : removed ? "No removed keyboards. Removed keyboards stay here with their configs and history." : "No keyboards in your setup yet. Add one below, or restore one from Removed."}</p> : null}
