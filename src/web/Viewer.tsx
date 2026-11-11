@@ -200,6 +200,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const toasts = useToasts();
   // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
   const refusalHandlers: RefusalHandlers = {
+    open_status: openKeyboardStatus,
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: () => onOpenRelease(),
@@ -904,8 +905,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   // The lab's Input Monitoring button (R3-09): the same System Settings opener as kanata's checklist (D-492).
   function openInputMonitoring() {
-    sync.remapperSetup.openSettings("input_monitoring").catch((error: unknown) =>
-      toasts.show({ kind: "error", message: "keyloom couldn't open System Settings", detail: error instanceof Error ? error.message : "Try the button again." }));
+    const failed = (detail: string) => toasts.show({ kind: "error", message: "keyloom couldn't open System Settings", detail });
+    sync.remapperSetup.openSettings("input_monitoring").then(
+      (r) => { if (!r.ok) failed(r.reason); },
+      (error: unknown) => failed(error instanceof Error ? error.message : "Try the button again."),
+    );
   }
 
   async function labApply(card: ProposalCard) {

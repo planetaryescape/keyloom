@@ -1,34 +1,33 @@
 import { useEffect, useRef } from "react";
 import type { BoardSync } from "../../api/http.ts";
 import type { ToastInput } from "../shell/Toasts.tsx";
-import { openKeyboardStatus } from "./SyncStatus.tsx";
+import type { ConfirmProblem } from "../configs/ConfigDialogs.tsx";
 import type { SyncApi } from "./useSync.ts";
-import { type RefusalAction, refusalNotice, refusalOf, syncNotice } from "./words.ts";
+import { type RefusalAction, knownRefusal, refusalNotice, syncNotice } from "./words.ts";
 
-/** What a refusal's button does on this page. An action the page can't take (left out, or undefined) leaves the toast without a button. */
-export type RefusalHandlers = { [A in RefusalAction]?: (() => void) | undefined };
+/** What a refusal's button does on this page. An action the page can't take leaves the toast without a button. */
+export type RefusalHandlers = Partial<Record<RefusalAction, () => void>>;
+
+/** A notice's button, when this page has a handler for it. Read at press time, so the button acts on the page as it is then. */
+const buttonFor = (action: { id: RefusalAction; label: string } | undefined, handlers: () => RefusalHandlers): { label: string; run: () => void } | undefined =>
+  action !== undefined && handlers()[action.id] !== undefined ? { label: action.label, run: () => handlers()[action.id]?.() } : undefined;
 
 /**
  * A refused request (its server code) as words and the button that fixes it, for a dialog that shows it in place of a toast (R3-01).
- * Null for a failure that isn't a refusal, which the caller says in its own words. The keyboard's status popover is on every page.
+ * Null for a failure that isn't a refusal, which the caller says in its own words.
  */
-export function refusalProblem(error: { code?: string | undefined; message: string }, handlers: RefusalHandlers): { message: string; detail?: string; action?: { label: string; run: () => void } } | null {
-  const notice = refusalOf(error);
+export function refusalProblem(error: { code?: string | undefined }, handlers: RefusalHandlers): ConfirmProblem | null {
+  const notice = knownRefusal(error.code);
   if (notice === null) return null;
-  const all: RefusalHandlers = { open_status: openKeyboardStatus, ...handlers };
-  const run = notice.action === undefined ? undefined : all[notice.action.id];
-  return {
-    message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }),
-    ...(notice.action !== undefined && run !== undefined ? { action: { label: notice.action.label, run } } : {}),
-  };
+  const action = buttonFor(notice.action, () => handlers);
+  return { message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) };
 }
 
 // Says when a change reaches a keyboard, and when it doesn't. The first state after the page opens says nothing: it isn't news.
 export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, handlers: RefusalHandlers = {}): void {
-  // Read at the moment the button is pressed, so the toast acts on the page as it is then.
-  // The keyboard's status popover is on every page that shows these toasts, so its button needs no handler from the page.
   const latest = useRef<RefusalHandlers>({});
-  latest.current = { open_status: openKeyboardStatus, ...handlers };
+  latest.current = handlers;
+  const current = () => latest.current;
   const before = useRef<ReadonlyMap<string, BoardSync> | null>(null);
   useEffect(() => {
     if (!sync.live) return;
@@ -37,9 +36,8 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
       for (const board of sync.boards) {
         const notice = syncNotice(before.current.get(board.boardId), board);
         if (notice === null) continue;
-        const id = notice.action?.id;
-        const action = notice.action !== undefined && id !== undefined && latest.current[id] !== undefined ? { action: { label: notice.action.label, run: () => latest.current[id]?.() } } : {};
-        show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...action });
+        const action = buttonFor(notice.action, current);
+        show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
       }
     }
     before.current = now;
@@ -48,11 +46,7 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
   useEffect(() => {
     if (sync.error === null) return;
     const notice = refusalNotice(sync.error.code, sync.error.message);
-    const id = notice.action?.id;
-    const run = id === undefined ? undefined : latest.current[id];
-    show({
-      kind: "error", message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }),
-      ...(notice.action !== undefined && id !== undefined && run !== undefined ? { action: { label: notice.action.label, run: () => latest.current[id]?.() } } : {}),
-    });
+    const action = buttonFor(notice.action, current);
+    show({ kind: "error", message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
   }, [sync.error, show]);
 }

@@ -174,6 +174,8 @@ export class SyncEngine {
   private detected: DetectedKeyboard[] = [];
   private lastPublished = "";
   private readonly sameDocument = new Map<string, boolean>();
+  /** A failed build's code, by build: it never changes, and the views are built every tick. */
+  private readonly buildCodes = new Map<string, string | null>();
 
   constructor(private readonly app: App, private readonly deps: SyncDeps, opts: SyncOptions = {}) {
     this.quietMs = opts.quietMs ?? 3000;
@@ -305,12 +307,15 @@ export class SyncEngine {
 
   /**
    * Records when kanata was last seen running a config keyloom wrote (keyloom.kbd, or safe.kbd with remapping off), for the exit-chord
-   * proof (D-509). Only while the board is unproven: after that nothing reads it, and the database isn't written every poll.
+   * proof (D-509). Only while the board is unproven, since nothing reads it after that, and at most once a minute: the ten-minute window
+   * doesn't need the 5-second poll's precision, and a board can stay unproven for days.
    */
   private noteKanataSeen(): void {
     for (const [boardId, reading] of this.readings) {
       if (reading.state !== "keyloom" && reading.state !== "remapping_off") continue;
-      if (!isRemapper(boardId) || getBoardSync(this.app.db, boardId).provenAt !== null) continue;
+      if (!isRemapper(boardId)) continue;
+      const bs = getBoardSync(this.app.db, boardId);
+      if (bs.provenAt !== null || (bs.kanataSeenAt !== null && bs.kanataSeenAt <= this.readAt && this.readAt - bs.kanataSeenAt < 60_000)) continue;
       recordKanataSeen(this.app.db, boardId, this.readAt);
     }
   }
@@ -453,9 +458,20 @@ export class SyncEngine {
   private runView(s: SyncRow): SyncRunView {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
-      errorCode: s.failure === "build" && s.buildId !== null ? (findBuild(this.app.db, s.buildId)?.errorCode ?? null) : null,
+      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : null,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
+  }
+
+  private buildCodeOf(buildId: string): string | null {
+    let code = this.buildCodes.get(buildId);
+    if (code === undefined) {
+      const build = findBuild(this.app.db, buildId);
+      code = build?.errorCode ?? null;
+      // Only a finished build's code is final; a row not written yet is asked again next time.
+      if (build !== undefined && build.status !== "running") this.buildCodes.set(buildId, code);
+    }
+    return code;
   }
 
   /** One view per board that has a layout, for the header and `keyloom sync status`. */

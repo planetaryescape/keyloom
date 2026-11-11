@@ -54,6 +54,8 @@ const RETRY_MIN_MS = 1000;
 const STALE_REPLACE: ReadonlySet<string> = new Set(["kanata_not_foreign", "kanata_not_running", "keyboard_removed"]);
 const RETRY_MAX_MS = 10_000;
 
+const asSyncError = (e: unknown): NonNullable<SyncApi["error"]> => ({ message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined });
+
 // Follows /api/events with fetch, because EventSource can't send the session token. A stream that ends is reopened with a growing
 // pause; the first frame of each is a whole snapshot, so nothing missed meanwhile matters.
 export function useSync(token: string): SyncApi {
@@ -131,7 +133,7 @@ export function useSync(token: string): SyncApi {
       });
       if (answer !== undefined && !liveRef.current) setBoards(answer.boards);
     } catch (e) {
-      if (!controller.signal.aborted) setError({ message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined });
+      if (!controller.signal.aborted) setError(asSyncError(e));
     } finally {
       if (waiting.current === controller) waiting.current = null;
     }
@@ -142,7 +144,7 @@ export function useSync(token: string): SyncApi {
       const next = await run();
       if (!liveRef.current) setBoards(next);
     } catch (e) {
-      setError({ message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined });
+      setError(asSyncError(e));
     }
   }, []);
 

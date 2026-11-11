@@ -152,7 +152,8 @@ export type AutoSyncLine = { name: "Auto-sync" | "Auto-apply"; on: boolean; canT
 
 export function autoSyncLine(board: BoardSync): AutoSyncLine {
   const a = board.auto;
-  const exitChord = board.remapper === true && !a.proven && a.exitChordReady === true;
+  // The server sends it true only for an unproven remapper (D-509).
+  const exitChord = a.exitChordReady === true;
   return {
     name: board.remapper === true ? "Auto-apply" : "Auto-sync",
     on: a.on,
@@ -200,16 +201,14 @@ export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_for
  */
 export type RefusalNotice = { message: string; detail?: string; action?: { id: RefusalAction; label: string } };
 
-/**
- * The refusal behind a failed request, when its code is one `refusalNotice` has words for (R3-01): a put-on or a put-version refused by
- * the sync engine gets the same message and button as the toast. Any other failure is null, and the caller shows its own message.
- */
-export const refusalOf = (error: { code?: string | undefined; message: string }): RefusalNotice | null => knownRefusal(error.code);
-
 export const refusalNotice = (code: string | undefined, message: string): RefusalNotice =>
   knownRefusal(code) ?? { message: "keyloom couldn't do that", detail: message };
 
-function knownRefusal(code: string | undefined): RefusalNotice | null {
+/**
+ * The words and button for a refusal code, or null for a code that isn't one (R3-01): a put-on refused by the sync engine gets the same
+ * message and button as the toast, and any other failure is the caller's to say.
+ */
+export function knownRefusal(code: string | undefined): RefusalNotice | null {
   switch (code) {
     case "archived": return { message: "This config is archived", detail: "Restore it to put it on the keyboard.", action: { id: "restore", label: "Restore" } };
     case "not_on_keyboard": return { message: "This config isn't the one on the keyboard", detail: "Put it on to make it the config that syncs.", action: { id: "put_on", label: "Put it on…" } };
