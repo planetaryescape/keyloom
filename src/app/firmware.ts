@@ -9,6 +9,7 @@ import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
+import { commandArg } from "./command-words.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
@@ -365,7 +366,7 @@ export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {
 export function misfitHint(view: LayoutView): string {
   const keys = view.board.definition.keyCount;
   if (view.document.layers.every((layer) => layer.bindings.length === keys)) return "";
-  const name = view.layout.name;
+  const name = commandArg(view.layout.name);
   return `. Its layers no longer match the ${keys} keys of ${view.board.definition.name}; find a version that did with \`keyloom version list ${name}\`, then go back to it with \`keyloom version restore ${name} <version>\``;
 }
 
@@ -470,7 +471,7 @@ function chooseBuild(app: App, opts: FlashOptions): BuildRow {
   }
   // A kanata board has no build to flash, so `keyloom build` would only refuse again: its way on is a sync (R3-11).
   const board = boardOf(app, layoutId);
-  if (board?.definition.firmware === "kanata") throw new UsageError(`${board.definition.name} is applied by writing a config file, not flashed; use \`keyloom sync ${opts.layout ?? layoutId}\``);
+  if (board?.definition.firmware === "kanata") throw new UsageError(`${board.definition.name} is applied by writing a config file, not flashed; use \`keyloom sync ${commandArg(opts.layout ?? layoutId)}\``);
   const row = latestSuccessfulBuild(app.db, layoutId);
   if (!row) throw new UsageError(`no successful build of this layout yet; run \`keyloom build ${opts.layout ?? layoutId}\` first`);
   return row;

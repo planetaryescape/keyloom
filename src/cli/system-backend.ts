@@ -8,6 +8,8 @@ import type { SystemBackend } from "../server/system-backend.ts";
 
 // The page offers Restart for an engine keyloom can restart, so that engine's terminal hint is left out; any other keeps it (R3-04).
 const response = (r: Awaited<ReturnType<typeof startDocker>>): DockerStartResponse => (r.ok ? { ok: true, version: r.version, engine: r.engine, waitedMs: r.waitedMs } : { ok: false, reason: r.restartEngine === undefined ? reasonWithHint(r) : r.reason, engine: r.engine });
+// A restart that failed has already done what the hint says; the page offers the engine's guide and Check again instead.
+const restartResponse = (r: Awaited<ReturnType<typeof restartDocker>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine });
 
 export function appSystemBackend(installDeps: InstallDeps = {}, docker: { restart?: typeof restartDocker; start?: typeof startDocker } = {}): SystemBackend & { stopInstalls: () => Promise<void> } {
   let starting: Promise<DockerStartResponse> | null = null;
@@ -25,7 +27,7 @@ export function appSystemBackend(installDeps: InstallDeps = {}, docker: { restar
     karabinerConfig: () => readKarabinerConfig(),
     cancelInstall: async (tool) => installs.cancel(tool),
     restartDocker: () => {
-      restarting ??= (docker.restart ?? restartDocker)().then(response).finally(() => { restarting = null; });
+      restarting ??= (docker.restart ?? restartDocker)().then(restartResponse).finally(() => { restarting = null; });
       return restarting;
     },
   };
