@@ -5,7 +5,9 @@ import type { ApiCandidate } from "../../src/api/detected-keyboards.ts";
 import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import type { NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
+// SAFETY: the Confirm panel reads only the candidate's id, name and firmware.
 const candidate = { id: "zmk/corne", name: "Corne", firmware: "zmk" } as ApiCandidate;
+// SAFETY: the Confirm panel reads only these fields of the hook's result; the rest of its API is never called while rendering.
 const flow = (previewProblem: string | null): NewKeyboard => ({
   step: { kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null },
   preview: null, previewProblem, problem: null, retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, review: () => {},

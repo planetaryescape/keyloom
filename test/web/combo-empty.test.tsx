@@ -1,10 +1,10 @@
 // An empty combo list offers New combo where the page can start one, instead of only describing the shift-click (R3-23).
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Layout } from "../../src/layout/schema.ts";
 import { ComboList } from "../../src/web/combos/ComboPane.tsx";
+import { tiny } from "../helpers/tiny.ts";
 
-const empty = { combos: [], layers: [], macros: [], tapDances: [] } as unknown as Layout;
+const empty = tiny({ combos: [] });
 const noop = () => {};
 
 test("with a way to start one, the empty list has a New combo button", () => {

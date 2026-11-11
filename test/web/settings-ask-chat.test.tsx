@@ -4,10 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Layout } from "../../src/layout/schema.ts";
 import { OtherSettings } from "../../src/web/settings/SettingsPane.tsx";
 
-const layout = { passthrough: [] } as unknown as Layout;
-const settings = [{ key: "TAPPING_TERM", value: 180 }] as unknown as Layout["settings"];
+const settings: Layout["settings"] = [{ firmware: "qmk", key: "TAPPING_TERM", value: 180 }];
 
 test("Ask the chat is a button, not words", () => {
-  const html = renderToStaticMarkup(<OtherSettings layout={layout} settings={settings} />);
+  const html = renderToStaticMarkup(<OtherSettings passthrough={[]} settings={settings} />);
   expect(html).toMatch(/<button[^>]*>Ask the chat<\/button> to change one/);
 });
