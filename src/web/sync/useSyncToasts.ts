@@ -5,8 +5,8 @@ import { openKeyboardStatus } from "./SyncStatus.tsx";
 import type { SyncApi } from "./useSync.ts";
 import { type RefusalAction, refusalNotice, refusalOf, syncNotice } from "./words.ts";
 
-/** What a refusal's button does on this page. An action the page can't take leaves the toast without a button. */
-export type RefusalHandlers = Partial<Record<RefusalAction, () => void>>;
+/** What a refusal's button does on this page. An action the page can't take (left out, or undefined) leaves the toast without a button. */
+export type RefusalHandlers = { [A in RefusalAction]?: (() => void) | undefined };
 
 /**
  * A refused request (its server code) as words and the button that fixes it, for a dialog that shows it in place of a toast (R3-01).
