@@ -7,7 +7,11 @@ const projectRoot = join(import.meta.dir, "../..");
 const cliResultSchema = z.strictObject({ code: z.number(), out: z.string(), err: z.string() });
 const cliErrorSchema = z.strictObject({
   schema_version: z.literal(1),
-  error: z.strictObject({ code: z.string(), message: z.string() }),
+  error: z.strictObject({
+    code: z.string(),
+    message: z.string(),
+    cause: z.strictObject({ code: z.string(), message: z.string() }).optional(),
+  }),
 });
 const resultsSchema = z.tuple([cliResultSchema, cliResultSchema]);
 const parseError = (text: string) => {
@@ -17,7 +21,7 @@ const parseError = (text: string) => {
   return cliErrorSchema.parse(value);
 };
 
-test("a cleanup failure replaces an operation error with one JSON document", async () => {
+test("a cleanup failure keeps the operation error as the cause in one JSON document", async () => {
   const dataDir = tempDir();
   const deviceConnectionsPath = join(projectRoot, "src/app/device-connections.ts");
   const mainPath = join(projectRoot, "src/cli/main.ts");
@@ -89,6 +93,8 @@ test("a cleanup failure replaces an operation error with one JSON document", asy
     error: {
       code: "cleanup_unconfirmed",
       message: "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again",
+      // The desktop shell reads this code (sidecar.rs error_codes), so a cleanup failure can't turn `schema_too_new` into Try again.
+      cause: { code: "not_found", message: 'no layout "ghost"' },
     },
   });
   expect(cleanupConfirmed.code).toBe(3);

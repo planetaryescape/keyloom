@@ -123,8 +123,9 @@
     const note = document.getElementById("note");
     note.textContent = state.note || "";
     note.hidden = !state.note;
-    document.getElementById("alert").hidden = state.busy;
-    document.getElementById("busy").hidden = !state.busy;
+    // The icons are SVG, which has no `hidden` property: setting one did nothing, so a busy window showed the warning, not the spinner.
+    document.getElementById("alert").toggleAttribute("hidden", state.busy);
+    document.getElementById("busy").toggleAttribute("hidden", !state.busy);
     document.getElementById("detail").textContent = state.detail || "";
     document.getElementById("details").hidden = !state.detail;
     // The server's last lines are the why, so they show without a click (R3-16).

@@ -51,11 +51,20 @@ pub fn show(app: &AppHandle) {
 
 /// Hands a file or URL to macOS's `open`: a .log opens in Console, a URL in the default browser.
 pub fn open_external(app: &AppHandle, target: &std::ffi::OsStr) {
-    match std::process::Command::new("/usr/bin/open").arg(target).spawn() {
+    run_open(app, &[target]);
+}
+
+/// Shows a file selected in Finder.
+pub fn reveal(app: &AppHandle, file: &std::path::Path) {
+    run_open(app, &[std::ffi::OsStr::new("-R"), file.as_os_str()]);
+}
+
+fn run_open(app: &AppHandle, args: &[&std::ffi::OsStr]) {
+    match std::process::Command::new("/usr/bin/open").args(args).spawn() {
         Ok(child) => {
             reap(child);
         }
-        Err(err) => say(app, &format!("could not open {}: {err}", target.to_string_lossy())),
+        Err(err) => say(app, &format!("could not open {}: {err}", args.last().map(|a| a.to_string_lossy()).unwrap_or_default())),
     }
 }
 

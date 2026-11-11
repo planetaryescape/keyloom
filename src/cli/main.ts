@@ -451,8 +451,11 @@ export async function runCli(argv: string[], io: Io = stdIo(), chat: ChatDeps = 
   if (cleanupFailed) {
     const warning = "keyboard helper termination could not be confirmed; restart keyloom before using the keyboard connection again";
     if (classified && !jsonErrors) io.err(`error: ${classified.message}\n`);
+    // Still one error document, but the command's own failure rides along as `cause`: the desktop shell reads its code
+    // (`schema_too_new` offers the update, not Try again), and a cleanup failure must not hide it.
+    const cause = classified ? { cause: { code: classified.kind, message: classified.message } } : {};
     io.err(jsonErrors
-      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning } })}\n`
+      ? `${JSON.stringify({ schema_version: SCHEMA_VERSION, error: { code: "cleanup_unconfirmed", message: warning, ...cause } })}\n`
       : `${warning}\n`);
     return EXIT.bug;
   }

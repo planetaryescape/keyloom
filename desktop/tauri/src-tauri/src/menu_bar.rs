@@ -3,6 +3,7 @@
 use crate::{log, sidecar, AppState};
 use futures_util::StreamExt;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 use tauri::{menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIcon, AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
@@ -57,7 +58,7 @@ pub fn parse_frame(frame: &str) -> Option<MenuBar> {
     serde_json::from_str::<Frame>(&data).ok()?.menu_bar
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str) {
+pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
     if let Err(err) = app.notification().builder().title(title).body(body).show() {
         log::say(app, &format!("notification failed: {err}"));
     }
@@ -142,62 +143,155 @@ pub async fn watch(app: &AppHandle, tray: &TrayIcon, items: &Items) {
     }
 }
 
+// Sync now while keyloom builds or flashes is refused as `busy`, and one started after that work ends can succeed, so the menu bar asks
+// again by itself, as the page does (src/web/sync/busy-retry.ts, R4-15). Same pace and limit as the page.
+const BUSY_RETRY_EVERY: Duration = Duration::from_secs(3);
+const BUSY_RETRY_FOR: Duration = Duration::from_secs(15 * 60);
+// One Sync now at a time: a second while one runs would only post the same sync twice.
+const IDLE: u8 = 0;
+const POSTING: u8 = 1;
+const WAITING_FOR_BUSY: u8 = 2;
+static SYNC_NOW: AtomicU8 = AtomicU8::new(IDLE);
+
+/// Holds the one Sync now. Dropping it frees the slot, also when the task panics, so a panic can't leave Sync now doing nothing.
+struct SyncNowRun(&'static AtomicU8);
+
+impl SyncNowRun {
+    /// The run, or what the one already running is doing.
+    fn claim(slot: &'static AtomicU8) -> Result<Self, u8> {
+        slot.compare_exchange(IDLE, POSTING, Ordering::AcqRel, Ordering::Acquire).map(|_| SyncNowRun(slot))
+    }
+
+    fn waiting_for_busy(&self) {
+        self.0.store(WAITING_FOR_BUSY, Ordering::Release);
+    }
+}
+
+impl Drop for SyncNowRun {
+    fn drop(&mut self) {
+        self.0.store(IDLE, Ordering::Release);
+    }
+}
+
+fn already_running(state: u8) -> &'static str {
+    if state == WAITING_FOR_BUSY {
+        "sync now: already waiting for keyloom to finish building or flashing"
+    } else {
+        "sync now: one is already being sent"
+    }
+}
+
+fn server(app: &AppHandle) -> Option<(String, String)> {
+    let state = app.state::<AppState>();
+    let guard = state.server.lock().unwrap();
+    guard.as_ref().map(|s| (s.origin.clone(), s.token.clone()))
+}
+
 // Posts the request the web app's Sync button posts, for the config the server says is waiting; the stream reports the result.
 pub fn sync_now(app: &AppHandle) {
-    let Some(layout_id) = app.state::<AppState>().sync_layout.lock().unwrap().clone() else { return };
-    let (origin, token) = {
-        let state = app.state::<AppState>();
-        let guard = state.server.lock().unwrap();
-        match guard.as_ref() {
-            Some(s) => (s.origin.clone(), s.token.clone()),
-            None => return,
+    let run = match SyncNowRun::claim(&SYNC_NOW) {
+        Ok(run) => run,
+        Err(state) => {
+            log::say(app, already_running(state));
+            return;
         }
     };
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let res = reqwest::Client::new()
-            .post(format!("{origin}/api/sync"))
-            .header("x-keyloom-token", &token)
-            .json(&serde_json::json!({ "layoutId": layout_id }))
-            .send()
-            .await;
-        let outcome = match res {
-            Ok(resp) if resp.status().is_success() => {
-                log::say(&app, &format!("sync now -> {}", resp.status()));
-                return;
-            }
-            Ok(resp) => {
-                let status = resp.status();
-                let code = resp.json::<serde_json::Value>().await.ok().and_then(|body| body["error"]["code"].as_str().map(str::to_string));
-                log::say(&app, &format!("sync now -> {status} {}", code.as_deref().unwrap_or("")));
-                SyncNow::Refused
-            }
-            Err(err) => {
-                log::say(&app, &format!("sync now -> {err}"));
-                SyncNow::Unreachable
+        let run = run;
+        let client = reqwest::Client::new();
+        let started = tokio::time::Instant::now();
+        let mut said_busy = false;
+        let notice = loop {
+            // The config waiting can change while keyloom is busy, and the busy work may have been this sync: then there is nothing left to do.
+            let layout_id = app.state::<AppState>().sync_layout.lock().unwrap().clone();
+            let (Some(layout_id), Some((origin, token))) = (layout_id, server(&app)) else { break None };
+            let outcome = post_sync(&app, &client, &origin, &token, &layout_id).await;
+            match outcome {
+                SyncNow::Synced => break None,
+                SyncNow::Busy => {
+                    if app.state::<AppState>().quit.is_set() {
+                        break None;
+                    }
+                    if started.elapsed() >= BUSY_RETRY_FOR {
+                        break Some(sync_now_notice_timed_out());
+                    }
+                    if !said_busy {
+                        said_busy = true;
+                        run.waiting_for_busy();
+                        let (title, body) = sync_now_notice(SyncNow::Busy);
+                        notify(&app, title, body);
+                    }
+                    tokio::time::sleep(BUSY_RETRY_EVERY).await;
+                }
+                other => break Some(sync_now_notice(other)),
             }
         };
+        drop(run);
         // The page shows the keyboard's state with a button for the way on, so the notice says why in short and opens it (R3-17).
-        let (title, body) = sync_now_notice(outcome);
-        notify(&app, title, body);
-        crate::show_window(&app);
+        if let Some((title, body)) = notice {
+            notify(&app, title, body);
+            crate::show_window(&app);
+        }
     });
+}
+
+async fn post_sync(app: &AppHandle, client: &reqwest::Client, origin: &str, token: &str, layout_id: &str) -> SyncNow {
+    let res = client
+        .post(format!("{origin}/api/sync"))
+        .header("x-keyloom-token", token)
+        .json(&serde_json::json!({ "layoutId": layout_id }))
+        .send()
+        .await;
+    match res {
+        Ok(resp) => {
+            let status = resp.status();
+            let code = if status.is_success() {
+                None
+            } else {
+                resp.json::<serde_json::Value>().await.ok().and_then(|body| body["error"]["code"].as_str().map(str::to_string))
+            };
+            log::say(app, &format!("sync now -> {status} {}", code.as_deref().unwrap_or("")));
+            answered(status.is_success(), code.as_deref())
+        }
+        Err(err) => {
+            log::say(app, &format!("sync now -> {err}"));
+            SyncNow::Unreachable
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SyncNow {
+    Synced,
+    /// keyloom is building or flashing; a sync after that can work.
+    Busy,
     /// keyloom answered and turned the sync down.
     Refused,
     /// keyloom's server didn't answer.
     Unreachable,
 }
 
+// The refusal code, never its sentence (src/app/sync-engine.ts SyncRefusal).
+fn answered(ok: bool, code: Option<&str>) -> SyncNow {
+    match (ok, code) {
+        (true, _) => SyncNow::Synced,
+        (false, Some("busy")) => SyncNow::Busy,
+        (false, _) => SyncNow::Refused,
+    }
+}
+
 // The server's refusal sentences name terminal commands for the CLI, so the notice doesn't repeat them: the page has the buttons.
 fn sync_now_notice(outcome: SyncNow) -> (&'static str, &'static str) {
     match outcome {
-        SyncNow::Refused => ("keyloom didn't sync", "keyloom can't sync this keyboard right now. keyloom is open with what to do."),
+        SyncNow::Busy => ("keyloom is building or flashing", "keyloom syncs this keyboard when that finishes."),
+        SyncNow::Synced | SyncNow::Refused => ("keyloom didn't sync", "keyloom can't sync this keyboard right now. keyloom is open with what to do."),
         SyncNow::Unreachable => ("keyloom didn't sync", "keyloom's server didn't answer. keyloom is open; try Sync now again when it shows your keyboard."),
     }
+}
+
+fn sync_now_notice_timed_out() -> (&'static str, &'static str) {
+    ("keyloom is still building or flashing", "It has been busy for 15 minutes, so keyloom stopped waiting to sync. keyloom is open with what is running.")
 }
 
 #[cfg(test)]
@@ -215,6 +309,40 @@ data: {"type":"sync","boards":[],"menuBar":{"summary":"2 changes not on your Moo
         assert_eq!(bar.title.as_deref(), Some("Behind"));
         assert_eq!(bar.sync_layout_id.as_deref(), Some("lay_1"));
         assert_eq!(bar.notices[0].title, "On your Glove80");
+    }
+
+    #[test]
+    fn one_sync_now_runs_at_a_time_and_a_panic_frees_it() {
+        static SLOT: AtomicU8 = AtomicU8::new(IDLE);
+        let run = SyncNowRun::claim(&SLOT).unwrap();
+        assert_eq!(SyncNowRun::claim(&SLOT).err(), Some(POSTING));
+        assert_eq!(already_running(POSTING), "sync now: one is already being sent");
+        run.waiting_for_busy();
+        assert_eq!(SyncNowRun::claim(&SLOT).err(), Some(WAITING_FOR_BUSY));
+        assert_eq!(already_running(WAITING_FOR_BUSY), "sync now: already waiting for keyloom to finish building or flashing");
+        drop(run);
+        let run = SyncNowRun::claim(&SLOT).unwrap();
+        let panicked = std::panic::catch_unwind(move || {
+            let _run = run;
+            panic!("the sync task panicked");
+        });
+        assert!(panicked.is_err());
+        assert!(SyncNowRun::claim(&SLOT).is_ok(), "the panic freed Sync now");
+    }
+
+    #[test]
+    fn a_busy_sync_now_waits_and_says_it_will_sync() {
+        assert_eq!(answered(false, Some("busy")), SyncNow::Busy);
+        assert_eq!(answered(false, Some("foreign_firmware")), SyncNow::Refused);
+        assert_eq!(answered(false, None), SyncNow::Refused);
+        assert_eq!(answered(true, None), SyncNow::Synced);
+        let (title, body) = sync_now_notice(SyncNow::Busy);
+        assert_eq!(title, "keyloom is building or flashing");
+        assert_eq!(body, "keyloom syncs this keyboard when that finishes.");
+        let (title, body) = sync_now_notice_timed_out();
+        assert_eq!(title, "keyloom is still building or flashing");
+        assert!(body.contains("15 minutes") && body.contains("keyloom is open"), "{body}");
+        assert_eq!(BUSY_RETRY_FOR.as_secs(), 15 * 60, "the words say 15 minutes");
     }
 
     #[test]

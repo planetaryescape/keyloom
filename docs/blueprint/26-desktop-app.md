@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, and D-514's update failures, last lines and Sync now notice); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, D-514's update failures, last lines and Sync now notice, D-515's links and downloads, and D-516's too-new database, Stop download and busy Sync now); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -42,7 +42,7 @@ The release matrix signs the visible Rust executable before embedding, without B
 
 ## Decisions
 
-D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them.
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them; D-507, D-514, D-515 and D-516 for the problem window, links, downloads and updates.
 
 ## As built
 
@@ -54,4 +54,8 @@ D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D
 - **Install.** A Homebrew cask is prepared at `packaging/homebrew/keyloom.rb` for `planetaryescape/homebrew-tap`. The updater is compiled in only with a key (D-328).
 - **No dead end when the server is missing (D-507).** A server that can't start, or stops more than three times in ten minutes, opens a problem window with **Try again** and **Show log** (and the CLI's replace offer, or the app update when a newer keyloom is in the way); the menu bar adds **Try starting keyloom again**. A server the shell started is started again after it exits, after 1 s, 5 s and 15 s. The shell's log is `~/Library/Logs/dev.planetaryescape.keyloom/keyloom.log`. When the server keeps stopping, the window shows the last 12 lines it wrote, without its token (D-514). A menu-bar Sync now that the server refuses, or that gets no answer, shows a notification and brings keyloom forward (D-514). Not exercised in a running app yet: checked by `cargo test`, `cargo clippy` and rendering the page.
 - **Updates (D-481).** When a signed update is available, the app notifies the user and offers a version-specific install-and-restart action in the menu bar. It downloads only after the user chooses; a successful install requests restart through the normal exit path, and a failed install checks again at once, which offers the action again. After an empty or failed check the item reads **Check for updates** and stays enabled (D-507). The download shows its progress. A failed install keeps the same version offered as **Couldn't install VERSION. Try again**, gives the reason in a notification and the problem window, and adds **Download the latest keyloom** to the menu (D-514).
+- **Links and downloads (D-515).** A link to another site opens in the default browser, and the window keeps keyloom; other schemes, and keyloom's own page in a new window, are refused. Only keyloom's own page can save a download. A download is saved to Downloads under its own name, never over an existing file, and Finder shows it; a failed one sends a notification. Checked in a debug build on a scratch home and data directory (`external.rs`).
+- **A database a newer keyloom upgraded (D-516).** `serve` exits 10 with `schema_too_new`; the problem window says the app is older than the data and offers the update and the download page, with no Try again. Checked by `cargo test`, not in a running app.
+- **Stop download (D-516).** An update download shows **Stop download** in the problem window and the menu bar, and stops by itself after 60 s with nothing received. Either way it ends as a failed install with the reason, offered again. Checked by `cargo test` only: no signed update feed exists to download from.
+- **Menu-bar Sync now while busy (D-516).** It says keyloom syncs when the build or flash finishes, and asks again every 3 s for up to 15 minutes, as the page does. Checked by `cargo test` only.
 - **Measured on BK's Mac (Apple Silicon):** 70 MB `.app` (72,088 KB on disk), server listening 0.6 s after launch.
