@@ -474,10 +474,12 @@ async function launchAndWait(engine: DockerEngine, opts: StartDockerOptions, l: 
   }
 
   // Asked at least once after the launch, even when the launch used the whole window: `colima start` returns once Docker is up.
+  let last: DockerStatus | null = null;
   for (;;) {
     if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped waiting for ${engine.name}.` };
     await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())), opts.signal);
     const next = await status();
+    last = next;
     if (next.ok) {
       const waitedMs = Date.now() - startedAt;
       opts.onProgress?.(`keyloom: ${engine.name} is up after ${Math.round(waitedMs / 1000)} s`);
@@ -493,6 +495,8 @@ async function launchAndWait(engine: DockerEngine, opts: StartDockerOptions, l: 
       break;
     }
   }
+  // A daemon that answers, only slowly, is up and may be running a build, so it is never restarted (D-497).
+  if (last?.ok === false && last.kind === "slow") return { ok: false, engine: engine.name, reason: `${engine.name} started, but Docker is answering slowly. It may be busy, so keyloom didn't restart it. Check again in a minute.` };
   // Colima has no window to open and wait on; its way on is a restart.
   if (restart.restartEngine !== undefined) return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s`, ...hint, ...restart };
   return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s. Open it, wait for it to say it is running, then build again.` };

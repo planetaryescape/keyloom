@@ -102,7 +102,8 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
     access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
-    restartEngine: (now.kind === "daemon-down" || now.kind === "slow") && found?.command[0] === "colima" ? found.name : null,
+    // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
+    restartEngine: now.kind === "daemon-down" && found?.command[0] === "colima" ? found.name : null,
   };
 }
 
@@ -120,15 +121,17 @@ export async function startDocker(opts: { onProgress?: (line: string) => void; s
 
 /**
  * Restarts what runs Docker, for the two cases a start can't fix: the Mac app that refuses this account its socket (`no-access`,
- * R2-07), and a Colima that wouldn't start or answer (R3-04), which is stopped hard and started again. Anything else keeps its own
- * fix, so this says so instead of guessing. A Docker that answers is left running.
+ * R2-07), and a Colima whose daemon is down (R3-04), which is stopped hard and started again. Anything else keeps its own fix, so this
+ * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
 export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
   // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is restarted.
   const now = await (over.status ?? (() => dockerStatus()))();
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
-  if (now.kind === "daemon-down" || now.kind === "slow") {
+  // A slow daemon is up and may be busy: `colima stop --force` would kill the build it runs, such as an auto-sync's (D-497).
+  if (now.kind === "slow") return { ok: false, engine: null, reason: "Docker is answering slowly, so it may be running a build. keyloom didn't restart it, because that would stop the build. Check again in a minute." };
+  if (now.kind === "daemon-down") {
     const finding = await (over.detect ?? findDockerEngine)();
     if (finding.kind === "engine" && finding.engine.command[0] === "colima") {
       return (over.restartColima ?? restartColima)(finding.engine, {

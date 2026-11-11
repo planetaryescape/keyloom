@@ -105,13 +105,27 @@ describe("a daemon that refuses this account (D-497)", () => {
     const restarted: string[] = [];
     const restartColima = async (engine: { name: string; command: string[] }) => (restarted.push(engine.command.join(" ")), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
     expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } })).toMatchObject({ ok: true, engine: "Colima" });
-    expect(await restartDocker({ overrides: { status: async () => ({ ok: false, kind: "slow", reason: "slow" }), detect: async () => colima, restartColima } })).toMatchObject({ ok: true });
-    expect(restarted).toEqual(["colima start --profile work", "colima start --profile work"]);
+    expect(restarted).toEqual(["colima start --profile work"]);
     expect(await restartDocker({ overrides: { status: async () => ({ ok: true, version: "29" }), detect: async () => colima, restartColima } })).toMatchObject({ ok: true, waitedMs: 0 });
-    expect(restarted).toHaveLength(2);
+    expect(restarted).toHaveLength(1);
     // Readiness says which engine the page may restart, and only for a dead daemon.
     expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ restartEngine: "Colima" });
     expect(await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} })).toMatchObject({ restartEngine: null });
+  });
+
+  test("a slow Colima is busy, not broken: it is never restarted, so a build running in it survives (D-497, #285 review)", async () => {
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } };
+    const slow = async () => ({ ok: false as const, kind: "slow" as const, reason: "Docker did not answer within 15 s; it may still be starting." });
+    let restarted = 0;
+    const restartColima = async () => (restarted++, { ok: true as const, version: "29", engine: "Colima", waitedMs: 1 });
+    const result = await restartDocker({ overrides: { status: slow, detect: async () => colima, restartColima } });
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) {
+      expect(result.reason).toContain("may be running a build");
+      expect(result.restartEngine).toBeUndefined();
+    }
+    expect(restarted).toBe(0);
+    expect(await dockerReadiness({ status: slow, detect: async () => colima, env: {} })).toMatchObject({ problem: "slow", restartEngine: null });
   });
 
   test("a build log keeps the engine's terminal hint (R3-04)", async () => {

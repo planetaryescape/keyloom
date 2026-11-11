@@ -172,6 +172,14 @@ describe("starting it", () => {
     const silent = await startDockerEngine({ status: scriptedStatus([down, down]).status, detect: async () => ({ kind: "engine", engine: colima }), start: async () => ({ ok: true }), sleep: async () => {}, timeoutMs: 40 });
     expect(silent).toMatchObject({ ok: false, restartEngine: "Colima" });
     if (!silent.ok) expect(silent.reason).not.toContain("Open it");
+    // Started, but still only slow at the deadline: it is up and may be busy, so no restart is offered (#285 review).
+    const slow: DockerStatus = { ok: false, kind: "slow", reason: "Docker did not answer within 5 s; it may still be starting." };
+    const busy = await startDockerEngine({ status: scriptedStatus([down, slow]).status, detect: async () => ({ kind: "engine", engine: colima }), start: async () => ({ ok: true }), sleep: async () => {}, timeoutMs: 40 });
+    expect(busy).toMatchObject({ ok: false, engine: "Colima" });
+    if (!busy.ok) {
+      expect(busy.restartEngine).toBeUndefined();
+      expect(busy.reason).toContain("busy");
+    }
   });
 
   test("Restart Colima stops it hard, then starts it and waits, and its own failure offers no second restart (R3-04)", async () => {
