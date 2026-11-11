@@ -27,7 +27,7 @@ export {
 } from "./versions.ts";
 export { type Board, type CheckResult, boardDevView, checkBoard, listBoardDefinitions, loadUserBoards, regenerateGeometry, showBoard } from "./boards.ts";
 export type { GeometryOptions } from "../boards/geometry.ts";
-export { type AddDeps, type AddInput, type AddOutcome, type KeyboardPreview, type PreviewBoard, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
+export { type AddDeps, type AddInput, type AddOutcome, type KeyboardAddCode, KeyboardAddError, type KeyboardPreview, type PreviewBoard, addKeyboard, previewKeyboard } from "./keyboard-add.ts";
 export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKeyboards, findCandidate, searchKeyboards } from "./keyboard-detect.ts";
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";

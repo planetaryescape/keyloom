@@ -1,7 +1,7 @@
 // The server's new-keyboard interface over the app (22, D-336). The keyboards on USB come from the sync engine's own reads, so the card
 // and the engine share one look at USB; previews and adds read the pinned firmware trees as `keyloom keyboard add` does.
 import {
-  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, addKeyboard, previewKeyboard, previewPut, putConfig, searchKeyboards, type AddDeps, type App,
+  KeyboardAddError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, addKeyboard, previewKeyboard, previewPut, putConfig, searchKeyboards, type AddDeps, type App,
   listKeyboardCollection, removeKeyboard, restoreKeyboard, prepareBoardContribution,
 } from "../app/index.ts";
 import type { SyncEngine } from "../app/sync-engine.ts";
@@ -12,6 +12,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     return await fn();
   } catch (err) {
     if (err instanceof NotFoundError) throw new KeyboardsError(404, "not_found", err.message);
+    // A keyboard keyloom can't add yet keeps its code, so the page says why in words and offers the contribution guide (R5-06).
+    if (err instanceof KeyboardAddError) throw new KeyboardsError(400, err.code, err.message);
     if (err instanceof UsageError) throw new KeyboardsError(400, "usage", err.message);
     // The validator refused the mapping: the page shows why against the keys it names, not "internal error" (D-014).
     if (err instanceof ValidationFailedError) throw new KeyboardsError(400, "validation", err.message);

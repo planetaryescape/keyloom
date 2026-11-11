@@ -112,6 +112,17 @@ describe("a Corne keyloom has never seen", () => {
     expect(DetectResponseSchema.parse(await (await call("/api/keyboards/detect")).json()).keyboards).toHaveLength(1);
   });
 
+  // R5-06: the page gets a code for a keyboard keyloom can't add yet, not only the CLI's sentence with its flags.
+  test("a keyboard keyloom can't add yet answers 400 with its code, and a preview always carries layouts and a problem code", async () => {
+    const { post } = await serve();
+    const noPositions = await post("/api/keyboards/preview", { candidate: "zmk:glove80" });
+    expect(noPositions.status).toBe(400);
+    expect(((await noPositions.json()) as { error: { code: string } }).error.code).toBe("no_key_positions");
+    const p = PreviewResponseSchema.parse(await (await post("/api/keyboards/preview", { candidate: "zmk:corne" })).json());
+    expect(p.layouts).toEqual([]);
+    expect(p.boardProblemCode).toBeNull();
+  });
+
   test("add needs the home row, refuses a controller that doesn't fit, and stores the board", async () => {
     const { post } = await serve();
     expect((await post("/api/keyboards/add", { candidate: "zmk:corne", controller: "nice_nano//zmk" })).status).toBe(400);

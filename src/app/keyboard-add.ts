@@ -4,7 +4,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type DerivedBoard, DeriveError, deriveBoard, localBoardId, previewRows } from "../boards/derive/build-board.ts";
+import { type DerivedBoard, DeriveError, type DeriveErrorCode, deriveBoard, localBoardId, previewRows } from "../boards/derive/build-board.ts";
 import type { Candidate } from "../boards/derive/detect.ts";
 import { zmkBootVolume } from "../boards/derive/flash-recipe.ts";
 import { keyboardIndex } from "../boards/derive/keyboard-index.ts";
@@ -22,6 +22,18 @@ import { cacheDir } from "../persistence/paths.ts";
 import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
 import { displayNameFor, findCandidate } from "./keyboard-detect.ts";
+
+/**
+ * A keyboard keyloom can't add yet, with a code a screen turns into its own words and the contribution guide (R5-06): the derive codes,
+ * and `no_key_positions` when the firmware's tree gives no key positions keyloom can read. The message is the CLI's. Exit 2 like any usage error.
+ */
+export type KeyboardAddCode = DeriveErrorCode | "no_key_positions";
+export class KeyboardAddError extends UsageError {
+  override name = "KeyboardAddError";
+  constructor(readonly code: KeyboardAddCode, message: string) {
+    super(message);
+  }
+}
 
 export type AddDeps = GeometryOptions & {
   /** The boards that count as already known; defaults to every board keyloom has loaded. */
@@ -47,6 +59,8 @@ export type KeyboardPreview = {
   rows: Array<{ row: number; keys: number }>;
   guessedHomeRow: number;
   layout: string | null;
+  /** QMK: every layout macro the keyboard has, when it has more than one, so the person can pick theirs; empty otherwise. */
+  layouts: Array<{ name: string; keys: number }>;
   /** What is still needed before the board can be written, as the flags that give it. */
   needs: string[];
   /** ZMK: the controllers that provide what the shield requires and whose boot drive keyloom knows. */
@@ -58,6 +72,8 @@ export type KeyboardPreview = {
    */
   board: PreviewBoard | null;
   boardProblem: string | null;
+  /** Why the board can't be drawn, for a screen to say without flags (R5-06); null with `boardProblem`. */
+  boardProblemCode: DeriveErrorCode | null;
   /** The name to show: "Corne (new)" when a board keyloom already has is called the same (D-336). */
   displayName: string;
 };
@@ -91,15 +107,22 @@ function resolveCandidate(id: string): Candidate {
 
 const isMissing = (err: unknown): boolean => err instanceof GeometryError && /returned 404/.test(err.message);
 
-type Source = { geometry: { keys: GeometryKey[]; path: string }; layout: string | null };
+type Source = { geometry: { keys: GeometryKey[]; path: string }; layout: string | null; layoutGuessed: boolean };
+
+/** The guess for a QMK keyboard with several layouts and no default (a third of QMK's): the one with most keys, which has every switch. */
+const guessLayout = (layouts: Readonly<Record<string, number>>): string | undefined =>
+  Object.entries(layouts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
 
 /** The pinned firmware tree's geometry for a candidate. This is the only network read: one to five small files, cached by SHA. */
-async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts: GeometryOptions): Promise<Source> {
+/** `guess`: a preview draws a keyboard with several layouts and no default on keyloom's guess, and lists the layouts to pick from. */
+async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts: GeometryOptions, guess = false): Promise<Source> {
   const fetchText = opts.fetchText ?? defaultFetcher;
   try {
     if (c.entry.kind === "qmk") {
       const e = c.entry.qmk;
-      const layout = input.layout === undefined ? defaultLayout(e.layouts, e.aliases) : (e.aliases?.[input.layout] ?? input.layout);
+      const known = input.layout === undefined ? defaultLayout(e.layouts, e.aliases) : (e.aliases?.[input.layout] ?? input.layout);
+      const layoutGuessed = known === undefined && guess;
+      const layout = layoutGuessed ? guessLayout(e.layouts) : known;
       if (layout === undefined || e.layouts[layout] === undefined) {
         const choices = Object.entries(e.layouts).map(([n, k]) => `${n} (${k} keys)`).join(", ");
         throw new UsageError(input.layout === undefined ? `${e.name} has several layouts and none is the default; choose one with --layout: ${choices}` : `${e.name} has no layout "${input.layout}"; it has ${choices}`);
@@ -126,15 +149,15 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
           }
         }
       }
-      if (!found) throw new UsageError(`QMK's tree has no layout ${layout} for ${e.target} at ${PINNED_SOURCES.qmk.sha.slice(0, 9)}`);
-      return { geometry: { keys: toGeometryKeys(found.keys), path: found.path }, layout };
+      if (!found) throw new KeyboardAddError("no_key_positions", `QMK's tree has no layout ${layout} for ${e.target} at ${PINNED_SOURCES.qmk.sha.slice(0, 9)}`);
+      return { geometry: { keys: toGeometryKeys(found.keys), path: found.path }, layout, layoutGuessed };
     }
     const z = c.entry.zmk;
     if (z.layout === undefined) {
-      throw new UsageError(`ZMK's tree gives ${z.name} no physical layout with key positions that keyloom can read (29 of its shields have one). Contribute the board by hand: docs/blueprint/04-boards-and-contributions.md`);
+      throw new KeyboardAddError("no_key_positions", `ZMK's tree gives ${z.name} no physical layout with key positions that keyloom can read (29 of its shields have one). Contribute the board by hand: docs/blueprint/04-boards-and-contributions.md`);
     }
     const text = await fetchPinned({ source: { ...PINNED_SOURCES.zmk, ref: "pinned" } }, z.layout.file, fetchText, opts.cacheDir);
-    return { geometry: { keys: parsePhysicalLayout(text, z.layout.label), path: `${z.layout.file}#${z.layout.label}` }, layout: null };
+    return { geometry: { keys: parsePhysicalLayout(text, z.layout.label), path: `${z.layout.file}#${z.layout.label}` }, layout: null, layoutGuessed: false };
   } catch (err) {
     if (err instanceof GeometryError) throw new UsageError(`couldn't read ${c.name}'s layout from the pinned firmware tree: ${err.message}. keyloom reads it from GitHub the first time and keeps it in ${cacheDir()}`);
     throw err;
@@ -144,15 +167,18 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
 /** What `keyboard add` needs from the person, and what it found; writes nothing. */
 export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddDeps = {}): Promise<KeyboardPreview> {
   const c = resolveCandidate(input.candidate);
-  const { geometry, layout } = await readGeometry(c, input, { cacheDir: cacheDirFor(opts), ...opts });
+  const { geometry, layout, layoutGuessed } = await readGeometry(c, input, { cacheDir: cacheDirFor(opts), ...opts }, true);
   const { rows, guessedHomeRow } = previewRows(geometry.keys);
   const needs: string[] = [];
   if (input.homeRow === undefined) needs.push("--home-row");
+  if (layoutGuessed) needs.push("--layout");
+  const layouts = c.entry.kind === "qmk" ? Object.entries(c.entry.qmk.layouts).map(([name, keys]) => ({ name, keys })) : [];
   if (c.entry.kind === "zmk" && (c.entry.zmk.requires?.length ?? 0) > 0 && input.controller === undefined) needs.push("--controller");
   const controllers = controllersFor(c);
   const assumed = input.controller === undefined && controllers.length > 0 ? (controllers[0] as { id: string }).id : null;
   let board: PreviewBoard | null = null;
   let boardProblem: string | null = null;
+  let boardProblemCode: DeriveErrorCode | null = null;
   try {
     const derived = deriveBoard({
       candidate: c, geometry, homeRow: input.homeRow ?? guessedHomeRow,
@@ -170,10 +196,11 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
   } catch (err) {
     if (!(err instanceof DeriveError)) throw err;
     boardProblem = err.message;
+    boardProblemCode = err.code;
   }
   return {
     candidate: { id: c.id, name: c.name, firmware: c.firmware }, keyCount: geometry.keys.length,
-    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, needs, controllers, board, boardProblem,
+    rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, layouts: layouts.length > 1 ? layouts : [], needs, controllers, board, boardProblem, boardProblemCode,
     displayName: displayNameFor(c),
   };
 }
@@ -211,7 +238,7 @@ export async function addKeyboard(app: App, input: AddInput, opts: AddDeps = {})
       ...(input.controller === undefined ? {} : { controller: input.controller }),
     });
   } catch (err) {
-    if (err instanceof DeriveError) throw new UsageError(err.message);
+    if (err instanceof DeriveError) throw new KeyboardAddError(err.code, err.message);
     throw err;
   }
 

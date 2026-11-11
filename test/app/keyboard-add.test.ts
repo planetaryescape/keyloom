@@ -108,3 +108,58 @@ describe("a QMK keyboard", () => {
     expect(p.needs).toEqual(["--home-row"]);
   });
 });
+
+// R5-06: a keyboard keyloom can't add yet says so with a code, and a QMK keyboard with several layouts and no default is drawn on a guess
+// with the layouts to pick from, instead of ending at "choose one with --layout".
+describe("what the new-keyboard screen is told", () => {
+  const grid = (rows: number[]) => rows.flatMap((n, y) => Array.from({ length: n }, (_, x) => ({ x, y, matrix: [y, x] })));
+  // Atomic: two layouts in QMK's index (66 and 75 keys) and neither is LAYOUT, so there is no default. Synthetic keys, the index's counts.
+  const atomic = JSON.stringify({ layouts: { LAYOUT_semi_standard: { layout: grid([14, 14, 13, 13, 12]) }, LAYOUT_ortho_5x15: { layout: grid([15, 15, 15, 15, 15]) } } });
+  const zmkTree = async (url: string): Promise<string> => {
+    // The MakerDiary m60's layout file, from the Corne fixture under the m60's label: only its keys matter here.
+    if (url.endsWith("/app/dts/layouts/common/60percent/ansi.dtsi")) return (await Bun.file(`${import.meta.dir}/../fixtures/zmk/corne-physical-layout/6column.dtsi`).text()).replace(/foostan_corne_6col_layout:/, "layout_60_ansi:");
+    if (url.endsWith("/keyboards/atomic/keyboard.json")) return atomic;
+    throw new GeometryError(`GET ${url} returned 404`);
+  };
+  const d = (): AddDeps => ({ fetchText: zmkTree, cacheDir: tempDir() });
+
+  test("a QMK keyboard with several layouts and no default is drawn on the one with most keys, lists them all, and needs --layout", async () => {
+    const p = await previewKeyboard({ candidate: "qmk:atomic" }, d());
+    expect(p.layout).toBe("LAYOUT_ortho_5x15");
+    expect(p.keyCount).toBe(75);
+    expect(p.layouts).toEqual([{ name: "LAYOUT_semi_standard", keys: 66 }, { name: "LAYOUT_ortho_5x15", keys: 75 }]);
+    expect(p.needs).toEqual(["--home-row", "--layout"]);
+    expect(p.board).not.toBeNull();
+    const picked = await previewKeyboard({ candidate: "qmk:atomic", layout: "LAYOUT_semi_standard" }, d());
+    expect(picked.keyCount).toBe(66);
+    expect(picked.needs).toEqual(["--home-row"]);
+  });
+
+  test("add still asks the CLI for --layout rather than storing keyloom's guess", async () => {
+    const { app } = world();
+    await expect(addKeyboard(app, { candidate: "qmk:atomic", homeRow: 3 }, { ...d(), boards: [] })).rejects.toThrow(/choose one with --layout/);
+    const out = await addKeyboard(app, { candidate: "qmk:atomic", homeRow: 3, layout: "LAYOUT_semi_standard" }, { ...d(), boards: [] });
+    expect(out.boardId).toBe("local/atomic");
+  });
+
+  test("a shield no controller keyloom knows fits is drawn, with controller_unknown and no board", async () => {
+    const p = await previewKeyboard({ candidate: "zmk:m60" }, d());
+    expect(p.controllers).toEqual([]);
+    expect(p.board).toBeNull();
+    expect(p.boardProblemCode).toBe("controller_unknown");
+    expect(p.boardProblem).toContain("--controller");
+  });
+
+  test("a keyboard whose firmware tree has no key positions is refused with no_key_positions, by preview and add alike", async () => {
+    const { app } = world();
+    const refusal = { name: "KeyboardAddError", code: "no_key_positions" };
+    expect(await previewKeyboard({ candidate: "zmk:glove80" }, d()).catch((e: unknown) => e)).toMatchObject(refusal);
+    expect(await addKeyboard(app, { candidate: "zmk:glove80", homeRow: 2 }, { ...d(), boards: [] }).catch((e: unknown) => e)).toMatchObject(refusal);
+  });
+
+  test("a home row the board doesn't have is refused by add with the derive code", async () => {
+    const { app } = world();
+    expect(await addKeyboard(app, { candidate: "qmk:atomic", homeRow: 9, layout: "LAYOUT_semi_standard" }, { ...d(), boards: [] }).catch((e: unknown) => e))
+      .toMatchObject({ name: "KeyboardAddError", code: "home_row_out_of_range" });
+  });
+});

@@ -5,7 +5,7 @@ import { DeriveError, deriveBoard, localBoardId } from "../../../src/boards/deri
 import { type Candidate } from "../../../src/boards/derive/detect.ts";
 import { qmkFlash, targetId, zmkFlash } from "../../../src/boards/derive/flash-recipe.ts";
 import { checkBoardDir } from "../../../src/boards/check.ts";
-import type { QmkEntry } from "../../../src/boards/derive/index-schema.ts";
+import type { QmkEntry, ZmkEntry } from "../../../src/boards/derive/index-schema.ts";
 import { keyboardIndex } from "../../../src/boards/derive/keyboard-index.ts";
 import { writeUserBoard } from "../../../src/boards/user-boards.ts";
 import { sourceBoards } from "../../helpers/derive-sources.ts";
@@ -131,6 +131,26 @@ describe("deriveBoard", () => {
   test("a home row outside the block and a missing layout macro are refused", () => {
     expect(() => deriveBoard({ candidate: qmkCandidate({}), geometry: { keys, path: "p" }, homeRow: 4, layout: "LAYOUT" })).toThrow(DeriveError);
     expect(() => deriveBoard({ candidate: qmkCandidate({}), geometry: { keys, path: "p" }, homeRow: 2 })).toThrow(/layout macro/);
+  });
+
+  // R5-06: every refusal carries a code, so the new-keyboard screen says it in words and never shows the CLI's flags.
+  test("each refusal carries its code", () => {
+    const codeOf = (input: Parameters<typeof deriveBoard>[0]): unknown => {
+      try {
+        deriveBoard(input);
+      } catch (err) {
+        return err instanceof DeriveError ? err.code : err;
+      }
+      return null;
+    };
+    expect(codeOf({ candidate: qmkCandidate({}), geometry: { keys, path: "p" }, homeRow: 4, layout: "LAYOUT" })).toBe("home_row_out_of_range");
+    expect(codeOf({ candidate: qmkCandidate({}), geometry: { keys, path: "p" }, homeRow: 2 })).toBe("layout_macro_missing");
+    const zmk = (over: { requires?: string[]; siblings: string[] }): Candidate => ({
+      id: "zmk:test", firmware: "zmk", name: "Test", vendor: "zmk", confidence: 1, reasons: [],
+      entry: { kind: "zmk", zmk: { id: "test", name: "Test", kind: over.requires ? "shield" : "board", ...over } satisfies ZmkEntry },
+    });
+    expect(codeOf({ candidate: zmk({ requires: ["pro_micro"], siblings: ["test"] }), geometry: { keys, path: "p" }, homeRow: 2 })).toBe("controller_unknown");
+    expect(codeOf({ candidate: zmk({ siblings: ["seeeduino_xiao"] }), geometry: { keys, path: "p" }, homeRow: 2 })).toBe("boot_drive_unknown");
   });
 
   test("the id keeps a derived board apart from the ones keyloom ships", () => {
