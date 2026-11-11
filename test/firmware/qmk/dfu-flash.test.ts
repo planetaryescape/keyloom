@@ -197,6 +197,22 @@ describe("a stop never cuts off a dfu tool's write (D-506)", () => {
     expect(await Bun.file(join(s.dir, "flash.log")).text()).toContain("not stopping dfu-programmer");
   }, SLOW_RUNNER_MS);
 
+  test("a state listener that throws as the write begins still releases the write guard, and runs no tool", async () => {
+    const s = await setup({ "dfu-programmer": recorder("$CALLS") });
+    const w = world();
+    const thrown = new Error("synthetic listener failure");
+    const flashing = flashWithDfuTool({
+      artifactPath: s.artifact, recipe: ATMEL, log: s.log, usb: w.usb, tools: s.paths, pollMs: 20,
+      onState: (state) => {
+        if (state === "writing") throw thrown;
+      },
+    });
+    await expect(flashing).rejects.toBe(thrown);
+    expect(keyboardWriteInProgress()).toBe(false);
+    expect(await s.called()).toEqual([]);
+    s.log.close();
+  }, SLOW_RUNNER_MS);
+
   test("the tool runs in its own process group, so a terminal's Ctrl-C reaches keyloom and not the tool", async () => {
     const s = await setup({ "dfu-util": `ps -o pgid= -p $$ > "$CALLS"; exit 0` });
     const bin = join(s.dir, "build.bin");

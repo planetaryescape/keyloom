@@ -15,11 +15,13 @@ const SRC = join(import.meta.dir, "../../src");
 
 /**
  * A child that flashes with a fake zapp under the CLI's untilInterrupted; the bootloader is "on USB" once `flag` exists. With
- * `usb: "unreadable"` every USB read fails, and short waits let the write timeout end the flash.
+ * `usb: "unreadable"` every USB read fails, and short waits let the write timeout end the flash. With `usb: "slow"` each read takes 1 s.
  */
-function flashScript(dir: string, opts: { usb?: "unreadable" } = {}): string {
+function flashScript(dir: string, opts: { usb?: "unreadable" | "slow" } = {}): string {
   const script = join(dir, "flash.ts");
-  const present = opts.usb === "unreadable" ? `async () => { throw new Error("system_profiler failed"); }` : `async () => existsSync(flag)`;
+  const present = opts.usb === "unreadable"
+    ? `async () => { throw new Error("system_profiler failed"); }`
+    : opts.usb === "slow" ? `async () => { await Bun.sleep(1000); return existsSync(flag); }` : `async () => existsSync(flag)`;
   const waits = opts.usb === "unreadable" ? "bootloaderWaitMs: 1500, writeTimeoutMs: 1500," : "";
   writeFileSync(script, `
 import { existsSync } from "node:fs";
@@ -57,7 +59,7 @@ function collect(stream: ReadableStream<Uint8Array>) {
   };
 }
 
-async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadable" } = {}) {
+async function child(zappBody: (flag: string) => string, opts: { usb?: "unreadable" | "slow" } = {}) {
   const dir = tempDir();
   const flag = join(dir, "in-bootloader");
   const artifact = join(dir, "build.bin");
@@ -176,6 +178,31 @@ describe("Ctrl-C during a flash (D-506)", () => {
       await c.out.done;
       await c.err.done;
       expect(c.out.text()).toContain("result failed");
+      expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
+      expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
+    } finally {
+      c.proc.kill("SIGKILL");
+      if (existsSync(pidFile())) {
+        try { process.kill(Number(readFileSync(pidFile(), "utf8").trim()), "SIGKILL"); } catch { /* already gone */ }
+      }
+    }
+  }, SLOW_RUNNER_MS);
+
+  test("a second Ctrl-C while the first one's USB check runs neither ends keyloom nor orphans zapp: zapp is stopped and the flash cancelled", async () => {
+    const c = await child(() => `echo $$ > "$0.pid"; echo "Firmware loaded: x"; exec sleep 600`, { usb: "slow" });
+    const pidFile = () => join(c.bin, "zapp.pid");
+    try {
+      await c.out.until("state waiting_for_bootloader");
+      // zapp's line is read before the cancel, so keyloom has seen it start.
+      await Bun.sleep(300);
+      c.ctrlC();
+      // The cancel's USB read takes a second; this lands inside it.
+      await Bun.sleep(200);
+      c.ctrlC();
+      expect(await c.proc.exited).toBe(0);
+      await c.out.done;
+      await c.err.done;
+      expect(c.out.text()).toContain("result failed Cancelled. Nothing was flashed.");
       expect(c.err.text()).toContain(WRITE_IN_PROGRESS_MESSAGE);
       expect(alive(Number(readFileSync(pidFile(), "utf8").trim()))).toBe(false);
     } finally {

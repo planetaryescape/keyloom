@@ -177,13 +177,15 @@ export async function flashWithDfuTool(input: DfuFlashInput): Promise<FlashResul
   // --- write ---------------------------------------------------------------------------
   writing = true;
   const releaseWrite = holdKeyboardWrite();
-  input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
-  const timer = setTimeout(() => {
-    stopped.reason = "write";
-    controller.abort();
-  }, input.writeTimeoutMs ?? WRITE_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let failure: string | undefined;
+  // Everything after the hold is inside the try: a state listener that throws must not leave the guard held, or a stop would wait for good.
   try {
+    input.onState("writing", "Don't unplug the keyboard. Flashing takes a few seconds.");
+    timer = setTimeout(() => {
+      stopped.reason = "write";
+      controller.abort();
+    }, input.writeTimeoutMs ?? WRITE_TIMEOUT_MS);
     for (const cmd of dfuCommands(recipe, tool, input.artifactPath, port)) {
       input.log.line(`keyloom: ${cmd.join(" ")}`);
       const lines: string[] = [];

@@ -336,6 +336,40 @@ describe("flashWithZapp never lets a stop cut off a write (D-506)", () => {
     expect(keyboardWriteInProgress()).toBe(false);
   }, SLOW_RUNNER_MS);
 
+  test("a cancel holds the write guard while it looks at USB, and lets it go once zapp has stopped", async () => {
+    const s = await setup('echo "Firmware loaded: x"; exec sleep 600');
+    const c = new AbortController();
+    const held: boolean[] = [];
+    const r = await s.flash({
+      signal: c.signal, pollMs: 20,
+      // A slow USB read: zapp may start writing while keyloom waits for it, so a second Ctrl-C then must not end keyloom.
+      bootloaderPresent: async () => {
+        await Bun.sleep(400);
+        return false;
+      },
+      onLine: (line) => {
+        if (!line.includes("Firmware loaded")) return;
+        setTimeout(() => c.abort(), 100);
+        setTimeout(() => held.push(keyboardWriteInProgress()), 300);
+      },
+    });
+    expect(r).toMatchObject({ state: "failed", error: "Cancelled. Nothing was flashed." });
+    expect(held).toEqual([true]);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
+  test("a USB read still pending when zapp exits changes nothing after it: no write starts and no guard is left held", async () => {
+    const s = await setup('echo "Firmware loaded: x"; sleep 0.2; exit 0');
+    const late = Promise.withResolvers<boolean>();
+    const r = await s.flash({ pollMs: 20, writeTimeoutMs: 200, bootloaderPresent: () => late.promise });
+    expect(r.state).toBe("succeeded");
+    const statesAtExit = s.states.length;
+    late.resolve(true);
+    await Bun.sleep(50);
+    expect(s.states.length).toBe(statesAtExit);
+    expect(keyboardWriteInProgress()).toBe(false);
+  }, SLOW_RUNNER_MS);
+
   test("the write guard is released when the flash throws mid-write, so serve still answers Ctrl-C", async () => {
     const s = await setup('echo "Firmware loaded: x"; echo "Flashing"; exit 0');
     const thrown = await s.flash({

@@ -136,6 +136,28 @@ describe("flash", () => {
     expect(done.error).toContain("The halves flashed so far keep the new firmware");
   }, 30_000);
 
+  // A shutdown that lands while the first half is written must still end the flash when the second half waits, not wait that half out.
+  test("shutdown during the first half's write cancels the flash once the second half waits for a hand", async () => {
+    const e = await zmkEnv();
+    const b = await built(e);
+    const boot = fakeBootloaders(e.volumes, [RIGHT, LEFT], { mountAfterMs: [100], onDemand: true });
+    let draining: Promise<string> | undefined;
+    const started = await startFlash(e.app, {
+      buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 60_000,
+      onFlasherState: (state) => {
+        if (state === "writing") draining ??= drainManualFlashTasks(e.app).then(() => "drained");
+      },
+    });
+    await until(async () => draining, (d) => d !== undefined);
+    const drained = await Promise.race([draining as Promise<string>, Bun.sleep(8000).then(() => "still waiting")]);
+    boot.stop();
+    expect(drained).toBe("drained");
+    expect(boot.written).toEqual([RIGHT]);
+    const done = await getFlash(e.app, started.id);
+    expect(done.status).toBe("failed");
+    expect(done.error).toContain("The halves flashed so far keep the new firmware");
+  }, 30_000);
+
   test("the flash view shows the instruction for the half it is waiting for, as the web app polls it", async () => {
     const e = await zmkEnv();
     const b = await built(e);

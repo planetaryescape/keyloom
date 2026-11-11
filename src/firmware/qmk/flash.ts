@@ -104,9 +104,10 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     abortedFor ??= reason;
     controller.abort();
   };
-  // Zapp writes the moment the bootloader appears, and says nothing while it does, so this is the write starting.
+  // Zapp writes the moment the bootloader appears, and says nothing while it does, so this is the write starting. A USB read that
+  // returns after Zapp has exited says nothing about this flash: it must not take a hold that nothing would release.
   const startWriting = (how: string) => {
-    if (writing || controller.signal.aborted) return;
+    if (writing || exited || controller.signal.aborted) return;
     writing = true;
     releaseWrite ??= holdKeyboardWrite();
     input.log.line(`keyloom: ${how}; zapp is writing`);
@@ -126,6 +127,10 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   // bootloader with half an image, so once the bootloader is there the flash finishes, whoever asked to stop it.
   const stopUnlessWriting = async (reason: "bootloader" | "cancelled") => {
     if (writing || exited) return refused(reason);
+    // Zapp may write while keyloom looks at USB, so the write guard is held from here until Zapp stops or finishes: a second Ctrl-C
+    // during the check would otherwise end keyloom and orphan Zapp in its own process group, to flash whenever the keyboard next
+    // enters its bootloader. Cleanup after Zapp exits releases it.
+    releaseWrite ??= holdKeyboardWrite();
     // keyloom has sent the restart command: the bootloader is moments away, and only the result says whether Zapp got it.
     if (entering !== undefined) await entering;
     if (!writing && loaded) {
@@ -137,10 +142,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
       if (seen === true) startWriting("the keyboard is in its bootloader");
       else if (seen === undefined && !writing && !exited) {
         // Not stopped on a guess. A timeout gives Zapp a write's time instead, and then its message says where the keyboard may be.
-        // Zapp may be writing, so the write guard is held: a second Ctrl-C would otherwise end keyloom and orphan Zapp in its own
-        // process group, to flash whenever the keyboard next enters its bootloader. The timers still end Zapp in a fixed time.
+        // The write guard stays held until Zapp exits; the timers still end Zapp in a fixed time.
         input.log.line("keyloom: couldn't read USB, so zapp may be writing; not stopping it");
-        releaseWrite ??= holdKeyboardWrite();
         if (reason === "bootloader") arm(input.writeTimeoutMs ?? WRITE_TIMEOUT_MS, "write");
         return;
       }
