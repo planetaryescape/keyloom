@@ -4,6 +4,9 @@ import type { Slot } from "../../layout/change.ts";
 import type { LayerReference } from "../../layout/layer-ops.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
 
+/** Why Open combo can't open that combo now (R5-13), decided before the dialog closes, with the button that shows what is in the way. */
+export type ComboOpenRefusal = { text: string; action: { label: string; run: () => void } };
+
 interface Props {
   layerName: string;
   references: readonly LayerReference[];
@@ -14,8 +17,8 @@ interface Props {
   /** A function in words ("Esc", "Hold Nav"), for the list of what would be lost. */
   nameFunction: (fn: string) => string;
   onOpenKey: (slot: Slot) => void;
-  /** Opens a combo's card, where its output or its layers are changed (R4-09). */
-  onOpenCombo: (comboId: string) => void;
+  /** Opens a combo's card, where its output or its layers are changed (R4-09), or says why it can't yet and opens nothing. */
+  onOpenCombo: (comboId: string) => ComboOpenRefusal | null;
   /** Removes a tap dance nothing uses, the one way past a dance that goes to this layer (#290 review). */
   onRemoveTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   onClose: () => void;
@@ -29,12 +32,32 @@ export function referenceAction(reference: LayerReference): { label: string; ope
   return null;
 }
 
+/**
+ * Opens the place a reference is changed. A key always opens and the dialog closes. A combo may refuse (R5-13): then the dialog stays
+ * open and gets the refusal to show, so it never closes into a toast with no button.
+ */
+export function openReference(
+  open: { slot: Slot } | { comboId: string },
+  on: { openKey: (slot: Slot) => void; openCombo: (comboId: string) => ComboOpenRefusal | null; close: () => void },
+): ComboOpenRefusal | null {
+  if ("slot" in open) {
+    on.close();
+    on.openKey(open.slot);
+    return null;
+  }
+  const refused = on.openCombo(open.comboId);
+  if (refused === null) on.close();
+  return refused;
+}
+
 // Deleting is the one layer action that can strand keys, so it lists what points at the layer first
 // and asks the validator, which refuses while any of those keys would reach nothing (16#layers, D-090).
 export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onRemoveTapDance, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [outcome, setOutcome] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
+  // The dialog stays open with this rather than closing into a toast with no button (R5-13).
+  const [comboRefusal, setComboRefusal] = useState<ComboOpenRefusal | null>(null);
 
   useEffect(() => {
     const element = dialog.current;
@@ -94,9 +117,7 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
                       onClick={() => {
                         const open = action.open;
                         if ("tapDanceId" in open) return void removeTapDance(open.tapDanceId);
-                        onClose();
-                        if ("slot" in open) onOpenKey(open.slot);
-                        else onOpenCombo(open.comboId);
+                        setComboRefusal(openReference(open, { openKey: onOpenKey, openCombo: onOpenCombo, close: onClose }));
                       }}
                     >
                       {action.label}
@@ -121,6 +142,13 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
           <span>
             These are only on {layerName}, so deleting it drops them: {dropping.map(nameFunction).join(", ")}. Undo brings them back.
           </span>
+        </div>
+      )}
+      {comboRefusal === null ? null : (
+        <div className="layer-dialog-lead" data-tone="warning" role="alert">
+          <TriangleAlert size={16} aria-hidden="true" />
+          <span>{comboRefusal.text}</span>
+          <button type="button" className="button layer-ref-open" onClick={() => { onClose(); comboRefusal.action.run(); }}>{comboRefusal.action.label}</button>
         </div>
       )}
       {outcome === null ? null : (

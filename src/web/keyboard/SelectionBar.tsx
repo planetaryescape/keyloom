@@ -61,10 +61,12 @@ export function SelectionBar({ count, layerName, selectMode, onSelectMode, onCle
       <div className="selection-actions">
         {count === 0 ? null : (
           <>
-            <button type="button" className="button" disabled={count < 2} title={count < 2 ? "Select a second key to make a combo" : "Press these keys together to send something else"} onClick={onCombo}>
+            {/* A disabled control says why beside it, not only in a title that touch and keyboard users never see (R5-12). */}
+            <button type="button" className="button" disabled={count < 2} aria-describedby={count < 2 ? "combo-why" : undefined} title={count < 2 ? undefined : "Press these keys together to send something else"} onClick={onCombo}>
               <Spline size={14} aria-hidden="true" />
               Make a combo
             </button>
+            {count < 2 ? <span id="combo-why" className="selection-why">Select a second key to make a combo</span> : null}
             <button type="button" className="button" title="Type keys to give them to the selected keys in order" onClick={onQuickStart}>
               <KeyboardIcon size={14} aria-hidden="true" />
               Type to assign

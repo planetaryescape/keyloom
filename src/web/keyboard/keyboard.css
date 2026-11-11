@@ -915,6 +915,12 @@ button.cap[data-dragging="true"] {
   margin: 0;
 }
 
+/* Why Make a combo is off, beside it (R5-12). */
+.selection-why {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
 .selection-bar[data-mode="quick"] {
   box-shadow: 0 0 0 1.5px var(--pending), var(--card-shadow);
 }
