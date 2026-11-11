@@ -149,6 +149,8 @@ export function TopBar({ onHome, boards, boardsAfter, sync, ask, undo, menu, onM
                 <>
                   {phone ? <Item icon={Undo2} label="Undo" hint="⌘Z" disabled={!undo.canUndo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} /> : null}
                   <Item icon={Redo2} label="Redo" hint="⇧⌘Z" disabled={!undo.canRedo || undo.busy || undo.blockedReason !== null} onSelect={() => { close(); undo.onUndo(); }} />
+                  {/* On a phone the menu is the only place Undo shows, so its reason sits beside it (R4-17). */}
+                  {phone && undo.blockedReason !== null ? <p className="menu-note">{undo.blockedReason}</p> : null}
                   <div className="menu-separator" role="separator" />
                 </>
               )}

@@ -1,6 +1,6 @@
 // Whether the Docker a firmware build needs is up, for the release dialog (D-486). keyloom starts the engine
 // itself, so this only ever says what is happening or what is missing, and offers the click when it can't.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DockerReadinessResponse } from "../../api/system.ts";
 import type { DockerStartResponse } from "../../api/system.ts";
 import { fetchDockerReadiness, restartDockerApp, startDockerEngine } from "../system.ts";
@@ -30,8 +30,6 @@ export function useDocker(token: string): Docker {
   const [problem, setProblem] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
   const [asks, setAsks] = useState(0);
-  const lastActionNow = useRef(lastAction);
-  lastActionNow.current = lastAction;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,7 +59,7 @@ export function useDocker(token: string): Docker {
   const run = useCallback((action: "start" | "restart", ask: (token: string) => Promise<DockerStartResponse>) => {
     setStarting(true);
     setProblem(null);
-    const before = lastActionNow.current;
+    const before = lastAction;
     setLastAction(action);
     ask(token)
       .then((result) => {
@@ -76,7 +74,7 @@ export function useDocker(token: string): Docker {
       })
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
       .finally(() => setStarting(false));
-  }, [token]);
+  }, [token, lastAction]);
   const start = useCallback(() => run("start", startDockerEngine), [run]);
   const restart = useCallback(() => run("restart", restartDockerApp), [run]);
 

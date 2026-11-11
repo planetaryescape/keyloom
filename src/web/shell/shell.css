@@ -156,6 +156,14 @@ a.menu-item {
   text-decoration: none;
 }
 
+.menu-note {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  max-width: 28ch;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 .menu-version {
   color: var(--ink-3);
   font-size: 12px;
