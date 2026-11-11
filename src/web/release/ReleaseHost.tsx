@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import type { RevisionInfo } from "../../api/http.ts";
+import type { Build, RevisionInfo } from "../../api/http.ts";
+import { undoChange } from "../api-write.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { ReleaseDialog } from "./ReleaseDialog.tsx";
 import { releaseStatus, type ReleaseStatus } from "./status.ts";
@@ -15,13 +16,17 @@ type AutoSync = { on: boolean; paused: boolean; onPause: () => void; onResume?: 
  * Build and flash for one layout: its builds, its flashes, the Docker it needs and the dialog. A board that is never built (the
  * MacBook keyboard, D-501) doesn't mount this, so it never asks for Docker's readiness or offers the dialog.
  */
-export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, autoSync, children }: {
+export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, autoSync, onChanged, onAskAboutBuild, children }: {
   token: string;
   layoutId: string;
   head: Pick<RevisionInfo, "id" | "summary">;
   boardName: string;
   boardRevisions: BoardDefinition["revisions"];
   autoSync: AutoSync;
+  /** Reads the layout again, after Go back made a new revision. */
+  onChanged: () => Promise<void>;
+  /** Puts a question about a failed build in the chat (R5-02); the dialog closes first. */
+  onAskAboutBuild: (build: Build) => void;
   children: (release: ReleaseHandle, dialog: ReactNode) => ReactNode;
 }) {
   const release = useRelease(token, layoutId);
@@ -50,6 +55,15 @@ export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, 
       boardRevisions={boardRevisions}
       status={status}
       now={now}
+      // The undo with `to` (D-170, D-502): a new revision checked against the rules, so the one that failed stays in History.
+      onGoBack={async (to) => {
+        await undoChange(token, layoutId, { revisionId: head.id, to });
+      }}
+      onShowLatest={onChanged}
+      onAskAboutBuild={(build) => {
+        setOpen(false);
+        onAskAboutBuild(build);
+      }}
     />
   );
   return <>{children(handle, dialog)}</>;

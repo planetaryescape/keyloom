@@ -42,6 +42,9 @@ async function setup(over: { makefile?: boolean } = {}) {
   return { build, dir, lines, dockerLog, source, board, log };
 }
 
+/** The failure a build ended in; a build that passed fails the test. */
+const failureOf = (p: Promise<unknown>): Promise<BuildFailure> => p.then(() => { throw new Error("the build passed"); }, (e: unknown) => e as BuildFailure);
+
 describe("buildQmk (fake docker)", () => {
   test("creates the pinned checkout, writes the keymap folder, runs the documented docker command and copies the artifact", async () => {
     const s = await setup();
@@ -107,6 +110,31 @@ describe("buildQmk (fake docker)", () => {
   test("a full Docker disk is called what it is", async () => {
     const s = await setup();
     await expect(s.build("disk")).rejects.toThrow(/Docker ran out of disk space/);
+    // It can pass once space is freed, so it carries no code and keeps Build again (R5-02).
+    expect((await failureOf(s.build("disk"))).code).toBeNull();
+  });
+
+  describe("failures that repeat every time carry their code (R5-02, recorded lines in test/fixtures/build-logs)", () => {
+    const logs = join(import.meta.dir, "../../fixtures/build-logs");
+    test("an unknown key code is a compile error", async () => {
+      const s = await setup();
+      const err = await failureOf(s.build("log", { FAKE_LOG: join(logs, "qmk-unknown-keycode.log") }));
+      expect(err).toBeInstanceOf(BuildFailure);
+      expect(err.code).toBe("compile_error");
+      expect(err.message).toStartWith("The generated firmware doesn't compile: 'KC_NOPE' undeclared here");
+    });
+    test("a firmware too big for the flash says so, by how much", async () => {
+      const s = await setup();
+      const err = await failureOf(s.build("log", { FAKE_LOG: join(logs, "ld-region-overflow.log") }));
+      expect(err.code).toBe("too_large");
+      expect(err.message).toBe("The firmware is too big for the Moonlander's memory by 228 bytes. Fewer combos, macros or features make it smaller.");
+    });
+    test("QMK's AVR size check, colour codes and all, is too large too", async () => {
+      const s = await setup();
+      const err = await failureOf(s.build("log", { FAKE_LOG: join(logs, "qmk-avr-too-large.log") }));
+      expect(err.code).toBe("too_large");
+      expect(err.message).toContain("by 262 bytes");
+    });
   });
 
   test("Docker not able to see the checkout is called what it is, before make's confusing 'no rule'", async () => {

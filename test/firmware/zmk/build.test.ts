@@ -45,6 +45,9 @@ async function setup() {
   return { build, dir, lines, dockerLog, source };
 }
 
+/** The failure a build ended in; a build that passed fails the test. */
+const failureOf = (p: Promise<unknown>): Promise<BuildFailure> => p.then(() => { throw new Error("the build passed"); }, (e: unknown) => e as BuildFailure);
+
 describe("buildZmk (fake docker)", () => {
   test("clones the template at its pin, writes the config files, runs the template's container and copies the artifact", async () => {
     const s = await setup();
@@ -132,6 +135,17 @@ describe("buildZmk (fake docker)", () => {
 
   test("a full Docker disk is called what it is", async () => {
     await expect((await setup()).build("disk")).rejects.toThrow(/Docker ran out of disk space/);
+  });
+
+  test("a key name the devicetree doesn't know, and a firmware too big, carry their codes; a full disk carries none (R5-02)", async () => {
+    const s = await setup();
+    const logs = join(import.meta.dir, "../../fixtures/build-logs");
+    const failed = (log: string) => failureOf(s.build("log", { FAKE_LOG: join(logs, log) }));
+    expect((await failed("zmk-devicetree-error.log")).code).toBe("compile_error");
+    const big = await failed("ld-region-overflow.log");
+    expect(big.code).toBe("too_large");
+    expect(big.message).toContain("by 228 bytes");
+    expect((await failed("zmk-docker-disk-full.log")).code).toBeNull();
   });
 
   test("Docker not able to see the checkout is called what it is, before the build's confusing failure", async () => {

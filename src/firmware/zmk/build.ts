@@ -3,7 +3,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, firmwareOverflow, tooLargeMessage } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
@@ -134,13 +134,14 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
         const at = locateCompileError(output);
         const keymap = input.source.files.find((f) => f.path === KEYMAP_FILE)?.content ?? "";
         const conf = locateConfError(output, input.source.files.find((f) => f.path === CONF_FILE)?.content ?? "");
-        const detail =
-          hint(output) ??
-          conf ??
-          (at
-            ? `The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymap, at)}.`
-            : `The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
-        throw new BuildFailure(detail);
+        // Docker's own trouble first: it can pass. A layout that doesn't compile or fit fails the same way every time (R5-02).
+        const docker = hint(output);
+        if (docker !== undefined) throw new BuildFailure(docker);
+        const overflow = firmwareOverflow(output);
+        if (overflow !== null) throw new BuildFailure(tooLargeMessage(input.board.name, overflow), "too_large");
+        if (conf !== undefined) throw new BuildFailure(conf, "compile_error");
+        if (at) throw new BuildFailure(`The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymap, at)}.`, "compile_error");
+        throw new BuildFailure(`The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
       }
 
       const file = Bun.file(join(input.checkoutDir, "glove80.uf2"));

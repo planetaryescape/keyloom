@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { BuildSchema, FlashSchema } from "../../src/api/http.ts";
 import {
-  BoardRevisionNeededError, BuildFailedError, FlashFailedError, FlashToolMissingError, NotFoundError, UsageError, ValidationFailedError, buildAndWait, closeApp, flashAndWait, getLayout,
+  BoardRevisionNeededError, BuildFailedError, FlashFailedError, FlashToolMissingError, NotFoundError, UsageError, ValidationFailedError, applyOps, buildAndWait, closeApp, flashAndWait, getLayout,
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
@@ -174,6 +174,23 @@ describe("startBuild / getBuild / buildAndWait", () => {
       expect(b.finishedAt).not.toBeNull();
       expect(b.logTail.join("\n")).toContain("build failed");
       expect(() => BuildSchema.parse(b)).not.toThrow();
+    }, { FAKE_MODE: "compile", FAKE_LINE: "40", FAKE_COL: "3" });
+  });
+
+  test("a build that fails the same way every time names the last revision that built, and the CLI says how to go back (R5-02)", async () => {
+    const e = await toolchainEnv();
+    const built = await e.run(() => buildAndWait(e.app, "synchronized", { boardRevision: "revb" }));
+    expect(built.lastBuilt).toBeNull();
+    const head = getLayout(e.app, "synchronized").revision.id;
+    applyOps(e.app, e.imported.layoutId, { baseRevisionId: head, summary: "A synthetic change", ops: [{ op: "setBinding", at: { layerId: "layer-0", position: 0 }, binding: { kind: "none" } }] });
+    await e.run(async () => {
+      const err = (await buildAndWait(e.app, "synchronized", { boardRevision: "revb" }).catch((x) => x)) as BuildFailedError;
+      expect(err.code).toBe("compile_error");
+      expect(err.message).toContain("Building it again fails the same way");
+      expect(err.message).toContain("keyloom version restore");
+      const view = await getBuild(e.app, err.buildId);
+      expect(view.lastBuilt).toEqual({ revisionId: built.revisionId, summary: getLayout(e.app, "synchronized", built.revisionId).revision.summary });
+      expect(() => BuildSchema.parse(view)).not.toThrow();
     }, { FAKE_MODE: "compile", FAKE_LINE: "40", FAKE_COL: "3" });
   });
 

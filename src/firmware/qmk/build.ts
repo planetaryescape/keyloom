@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, firmwareOverflow, tooLargeMessage } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -11,7 +11,7 @@ import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
 import { artifactKind, artifactProblem } from "./artifact.ts";
 import type { GeneratedSource } from "./generate.ts";
-import { describeLocated, locateCompileError } from "./locate-error.ts";
+import { describeLocated, generatedSourceError, locateCompileError } from "./locate-error.ts";
 import { writeSource } from "./write-source.ts";
 
 export const BUILD_TIMEOUT_MS = 20 * 60_000;
@@ -118,11 +118,16 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       if (result.timedOut) throw new BuildFailure(`The build took longer than ${Math.round((input.timeoutMs ?? BUILD_TIMEOUT_MS) / 60_000)} minutes and was stopped.`);
       if (result.aborted) throw new BuildFailure("The build was cancelled.");
       if (result.exitCode !== 0) {
+        // Docker's own trouble first: it can pass. A layout that doesn't compile or fit fails the same way every time (R5-02).
+        const docker = hint(output);
+        if (docker !== undefined) throw new BuildFailure(docker);
+        const overflow = firmwareOverflow(output);
+        if (overflow !== null) throw new BuildFailure(tooLargeMessage(input.board.name, overflow), "too_large");
         const located = locateCompileError(output, input.source.files.find((f) => f.path === "keymap.c")?.content ?? "", input.board);
-        const detail =
-          hint(output) ??
-          (located ? `The generated firmware doesn't compile: ${describeLocated(located)}` : `QMK's build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
-        throw new BuildFailure(detail);
+        if (located) throw new BuildFailure(`The generated firmware doesn't compile: ${describeLocated(located)}`, "compile_error");
+        const generated = generatedSourceError(output, input.source.keymapName);
+        if (generated !== undefined) throw new BuildFailure(`The generated firmware doesn't compile: ${generated}`, "compile_error");
+        throw new BuildFailure(`QMK's build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
       }
 
       if (input.source.requiredSymbols?.length) {

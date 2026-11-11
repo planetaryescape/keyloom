@@ -84,6 +84,7 @@ case "$FAKE_MODE" in
   nobin) echo "nix-build finished"; exit 0;;
   badbin) echo "not a uf2" > "$vol/glove80.uf2"; exit 0;;
   compile) echo "/nix/store/abc-glove80.keymap:$FAKE_LINE:$FAKE_COL: error: 'NOPE' undeclared"; exit 1;;
+  log) cat "$FAKE_LOG"; exit 2;;
   disk) echo "cp: write error: No space left on device"; exit 1;;
   hang) echo started; exec sleep 600;;
 esac

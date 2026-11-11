@@ -120,6 +120,8 @@ interface ViewerProps {
   onOpenRelease: (revision?: { id: string; summary: string }) => void;
   repairDraft: FindingRepairDraft | null;
   onRepairDraft: (id: string, draft: FindingRepairDraft | null, replace?: boolean) => void;
+  /** "Ask keyloom about this build" from Build and flash (R5-02): a new one opens the chat with the question in it to check and send. */
+  buildQuestion?: { id: string; buildId: string; request: string } | null;
   /** The keyboard's sync state, for the sync line and the toasts that say a change reached it or didn't. */
   sync: SyncApi;
   /** What the top bar needs from the page around the layout: the layouts and boards to switch between, and Build and flash. */
@@ -174,7 +176,7 @@ const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, sync, chrome }: ViewerProps) {
+export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, buildQuestion = null, sync, chrome }: ViewerProps) {
   const [repairNotice, setRepairNotice] = useState<string | null>(null);
   const planRecovery = (source: RecoverySource, context: RecoveryContext) => {
     if (repairDraft) { setRepairNotice("Finish or dismiss the existing repair request first. It has been kept."); return; }
@@ -184,6 +186,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setChatOpen(true);
   };
   const { document: layout, board, geometry, revision } = detail;
+  // Each question asked from Build and flash once (R5-02): into the chat as a request to check and send, unless one is already waiting there.
+  const askedBuild = useRef<string | null>(null);
+  useEffect(() => {
+    if (buildQuestion === null || askedBuild.current === buildQuestion.id) return;
+    askedBuild.current = buildQuestion.id;
+    if (repairDraft) setRepairNotice("Finish or dismiss the existing request first. It has been kept; ask about the build again after.");
+    else onRepairDraft(buildQuestion.id, { id: buildQuestion.id, buildId: buildQuestion.buildId, headRevisionId: detail.revision.id, request: buildQuestion.request, sent: false }, true);
+    setChatOpen(true);
+    // Once per question; the draft and the setters are read as they are when it arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildQuestion?.id]);
   // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
   const [layerId, setLayerId] = useState<string | null>(() => {
     const name = chrome.arrival?.layerName?.trim().toLowerCase();
@@ -1712,6 +1725,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   if (layer === undefined) return null;
   function currentRepair(): boolean {
     if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return false;
+    // A question about a build stays good to send whatever the review says; its log is in it.
+    if ("buildId" in repairDraft) return true;
     if ("source" in repairDraft) {
       const source = repairDraft.source;
       return source.conversationId !== undefined || (source.kind === "proposal" && waiting?.some((proposal) => proposal.changeSetId === source.proposalId && proposal.status === "proposed") === true);

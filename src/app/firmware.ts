@@ -5,7 +5,7 @@ import { requirePlatformSupport } from "../firmware/toolchain/platform-support.t
 import { join, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
-import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
+import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
@@ -13,12 +13,12 @@ import { commandArg } from "./command-words.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
-  type BuildRow, type FlashRow, activeFlashes, createBuild, createFlash, finishBuild, finishFlash, findBuild, findFlash, latestSuccessfulBuild,
+  type BuildRow, type FlashRow, activeFlashes, builtRevisionIds, createBuild, createFlash, finishBuild, finishFlash, findBuild, findFlash, latestSuccessfulBuild,
   newBuildId, newFlashId, setFlashProgress,
 } from "../persistence/builds.ts";
 import { recordHandsFreeProof } from "../persistence/syncs.ts";
 import { appendLog } from "../persistence/log.ts";
-import { findLayoutRow, listLayoutRows } from "../persistence/layouts.ts";
+import { findLayoutRow, listLayoutRows, revisionChain } from "../persistence/layouts.ts";
 import { recordVersion } from "../persistence/versions.ts";
 import { cacheDir } from "../persistence/paths.ts";
 import { showBoard } from "./boards.ts";
@@ -40,8 +40,13 @@ export type BuildView = {
   boardRevision: string;
   status: "running" | "succeeded" | "failed";
   error: string | null;
-  /** Why it failed as a code the UI acts on: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a stop the person asked for (R3-10). */
-  errorCode: "docker_unavailable" | "cancelled" | null;
+  /**
+   * Why it failed as a code the UI acts on: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a stop the person asked
+   * for (R3-10); "compile_error" and "too_large" fail the same way every time, so the UI offers `lastBuilt` instead of Build again (R5-02).
+   */
+  errorCode: BuildErrorCode | null;
+  /** For a build that fails the same way every time: the newest earlier revision in its history that built, or null (R5-02). */
+  lastBuilt: { revisionId: string; summary: string } | null;
   /** What flashing this build will need, so the dialog knows before anyone clicks (D-489, D-490). */
   flashPlan: FlashPlan;
   startedAt: number;
@@ -183,11 +188,25 @@ async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
   const board = boardOf(app, row.layoutId);
   return {
     id: row.id, revisionId: row.revisionId, layoutId: row.layoutId, boardRevision: row.boardRevision, status: row.status, error: row.error,
-    errorCode: row.errorCode === "docker_unavailable" || row.errorCode === "cancelled" ? row.errorCode : null,
+    errorCode: isBuildErrorCode(row.errorCode) ? row.errorCode : null,
+    lastBuilt: row.status === "failed" && isBuildErrorCode(row.errorCode) && DETERMINISTIC_BUILD_CODES.has(row.errorCode) ? lastBuiltBefore(app, row) : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
   };
+}
+
+const BUILD_ERROR_CODES: ReadonlySet<string> = new Set<BuildErrorCode>(["docker_unavailable", "cancelled", "compile_error", "too_large"]);
+const isBuildErrorCode = (code: string | null): code is BuildErrorCode => code !== null && BUILD_ERROR_CODES.has(code);
+
+/**
+ * The newest revision before `row`'s, in its own history, that has a build that succeeded (R5-02). Going back to it is the undo with `to`
+ * (D-502): a new revision, so the one that failed stays in History.
+ */
+function lastBuiltBefore(app: App, row: BuildRow): { revisionId: string; summary: string } | null {
+  const built = builtRevisionIds(app.db, row.layoutId);
+  const found = revisionChain(app.db, row.layoutId, row.revisionId).slice(1).find((r) => built.has(r.id));
+  return found === undefined ? null : { revisionId: found.id, summary: found.summary };
 }
 
 /** The board a build's layout is for, or undefined when the layout or its board has gone. */
@@ -354,7 +373,8 @@ export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {
   if (done.status !== "succeeded") {
     // Only the terminal gets the command: the page has its own Go back for a layout that doesn't fit (D-502).
     const view = getLayout(app, started.layoutId, started.revisionId);
-    throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"}${misfitHint(view)} (log: ${done.logPath})`, done.id, done.logPath, done.errorCode);
+    const hint = misfitHint(view) || sameEveryTimeHint(done, view);
+    throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"}${hint} (log: ${done.logPath})`, done.id, done.logPath, done.errorCode);
   }
   return done;
 }
@@ -368,6 +388,16 @@ export function misfitHint(view: LayoutView): string {
   if (view.document.layers.every((layer) => layer.bindings.length === keys)) return "";
   const name = commandArg(view.layout.name);
   return `. Its layers no longer match the ${keys} keys of ${view.board.definition.name}; find a version that did with \`keyloom version list ${name}\`, then go back to it with \`keyloom version restore ${name} <version>\``;
+}
+
+/**
+ * The way back for a build that fails the same way every time (R5-02): a version that was on the keyboard was built. The page offers the
+ * last revision that built as Go back instead. Empty for any other failure.
+ */
+export function sameEveryTimeHint(build: Pick<BuildView, "errorCode">, view: LayoutView): string {
+  if (build.errorCode === null || !DETERMINISTIC_BUILD_CODES.has(build.errorCode)) return "";
+  const name = commandArg(view.layout.name);
+  return `. Building it again fails the same way; find a version that was on the keyboard with \`keyloom version list ${name}\`, then go back to it with \`keyloom version restore ${name} <version>\``;
 }
 
 // --- flash ----------------------------------------------------------------------------------

@@ -30,6 +30,7 @@ case "$FAKE_MODE" in
   noright) mkdir -p "$vol/build/left/zephyr"; cp "$FAKE_UF2" "$vol/build/left/zephyr/zmk.uf2"; exit 0;;
   badbin) for t in left right; do mkdir -p "$vol/build/$t/zephyr"; echo "not a uf2" > "$vol/build/$t/zephyr/zmk.uf2"; done; exit 0;;
   compile) echo "/work/config/board.keymap:$FAKE_LINE:$FAKE_COL: error: 'NOPE' undeclared"; exit 1;;
+  log) cat "$FAKE_LOG"; exit 2;;
   disk) echo "No space left on device"; exit 1;;
 esac
 exit 9
@@ -60,6 +61,9 @@ async function setup() {
     );
   return { build, dir, lines, dockerLog, board };
 }
+
+/** The failure a build ended in; a build that passed fails the test. */
+const failureOf = (p: Promise<unknown>): Promise<BuildFailure> => p.then(() => { throw new Error("the build passed"); }, (e: unknown) => e as BuildFailure);
 
 describe("buildZmkWest (fake docker)", () => {
   test("an external board module is pinned, each half selects its own board, and no shield is invented", async () => {
@@ -195,6 +199,14 @@ describe("buildZmkWest (fake docker)", () => {
   test("a compile error in the keymap is located by the generated file's own name", async () => {
     const s = await setup();
     await expect(s.build("compile", { FAKE_LINE: "1", FAKE_COL: "3" })).rejects.toThrow(/doesn't compile: .*line 1 of board\.keymap/);
+    expect((await failureOf(s.build("compile", { FAKE_LINE: "1", FAKE_COL: "3" }))).code).toBe("compile_error");
+  });
+
+  test("a firmware too big for the flash carries its code and how much (R5-02)", async () => {
+    const s = await setup();
+    const err = await failureOf(s.build("log", { FAKE_LOG: join(import.meta.dir, "../../fixtures/build-logs/ld-region-overflow.log") }));
+    expect(err.code).toBe("too_large");
+    expect(err.message).toContain("memory by 228 bytes");
   });
 
   test("a full Docker disk says so", async () => {

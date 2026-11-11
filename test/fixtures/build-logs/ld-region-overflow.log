@@ -1,0 +1,3 @@
+/opt/arm-gnu-toolchain/bin/../lib/gcc/arm-none-eabi/15.2.1/../../../../arm-none-eabi/bin/ld: a2.elf section `.data' will not fit in region `FLASH'
+/opt/arm-gnu-toolchain/bin/../lib/gcc/arm-none-eabi/15.2.1/../../../../arm-none-eabi/bin/ld: region `FLASH' overflowed by 228 bytes
+collect2: error: ld returned 1 exit status

@@ -79,7 +79,10 @@ export function formatFindingRepairRequest(finding: { title: string; body: strin
   ].filter(Boolean).join("\n\n");
 }
 
-export type FindingRepairDraft = { id: string; reviewId: string; headRevisionId: string; findingId: string; request: string; sent: boolean } | import("../validation/proposal-recovery.ts").ProposalRecoveryDraft;
+/** A question about a failed build, with its log, waiting in the chat for the person to check and send (R5-02). */
+export type BuildQuestionDraft = { id: string; buildId: string; headRevisionId: string; request: string; sent: boolean };
+
+export type FindingRepairDraft = { id: string; reviewId: string; headRevisionId: string; findingId: string; request: string; sent: boolean } | import("../validation/proposal-recovery.ts").ProposalRecoveryDraft | BuildQuestionDraft;
 
 export function selectableFinding(items: readonly import("../validation/review-item.ts").ReviewItem[], id: string) {
   return fixableFindings(items).find((item) => item.id === id);

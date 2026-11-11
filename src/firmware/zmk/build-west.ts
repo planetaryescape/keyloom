@@ -6,7 +6,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
-import { BuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, firmwareOverflow, tooLargeMessage } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
@@ -144,13 +144,14 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         const keymapFile = input.source.files.find((f) => f.path.endsWith(".keymap"));
         const at = locateCompileError(output);
         const conf = locateConfError(output, input.source.files.find((f) => f.path.endsWith(".conf"))?.content ?? "");
-        const detail =
-          hint(output) ??
-          conf ??
-          (at && keymapFile
-            ? `The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymapFile.content, at, keymapFile.path)}.`
-            : `The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
-        throw new BuildFailure(detail);
+        // Docker's own trouble first: it can pass. A layout that doesn't compile or fit fails the same way every time (R5-02).
+        const docker = hint(output);
+        if (docker !== undefined) throw new BuildFailure(docker);
+        const overflow = firmwareOverflow(output);
+        if (overflow !== null) throw new BuildFailure(tooLargeMessage(input.board.name, overflow), "too_large");
+        if (conf !== undefined) throw new BuildFailure(conf, "compile_error");
+        if (at && keymapFile) throw new BuildFailure(`The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymapFile.content, at, keymapFile.path)}.`, "compile_error");
+        throw new BuildFailure(`The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
       }
 
       const bundle: Record<string, Uint8Array> = {};

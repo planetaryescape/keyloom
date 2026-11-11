@@ -1,6 +1,6 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, LoaderCircle, MessageCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, Undo2, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Flash, RevisionInfo } from "../../api/http.ts";
+import type { Build, Flash, RevisionInfo } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import { LogTail } from "./LogTail.tsx";
@@ -12,6 +12,9 @@ import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
+import { buildFailureView } from "./build-failure-words.ts";
+import { ApiError } from "../api.ts";
+import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
 import "./release.css";
 
 interface Props {
@@ -29,6 +32,12 @@ interface Props {
   boardRevisions: BoardDefinition["revisions"];
   status: ReleaseStatus;
   now: number;
+  /** Goes back to an earlier revision as a new one (D-502), then shows it; for a build that fails the same way every time (R5-02). */
+  onGoBack?: (to: string) => Promise<void>;
+  /** Reads the layout again, after the server refused Go back because the layout had moved on (D-506). */
+  onShowLatest?: () => Promise<void>;
+  /** Closes the dialog and puts a question about this build, with its log, in the chat for the person to send (R5-02). */
+  onAskAboutBuild?: (build: Build) => void;
 }
 
 type StepState = "todo" | "active" | "done" | "failed" | "warning" | "locked";
@@ -74,9 +83,13 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, boardRevisions, status, now }: Props) {
+export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, boardRevisions, status, now, onGoBack, onShowLatest, onAskAboutBuild }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
+  // Go back to the last version that built (R5-02): while it runs, what the server refused, and the revision it went back to.
+  const [goingBack, setGoingBack] = useState(false);
+  const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
+  const [wentBackTo, setWentBackTo] = useState<string | null>(null);
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
   const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction);
   const blocked = buildBlockedReason(dockerNow);
@@ -103,6 +116,29 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
+  const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision) : null;
+  const goBack = async (to: { revisionId: string; summary: string }) => {
+    if (onGoBack === undefined) return;
+    setGoingBack(true);
+    setGoBackRefused(null);
+    try {
+      await onGoBack(to.revisionId);
+    } catch (problem) {
+      setGoBackRefused(problem instanceof ApiError ? goBackRefusal(problem.code, problem.message) : { text: problem instanceof Error ? problem.message : "keyloom couldn't go back.", next: null });
+      setGoingBack(false);
+      return;
+    }
+    setWentBackTo(to.summary);
+    // The new revision is made; a page that can't read it yet says so, and Show the latest version reads it again. Go back stays hidden,
+    // so it can't be made twice.
+    try {
+      await onShowLatest?.();
+    } catch {
+      setGoBackRefused({ text: `keyloom went back to “${headline(to.summary)}”, but couldn't show it yet.`, next: "reload" });
+    } finally {
+      setGoingBack(false);
+    }
+  };
   const flashState: StepState = flash === null ? (canFlash ? "todo" : "locked") : flash.status === "succeeded" ? flash.verified ? "done" : "warning" : flash.status === "failed" ? (flash.errorCode === "cancelled" ? "todo" : flash.errorCode === "not_confirmed" ? "warning" : "failed") : "active";
 
   const confirmBlock = (
@@ -197,7 +233,9 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               <>
                 {buildStopped ? <p className="muted" role="status">Build stopped.</p> : null}
                 <p>
-                  {earlier
+                  {wentBackTo !== null && earlier
+                    ? `The layout is back to “${headline(wentBackTo)}”. Build it to put it on the keyboard.`
+                    : earlier
                     ? "The last build was of an earlier version of this layout. Build again to include the latest change."
                     : "Compiles the layout into firmware. Nothing is sent to your keyboard yet."}
                 </p>
@@ -249,7 +287,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               </>
             ) : (
               <>
-                {build.errorCode === "docker_unavailable" ? (
+                {failure?.kind === "docker" ? (
                   // The build stopped at Docker: the same callout and button as before a build, never the raw sentence.
                   dockerNow.kind === "none" ? <p className="ok">Docker is ready now. Build again to continue.</p> : <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} buildFailed />
                 ) : (
@@ -258,14 +296,38 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                       <CircleAlert size={18} aria-hidden="true" />
                       <p>{plain(build.error ?? "The build failed.")}</p>
                     </div>
+                    {failure?.kind === "same_every_time" ? <p>{failure.next}</p> : null}
                     <LogTail label="Build log, last lines" lines={build.logTail} />
                   </>
                 )}
                 <div className="step-actions">
-                  <button type="button" className="button" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
-                    Build again
-                  </button>
-                  {blocked === null ? null : <p className="blocked-reason">{blocked}</p>}
+                  {/* A layout that doesn't compile or fit fails the same way again, so Build again is only for a failure that may pass (R5-02). */}
+                  {failure?.kind === "same_every_time" ? (
+                    failure.goBack === null || onGoBack === undefined || goBackRefused !== null ? null : (
+                      <button type="button" className="button button-primary" disabled={goingBack} onClick={() => failure.goBack !== null && void goBack(failure.goBack)}>
+                        {goingBack ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}
+                        Go back to the last version that built
+                      </button>
+                    )
+                  ) : (
+                    <button type="button" className="button" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
+                      Build again
+                    </button>
+                  )}
+                  {failure?.kind === "docker" || onAskAboutBuild === undefined ? null : (
+                    <button type="button" className="button" onClick={() => onAskAboutBuild(build)}>
+                      <MessageCircle size={14} aria-hidden="true" />
+                      Ask keyloom about this build
+                    </button>
+                  )}
+                  {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
+                  {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
+                  {goBackRefused?.next !== "reload" || onShowLatest === undefined ? null : (
+                    <button type="button" className="button" onClick={() => void onShowLatest().then(() => setGoBackRefused(null), (problem: unknown) => setGoBackRefused({ text: `keyloom couldn't read the latest version: ${problem instanceof Error ? problem.message : String(problem)}`, next: "reload" }))}>
+                      <RefreshCw size={14} aria-hidden="true" />
+                      Show the latest version
+                    </button>
+                  )}
                 </div>
               </>
             )}
