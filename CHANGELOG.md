@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.74.0](https://github.com/planetaryescape/keyloom/compare/v0.73.0...v0.74.0) (2026-11-11)
+
+
+### Features
+
+* give flash problems codes, cancel a waiting flash and check an unconfirmed one ([ebd7ecb](https://github.com/planetaryescape/keyloom/commit/ebd7ecbacdc51346580e33f01a80155d9222c12d))
+* link the import cards' editors, read Karabiner's settings from the Mac, and reload after an unreadable import ([3707ffa](https://github.com/planetaryescape/keyloom/commit/3707ffa875a39acac98520360864ac2724885773))
+* offer the fix for every flash problem in Build and flash, and keep the MacBook out of it ([12020c7](https://github.com/planetaryescape/keyloom/commit/12020c7438184d92ffaeda09f9b12afecdc89a5b))
+* open a window with Try again when the desktop server can't start or keeps stopping ([13e6610](https://github.com/planetaryescape/keyloom/commit/13e66109f6e16ce91e164b0486365eb64cdffd3f))
+* root-owned kanata for the daemon, and a kanata checklist with no dead ends ([9255ef1](https://github.com/planetaryescape/keyloom/commit/9255ef10c38d8beaaa97bffb29d14457d04b3f9f))
+* run a root-owned, hash-checked copy of kanata, and give the kanata checklist an install it can follow and cancel ([4e9a20b](https://github.com/planetaryescape/keyloom/commit/4e9a20b4b090bb8dbcaa58def1f21b3b26a35213))
+
+
+### Bug Fixes
+
+* answer the bot review of the flash-cancel fix ([2072917](https://github.com/planetaryescape/keyloom/commit/20729175b94dee9db141b9cd3a586b36bf31ca14))
+* clear git locks a cancelled ZMK build left in its checkout ([7d548f1](https://github.com/planetaryescape/keyloom/commit/7d548f12fbecaf35b9ab389edb0851f12478a98d))
+* find Colima after a failed first start, and restart or install Docker only when that fixes it ([118878d](https://github.com/planetaryescape/keyloom/commit/118878d520235414c50340a77141e62965725992))
+* finish a stranded ZMK flash and clear a cancelled build's git locks ([2bf08df](https://github.com/planetaryescape/keyloom/commit/2bf08dfd66d8f2790ed3a0cef0ce00adacb07407))
+* finish a ZMK flash whose boot drive went away before the file was opened ([0cb3da4](https://github.com/planetaryescape/keyloom/commit/0cb3da46003b39627c5d9370e37628b1ffa9d6a0))
+* flash problems offer their fix, and the MacBook keyboard never opens Build and flash ([e144d32](https://github.com/planetaryescape/keyloom/commit/e144d32c1811531880b1514827b8cb0a361bcb15))
+* give every Docker and tool install state a way out ([5a3b9d3](https://github.com/planetaryescape/keyloom/commit/5a3b9d3e4281e3750850eb273bc9abbfc50008f8))
+* give every Docker and tool install state a way out ([be0c57f](https://github.com/planetaryescape/keyloom/commit/be0c57f79d0f665d407c69671e75de8ede28cab8))
+* hold the write guard through a ZMK restart and say where a stopped keyboard is ([36d9bdc](https://github.com/planetaryescape/keyloom/commit/36d9bdc64d18b6ad626d9bd5973eeb0969446ae6))
+* keep the write guard sound around Zapp's exit, a cancel's USB check and a shutdown during a split write ([010b0e1](https://github.com/planetaryescape/keyloom/commit/010b0e1e7e8a8d908cd1f4f7c84cfe92c99e024c))
+* let a written but unconfirmed flash be checked again, and never record a stale check or cancel answer ([5f1281c](https://github.com/planetaryescape/keyloom/commit/5f1281cb11929289fdb996e42da5796eaac2d601))
+* link the places copy names, and drop offers that can't be taken ([93dd6d0](https://github.com/planetaryescape/keyloom/commit/93dd6d08d752c89a6c9e982f6e65bd1fc7cb4ce4))
+* never let a Ctrl-C, shutdown or cancel cut off a keyboard write ([123ae98](https://github.com/planetaryescape/keyloom/commit/123ae9897bc1c343cd45c15e13c042681d9e14b6))
+* never stop a flash once the keyboard is in its bootloader, and keep flash and Apply words true ([8367f70](https://github.com/planetaryescape/keyloom/commit/8367f7047eb112fe353098ec70dc16a7142467a0))
+* offer only the locked provider's setup, and a way round a refusing Keychain ([849ae28](https://github.com/planetaryescape/keyloom/commit/849ae282065129d82edd971baa672ab7b5b494cb))
+* read a flash's instruction code with its instruction, before the log read ([dbb6301](https://github.com/planetaryescape/keyloom/commit/dbb630155720a2873a7fda5f9f22e2eb1b390134))
+* release the write guard and keep the error when a hands-free restart's callback throws ([c7f490d](https://github.com/planetaryescape/keyloom/commit/c7f490dd39671a2366eec7f6b7d99f938bf3309b))
+* say why a root setup stopped, keep kanata's log root-only, and offer no password step for a kanata changed outside Homebrew ([cefab69](https://github.com/planetaryescape/keyloom/commit/cefab69ceaa65a27caad473fa3777f5feb36b49b))
+* stop a ZMK build when keyloom can't check for or remove an earlier container ([bbadce9](https://github.com/planetaryescape/keyloom/commit/bbadce95299bd00ac69b375fb8c6e164af795cc8))
+* stop all of Homebrew on Cancel, keep the newest log line in view, and record D-498 and D-503 ([0815b08](https://github.com/planetaryescape/keyloom/commit/0815b08a413f902537c1e3c4ab587a57d2b8204a))
+* stop the desktop server cleanly on quit, timeout and exit, and say why Karabiner's settings can't be read ([a29702f](https://github.com/planetaryescape/keyloom/commit/a29702fc45a1592ab304ad7ade2d3880f36083f0))
+* test the new shutdown cancel and the keyboard that only left USB ([7955392](https://github.com/planetaryescape/keyloom/commit/795539215e07cf94b461b175c38fe4dc4b31e1bc))
+* the desktop app, chat setup and copy offer the way out (round 2) ([293c9ef](https://github.com/planetaryescape/keyloom/commit/293c9efe8063da6f28e8fcc4809a919535cbe3ef))
+* treat a timed-out container check or removal as a failed ZMK build ([83f3b5a](https://github.com/planetaryescape/keyloom/commit/83f3b5a8007ca6f74d9cfed532c285e7835fc933))
+* wait for zapp's loaded line before the slow-USB Ctrl-C test signals ([e50bf95](https://github.com/planetaryescape/keyloom/commit/e50bf9545812c652d6303dc864f692097fc49d3c))
+* write a returning boot drive at its new path, and only when its half is proven ([3f990e3](https://github.com/planetaryescape/keyloom/commit/3f990e33ad4c97b4901a5d3a07bb5dfab1cc956c))
+
 ## [0.73.0](https://github.com/planetaryescape/keyloom/compare/v0.72.5...v0.73.0) (2026-11-11)
 
 
