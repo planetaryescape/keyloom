@@ -193,7 +193,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [placing, setPlacing] = useState<PlaceRequest | null>(null);
   const [placements, setPlacements] = useState<readonly Placement[]>([]);
   const toasts = useToasts();
-  useSyncToasts(sync, toasts.show);
+  // A refused sync's toast offers the fix (R1-16); each handler is the same one the page's own control uses.
+  useSyncToasts(sync, toasts.show, {
+    restore: () => void restoreArchived(summary.id),
+    put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
+    open_release: () => onOpenRelease(),
+    replace_foreign: () => sync.setReplaceAsk(summary.id),
+  });
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
   // them (D-263, P3 review); an undo clears them, since what changed is no longer what is waiting.
   const [unsynced, setUnsynced] = useState<{ layerId: string; position: number }[]>([]);
@@ -1764,7 +1770,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           editingOther && keyboardConfig !== null ? (
             <EditingStatus name={summary.name} onKeyboard={keyboardConfig.name} boardName={boardDisplayName(board.name)} onPutOn={() => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } })} />
           ) : (
-            <SyncStatus sync={sync} layoutId={summary.id} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} />
+            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
           )
         }
         ask={{ open: chatOpen, onToggle: toggleChat }}
@@ -2285,7 +2291,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
           lines={[
             `keyloom builds ${configDialog.target.name} and puts it on the keyboard, the same press-and-sync as Apply. From then on ${configDialog.target.name} is the config that syncs.`,
-            ...(keyboardConfig === null ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
+            ...(keyboardConfig === null || keyboardConfig.id === configDialog.target.id ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
           ]}
           confirmLabel="Put it on"
           onConfirm={() => putOn(configDialog.target)}

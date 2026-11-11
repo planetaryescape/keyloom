@@ -471,6 +471,10 @@ a.menu-item {
   color: var(--color-text-muted);
 }
 
+.toast-action {
+  flex: none;
+}
+
 .toast[data-kind="success"] {
   border-color: var(--color-success);
 }

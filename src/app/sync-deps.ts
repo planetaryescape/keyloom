@@ -17,7 +17,7 @@ export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note:
 
 export type RemapperDeps = {
   /** Writes, checks, reloads and verifies one revision on a software remapper. Never throws. */
-  apply(a: { layoutId: string; revisionId: string }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string }>;
+  apply(a: { layoutId: string; revisionId: string; /** Replace a keyloom.kbd keyloom didn't write, keeping a copy (R1-17). */ overwriteForeign?: boolean }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string }>;
   /** Loads the identity map. Never throws. */
   disable(boardId: string): Promise<{ ok: true } | { ok: false; error: string }>;
 };
@@ -55,7 +55,7 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
     remapper: {
       async apply(a) {
         try {
-          const r = await applyToRemapper(app, a.layoutId, a.revisionId, opts.handsFree?.remapper ?? {});
+          const r = await applyToRemapper(app, a.layoutId, a.revisionId, opts.handsFree?.remapper ?? {}, a.overwriteForeign ? { overwriteForeign: true } : {});
           return r.ok ? { ok: true, ms: r.ms } : { ok: false, step: r.step, error: r.error };
         } catch (err) {
           return { ok: false, step: "apply", error: message(err) };

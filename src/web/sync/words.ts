@@ -3,7 +3,11 @@
 import type { BoardSync } from "../../api/http.ts";
 
 export type SyncTone = "success" | "busy" | "neutral" | "warning" | "error";
-export type SyncActionId = "sync_now" | "flash_keyloom";
+/**
+ * What a line's button does. `put_on` opens the put-on confirm (D-300), `open_release` the Build and flash dialog, where Docker's own
+ * callout lives, and `replace_foreign` the confirm that replaces a kanata config keyloom didn't write (R1-17).
+ */
+export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign";
 
 export interface SyncLine {
   /** The pill's text. */
@@ -44,7 +48,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
     return {
       label: `Your ${name} runs “${board.layoutName}”`, short: "Other layout",
       detail: `This layout isn't on it. Put it there and “${board.layoutName}” stops being what the ${name} runs.`,
-      tone: "neutral", action: { id: "sync_now", label: "Put this layout on it" },
+      tone: "neutral", action: { id: "put_on", label: "Put this layout on it" },
     };
   }
   if (board.remapper === true) return remapperLine(board, name, s);
@@ -65,10 +69,10 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
         : s.why === "paused" ? "Auto-sync is paused."
         : s.why === "auto_off" ? "Auto-sync is off for this keyboard."
         : s.why === "unproven" ? "Auto-sync turns on after keyloom flashes this keyboard by itself once and sees it come back. Sync now to do that."
-        : s.why === "other_config" ? `Your ${name} runs a different config. Put this one on from the config menu to replace it.`
+        : s.why === "other_config" ? `Your ${name} runs a different config. Put “${board.layoutName}” on it to replace that one.`
         : s.why === "unknown_build" ? `Your ${name} runs a keyloom build this copy doesn't know, so keyloom won't replace it by itself.`
         : "Something else was flashed since this change.";
-      return { label, short: "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: { id: "sync_now", label: "Sync now" } };
+      return { label, short: "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: behindAction(board, s.why) };
     }
     case "needs_hand":
       return {
@@ -92,6 +96,14 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
   }
 }
 
+// Sync now is offered only where it can succeed. Another config on the keyboard is a choice (D-300), and a failed build is answered in
+// Build and flash, which says what the build needs (Docker's callout) and shows its log; repeating it from here would fail the same way.
+function behindAction(board: BoardSync, why: Extract<BoardSync["state"], { kind: "behind" }>["why"]): SyncLine["action"] {
+  if (why === "other_config") return { id: "put_on", label: `Put “${board.layoutName}” on it` };
+  if (why === "failed" && board.last?.failure === "build") return { id: "open_release", label: "Build and flash…" };
+  return { id: "sync_now", label: "Sync now" };
+}
+
 function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): SyncLine {
   switch (s.kind) {
     case "in_sync":
@@ -106,16 +118,20 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
         : s.why === "waiting" ? (s.error ? `${s.error} Trying again.` : "Applying in a moment.")
         : s.why === "paused" ? "Auto-apply is paused."
         : s.why === "auto_off" ? "Auto-apply is off for this keyboard."
-        : s.why === "unproven" ? "Auto-apply turns on after you prove kanata's emergency exit once (hold Left Control + Space + Escape), then run keyloom remap confirm-exit-chord."
+        : s.why === "unproven" ? "Auto-apply turns on after you prove kanata's emergency exit once. The steps are under Auto-apply below."
         : "Something else was loaded since this change.";
       return { label, short: s.why === "remapping_off" ? "Off" : "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: { id: "sync_now", label: s.why === "remapping_off" ? "Turn remapping on" : "Apply now" } };
     }
     case "needs_hand":
       return { label: "Needs a hand", short: "Needs a hand", detail: s.instruction, tone: "warning", action: { id: "sync_now", label: "Try again" } };
     case "not_connected":
-      return { label: `kanata isn't running`, short: "Not running", detail: "Run keyloom doctor to see what is missing. Until kanata runs, the MacBook keyboard types plainly.", tone: "neutral", action: null };
+      // The popover lists what is missing, with a button for each (D-493).
+      return { label: `kanata isn't running`, short: "Not running", detail: "Until kanata runs, your MacBook keyboard types plainly.", tone: "neutral", action: null };
     case "not_keyloom":
-      return { label: "kanata runs a config keyloom didn't write", short: "Not keyloom's", detail: `${s.detail}. keyloom never replaces it by itself.`, tone: "warning", action: null };
+      return {
+        label: "kanata runs a config keyloom didn't write", short: "Not keyloom's", detail: "keyloom never replaces it by itself. Replace it to put this layout on, and keyloom keeps a copy.", more: `${s.detail}.`,
+        tone: "warning", action: { id: "replace_foreign", label: "Replace it…" },
+      };
   }
 }
 
@@ -126,7 +142,7 @@ export function autoSyncLine(board: BoardSync): { on: boolean; canTurnOn: boolea
     on: a.on,
     canTurnOn: a.proven,
     note: a.proven ? null : board.remapper === true
-      ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape, see kanata stop, then run keyloom remap confirm-exit-chord."
+      ? "Turns on after you prove kanata's emergency exit once: hold Left Control + Space + Escape until your MacBook keyboard types plainly, then press the button below."
       : "Turns on after keyloom flashes this keyboard by itself once and sees it come back.",
   };
 }
@@ -152,4 +168,25 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): { k
   }
   if (now.kind === "needs_hand") return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };
   return null;
+}
+
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign";
+
+/**
+ * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
+ * each code says what happened and offers the button that fixes it, where the page has one.
+ */
+export function refusalNotice(code: string | undefined, message: string): { message: string; detail?: string; action?: { id: RefusalAction; label: string } } {
+  switch (code) {
+    case "archived": return { message: "This config is archived", detail: "Restore it to put it on the keyboard.", action: { id: "restore", label: "Restore" } };
+    case "not_on_keyboard": return { message: "This config isn't the one on the keyboard", detail: "Put it on to make it the config that syncs.", action: { id: "put_on", label: "Put it on…" } };
+    case "cant_sync": return { message: "keyloom can't sync this keyboard by itself", detail: "Build and flash puts this layout on it.", action: { id: "open_release", label: "Build and flash…" } };
+    case "foreign_firmware": return { message: "The keyboard runs firmware keyloom didn't build", detail: "keyloom never replaces it by itself. Build and flash replaces it after you confirm.", action: { id: "open_release", label: "Build and flash…" } };
+    case "kanata_foreign": return { message: "kanata runs a config keyloom didn't write", detail: "keyloom never replaces it by itself.", action: { id: "replace_foreign", label: "Replace it…" } };
+    case "kanata_not_running": return { message: "kanata isn't running", detail: "The keyboard's status at the top of the page lists what is missing, with a button for each." };
+    case "not_connected": return { message: "The keyboard isn't connected", detail: "Plug it in and keyloom checks it." };
+    case "busy": return { message: "keyloom is already building or flashing", detail: "Sync again when it finishes." };
+    case "kanata_still_running": return { message: "kanata is still running", detail: "Hold Left Control, Space and Escape together until your MacBook keyboard types plainly, then press the button again." };
+    default: return { message: "keyloom couldn't do that", detail: message };
+  }
 }

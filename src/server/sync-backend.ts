@@ -14,6 +14,10 @@ export interface SyncBackend {
   setPaused(boardId: string, paused: boolean): Promise<BoardSync[]>;
   /** "Disable remapping": loads the identity map on a software-remapper board, with no sudo (21). */
   disableRemapping(boardId: string): Promise<BoardSync[]>;
+  /** "Replace it": applies the config's head over a kanata config keyloom didn't write, keeping a copy (R1-17). */
+  replaceForeignRemapperConfig(layoutId: string): Promise<BoardSync[]>;
+  /** The person held kanata's exit chord and saw it stop; refused while kanata still answers (R1-18). */
+  confirmExitChord(boardId: string): Promise<BoardSync[]>;
   /** Calls `listener` with every board's state, the keyboards keyloom has no board for, and the known boards with no config yet, whenever one changes; returns the unsubscribe. */
   subscribe(listener: (boards: BoardSync[], newKeyboards: DetectedKeyboard[], setupBoards: DetectedKeyboard[]) => void): () => void;
   /** The keyboards on USB keyloom has no board for, as of the engine's last read (D-336). */

@@ -6,6 +6,8 @@ export interface ToastInput {
   kind: ToastKind;
   message: string;
   detail?: string;
+  /** The one thing to do about it, such as Restore; pressing it closes the toast. */
+  action?: { label: string; run: () => void };
 }
 interface Toast extends ToastInput {
   id: number;
@@ -41,6 +43,9 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         <strong>{toast.message}</strong>
         {toast.detail === undefined ? null : <span>{toast.detail}</span>}
       </p>
+      {toast.action === undefined ? null : (
+        <button type="button" className="button toast-action" onClick={() => { toast.action?.run(); onDismiss(); }}>{toast.action.label}</button>
+      )}
       <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>
         <X size={14} aria-hidden="true" />
       </button>

@@ -210,6 +210,24 @@ describe("Host check covers the page and its assets", () => {
       expect((await api(port, path, { host: `127.0.0.1:${port}` })).status).toBe(404);
     }
   });
+
+  test("an unknown page is an HTML page with a way back into keyloom; an unknown /api path stays JSON (R1-07)", async () => {
+    const { port } = start();
+    const page = await api(port, "/nope/path", {});
+    expect(page.status).toBe(404);
+    expect(page.headers.get("content-type")).toContain("text/html");
+    const html = await page.text();
+    expect(html).toContain("Open keyloom");
+    expect(html).toContain('href="/"');
+    // This session's token is carried into the link; any other value is not echoed back.
+    expect(await (await api(port, `/nope?t=${TOKEN}`, {})).text()).toContain(`href="/?t=${TOKEN}"`);
+    const foreign = await (await api(port, `/nope?t=%22%3E%3Cscript%3E`, {})).text();
+    expect(foreign).toContain('href="/"');
+    expect(foreign).not.toContain("<script>");
+    const json = await api(port, "/api/nope", goodHeaders);
+    expect(json.status).toBe(404);
+    expect(await json.json()).toEqual({ error: "not found" });
+  });
 });
 
 describe("api path handling", () => {

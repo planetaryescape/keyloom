@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SyncNowResponseSchema, SyncStatusResponseSchema, type BoardSync, type LayoutUpdatedEvent } from "../../api/http.ts";
+import { ApiError } from "../api.ts";
 import { request } from "../api-write.ts";
 import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { ReviewEvent } from "../../api/review.ts";
 import { createEventParser } from "./events.ts";
+import { RemapperSetupResponseSchema, SetupActionResponseSchema, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
 
 export interface SyncApi {
   boards: readonly BoardSync[];
@@ -17,13 +19,27 @@ export interface SyncApi {
   lastLayoutUpdated: LayoutUpdatedEvent | null;
   /** False until the first state arrives, and while the stream is being reopened. */
   live: boolean;
-  /** Why the last action failed, until the next one starts. */
-  error: string | null;
+  /** Why the last action failed, until the next one starts. `code` is the server's (R1-16), which the toast turns into an action. */
+  error: { message: string; code: string | undefined } | null;
   syncNow: (layoutId: string) => Promise<void>;
   setAuto: (boardId: string, enabled: boolean) => Promise<void>;
   setPaused: (boardId: string, paused: boolean) => Promise<void>;
   /** "Disable remapping" on a software-remapper board: the identity map, no sudo. */
   disableRemapping: (boardId: string) => Promise<void>;
+  /** "Replace it" on a kanata config keyloom didn't write; keyloom keeps a copy (R1-17). Rejects, so its confirm can say why. */
+  replaceForeign: (layoutId: string) => Promise<void>;
+  /** The person held kanata's exit chord and saw it stop (R1-18). */
+  confirmExitChord: (boardId: string) => Promise<void>;
+  /** The layout whose "Replace it" confirm is open, from the pill or a toast; null when none is. */
+  replaceAsk: string | null;
+  setReplaceAsk: (layoutId: string | null) => void;
+  /** Setting kanata up from the popover (D-493) and opening System Settings at a pane (D-492). */
+  remapperSetup: {
+    status: (boardId: string) => Promise<RemapperSetupResponse>;
+    installKanata: () => Promise<SetupActionResponse>;
+    startKanata: (boardId: string) => Promise<SetupActionResponse>;
+    openSettings: (pane: SettingsPaneName) => Promise<SetupActionResponse>;
+  };
 }
 
 const RETRY_MIN_MS = 1000;
@@ -38,7 +54,8 @@ export function useSync(token: string): SyncApi {
   const [lastReview, setLastReview] = useState<ReviewEvent | null>(null);
   const [lastLayoutUpdated, setLastLayoutUpdated] = useState<LayoutUpdatedEvent | null>(null);
   const [live, setLive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SyncApi["error"]>(null);
+  const [replaceAsk, setReplaceAsk] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -90,15 +107,26 @@ export function useSync(token: string): SyncApi {
       const next = await run();
       if (!liveRef.current) setBoards(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "keyloom couldn't do that.");
+      setError({ message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined });
     }
   }, []);
 
   return {
-    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, error,
+    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, error, replaceAsk, setReplaceAsk,
     syncNow: (layoutId) => act(async () => (await request("POST", "/api/sync", token, SyncNowResponseSchema, undefined, { layoutId })).boards),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
+    remapperSetup: {
+      status: (boardId) => request("GET", `/api/system/remapper?board=${encodeURIComponent(boardId)}`, token, RemapperSetupResponseSchema),
+      installKanata: () => request("POST", "/api/system/remapper/install-kanata", token, SetupActionResponseSchema, undefined, {}),
+      startKanata: (boardId) => request("POST", "/api/system/remapper/start", token, SetupActionResponseSchema, undefined, { boardId }),
+      openSettings: (pane) => request("POST", "/api/system/open-settings", token, SetupActionResponseSchema, undefined, { pane }),
+    },
+    replaceForeign: async (layoutId) => {
+      const next = (await request("POST", "/api/sync/replace-foreign", token, SyncStatusResponseSchema, undefined, { layoutId })).boards;
+      if (!liveRef.current) setBoards(next);
+    },
+    confirmExitChord: (boardId) => act(async () => (await request("POST", "/api/sync/confirm-exit-chord", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
     setPaused: (boardId, paused) => act(async () => (await request("POST", "/api/sync/pause", token, SyncStatusResponseSchema, undefined, { boardId, paused })).boards),
   };
 }
