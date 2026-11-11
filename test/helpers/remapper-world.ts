@@ -9,7 +9,7 @@ import { identityLayout } from "../../src/firmware/kanata/identity.ts";
 import { remapperPaths } from "../../src/firmware/kanata/paths.ts";
 import { createLayout } from "../../src/persistence/layouts.ts";
 import { recordHandsFreeProof } from "../../src/persistence/syncs.ts";
-import { startFakeKanata } from "./fake-kanata.ts";
+import { startFakeKanata, writeFakeKanataBinary } from "./fake-kanata.ts";
 import { macbook, richLayout } from "./macbook.ts";
 import { tempDir } from "./tmp.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,8 +27,10 @@ export function remapperWorld(opts: { proven?: boolean } = {}) {
   writeFileSync(paths.kbd, setupSource.files[0]!.content);
   writeFileSync(paths.safe, setupSource.files[1]!.content);
   const fake = startFakeKanata({ initialFile: paths.kbd });
+  // Setup copies and checks this binary (D-498); it is never the real kanata.
+  const kanataBin = writeFakeKanataBinary(tempDir());
   const over = {
-    home, endpoint: { port: fake.port },
+    home, endpoint: { port: fake.port }, kanataBin: () => kanataBin,
     // kanata isn't needed for the state machine: the file only has to exist and be keyloom's.
     check: async (p: string) => ({ ok: readFileSync(p, "utf8").includes("(deflayer"), output: "config file is valid" }),
   };
@@ -43,7 +45,7 @@ export function remapperWorld(opts: { proven?: boolean } = {}) {
   };
   const engines: SyncEngine[] = [];
   return {
-    app, fake, home, over, deps, layoutId: created.layout.id, paths,
+    app, fake, home, over, deps, layoutId: created.layout.id, paths, kanataBin,
     richLayoutId: () => createLayout(app.db, { name: "rich", layout: richLayout(), summary: "rich", origin: "import" }).layout.id,
     engine(o: SyncOptions = {}) {
       const e = new SyncEngine(app, deps, { quietMs: 5, tickMs: 600_000, pollMs: 0, ...o });

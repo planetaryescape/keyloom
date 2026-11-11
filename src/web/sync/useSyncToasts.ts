@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { BoardSync } from "../../api/http.ts";
 import type { ToastInput } from "../shell/Toasts.tsx";
+import { openKeyboardStatus } from "./SyncStatus.tsx";
 import type { SyncApi } from "./useSync.ts";
 import { type RefusalAction, refusalNotice, syncNotice } from "./words.ts";
 
@@ -23,8 +24,9 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
   }, [sync.boards, sync.live, show]);
 
   // Read at the moment the button is pressed, so the toast acts on the page as it is then.
-  const latest = useRef(handlers);
-  latest.current = handlers;
+  // The keyboard's status popover is on every page that shows these toasts, so its button needs no handler from the page.
+  const latest = useRef<RefusalHandlers>({});
+  latest.current = { open_status: openKeyboardStatus, ...handlers };
   useEffect(() => {
     if (sync.error === null) return;
     const notice = refusalNotice(sync.error.code, sync.error.message);

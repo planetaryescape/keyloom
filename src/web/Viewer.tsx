@@ -11,7 +11,8 @@ import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
-import { undoChange, upgradeStoredLayout } from "./api-write.ts";
+import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
+import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
 import { ViewControls } from "./shell/ViewControls.tsx";
 import { useLab } from "./lab/useLab.ts";
@@ -203,6 +204,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     check_exit_chord: () => {
       const remapper = sync.boards.find((b) => b.remapper === true);
       if (remapper !== undefined) void sync.confirmExitChord(remapper.boardId);
+    },
+    // The same restore as Your keyboards' Restore button, for the board on screen, which the refused sync was for.
+    restore_keyboard: () => {
+      request("POST", "/api/keyboards/restore", token, CollectionKeyboardSchema, undefined, { board: summary.boardId }).then(
+        (restored) => {
+          toasts.show({ kind: "success", message: `${restored.name} restored`, detail: "Syncing stays paused until you resume it in the keyboard's status." });
+          onChanged();
+        },
+        (error: unknown) => toasts.show({ kind: "error", message: "keyloom couldn't restore the keyboard", detail: error instanceof Error ? error.message : "Try again from Your keyboards." }),
+      );
     },
   });
   // Keys applied from the bar since the keyboard last had this layout. They keep an amber dot until the sync line says the keyboard has
@@ -2297,7 +2308,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         <ConfirmDialog
           title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
           lines={[
-            `keyloom builds ${configDialog.target.name} and puts it on the keyboard, the same press-and-sync as Apply. From then on ${configDialog.target.name} is the config that syncs.`,
+            // kanata has nothing to build: keyloom writes the config and kanata reloads it.
+            board.firmware === "kanata"
+              ? `keyloom loads ${configDialog.target.name} into kanata, the same as Apply. From then on ${configDialog.target.name} is the config your MacBook keyboard types.`
+              : `keyloom builds ${configDialog.target.name} and puts it on the keyboard, the same press-and-sync as Apply. From then on ${configDialog.target.name} is the config that syncs.`,
             ...(keyboardConfig === null || keyboardConfig.id === configDialog.target.id ? [] : [`${keyboardConfig.name} comes off the keyboard. It stays here with its history, and you can put it back the same way.`]),
           ]}
           confirmLabel="Put it on"
@@ -2309,8 +2323,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           title={`Put ${versionTitle(configDialog.milestone.version)} on your ${boardDisplayName(board.name)}?`}
           lines={[
             configDialog.milestone.version.revisionId === revision.id
-              ? `keyloom builds ${summary.name} as it is now, which is this version, and puts it on the keyboard.`
-              : `keyloom goes back to this version as a new change in ${summary.name}, so auto-sync keeps it there, then builds it and puts it on the keyboard. The newer changes stay in History.`,
+              ? board.firmware === "kanata" ? `keyloom loads ${summary.name} as it is now, which is this version, into kanata.` : `keyloom builds ${summary.name} as it is now, which is this version, and puts it on the keyboard.`
+              : board.firmware === "kanata"
+                ? `keyloom goes back to this version as a new change in ${summary.name}, so auto-apply keeps it there, then loads it into kanata. The newer changes stay in History.`
+                : `keyloom goes back to this version as a new change in ${summary.name}, so auto-sync keeps it there, then builds it and puts it on the keyboard. The newer changes stay in History.`,
             ...(editingOther && keyboardConfig !== null ? [`${summary.name} becomes the config on your ${boardDisplayName(board.name)}; ${keyboardConfig.name} comes off it but stays here.`] : []),
           ]}
           confirmLabel="Put it on"

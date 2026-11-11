@@ -7,6 +7,7 @@ import {
 import type { Command } from "commander";
 import type { CliContext } from "./context.ts";
 import { print } from "../output.ts";
+import { ROOT_KANATA_PATH } from "../../app/remapper.ts";
 
 const DEFAULT_BOARD = "apple/macbook-ansi";
 
@@ -19,19 +20,24 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
 
   remap
     .command("setup")
-    .description("write the LaunchDaemon file into keyloom's folder and print the one command to run as root; keyloom never runs sudo")
+    .description("write the LaunchDaemon file into keyloom's folder and print the one command to run as root, which copies kanata to a root-owned place; keyloom never runs sudo")
     .option("--board <board>", "board ID", DEFAULT_BOARD)
     .action(async (opts: { board: string }) => {
       const r = await setupRemapper(opts.board, over);
       print(io, format(), {
-        json: { plist_path: r.plistPath, kanata_path: r.kanataPath ?? null, root_command: r.rootCommand },
+        json: { plist_path: r.plistPath, kanata_path: r.kanataPath ?? null, root_command: r.rootCommand, blocked: r.blocked },
         table: [
           `wrote ${r.plistPath}`,
           r.wroteConfig ? "wrote an identity keyloom.kbd and safe.kbd (nothing remapped) so the daemon has a config to start with" : "keyloom.kbd already exists; it was left alone",
-          r.kanataPath ? `kanata: ${r.kanataPath}` : "kanata isn't installed yet: brew install kanata (the plist assumes /opt/homebrew/bin/kanata)",
+          ...(r.blocked?.code === "no_kanata" ? ["kanata isn't installed yet: brew install kanata, then run `keyloom remap setup` again"] : r.kanataPath ? [`kanata: ${r.kanataPath}`] : []),
           "",
-          "Read the file, then run this once as an administrator. keyloom never runs it:",
-          `  ${r.rootCommand}`,
+          ...(r.rootCommand === null
+            ? r.blocked?.code === "no_kanata" ? [] : [`no root command: ${r.blocked?.reason ?? "keyloom couldn't prepare one"}`]
+            : [
+              `Read the file, then run this once as an administrator. keyloom never runs it. It copies kanata to ${ROOT_KANATA_PATH}, checks the copy is`,
+              "the kanata keyloom checked, installs the same plist text (carried encoded), and starts the daemon. Run it again after you upgrade kanata.",
+              `  ${r.rootCommand}`,
+            ]),
           "",
           "Then prove the way out before you rely on it: hold Left Control + Space + Escape, see kanata stop, and run `keyloom remap confirm-exit-chord`.",
         ].join("\n"),
@@ -45,10 +51,11 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
     .action(async (opts: { board: string }) => {
       const r = await remapperDoctor(opts.board, over);
       print(io, format(), {
-        json: { findings: r.findings, root_command: r.rootCommand },
+        json: { findings: r.findings, root_command: r.rootCommand, blocked: r.blocked },
         table: [
           ...r.findings.map((f) => `${f.status.toUpperCase().padEnd(7)} ${f.name}: ${f.detail}${f.fix ? `\n        fix: ${f.fix}` : ""}`),
           ...(r.rootCommand ? ["", "Run once as an administrator after `keyloom remap setup`:", `  ${r.rootCommand}`] : []),
+          ...(r.blocked !== null && r.blocked.code !== "no_kanata" ? ["", `no root command: ${r.blocked.reason}`] : []),
         ].join("\n"),
       });
     });

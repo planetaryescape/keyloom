@@ -5,7 +5,7 @@ import { request } from "../api-write.ts";
 import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { ReviewEvent } from "../../api/review.ts";
 import { createEventParser } from "./events.ts";
-import { RemapperSetupResponseSchema, SetupActionResponseSchema, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
+import { RemapperSetupResponseSchema, SetupActionResponseSchema, type KanataInstallAction, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
 
 export interface SyncApi {
   boards: readonly BoardSync[];
@@ -41,7 +41,9 @@ export interface SyncApi {
   /** Setting kanata up from the popover (D-493) and opening System Settings at a pane (D-492). */
   remapperSetup: {
     status: (boardId: string) => Promise<RemapperSetupResponse>;
-    installKanata: () => Promise<SetupActionResponse>;
+    /** Starts `brew install kanata`, `brew upgrade kanata` for Update kanata, or `brew reinstall kanata`; `status` follows it. */
+    installKanata: (action?: KanataInstallAction) => Promise<SetupActionResponse>;
+    cancelInstall: () => Promise<SetupActionResponse>;
     startKanata: (boardId: string) => Promise<SetupActionResponse>;
     openSettings: (pane: SettingsPaneName) => Promise<SetupActionResponse>;
   };
@@ -130,7 +132,8 @@ export function useSync(token: string): SyncApi {
     disableRemapping: (boardId) => act(async () => (await request("POST", "/api/sync/disable-remapping", token, SyncStatusResponseSchema, undefined, { boardId })).boards),
     remapperSetup: {
       status: (boardId) => request("GET", `/api/system/remapper?board=${encodeURIComponent(boardId)}`, token, RemapperSetupResponseSchema),
-      installKanata: () => request("POST", "/api/system/remapper/install-kanata", token, SetupActionResponseSchema, undefined, {}),
+      installKanata: (action = "install") => request("POST", "/api/system/remapper/install-kanata", token, SetupActionResponseSchema, undefined, { action }),
+      cancelInstall: () => request("POST", "/api/system/remapper/install-kanata/cancel", token, SetupActionResponseSchema, undefined, {}),
       startKanata: (boardId) => request("POST", "/api/system/remapper/start", token, SetupActionResponseSchema, undefined, { boardId }),
       openSettings: (pane) => request("POST", "/api/system/open-settings", token, SetupActionResponseSchema, undefined, { pane }),
     },
