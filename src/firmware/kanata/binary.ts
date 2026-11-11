@@ -65,6 +65,7 @@ export type CmdCheck = "refuses" | "allows" | "unknown";
  */
 export function cmdCheckResult(r: { ok: boolean; output: string }): CmdCheck {
   if (r.ok) return "allows";
-  // kanata reports errors through miette, which wraps long lines; the phrase is matched across any line break.
-  return r.output.replace(/\s+/g, " ").includes("cmd is not enabled") ? "refuses" : "unknown";
+  // kanata reports errors through miette, which wraps long lines and starts each continuation with a box-drawing rule, so the phrase
+  // is matched with those rules and line breaks read as spaces.
+  return r.output.replace(/[\u2500-\u257f]/g, " ").replace(/\s+/g, " ").includes("cmd is not enabled") ? "refuses" : "unknown";
 }

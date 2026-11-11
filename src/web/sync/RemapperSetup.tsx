@@ -1,5 +1,5 @@
 import { CircleCheck, Circle, ExternalLink, Info, LoaderCircle, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RemapperSetupResponse } from "../../api/system-remapper.ts";
 import type { SyncApi } from "./useSync.ts";
 import { type SetupActionId, type SetupStep, attentionSteps, setupFailure, setupSteps } from "./remapper-words.ts";
@@ -117,9 +117,7 @@ function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: s
           <div className="sync-setup-body">
             <span className="sync-setup-title">{step.title}{step.state === "done" ? <span className="sr-only"> (done)</span> : null}</span>
             {step.detail === null ? null : <span className="sync-setup-detail">{step.detail}</span>}
-            {step.log === null || step.log.length === 0 ? null : (
-              <pre className="sync-setup-log" aria-label="What Homebrew printed last">{step.log.join("\n")}</pre>
-            )}
+            {step.log === null || step.log.length === 0 ? null : <LogTail lines={step.log} />}
             {step.problem === null ? null : <span className="sync-setup-problem" role="alert">{step.problem}</span>}
             {step.actions.length === 0 && step.link === null ? null : (
               <span className="sync-setup-actions">
@@ -141,6 +139,16 @@ function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: s
       ))}
     </ol>
   );
+}
+
+/** Homebrew's last lines, kept scrolled to the end so the newest is the one in view. */
+function LogTail({ lines }: { lines: string[] }) {
+  const box = useRef<HTMLPreElement>(null);
+  const text = lines.join("\n");
+  useLayoutEffect(() => {
+    if (box.current !== null) box.current.scrollTop = box.current.scrollHeight;
+  }, [text]);
+  return <pre ref={box} className="sync-setup-log" aria-label="What Homebrew printed last">{text}</pre>;
 }
 
 function ProblemLine({ problem }: { problem: Problem | null }) {

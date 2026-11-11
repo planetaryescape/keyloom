@@ -64,7 +64,7 @@ keyloom v0.10.1 is accurate and accessible, but it reads like a tool for checkin
   - Build, Flash and Doctor move into a menu.
   - The import date, revision hash and key count move to the layout summary.
 - **The toolbar under the header** carries the layer tabs, Combos, Library, History with undo and redo, and the Advanced view toggle. There's no instruction row. First-run hints show once, as a tip on the board that can be dismissed (see [states](#states-say-what-to-do-next)).
-- **Notices don't push the board.** Apply, undo and errors use a toast at the bottom of the stage that disappears after 4 s, and undo stays in the toolbar. Today's full-width notice moves the layer tabs down 62 px.
+- **Notices don't push the board.** Apply, undo and errors use a toast at the bottom of the stage that disappears after 4 s (8 s for an error, at least 12 s with a button, and never while the pointer or focus is on it; D-503), and undo stays in the toolbar. Today's full-width notice moves the layer tabs down 62 px.
 
 ## A keycap shows every slot it has
 

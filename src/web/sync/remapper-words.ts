@@ -46,12 +46,14 @@ function installJob(status: RemapperSetupResponse, action: "install" | "upgrade"
   }
   if (job.state === "failed" || job.state === "cancelled") {
     const retry: SetupActionId = action === "install" ? { kind: "install_kanata" } : { kind: "update_kanata" };
+    const failed = job.state === "failed";
     return {
       title: action === "install" ? "Install kanata" : "kanata is installed",
-      detail: null,
-      actions: status.canInstall ? [{ id: retry, label: job.state === "failed" ? "Try again" : action === "install" ? "Install kanata" : "Update kanata" }] : [],
-      log: job.state === "failed" && job.log.length > 0 ? job.log.slice(-LOG_LINES) : null,
-      problem: job.state === "cancelled" ? `You cancelled the ${action === "install" ? "install" : "update"}.` : job.failure?.reason ?? "Homebrew stopped with an error.",
+      // A cancel was the person's choice, so it is said plainly, not as an error.
+      detail: failed ? null : `You cancelled the ${action === "install" ? "install" : "update"}. Nothing else changed.`,
+      actions: status.canInstall ? [{ id: retry, label: failed ? "Try again" : action === "install" ? "Install kanata" : "Update kanata" }] : [],
+      log: failed && job.log.length > 0 ? job.log.slice(-LOG_LINES) : null,
+      problem: failed ? job.failure?.reason ?? "Homebrew stopped with an error." : null,
     };
   }
   return null;

@@ -4,8 +4,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   ADMIN_PROMPT, IDLE_INSTALL, SETTINGS_PANES, SETTINGS_PANE_NAMES, type Runner, type SetupDeps, type StreamRunner, adminCommand, appleScriptString,
   compareVersions, daemonInstallScript, installKanata, kanataInstaller, kanataUpdate, openSettingsPane, remapperSetupStatus, shellQuote, startKanataDaemon,
+  streamRunner,
 } from "../../src/app/remapper-setup.ts";
-import { fileSha256 } from "../../src/firmware/kanata/binary.ts";
+import { cmdCheckResult, fileSha256 } from "../../src/firmware/kanata/binary.ts";
 import { ROOT_KANATA_PATH } from "../../src/firmware/kanata/plist.ts";
 import { writeFakeKanataBinary } from "../helpers/fake-kanata.ts";
 import { SettingsPaneSchema } from "../../src/api/system-remapper.ts";
@@ -227,6 +228,53 @@ describe("installing kanata", () => {
     const st = streamer({ lines: ["==> Fetching kanata", "Error: No such file or directory"], code: 1 });
     expect(await installKanata(deps(recorder().run, { stream: st.stream }), "install", { signal: signal(), onLine: () => {} }))
       .toEqual({ ok: false, code: "failed", reason: "Homebrew couldn't install kanata: Error: No such file or directory" });
+  });
+});
+
+describe("reading kanata's answer to the cmd probe (D-498)", () => {
+  test("valid is allows; kanata's own refusal, even wrapped by miette, is refuses; anything else is unknown", () => {
+    expect(cmdCheckResult({ ok: true, output: "config file is valid" })).toBe("allows");
+    expect(cmdCheckResult({ ok: false, output: "  × cmd is not\n  │ enabled for this kanata executable" })).toBe("refuses");
+    expect(cmdCheckResult({ ok: false, output: "Error: unexpected token" })).toBe("unknown");
+    // A config kanata calls valid, whatever else it printed, is one that would run programs.
+    expect(cmdCheckResult({ ok: true, output: "cmd is not enabled\nconfig file is valid" })).toBe("allows");
+  });
+});
+
+describe("the Homebrew runner", () => {
+  /** Runs `script` through the real runner. The preload's guard is lifted only for this stand-in, which never runs brew. */
+  async function runScript(script: string, abortAfterMs?: number) {
+    const before = process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS;
+    process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS = "0";
+    try {
+      const controller = new AbortController();
+      const lines: string[] = [];
+      if (abortAfterMs !== undefined) setTimeout(() => controller.abort(), abortAfterMs);
+      const started = Date.now();
+      const r = await streamRunner(["/bin/sh", "-c", script], { signal: controller.signal, onLine: (l) => lines.push(l) });
+      return { ...r, lines, ms: Date.now() - started };
+    } finally {
+      process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS = before;
+    }
+  }
+
+  test("streams lines, carriage-return redraws included, and the exit code", async () => {
+    const r = await runScript(`printf 'one\\ntwo\\rthree\\n'; echo err >&2; exit 3`);
+    expect(r).toMatchObject({ code: 3, aborted: false });
+    expect(r.lines.sort()).toEqual(["err", "one", "three", "two"]);
+  });
+
+  test("Cancel stops the whole process group, children holding the output included, at once", async () => {
+    // As brew runs Ruby, which runs curl: the child keeps the pipe open after its parent dies.
+    const r = await runScript("echo started; sleep 30 & wait", 300);
+    expect(r.aborted).toBe(true);
+    expect(r.lines).toEqual(["started"]);
+    expect(r.ms).toBeLessThan(5000);
+  });
+
+  test("the test preload refuses it, so a forgotten fake never runs brew", async () => {
+    expect(process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS).toBe("1");
+    await expect(streamRunner(["brew", "install", "kanata"], { signal: new AbortController().signal, onLine: () => {} })).rejects.toThrow("refusing");
   });
 });
 

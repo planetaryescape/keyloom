@@ -5,7 +5,6 @@ import { existsSync, realpathSync } from "node:fs";
 import { findKanata } from "../firmware/kanata/binary.ts";
 import { daemonInstallScript } from "../firmware/kanata/daemon-install.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
-import { run } from "../firmware/toolchain/run.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
 
 export { daemonInstallScript, shellQuote } from "../firmware/kanata/daemon-install.ts";
@@ -94,13 +93,59 @@ export type StreamRunner = (cmd: readonly string[], opts: { signal: AbortSignal;
 
 // A fresh Homebrew can update itself first, which can take minutes.
 const BREW_TIMEOUT_MS = 20 * 60_000;
+const KILL_GRACE_MS = 5000;
 
+/**
+ * Runs Homebrew in its own process group, so Cancel stops all of it. `brew` is a shell script that runs Ruby, which runs curl: a SIGTERM to
+ * `brew` alone leaves its children running and holding the output open, so the install would look like it runs on. The shared toolchain
+ * runner (src/firmware/toolchain/run.ts) signals only the process it started; this one signals the group. They can merge later.
+ */
 export const streamRunner: StreamRunner = async (cmd, opts) => {
   // The test preload sets this, so a forgotten fake fails its test instead of installing software on the machine.
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error(`refusing to run ${cmd.join(" ")} in a test`);
-  const r = await run({ cmd: [...cmd], timeoutMs: BREW_TIMEOUT_MS, signal: opts.signal, onLine: (line) => opts.onLine(line), env: { HOMEBREW_NO_ENV_HINTS: "1" } });
-  return { code: r.exitCode, aborted: r.aborted };
+  const proc = Bun.spawn([...cmd], { stdout: "pipe", stderr: "pipe", stdin: "ignore", detached: true, env: { ...process.env, HOMEBREW_NO_ENV_HINTS: "1" } });
+  const signalGroup = (signal: NodeJS.Signals) => {
+    try {
+      process.kill(-proc.pid, signal);
+    } catch {
+      // The group has already gone.
+    }
+  };
+  let aborted = false;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    signalGroup("SIGTERM");
+    killTimer ??= setTimeout(() => signalGroup("SIGKILL"), KILL_GRACE_MS);
+  };
+  const onAbort = () => {
+    aborted = true;
+    stop();
+  };
+  if (opts.signal.aborted) onAbort();
+  else opts.signal.addEventListener("abort", onAbort, { once: true });
+  const timeout = setTimeout(stop, BREW_TIMEOUT_MS);
+  try {
+    await Promise.all([readLines(proc.stdout, opts.onLine), readLines(proc.stderr, opts.onLine), proc.exited]);
+  } finally {
+    clearTimeout(timeout);
+    clearTimeout(killTimer);
+    opts.signal.removeEventListener("abort", onAbort);
+  }
+  return { code: proc.exitCode, aborted };
 };
+
+/** Each line of a stream, split on \n, \r\n or \r (Homebrew redraws its progress bars with \r). */
+async function readLines(stream: ReadableStream<Uint8Array>, onLine: (line: string) => void): Promise<void> {
+  const decoder = new TextDecoder();
+  let pending = "";
+  for await (const chunk of stream) {
+    const parts = (pending + decoder.decode(chunk, { stream: true })).split(/\r\n|\r|\n/);
+    pending = parts.pop() ?? "";
+    for (const line of parts) onLine(line);
+  }
+  const rest = pending + decoder.decode();
+  if (rest !== "") onLine(rest);
+}
 
 export type SetupDeps = {
   run: Runner;
@@ -112,7 +157,7 @@ export type SetupDeps = {
 };
 
 export const realSetupDeps = (remapper: RemapperOverrides = {}): SetupDeps => ({
-  run: spawnRunner, stream: streamRunner, platform: process.platform, brew: findBrew, kanata: () => remapper.kanataBin?.() ?? findKanata(), remapper,
+  run: spawnRunner, stream: streamRunner, platform: process.platform, brew: findBrew, kanata: remapper.kanataBin ?? (() => findKanata()), remapper,
 });
 
 /** -1, 0 or 1, comparing dotted version numbers part by part; a part that isn't a number counts as 0. */

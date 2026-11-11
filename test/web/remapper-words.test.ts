@@ -50,7 +50,7 @@ describe("setupSteps", () => {
     });
     expect(failed?.detail).toContain("remapper");
     const cancelled = setupSteps(status(fresh, { install: job({ state: "cancelled", failure: { code: "cancelled", reason: "x" } }) }))[0];
-    expect(cancelled).toMatchObject({ problem: "You cancelled the install.", actions: [{ id: { kind: "install_kanata" }, label: "Install kanata" }], link: null });
+    expect(cancelled).toMatchObject({ problem: null, detail: "You cancelled the install. Nothing else changed.", actions: [{ id: { kind: "install_kanata" }, label: "Install kanata" }], link: null });
   });
 
   test("an older Homebrew kanata offers Update kanata, with its progress and Cancel; any other mismatch links the release (R2-10)", () => {
