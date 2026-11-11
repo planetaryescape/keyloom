@@ -268,6 +268,14 @@ describe("System Settings panes", () => {
     expect(await openSettingsPane("accessibility", { run: linux.run, platform: "linux" })).toMatchObject({ ok: false, code: "unsupported_platform" });
     expect(linux.calls).toEqual([]);
   });
+
+  test("Karabiner-Elements opens as an app, and a failure names it (R3-21)", async () => {
+    const r = recorder();
+    expect(await openSettingsPane("karabiner_elements", { run: r.run, platform: "darwin" })).toEqual({ ok: true });
+    expect(r.calls).toEqual([["open", "/Applications/Karabiner-Elements.app"]]);
+    const failing: Runner = async () => ({ code: 1, out: "Unable to find application" });
+    expect(await openSettingsPane("karabiner_elements", { run: failing, platform: "darwin" })).toMatchObject({ ok: false, reason: expect.stringContaining("macOS didn't open Karabiner-Elements") });
+  });
 });
 
 describe("installing kanata", () => {

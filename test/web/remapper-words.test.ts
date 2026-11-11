@@ -121,6 +121,12 @@ describe("setupSteps", () => {
     expect(steps.flatMap((s) => s.actions)).toEqual([]);
   });
 
+  test("Karabiner-Elements' rules step opens the app only when it is installed (R3-21)", () => {
+    const rules = (findings: Parameters<typeof status>[0]) => setupSteps(status(findings)).find((s) => s.key === "karabiner");
+    expect(rules([...fresh, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])?.actions).toEqual([{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }]);
+    expect(rules([...fresh, f("karabiner_config", "warn")])?.actions).toEqual([]);
+  });
+
   test("no step shows a command to paste", () => {
     const all = [
       ...setupSteps(status([...fresh, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])),

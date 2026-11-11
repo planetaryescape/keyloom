@@ -178,7 +178,12 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
   }
 
   if (find("karabiner_config")?.status === "warn") {
-    steps.push(step({ key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it." }));
+    // The button only where the app is there to open: the doctor's karabiner_elements finding is its installed copy (R3-21).
+    const installed = find("karabiner_elements") !== undefined;
+    steps.push(step({
+      key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.",
+      actions: mac && installed ? [{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }] : [],
+    }));
   }
   if (find("karabiner_elements")?.status === "warn") {
     steps.push(step({ key: "karabiner-upgrade", state: "note", title: "Don't upgrade Karabiner-Elements", detail: "Version 16 replaces the driver with one kanata can't use yet." }));
