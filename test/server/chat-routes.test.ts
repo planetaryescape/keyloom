@@ -191,3 +191,101 @@ describe("priority chips over the wire", () => {
     expect((await call("/api/priorities/dec_x", { method: "GET" })).status).toBe(405);
   });
 });
+
+describe("setting up a provider over the wire (D-496)", () => {
+  const KEY = "sk-ant-api03-Example_Key-0123456789abcdWXYZ";
+
+  async function serveKeys(verify: "ok" | "rejected") {
+    const { Credentials, keychainStore, useCredentials } = await import("../../src/app/credentials.ts");
+    const items = new Map<string, string>();
+    const argv: string[] = [];
+    useCredentials(new Credentials(keychainStore(async (_command, args, stdin) => {
+      argv.push(args.join(" "));
+      const account = args[args.indexOf("-a") + 1] ?? "";
+      if (args[0] === "find-generic-password") return items.has(account) ? { code: 0, stdout: items.get(account)! } : { code: 44, stdout: "" };
+      if (args[0] === "delete-generic-password") return { code: items.delete(account) ? 0 : 44, stdout: "" };
+      const words = [...(stdin ?? "").matchAll(/"([^"]*)"/g)].map((m) => m[1] ?? "");
+      items.set(words[1] ?? "", words[3] ?? "");
+      return { code: 0, stdout: "" };
+    })));
+    const ctx = await optionOptionApp();
+    const backend = appChatBackend(ctx.app, { verifyKey: async () => (verify === "ok" ? { status: "ok" } : { status: "rejected", reason: "invalid x-api-key" }) });
+    const server = Bun.serve({ port: 0, fetch: async (request) => (await handleChatRoute(request, new URL(request.url).pathname, backend, TOKEN)) ?? new Response("no", { status: 404 }) });
+    servers.push(server);
+    const call = (path: string, init: RequestInit = {}) =>
+      fetch(`http://127.0.0.1:${server.port}${path}`, { ...init, headers: { "x-keyloom-token": TOKEN, "content-type": "application/json", ...init.headers } });
+    return { call, items, argv, done: () => useCredentials(undefined) };
+  }
+
+  test("saving a key answers with the status, its last four characters only, and forgetting removes it", async () => {
+    const s = await serveKeys("ok");
+    try {
+      await withoutCredentials(async () => {
+        const saved = await s.call("/api/chat/provider/key", { method: "POST", body: JSON.stringify({ provider: "anthropic", key: KEY }) });
+        expect(saved.status).toBe(200);
+        const text = await saved.text();
+        expect(text).not.toContain(KEY);
+        const body = JSON.parse(text);
+        expect(body.checked).toBe(true);
+        expect(body.status.active.provider).toBe("anthropic");
+        expect(body.status.providers.find((p: { id: string }) => p.id === "anthropic").credential).toEqual({ source: "keychain", last4: "WXYZ" });
+        expect(s.items.get("anthropic")).toBe(KEY);
+        for (const args of s.argv) expect(args).not.toContain(KEY);
+
+        const forgot = await s.call("/api/chat/provider/key/anthropic", { method: "DELETE" });
+        expect(forgot.status).toBe(200);
+        expect((await forgot.json()).active).toBeNull();
+        expect(s.items.has("anthropic")).toBe(false);
+      });
+    } finally {
+      s.done();
+    }
+  });
+
+  test("a refused key is a 400 key_rejected that names the provider and never echoes the key", async () => {
+    const s = await serveKeys("rejected");
+    try {
+      await withoutCredentials(async () => {
+        const res = await s.call("/api/chat/provider/key", { method: "POST", body: JSON.stringify({ provider: "anthropic", key: KEY }) });
+        expect(res.status).toBe(400);
+        const text = await res.text();
+        expect(text).not.toContain(KEY);
+        expect(JSON.parse(text).error).toEqual({ code: "key_rejected", message: "Anthropic refused this key." });
+        expect(s.items.size).toBe(0);
+      });
+    } finally {
+      s.done();
+    }
+  });
+
+  test("a bad body gets a fixed message, a form post is refused, and an unknown provider is not found", async () => {
+    const s = await serveKeys("ok");
+    try {
+      const bad = await s.call("/api/chat/provider/key", { method: "POST", body: JSON.stringify({ provider: "codex", key: KEY }) });
+      expect(bad.status).toBe(400);
+      expect(await bad.text()).not.toContain(KEY);
+      const form = await s.call("/api/chat/provider/key", { method: "POST", body: `key=${KEY}`, headers: { "content-type": "application/x-www-form-urlencoded" } });
+      expect(form.status).toBe(415);
+      expect((await s.call("/api/chat/provider/key/codex", { method: "DELETE" })).status).toBe(404);
+      expect((await s.call("/api/chat/provider/key", { method: "GET" })).status).toBe(405);
+    } finally {
+      s.done();
+    }
+  });
+
+  test("a Codex sign-in with no Codex installed is a 409 codex_missing", async () => {
+    const s = await serveKeys("ok");
+    try {
+      await withoutCredentials(async () => {
+        const res = await s.call("/api/chat/provider/codex-login", { method: "POST" });
+        expect(res.status).toBe(409);
+        expect((await res.json()).error.code).toBe("codex_missing");
+        const cancel = await s.call("/api/chat/provider/codex-login", { method: "DELETE" });
+        expect(cancel.status).toBe(200);
+        expect((await cancel.json()).codexSignIn).toEqual({ state: "idle" });
+      });
+    } finally {
+      s.done();
+    }
+  });
+});

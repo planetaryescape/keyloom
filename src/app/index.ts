@@ -3,7 +3,7 @@ export { type App, closeApp, openApp } from "./context.ts";
 export { type CollectionKeyboard, listKeyboardCollection, listSetupLayouts, removeKeyboard, restoreKeyboard } from "./keyboard-collection.ts";
 export { prepareBoardContribution, exportBoardContribution } from "./board-contribution.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BusyError, CredentialError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";
@@ -82,6 +82,8 @@ export {
 } from "./review.ts";
 export { ReviewEngine, type ReviewOptions } from "./review-engine.ts";
 export { type ProviderStatus, chooseNextProvider, defaultAgentModel, providerStatus } from "./chat-model.ts";
+export { type SaveKeyOptions, cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./provider-setup.ts";
+export { type KeyProvider, KEY_ENV, KEY_PROVIDERS, credentials, isKeyProvider } from "./credentials.ts";
 export type { AgentModel } from "../agent/model.ts";
 export { PROVIDERS, type ProviderId, isProviderId } from "../agent/provider.ts";
 export type { ConversationRow } from "../persistence/conversations.ts";

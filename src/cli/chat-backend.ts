@@ -1,10 +1,14 @@
 // The server's chat interface over the app's conversation use cases (rung 3). The one place that
 // knows both the server's wire shapes and the app's errors.
 import {
-  type AgentModel, type App, BusyError, ModelError, NotFoundError, type ProviderId, UsageError, chooseNextProvider, providerStatus, listConversationSummaries, retirePriority, sendMessage, showConversation,
+  type AgentModel, type App, BusyError, CredentialError, ModelError, type SaveKeyOptions, cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn, NotFoundError, type ProviderId, UsageError, chooseNextProvider, providerStatus, listConversationSummaries, retirePriority, sendMessage, showConversation,
 } from "../app/index.ts";
 import { type ChatBackend, ChatError } from "../server/chat-backend.ts";
 import { acknowledgeAgentView, answerAgentRun, cancelAgentRequest, cancelAgentRun, drainAgentRuns, inspectAgentRun, latestAgentRun, reconcileAgentRuns, startAgentRun } from "../app/agent-runs.ts";
+
+const CREDENTIAL_STATUS: Record<CredentialError["code"], 400 | 409 | 502 | 503> = {
+  key_malformed: 400, key_rejected: 400, key_from_environment: 409, key_store_unavailable: 503, key_store_failed: 502, codex_missing: 409,
+};
 
 const MODEL_STATUS: Record<string, 402 | 429 | 502 | 503> = { missing_key: 503, rate_limit: 429, connection: 502, overloaded: 503, no_credits: 402 };
 
@@ -13,12 +17,13 @@ export function toChatError(err: unknown): unknown {
   if (err instanceof NotFoundError) return new ChatError(404, "not_found", err.message);
   if (err instanceof BusyError) return new ChatError(409, "busy", err.message);
   if (err instanceof UsageError) return new ChatError(400, "usage", err.message);
+  if (err instanceof CredentialError) return new ChatError(CREDENTIAL_STATUS[err.code], err.code, err.message);
   if (err instanceof ModelError) return new ChatError(MODEL_STATUS[err.kind] ?? 502, err.kind === "missing_key" ? "missing_api_key" : `model_${err.kind}`, err.message);
   return err;
 }
 
-/** `model` is for tests; in use it is omitted and the app picks the provider on each message (19). */
-export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: ProviderId } = {}): ChatBackend {
+/** `model` and `verifyKey` are for tests; in use they are omitted and the app picks the provider on each message (19). */
+export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: ProviderId; verifyKey?: SaveKeyOptions["verify"] } = {}): ChatBackend {
   return {
     runs: {
       async acknowledgeView(id, ack) { try { return acknowledgeAgentView(app, id, ack); } catch (err) { throw toChatError(err); } },
@@ -55,6 +60,28 @@ export function appChatBackend(app: App, opts: { model?: AgentModel; provider?: 
     async chooseProvider(choice) {
       try {
         return await chooseNextProvider(app.dataDir, choice, opts.provider ? { provider: opts.provider } : {});
+      } catch (err) {
+        throw toChatError(err);
+      }
+    },
+    async saveKey({ provider, key }) {
+      try {
+        return await saveProviderKey(app.dataDir, provider, key, opts.provider ? { provider: opts.provider } : {}, opts.verifyKey ? { verify: opts.verifyKey } : {});
+      } catch (err) {
+        throw toChatError(err);
+      }
+    },
+    async forgetKey(provider) {
+      try {
+        return await forgetProviderKey(app.dataDir, provider, opts.provider ? { provider: opts.provider } : {});
+      } catch (err) {
+        throw toChatError(err);
+      }
+    },
+    async codexSignIn(action) {
+      const current = opts.provider ? { provider: opts.provider } : {};
+      try {
+        return await (action === "start" ? startCodexSignIn(app.dataDir, current) : cancelCodexSignIn(app.dataDir, current));
       } catch (err) {
         throw toChatError(err);
       }

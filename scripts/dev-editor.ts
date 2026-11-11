@@ -12,7 +12,8 @@
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
 // KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way, and
-// KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35).
+// KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35). With missing_key, a pasted key containing "bad"
+// is refused and any other is "saved"; KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the pretend Codex sign-in that long (default 1500).
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
 import { FakeChat } from "../test/helpers/fake-chat-backend.ts";
 import { FakeEditor } from "../test/helpers/fake-editor-backend.ts";

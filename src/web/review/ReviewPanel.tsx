@@ -14,7 +14,9 @@ import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
+import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
+import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
@@ -168,6 +170,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const [details, setDetails] = useState(false);
   const [picking, setPicking] = useState(false);
   const provider = useProviderStatus(token);
+  // A model is set up but isn't the chosen one: Set up a model offers the picker, to choose the ready one; otherwise the setup.
+  // A locked choice (--provider, KEYLOOM_PROVIDER) can't be changed in the picker, so it gets the setup.
+  const pickReady = offersPicker(provider.status);
   const [applying, setApplying] = useState<string | null>(null);
   const review = r.review;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
@@ -337,7 +342,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             </p>
             <div className="br-actions br-actions-start">
               {review.ai.status === "unavailable" ? (
-                <button type="button" className="sheet-action" aria-expanded={picking} disabled={provider.status === null} onClick={() => setPicking((v) => !v)}>Set up a model</button>
+                <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
               ) : (
                 <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
               )}
@@ -346,11 +351,27 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
               )}
             </div>
             {details && review.ai.reason !== null ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
-            {picking ? (
+            {picking && !pickReady ? (
+              // Nothing is set up: the same setup the chat uses (D-496). A key saved here is used by the review at once.
+              <ModelSetup
+                token={token}
+                status={provider.status}
+                onReload={() => void provider.reload()}
+                onChanged={(next) => {
+                  provider.replace(next);
+                  if (activeProviderReady(next)) {
+                    setPicking(false);
+                    void r.run(true);
+                  }
+                }}
+              />
+            ) : picking ? (
+              // A model is set up but isn't the one chosen: pick the ready one.
               <ProviderPicker
                 token={token}
                 status={provider.status}
                 pinned={null}
+                onReload={() => void provider.reload()}
                 menuOpened={{ open: picking, onClose: () => setPicking(false) }}
                 onChanged={(next) => {
                   provider.replace(next);

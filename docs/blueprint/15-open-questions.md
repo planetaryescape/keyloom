@@ -231,7 +231,7 @@ Read from keyloom's logs of three flashes of BK's Glove80 on 2026-10-16 (no one 
 | Q18 | Would BK give up Oryx and Keymapp on the Moonlander for Vial's live tap dance, combos and tapping term? | Open; blueprint assumes no, and keeps ZSA's fork (D-097) |
 | Q19 | Should clicking a key always open its panel, with keys sent to the chat only through "Asking about" chips? | Open; blueprint assumes yes (D-099) |
 | Q20 | Should the Codex provider be offered to other users, given that OpenAI's terms for third-party apps using ChatGPT login couldn't be read? | Open; blueprint assumes BK's own machine only until the terms are checked (D-108) |
-| Q21 | Should keyloom read API keys from the macOS Keychain itself, or keep taking them from the environment (`op run`, shell profile)? | Open; blueprint assumes the environment only, as today |
+| Q21 | Should keyloom read API keys from the macOS Keychain itself, or keep taking them from the environment (`op run`, shell profile)? | Answered by D-496 (2026-11-11): a key pasted in the app is kept in the Keychain (or the Linux Secret Service) and read from there; the environment still wins |
 | Q22 | OpenRouter for Claude models only, or other models too (which needs a Chat Completions adapter)? | Open; blueprint assumes Claude only (D-107) |
 | Q23 | Is Codex acceptable without token streaming and without a cost figure? | Open; blueprint assumes yes, showing whole messages and tokens only (D-108) |
 | Q24 | Would BK build the Glove80 against the community fork behind `moergo-sc/zmk#36` to get per-key, per-layer colours, given it is unmerged and on a different base from MoErgo's v26.09? | Open; blueprint assumes no, and the Glove80 has no lighting (D-225, S21) |

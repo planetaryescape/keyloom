@@ -1,6 +1,6 @@
 # 19: Model providers: Codex subscription, OpenRouter key or Anthropic key
 
-Status: built in rung 10, 2026-10-15. Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
+Status: built in rung 10, 2026-10-15. Saving a pasted key in the Keychain or Secret Service, and Sign in with Codex from the app, built 2026-11-11 (D-496). Source baseline: origin/main at `65cc12a` (v0.10.1). Results: S19 and S20 in [15](15-open-questions.md).
 
 BK: "use codex cli for AI I think it allow you to use codex sub with it's agent sdk if I'm not mistaken, we can use that. Also make it possible for me to use an openrouter api key". This came after the Anthropic account behind keyloom's key ran out of credits, which stopped the chat and the live evals.
 
@@ -71,11 +71,16 @@ Codex's loop isn't keyloom's, so the guarantee can't depend on the loop. It rest
   - `agent.provider` is one of `anthropic`, `openrouter` or `codex`, with `--provider` on `chat` and `serve`, in `<data dir>/config.json` (D-120).
   - `agent.model` and `agent.effort` are read from the same file, with a default model per provider. A config model applies only to the provider the config names.
   - The order is the flag, then `KEYLOOM_PROVIDER`, then the config, then the first provider with a credential.
-  - The web app shows the active provider and model under the chat header, and the provider and model a conversation started on when one is open. It doesn't change them; that waits for a request.
+  - The web app shows the active provider and model under the chat header, and the provider and model a conversation started on when one is open. The picker changes the provider for the next conversation (D-111).
+  - One setup surface (`src/web/chat/ModelSetup.tsx`) serves "Chat needs a model", the picker's provider that needs setup, the review's **Set up a model**, and "The key was refused" / "Out of credits" (D-496).
 - **Credentials.**
   - Anthropic reads `ANTHROPIC_API_KEY`. OpenRouter reads `OPENROUTER_API_KEY`. Codex uses its own login, and an optional `CODEX_API_KEY` switches it to API billing.
-  - keyloom never stores a key, as today (03).
-  - BK keeps his keys in the macOS Keychain. Whether keyloom should read the Keychain itself, rather than through `op run` or a shell profile, is Q21.
+  - A key pasted in the app or piped to `keyloom provider key set` is kept in the macOS Keychain (`security`, service `keyloom`, account = the provider) or the Linux Secret Service (`secret-tool`), and read again at each message, so it works with no restart (D-496). The environment wins over it.
+  - The key never goes into argv: `security -i` and `secret-tool store` read it from stdin. It never reaches the database, the logs, the event stream or an API response; responses say where a key came from and its last four characters.
+  - Before saving, keyloom checks the key with one `models.retrieve` read, which spends no tokens. A refused key is not saved. A key that can't be checked (no network) is saved, and the first message tells.
+  - On Windows, or Linux without `secret-tool` or without a running Secret Service, there is no store: the setup shows the environment variable to copy. A `secret-tool` failure is told from a missing item by its stderr, so a removal that fails is reported, never taken as done.
+  - A message reads only the answering provider's stored key, so a slow store read for another provider never holds up a key in the environment.
+  - **Sign in with Codex** runs `codex login`, which opens the browser; the status says `waiting` until it exits, then Codex is ready. keyloom still never reads the ChatGPT credential (D-108). The button is hidden when `codex` is not installed.
 - **Logging.** The turn log records provider, model, effort, tokens and cost where known ([11](11-observability-and-evals.md)).
 
 ## Evals run per provider

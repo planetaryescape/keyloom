@@ -1,7 +1,7 @@
 // Exit codes (10#exit-codes). Only the codes this build can produce are mapped.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PlatformUnavailableError, BuildFailedError, BusyError, IncompatibleError, SchemaTooNewError, LabCaptureError, EmulateFailedError, FlashFailedError, ModelError, NotFoundError, StaleBaseError, ToolchainUnavailableError, UsageError, ValidationFailedError, logsDir } from "../app/index.ts";
+import { CredentialError, PlatformUnavailableError, BuildFailedError, BusyError, IncompatibleError, SchemaTooNewError, LabCaptureError, EmulateFailedError, FlashFailedError, ModelError, NotFoundError, StaleBaseError, ToolchainUnavailableError, UsageError, ValidationFailedError, logsDir } from "../app/index.ts";
 
 export const EXIT = { ok: 0, bug: 1, usage: 2, notFound: 3, validation: 4, staleBase: 5, toolchain: 6, buildFailed: 7, flashFailed: 8, modelApi: 9, incompatible: 10 } as const;
 
@@ -9,6 +9,8 @@ export type Classified = { code: number; kind: string; message: string };
 
 export function classify(err: unknown, dataDir: string): Classified {
   if (err instanceof PlatformUnavailableError) return { code: EXIT.toolchain, kind: err.code, message: err.message };
+  // A refused key is the provider's answer (9); a key store that failed is this computer's tooling (6); the rest are the input (2).
+  if (err instanceof CredentialError) return { code: err.code === "key_rejected" ? EXIT.modelApi : err.code === "key_store_failed" ? EXIT.toolchain : EXIT.usage, kind: err.code, message: err.message };
   if (err instanceof ModelError) return { code: EXIT.modelApi, kind: err.kind === "missing_key" ? "missing_api_key" : "model_api", message: err.message };
   if (err instanceof SchemaTooNewError) return { code: EXIT.incompatible, kind: "schema_too_new", message: err.message };
   if (err instanceof IncompatibleError) return { code: EXIT.incompatible, kind: err.kind, message: err.message };

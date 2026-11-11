@@ -5,7 +5,6 @@ import { deviceHelperDiagnostic, type HelperDiagnostic } from "../firmware/toolc
 import { DeviceTransportError } from "../firmware/toolchain/device-helper/transport-client.ts";
 import { Database } from "bun:sqlite";
 import { SchemaTooNewError, assertSchemaKnown } from "../persistence/schema-guard.ts";
-import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { DEFAULT_MODELS } from "../agent/provider.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
@@ -24,6 +23,8 @@ import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { type RemapperOverrides, remapperDoctor } from "./remapper.ts";
 import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.ts";
 import { keyedProviders } from "./chat-model.ts";
+import { type CredentialOutcome, type KeyedProvider, verifyCredential } from "./credential-check.ts";
+import { credentials } from "./credentials.ts";
 import { dockerReadiness } from "./toolchain.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
@@ -96,37 +97,15 @@ export function runDoctor(opts: { dataDir?: string } = {}): DoctorCheck[] {
 
 const gb = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 
-/** The providers whose credential keyloom can check with an API read: the two it has a key for, not Codex's login. */
-type KeyedProvider = "anthropic" | "openrouter";
-
-/** What one provider's check found: `rejected` is the credential failing, `unchecked` is not being able to tell. */
-export type CredentialOutcome = { status: "ok" } | { status: "rejected" | "unchecked"; reason: string };
+export type { CredentialOutcome } from "./credential-check.ts";
 
 /** The credential check's injected parts, in the style of RemapperOverrides, so a test never touches the network. */
 export type CredentialOverrides = {
-  /** Where the key is read from; the process's own environment by default. */
+  /** Where the key is read from; the process's own environment, with any key keyloom stored, by default. */
   env?: Record<string, string | undefined>;
   /** The read that resolves a credential. The real one is the SDK's `models.retrieve`: a read, never a generation. */
   verify?: (provider: KeyedProvider, env: Record<string, string | undefined>) => Promise<CredentialOutcome>;
 };
-
-/** One round trip, and short enough that a hung network can't hang `doctor` (11#logs). */
-const CREDENTIAL_TIMEOUT_MS = 5_000;
-
-async function verifyCredential(provider: KeyedProvider, env: Record<string, string | undefined>): Promise<CredentialOutcome> {
-  const client = provider === "anthropic" ? clientFromEnv(env) : openRouterClientFromEnv(env);
-  if (!client) return { status: "unchecked", reason: `${provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENROUTER_API_KEY"} is not set` };
-  try {
-    await client.models.retrieve(DEFAULT_MODELS[provider], null, { timeout: CREDENTIAL_TIMEOUT_MS, maxRetries: 0 });
-    return { status: "ok" };
-  } catch (err) {
-    const failure = classifyModelError(err, provider);
-    // A rejected key is the answer this check exists for. Anything else (no network, a rate limit, a model the account
-    // can't see) can't tell a good credential from a bad one, and `doctor` must not fail on a flaky connection.
-    if (failure !== null && (failure.kind === "auth" || failure.kind === "permission")) return { status: "rejected", reason: failure.message };
-    return { status: "unchecked", reason: failure?.message ?? (err instanceof Error ? err.message : String(err)) };
-  }
-}
 
 /**
  * The model credential (11#logs): one `models.retrieve` read for each provider whose key is set, so a turn isn't
@@ -134,13 +113,13 @@ async function verifyCredential(provider: KeyedProvider, env: Record<string, str
  * that chats through Codex or doesn't chat yet.
  */
 export async function runCredentialChecks(over: CredentialOverrides = {}): Promise<DoctorCheck[]> {
-  const env = over.env ?? process.env;
+  const env = over.env ?? await credentials().env(process.env);
   const verify = over.verify ?? verifyCredential;
   const keyed = keyedProviders(env).filter((p): p is KeyedProvider => p !== "codex");
   if (keyed.length === 0) {
     return [{
       name: "model credential", ok: true, warn: true,
-      detail: "no API key is set; set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or sign in with `codex login`, for example: op run -- keyloom doctor",
+      detail: "no API key is set; save one with `keyloom provider key set anthropic`, set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or sign in with `codex login`",
     }];
   }
   const checks: DoctorCheck[] = [];
