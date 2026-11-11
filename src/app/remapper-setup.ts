@@ -3,7 +3,7 @@
 // `osascript` or `open` runs under `bun test`.
 import { existsSync, realpathSync } from "node:fs";
 import { findKanata } from "../firmware/kanata/binary.ts";
-import { daemonInstallScript } from "../firmware/kanata/daemon-install.ts";
+import { daemonInstallScript, rootScriptFailure } from "../firmware/kanata/daemon-install.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
 
@@ -65,10 +65,13 @@ export const ADMIN_PROMPT = "keyloom wants to copy kanata to a folder only macOS
 
 export type SetupFinding = Pick<Finding, "code" | "name" | "status" | "detail">;
 
+/** `reinstall` puts Homebrew's own kanata back over one changed outside Homebrew (D-498). */
+export type KanataInstallAction = "install" | "upgrade" | "reinstall";
+
 /** The install or update started from the app; the wire's KanataInstallSchema (src/api/system-remapper.ts) is the same shape. */
 export type KanataInstall = {
   state: "idle" | "running" | "succeeded" | "failed" | "cancelled";
-  action: "install" | "upgrade" | null;
+  action: KanataInstallAction | null;
   /** The last lines Homebrew printed, oldest first. */
   log: string[];
   failure: { code: string; reason: string } | null;
@@ -79,7 +82,8 @@ export type RemapperSetupStatus = {
   canInstall: boolean;
   /** The install or update started from the app, while it runs and after it ends. */
   install: KanataInstall;
-  kanata: { version: string | null; wanted: string; update: "brew" | "link" | null };
+  /** `path` is where the kanata on PATH really is, and `copyVersion` the version of the root copy the daemon runs, when it differs. */
+  kanata: { version: string | null; wanted: string; update: "brew" | "link" | null; path: string | null; copyVersion: string | null };
   /** The driver release keyloom's kanata works with, for its download link. */
   driverVersion: string | null;
   findings: SetupFinding[];
@@ -190,14 +194,20 @@ export function kanataUpdate(kanata: { bin: string; version: string | undefined 
 export const IDLE_INSTALL: KanataInstall = { state: "idle", action: null, log: [], failure: null };
 
 export async function remapperSetupStatus(boardId: string, deps: SetupDeps, install: KanataInstall = IDLE_INSTALL): Promise<RemapperSetupStatus> {
-  const report = await remapperDoctor(boardId, deps.remapper ?? {});
+  const report = await remapperDoctor(boardId, deps.remapper ?? {}, { rootCommand: false });
   const rev = remapperEnv(boardId, deps.remapper ?? {}).rev;
   const canInstall = deps.platform === "darwin" && deps.brew() !== undefined;
+  const update = kanataUpdate(report.kanata, rev.kanataVersion, canInstall);
+  // `brew upgrade` succeeds without a change when Homebrew has nothing newer, so Update kanata would only do the same again.
+  const brewHasNothingNewer = update === "brew" && install.action === "upgrade" && install.state === "succeeded";
   return {
     platform: deps.platform === "darwin" ? "darwin" : "other",
     canInstall,
     install,
-    kanata: { version: report.kanata?.version ?? null, wanted: rev.kanataVersion, update: kanataUpdate(report.kanata, rev.kanataVersion, canInstall) },
+    kanata: {
+      version: report.kanata?.version ?? null, wanted: rev.kanataVersion, update: brewHasNothingNewer ? "link" : update,
+      path: report.kanata?.real ?? null, copyVersion: report.copyVersion ?? null,
+    },
     driverVersion: rev.driverVersions.at(-1) ?? null,
     findings: report.findings.map(({ code, name, status, detail }) => ({ code, name, status, detail })),
   };
@@ -206,10 +216,10 @@ export async function remapperSetupStatus(boardId: string, deps: SetupDeps, inst
 export type ActionResult = { ok: true } | { ok: false; code: string; reason: string };
 
 /**
- * `brew install kanata`, or `brew upgrade kanata` for Update kanata. Homebrew asks nothing for a formula, so it runs without a terminal.
- * Each line it prints goes to `onLine`, and `signal` stops it.
+ * `brew install kanata`, `brew upgrade kanata` for Update kanata, or `brew reinstall kanata`. Homebrew asks nothing for a formula, so it
+ * runs without a terminal. Each line it prints goes to `onLine`, and `signal` stops it.
  */
-export async function installKanata(deps: SetupDeps, action: "install" | "upgrade", opts: { signal: AbortSignal; onLine: (line: string) => void }): Promise<ActionResult> {
+export async function installKanata(deps: SetupDeps, action: KanataInstallAction, opts: { signal: AbortSignal; onLine: (line: string) => void }): Promise<ActionResult> {
   const ready = installPrecheck(deps);
   if (!ready.ok) return ready;
   const lines: string[] = [];
@@ -220,7 +230,7 @@ export async function installKanata(deps: SetupDeps, action: "install" | "upgrad
       opts.onLine(line);
     },
   });
-  const what = action === "install" ? "install" : "update";
+  const what = action === "upgrade" ? "update" : action;
   if (r.aborted || opts.signal.aborted) return { ok: false, code: "cancelled", reason: `You cancelled the ${what}.` };
   if (r.code !== 0) return { ok: false, code: "failed", reason: `Homebrew couldn't ${what} kanata: ${lastLine(lines.join("\n")) || `brew exited ${r.code ?? "from a signal"}`}` };
   return deps.kanata() === undefined ? { ok: false, code: "failed", reason: "Homebrew finished, but keyloom still can't find kanata." } : { ok: true };
@@ -246,7 +256,7 @@ export function kanataInstaller(deps: SetupDeps) {
   let running: Promise<void> = Promise.resolve();
   return {
     state: (): KanataInstall => ({ ...state, log: [...state.log] }),
-    start(action: "install" | "upgrade"): ActionResult {
+    start(action: KanataInstallAction): ActionResult {
       if (state.state === "running") return { ok: true };
       const ready = installPrecheck(deps);
       if (!ready.ok) return ready;
@@ -290,6 +300,9 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   if (r.code === 0) return { ok: true };
   // osascript reports a cancelled password dialog as error -128.
   if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata wasn't started." };
+  // The root script says why it stopped (daemon-install.ts), and the code is what the page acts on.
+  const root = rootScriptFailure(r.out);
+  if (root !== null) return { ok: false, code: root.code, reason: root.reason };
   return { ok: false, code: "failed", reason: `macOS couldn't start kanata: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
 }
 

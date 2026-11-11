@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ApiErrorBody } from "../api/http.ts";
 import {
   InstallKanataRequestSchema, OpenSettingsRequestSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, StartKanataRequestSchema,
-  type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
+  type KanataInstallAction, type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
 } from "../api/system-remapper.ts";
 import { checkToken } from "./guard.ts";
 
@@ -12,7 +12,7 @@ import { checkToken } from "./guard.ts";
 export interface RemapperSetupBackend {
   status(boardId: string): Promise<RemapperSetupResponse>;
   /** Starts the install or update and returns at once; `status` follows it. Repeated calls share one install. */
-  installKanata(action: "install" | "upgrade"): Promise<SetupActionResponse>;
+  installKanata(action: KanataInstallAction): Promise<SetupActionResponse>;
   /** Stops the running install. */
   cancelInstall(): Promise<SetupActionResponse>;
   startKanata(boardId: string): Promise<SetupActionResponse>;
@@ -68,7 +68,7 @@ export async function handleRemapperSetupRoute(request: Request, url: URL, backe
     }
     if (route.action === "install") {
       const parsed = InstallKanataRequestSchema.safeParse(body);
-      if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" }.");
+      if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" | \"reinstall\" }.");
       return Response.json(SetupActionResponseSchema.parse(await backend.installKanata(parsed.data.action ?? "install")));
     }
     if (route.action === "start") {

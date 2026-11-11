@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { type ApplyDeps, type ApplyOptions, type ApplyResult, type DisableResult, type RunningKanata, applyKanata, disableRemapping, readRunningKanata } from "../firmware/kanata/apply.ts";
-import { CMD_PROBE_CONFIG, cmdCheckResult, fileSha256, findKanata, kanataCheck } from "../firmware/kanata/binary.ts";
+import { CMD_PROBE_CONFIG, cmdCheckResult, findKanata, kanataCheck } from "../firmware/kanata/binary.ts";
 import { type KanataBoardRevision, kanataRevision } from "../firmware/kanata/board-config.ts";
 import type { KanataEndpoint } from "../firmware/kanata/client.ts";
 import { type DoctorProbe, type DoctorReport, runRemapperDoctor } from "../firmware/kanata/doctor.ts";
@@ -21,7 +21,7 @@ import type { App } from "./context.ts";
 import { UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 export type RemapperOverrides = {
@@ -133,14 +133,23 @@ async function daemonInstallFor(env: RemapperEnv, over: RemapperOverrides, plist
   } catch {
     // A path that won't resolve fails the read below with its own reason.
   }
-  const sha256 = await fileSha256(source);
-  if (sha256 === undefined) return { blocked: { code: "kanata_unreadable", reason: `keyloom couldn't read kanata at ${source}.` }, kanataPath: source };
+  // One read: the hash root checks and the probe both come from these bytes, so the kanata checked for `cmd` is the one the hash pins.
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(source);
+  } catch {
+    return { blocked: { code: "kanata_unreadable", reason: `keyloom couldn't read kanata at ${source}.` }, kanataPath: source };
+  }
+  const sha256 = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
   const dir = await mkdtemp(join(tmpdir(), "keyloom-cmd-probe-"));
   let probe: { ok: boolean; output: string };
   try {
+    // A private copy of those bytes, in a folder only this account can open, is what runs.
+    const copy = join(dir, "kanata");
+    await writeFile(copy, bytes, { mode: 0o700 });
     const path = join(dir, "probe.kbd");
     await writeFile(path, CMD_PROBE_CONFIG);
-    probe = await kanataCheck(source, path).catch((err: unknown) => ({ ok: false, output: err instanceof Error ? err.message : String(err) }));
+    probe = await kanataCheck(copy, path).catch((err: unknown) => ({ ok: false, output: err instanceof Error ? err.message : String(err) }));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -182,14 +191,18 @@ export async function setupRemapper(boardId: string, over: RemapperOverrides = {
 }
 
 /** The doctor's findings, and the root command when the daemon needs (re)installing; `blocked` says why there is none. */
-export type RemapperDoctorReport = Pick<DoctorReport, "findings" | "kanata"> & { rootCommand: string | null; blocked: DaemonInstallBlock | null };
+export type RemapperDoctorReport = Pick<DoctorReport, "findings" | "kanata" | "copyVersion"> & { rootCommand: string | null; blocked: DaemonInstallBlock | null };
 
-export async function remapperDoctor(boardId: string, over: RemapperOverrides = {}): Promise<RemapperDoctorReport> {
+/**
+ * `rootCommand: false` skips building the root command, which hashes and probes kanata: the app's checklist polls this every 1.5 s during
+ * an update and never shows the command.
+ */
+export async function remapperDoctor(boardId: string, over: RemapperOverrides = {}, opts: { rootCommand?: boolean } = {}): Promise<RemapperDoctorReport> {
   const env = remapperEnv(boardId, over);
   const karabinerJson = over.karabinerJson ?? join(over.home ?? homedir(), ".config", "karabiner", "karabiner.json");
   const report = await runRemapperDoctor({ rev: env.rev, paths: env.paths, karabinerJson, port: env.deps.endpoint.port }, over.probe);
-  const read = { findings: report.findings, kanata: report.kanata };
-  if (!report.needsRoot) return { ...read, rootCommand: null, blocked: null };
+  const read = { findings: report.findings, kanata: report.kanata, copyVersion: report.copyVersion };
+  if (!report.needsRoot || opts.rootCommand === false) return { ...read, rootCommand: null, blocked: null };
   const plan = await daemonInstallFor(env, over);
   return "install" in plan ? { ...read, rootCommand: rootInstallCommand(plan.install), blocked: null } : { ...read, rootCommand: null, blocked: plan.blocked };
 }

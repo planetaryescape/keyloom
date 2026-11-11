@@ -15,7 +15,7 @@ function serve() {
   let cancels = 0;
   const backend: RemapperSetupBackend = {
     status: async () => ({
-      platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null }, kanata: { version: null, wanted: "1.12.0", update: null },
+      platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null }, kanata: { version: null, wanted: "1.12.0", update: null, path: null, copyVersion: null },
       driverVersion: "6.2.0", findings: [{ code: "kanata_missing", name: "kanata", status: "fail", detail: "kanata isn't installed" }],
     }),
     installKanata: async (action) => (installs.push(action), action === "install" ? { ok: false, code: "no_brew", reason: "Homebrew isn't installed" } : { ok: true }),
@@ -48,11 +48,12 @@ describe("remapper setup routes", () => {
     expect((await post("/api/system/remapper/install-kanata", { extra: 1 })).status).toBe(400);
   });
 
-  test("install takes an optional action, upgrade for Update kanata, and nothing else", async () => {
+  test("install takes an optional action, upgrade for Update kanata or reinstall for a kanata changed outside Homebrew, and nothing else", async () => {
     const { post, installs } = serve();
     expect(await (await post("/api/system/remapper/install-kanata", { action: "upgrade" })).json()).toEqual({ ok: true });
-    expect((await post("/api/system/remapper/install-kanata", { action: "reinstall" })).status).toBe(400);
-    expect(installs).toEqual(["upgrade"]);
+    expect(await (await post("/api/system/remapper/install-kanata", { action: "reinstall" })).json()).toEqual({ ok: true });
+    expect((await post("/api/system/remapper/install-kanata", { action: "uninstall" })).status).toBe(400);
+    expect(installs).toEqual(["upgrade", "reinstall"]);
   });
 
   test("cancel stops the running install, takes an empty body, and needs the token", async () => {

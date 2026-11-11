@@ -1,7 +1,7 @@
 // The setup doctor for the MacBook remapper (21): reads the kanata and driver versions, whether the daemon is installed and
 // listening, and prints the one command BK has to run as root. Everything here only reads; it starts nothing, writes nothing
 // and never asks for sudo (D-231). The probe is injectable, so tests describe a machine instead of being on one.
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { type KanataEndpoint, hello } from "./client.ts";
 import { type KanataBoardRevision } from "./board-config.ts";
@@ -16,7 +16,8 @@ export type FindingCode =
   | "permissions" | "daemon_missing" | "port_closed" | "kbd_file"
   // The daemon runs keyloom's root-owned copy of kanata (D-498): `kanata_updated` compares it with the kanata on PATH, and
   // `daemon_outdated` is a daemon set up before the copy existed, which still runs kanata from a folder the person can change.
-  | "kanata_updated" | "daemon_outdated";
+  // `kanata_replaced` is a kanata on PATH that differs from the copy without looking like a Homebrew update, which setup doesn't offer to copy.
+  | "kanata_updated" | "kanata_replaced" | "daemon_outdated";
 
 export type Finding = {
   code: FindingCode;
@@ -36,6 +37,8 @@ export type DoctorProbe = {
   hello(endpoint: KanataEndpoint): Promise<{ version: string; protocol: number | null }>;
   /** A file's SHA-256, to compare kanata with the daemon's copy. Without it the doctor doesn't compare them. */
   fileHash?(path: string): Promise<string | undefined>;
+  /** Where a path's links lead, to see whether kanata is in Homebrew's Cellar. Without it the path is taken as it is. */
+  realPath?(path: string): string;
 };
 
 export function realProbe(): DoctorProbe {
@@ -55,7 +58,29 @@ export function realProbe(): DoctorProbe {
     readText: (p) => readFile(p, "utf8").catch(() => undefined),
     hello: (e) => hello(e),
     fileHash: fileSha256,
+    realPath: (p) => {
+      try {
+        return realpathSync(p);
+      } catch {
+        return p;
+      }
+    },
   };
+}
+
+/** The version in a Homebrew Cellar path (`…/Cellar/kanata/1.12.0_1/bin/kanata` is 1.12.0), or undefined for a kanata from elsewhere. */
+export function cellarVersion(realPath: string): string | undefined {
+  return /\/Cellar\/kanata\/([^/]+)\/bin\/kanata$/.exec(realPath)?.[1]?.replace(/_\d+$/, "");
+}
+
+/**
+ * Whether a kanata that differs from the root copy looks like a Homebrew update (D-498): it lives in a Cellar folder named for the
+ * version it reports, and that version isn't the copy's. Anything else, such as a binary replaced in place under the same version, is
+ * offered no password step: a process running as the person can write Homebrew's folder, so a changed hash alone proves nothing.
+ */
+export function looksLikeHomebrewUpdate(realPath: string, version: string | undefined, copyVersion: string | undefined): boolean {
+  const cellar = cellarVersion(realPath);
+  return cellar !== undefined && version !== undefined && cellar === version && version !== copyVersion;
 }
 
 /**
@@ -89,7 +114,14 @@ export type DoctorInput = {
  * `needsRoot`: the daemon has to be (re)installed, which takes the root command `keyloom remap setup` prints. `kanata` is the binary on
  * PATH and the version it reports, for a screen that offers an update.
  */
-export type DoctorReport = { findings: Finding[]; needsRoot: boolean; kanata: { bin: string; version: string | undefined } | null };
+export type DoctorReport = {
+  findings: Finding[];
+  needsRoot: boolean;
+  /** `real` is where `bin`'s links lead. */
+  kanata: { bin: string; real: string; version: string | undefined } | null;
+  /** The version of the root copy the daemon runs, read only when it differs from the kanata on PATH. */
+  copyVersion: string | undefined;
+};
 
 const DRIVER_PKG = "org.pqrs.Karabiner-DriverKit-VirtualHIDDevice";
 const KE_PLIST = "/Applications/Karabiner-Elements.app/Contents/Info.plist";
@@ -102,7 +134,9 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
 
   // kanata itself.
   const bin = probe.kanataBin();
+  const real = bin === undefined ? undefined : (probe.realPath?.(bin) ?? bin);
   let version: string | undefined;
+  let copyVersion: string | undefined;
   if (!bin) {
     add({ code: "kanata_missing", name: "kanata", status: "fail", detail: "kanata isn't installed", fix: `brew install kanata (keyloom targets ${rev.kanataVersion})` });
   } else {
@@ -178,8 +212,18 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
       if (onPath === undefined || copy === undefined) add({ code: "kanata_updated", name: "kanata's root copy", status: "unknown", detail: `couldn't compare ${bin} with ${ROOT_KANATA_PATH}` });
       else if (onPath === copy) add({ code: "kanata_updated", name: "kanata's root copy", status: "ok", detail: `${ROOT_KANATA_PATH} is the same kanata as ${bin}` });
       else {
-        needsRoot = true;
-        add({ code: "kanata_updated", name: "kanata's root copy", status: "warn", detail: `kanata at ${bin} changed since setup; the LaunchDaemon still runs the copy at ${ROOT_KANATA_PATH}`, fix: setUpAgain });
+        copyVersion = await probe.kanataVersion(ROOT_KANATA_PATH);
+        const was = `the LaunchDaemon still runs the copy at ${ROOT_KANATA_PATH} (${copyVersion ?? "an unknown version"})`;
+        if (looksLikeHomebrewUpdate(real ?? bin, version, copyVersion)) {
+          needsRoot = true;
+          add({ code: "kanata_updated", name: "kanata's root copy", status: "warn", detail: `Homebrew updated kanata to ${version} at ${real ?? bin}; ${was}`, fix: setUpAgain });
+        } else {
+          add({
+            code: "kanata_replaced", name: "kanata's root copy", status: "warn",
+            detail: `kanata at ${real ?? bin} (${version ?? "an unknown version"}) changed outside Homebrew; ${was}`,
+            fix: cellarVersion(real ?? bin) !== undefined ? "brew reinstall kanata" : "if you installed this kanata yourself, run `keyloom remap setup`, then the root command it prints",
+          });
+        }
       }
     }
   }
@@ -199,7 +243,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
     add({ code: "kbd_file", name: "keyloom.kbd", status: h?.intact ? "ok" : "warn", detail: h ? (h.intact ? `written by keyloom for ${h.layoutId} at ${h.revisionId}` : "written by keyloom, then edited by hand") : "not written by keyloom" });
   }
 
-  return { findings, needsRoot, kanata: bin ? { bin, version } : null };
+  return { findings, needsRoot, kanata: bin && real ? { bin, real, version } : null, copyVersion };
 }
 
 /** The command that stops the daemon for good, for the rollback section of the runbook and for "Disable remapping" when kanata hangs. */

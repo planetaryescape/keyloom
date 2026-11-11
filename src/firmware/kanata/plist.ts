@@ -9,6 +9,12 @@ export const DAEMON_PLIST_PATH = `/Library/LaunchDaemons/${DAEMON_LABEL}.plist`;
  */
 export const ROOT_KANATA_DIR = "/Library/Application Support/keyloom";
 export const ROOT_KANATA_PATH = `${ROOT_KANATA_DIR}/kanata`;
+/**
+ * Where the daemon writes kanata's output. Setup creates it root:wheel 600 before the daemon starts (D-498): a reload error prints the
+ * start of a file the config `include`s, and kanata reads as root, so a world-readable log would show any process the start of a root-only
+ * file. launchd appends to an existing file and keeps its mode.
+ */
+export const DAEMON_LOG_PATH = "/var/log/keyloom-kanata.log";
 
 export type PlistInput = {
   /** Absolute path of the kanata binary the daemon runs: keyloom's root-owned copy (D-498), except in older plists. */
@@ -52,9 +58,9 @@ ${args.map((a) => `    <string>${xml(a)}</string>`).join("\n")}
     <integer>4096</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/var/log/keyloom-kanata.log</string>
+  <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
-  <string>/var/log/keyloom-kanata.log</string>
+  <string>${DAEMON_LOG_PATH}</string>
 </dict>
 </plist>
 `;

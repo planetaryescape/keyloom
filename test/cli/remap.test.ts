@@ -66,7 +66,12 @@ describe("keyloom remap", () => {
     expect(r.code).toBe(0);
     const out = JSON.parse(r.out);
     // The same script the app runs (D-498): kanata copied to its root-owned place, checked by hash, then the plist carried encoded.
-    expect(out.root_command).toStartWith("sudo sh -c 'mkdir -p '\\''/Library/Application Support/keyloom'\\''");
+    expect(out.root_command).toStartWith(`sudo sh -c 'fail() { printf "keyloom setup stopped (%s): %s\\n" "$1" "$2" >&2; exit 1; }; mkdir -p '\\''/Library/Application Support/keyloom'\\''`);
+    // Each failure says why in the terminal, and the daemon's log is made root's before it starts (review of #279).
+    expect(out.root_command).toContain("fail kanata_swapped '\\''kanata at ");
+    expect(out.root_command).toContain("chmod 600 '\\''/var/log/keyloom-kanata.log'\\''");
+    // No reason carries an apostrophe, so the printed command has one level of quoting to read.
+    expect(out.root_command).not.toContain(`'\\''\\'\\'''\\''`);
     expect(out.root_command).toContain(`= ${await fileSha256(world.kanataBin)} ]`);
     expect(out.root_command).toContain("launchctl bootstrap system");
     expect(out.root_command).not.toContain(world.home);

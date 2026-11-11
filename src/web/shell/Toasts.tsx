@@ -58,6 +58,23 @@ export function dismissTimer(ms: number, onDone: () => void, clock: Clock = real
   };
 }
 
+/**
+ * The toasts after `toast` arrives, at most `max`. A full stack drops its oldest toast without a button first, so a toast with one
+ * isn't pushed out before its 12 s by news that came after it.
+ */
+export function addToast<T extends ToastInput>(all: readonly T[], toast: T, max: number): T[] {
+  if (all.length < max) return [...all, toast];
+  const plain = all.findIndex((t) => t.action === undefined);
+  const drop = plain === -1 ? 0 : plain;
+  return [...all.slice(0, drop), ...all.slice(drop + 1), toast].slice(-max);
+}
+
+/**
+ * Whether focus leaving a toast lets its countdown run again. Focus that moved inside it doesn't, and neither does the window losing
+ * focus to another app: the person is away, so the toast waits until they come back and move on.
+ */
+export const focusLeftToast = (movedInside: boolean, documentFocused: boolean): boolean => !movedInside && documentFocused;
+
 export function useToasts(): { toasts: Toast[]; show: (toast: ToastInput) => void; dismiss: (id: number) => void } {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const next = useRef(0);
@@ -65,7 +82,7 @@ export function useToasts(): { toasts: Toast[]; show: (toast: ToastInput) => voi
   const show = useCallback((toast: ToastInput) => {
     next.current += 1;
     const id = next.current;
-    setToasts((all) => [...all.slice(-(MAX_SHOWN - 1)), { ...toast, id }]);
+    setToasts((all) => addToast(all, { ...toast, id }, MAX_SHOWN));
   }, []);
   return { toasts, show, dismiss };
 }
@@ -80,7 +97,14 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   useEffect(() => {
     const t = dismissTimer(toastLifetime(toast.kind, hasAction), () => dismiss.current());
     timer.current = t;
-    return () => t.stop();
+    // A hidden page (another tab, a minimised window) holds the countdown, so the toast is still there when the person looks again.
+    const onVisibility = () => (document.hidden ? t.hold("hidden") : t.release("hidden"));
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      t.stop();
+    };
   }, [toast.kind, hasAction]);
   return (
     <div
@@ -92,7 +116,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       onFocus={() => timer.current?.hold("focus")}
       onBlur={(event) => {
         const next = event.relatedTarget;
-        if (!(next instanceof Node && event.currentTarget.contains(next))) timer.current?.release("focus");
+        if (focusLeftToast(next instanceof Node && event.currentTarget.contains(next), document.hasFocus())) timer.current?.release("focus");
       }}
     >
       <Icon size={16} aria-hidden="true" />

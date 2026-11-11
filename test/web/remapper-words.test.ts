@@ -5,9 +5,10 @@ import type { KanataInstall, RemapperSetupResponse, SetupFinding } from "../../s
 import { attentionSteps, setupFailure, setupSteps } from "../../src/web/sync/remapper-words.ts";
 
 const f = (code: SetupFinding["code"], status: SetupFinding["status"], detail = "x"): SetupFinding => ({ code, name: code, status, detail });
+const k = (over: Partial<RemapperSetupResponse["kanata"]> = {}): RemapperSetupResponse["kanata"] => ({ version: null, wanted: "1.12.0", update: null, path: null, copyVersion: null, ...over });
 const status = (findings: SetupFinding[], over: Partial<RemapperSetupResponse> = {}): RemapperSetupResponse =>
   ({
-    platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null }, kanata: { version: null, wanted: "1.12.0", update: null },
+    platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null }, kanata: k(),
     driverVersion: "6.2.0", findings, ...over,
   });
 const job = (j: Partial<KanataInstall>): KanataInstall => ({ state: "running", action: "install", log: [], failure: null, ...j });
@@ -55,21 +56,53 @@ describe("setupSteps", () => {
 
   test("an older Homebrew kanata offers Update kanata, with its progress and Cancel; any other mismatch links the release (R2-10)", () => {
     const old = [f("kanata_version", "warn"), ...running.slice(1)];
-    const brew = setupSteps(status(old, { kanata: { version: "1.11.0", wanted: "1.12.0", update: "brew" } }))[0];
-    expect(brew).toMatchObject({ state: "note", whileRunning: true, actions: [{ id: { kind: "update_kanata" }, label: "Update kanata" }], link: null });
+    const brew = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }) }))[0];
+    // The release link sits beside Update kanata: Homebrew may not have the version keyloom writes for yet.
+    expect(brew).toMatchObject({ state: "note", whileRunning: true, actions: [{ id: { kind: "update_kanata" }, label: "Update kanata" }], link: { label: "Get kanata 1.12.0" } });
     expect(brew?.detail).toBe("It's version 1.11.0, and keyloom writes for 1.12.0, so some keys may not load.");
-    const updating = setupSteps(status(old, { kanata: { version: "1.11.0", wanted: "1.12.0", update: "brew" }, install: job({ action: "upgrade", log: ["==> Upgrading kanata"] }) }))[0];
-    expect(updating).toMatchObject({ title: "Updating kanata…", actions: [{ id: { kind: "cancel_install" }, label: "Cancel update" }], log: ["==> Upgrading kanata"] });
-    const failed = setupSteps(status(old, { kanata: { version: "1.11.0", wanted: "1.12.0", update: "brew" }, install: job({ action: "upgrade", state: "failed", failure: { code: "failed", reason: "nope" } }) }))[0];
+    const updating = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }), install: job({ action: "upgrade", log: ["==> Upgrading kanata"] }) }))[0];
+    expect(updating).toMatchObject({ title: "Updating kanata…", actions: [{ id: { kind: "cancel_install" }, label: "Cancel update" }], log: ["==> Upgrading kanata"], link: null });
+    const failed = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }), install: job({ action: "upgrade", state: "failed", failure: { code: "failed", reason: "nope" } }) }))[0];
     expect(failed).toMatchObject({ problem: "nope", actions: [{ label: "Try again" }], link: { href: "https://github.com/jtroo/kanata/releases/tag/v1.12.0", label: "Get kanata 1.12.0" } });
-    const link = setupSteps(status(old, { kanata: { version: "1.13.0", wanted: "1.12.0", update: "link" } }))[0];
+    const link = setupSteps(status(old, { kanata: k({ version: "1.13.0", update: "link" }) }))[0];
     expect(link).toMatchObject({ actions: [], link: { label: "Get kanata 1.12.0" } });
+  });
+
+  test("an update that found nothing newer says so and offers the release, not Update kanata again (review of #279)", () => {
+    const old = [f("kanata_version", "warn"), ...running.slice(1)];
+    // The server sends `link` once a `brew upgrade` succeeded and kanata is still older.
+    const done = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "link" }), install: job({ action: "upgrade", state: "succeeded" }) }))[0];
+    expect(done).toMatchObject({ actions: [], link: { href: "https://github.com/jtroo/kanata/releases/tag/v1.12.0", label: "Get kanata 1.12.0" } });
+    expect(done?.detail).toBe("Homebrew has nothing newer than 1.11.0, and keyloom writes for 1.12.0. Get 1.12.0 from kanata's releases page.");
+  });
+
+  test("a kanata changed outside Homebrew names it and offers no password step for Homebrew's; Reinstall kanata puts it back (D-498)", () => {
+    const cellar = "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata";
+    const changed = attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ version: "1.12.0", path: cellar, copyVersion: "1.12.0" }) }));
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({ key: "replaced", title: "kanata changed outside Homebrew", actions: [{ id: { kind: "reinstall_kanata" }, label: "Reinstall kanata" }], link: null });
+    expect(changed[0]?.detail).toContain(`${cellar} is version 1.12.0, and kanata's background service runs version 1.12.0`);
+    expect(changed[0]?.actions.some((a) => a.id.kind === "start_kanata")).toBe(false);
+    // While Homebrew reinstalls it, the step follows the job.
+    const reinstalling = attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: cellar }), install: job({ action: "reinstall", log: ["==> Reinstalling kanata"] }) }));
+    expect(reinstalling[0]).toMatchObject({ title: "Reinstalling kanata…", actions: [{ id: { kind: "cancel_install" }, label: "Cancel reinstall" }] });
+    // A kanata from elsewhere has no Homebrew copy to put back: the person who installed it can set up with it.
+    const own = attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ version: "1.12.0", path: "/usr/local/bin/kanata", copyVersion: "1.11.0" }) }));
+    expect(own[0]).toMatchObject({ actions: [{ id: { kind: "start_kanata" }, label: "Set up with this kanata" }] });
+    expect(own[0]?.detail).toContain("If you installed this kanata yourself");
+    // Stopped: Start kanata would copy it as root, so it waits for the change to be dealt with.
+    const stopped = setupSteps(status([...running.slice(0, 4), f("port_closed", "warn"), f("kanata_replaced", "warn")], { kanata: k({ path: cellar }) }));
+    expect(stopped.find((s) => s.key === "start")).toMatchObject({ actions: [], detail: "Deal with the kanata change above first." });
+    expect(stopped.map((s) => s.key).indexOf("replaced")).toBeLessThan(stopped.map((s) => s.key).indexOf("start"));
   });
 
   test("a kanata updated since setup, or a daemon from before the root copy, offers Set up and start kanata while kanata runs (D-498)", () => {
     const updated = attentionSteps(status([...running, f("kanata_updated", "warn")]));
     expect(updated).toHaveLength(1);
     expect(updated[0]).toMatchObject({ key: "copy", title: "kanata was updated. Set it up again", actions: [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] });
+    // The step names what it would copy, so the person can see it is Homebrew's.
+    const named = attentionSteps(status([...running, f("kanata_updated", "warn")], { kanata: k({ version: "1.12.0", path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) }));
+    expect(named[0]?.detail).toContain("Homebrew updated kanata to 1.12.0, at /opt/homebrew/Cellar/kanata/1.12.0/bin/kanata.");
     const outdated = attentionSteps(status([...running, f("daemon_outdated", "warn")]));
     expect(outdated[0]).toMatchObject({ key: "copy", title: "Set kanata up again" });
     expect(outdated[0]?.detail).toContain("/Library/Application Support/keyloom");
@@ -91,8 +124,10 @@ describe("setupSteps", () => {
   test("no step shows a command to paste", () => {
     const all = [
       ...setupSteps(status([...fresh, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])),
-      ...attentionSteps(status([f("kanata_version", "warn"), ...running.slice(1), f("kanata_updated", "warn")], { kanata: { version: "1.11.0", wanted: "1.12.0", update: "brew" } })),
+      ...attentionSteps(status([f("kanata_version", "warn"), ...running.slice(1), f("kanata_updated", "warn")], { kanata: k({ version: "1.11.0", update: "brew" }) })),
       ...attentionSteps(status([...running, f("daemon_outdated", "warn")])),
+      ...attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: "/usr/local/bin/kanata" }) })),
+      ...attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) })),
     ];
     for (const s of all) expect(`${s.title} ${s.detail ?? ""}`).not.toMatch(/`|sudo|keyloom (doctor|remap|import)|brew install/);
   });
@@ -107,5 +142,11 @@ describe("setupFailure", () => {
   test("a kanata that can run programs, or no Homebrew, points at the download (D-498)", () => {
     expect(setupFailure("kanata_allows_cmd", "x")).toMatchObject({ text: expect.stringContaining("won't run it as root"), link: { label: "Download kanata" } });
     expect(setupFailure("no_brew", "x").link?.href).toBe("https://github.com/jtroo/kanata/releases");
+    // One keyloom can't read is refused too; the download is the way on (review of #279).
+    expect(setupFailure("kanata_cmd_unknown", "keyloom couldn't tell.")).toMatchObject({ text: expect.stringContaining("keyloom couldn't tell."), link: { label: "Download kanata" } });
+  });
+
+  test("a kanata swapped while the password dialog was open says nothing was installed and how to go on", () => {
+    expect(setupFailure("kanata_swapped", "x")).toEqual({ text: expect.stringContaining("installed nothing. Press the button again"), link: null });
   });
 });
