@@ -10,11 +10,8 @@ const codex: Provider = { ...base, id: "codex", command: "codex login" };
 const idle = { keyStore: "keychain" as const, codexSignIn: { state: "idle" as const } };
 
 describe("the setup for a key provider", () => {
-  test("no key and a Keychain: a field to paste into, with the key page", () => {
-    expect(setupView(anthropic, idle)).toEqual({
-      kind: "paste", label: "Anthropic API key", keyPage: "https://console.anthropic.com/settings/keys",
-      note: "keyloom checks the key with Anthropic, then keeps it in your Keychain.",
-    });
+  test("no key and a Keychain: a field to paste into", () => {
+    expect(setupView(anthropic, idle)).toEqual({ kind: "paste", note: "keyloom checks the key with Anthropic, then keeps it in your Keychain." });
   });
 
   test("a saved key can be forgotten; one from the environment can't", () => {

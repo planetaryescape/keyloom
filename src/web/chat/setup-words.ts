@@ -1,31 +1,33 @@
 // What the model setup shows for each provider (D-496), decided from the status the server sent, never from error text.
-import type { ChatProviderStatus } from "../../api/http.ts";
+import type { ChatProviderKey, ChatProviderStatus } from "../../api/http.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
+/** The providers that take an API key, from the wire contract. */
+export type KeyProvider = ChatProviderKey["provider"];
 
 export const PROVIDER_NAMES: Record<Provider["id"], string> = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" };
 
 /** Where each provider hands out keys, for the "Get a key" link. */
-export const KEY_PAGES: Record<"anthropic" | "openrouter", string> = {
+export const KEY_PAGES: Record<KeyProvider, string> = {
   anthropic: "https://console.anthropic.com/settings/keys",
   openrouter: "https://openrouter.ai/settings/keys",
 };
 
 /** Where each provider sells credits, for "Out of credits". */
-export const CREDITS_PAGES: Record<"anthropic" | "openrouter", string> = {
+export const CREDITS_PAGES: Record<KeyProvider, string> = {
   anthropic: "https://console.anthropic.com/settings/billing",
   openrouter: "https://openrouter.ai/settings/credits",
 };
 
 const STORE_NAMES: Record<NonNullable<ChatProviderStatus["keyStore"]>, string> = { keychain: "your Keychain", "secret-service": "your system keyring" };
-const ENV_NAMES: Record<"anthropic" | "openrouter", string> = { anthropic: "ANTHROPIC_API_KEY", openrouter: "OPENROUTER_API_KEY" };
+const ENV_NAMES: Record<KeyProvider, string> = { anthropic: "ANTHROPIC_API_KEY", openrouter: "OPENROUTER_API_KEY" };
 
 export type SetupView =
   /** Nothing to offer: Codex when its CLI is not on this computer. */
   | { kind: "hidden" }
   | { kind: "ready"; text: string; forget: boolean }
   /** A password field that saves to the key store. */
-  | { kind: "paste"; label: string; keyPage: string; note: string }
+  | { kind: "paste"; note: string }
   /** No key store on this computer: the environment variable is the only way, so the command is shown to copy. */
   | { kind: "env-only"; text: string; command: string; keyPage: string }
   | { kind: "codex-sign-in"; text: string; failed: string | null }
@@ -53,12 +55,7 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
   if (status.keyStore === null) {
     return { kind: "env-only", text: `This computer has no keyring keyloom can save to. Start keyloom with ${ENV_NAMES[id]} set.`, command: provider.command, keyPage: KEY_PAGES[id] };
   }
-  return {
-    kind: "paste",
-    label: `${PROVIDER_NAMES[id]} API key`,
-    keyPage: KEY_PAGES[id],
-    note: `keyloom checks the key with ${PROVIDER_NAMES[id]}, then keeps it in ${STORE_NAMES[status.keyStore]}.`,
-  };
+  return { kind: "paste", note: `keyloom checks the key with ${PROVIDER_NAMES[id]}, then keeps it in ${STORE_NAMES[status.keyStore]}.` };
 }
 
 /**
@@ -66,6 +63,3 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
  * reason; these two mean the status changed under the page (an environment key appeared, or the store went away).
  */
 export const failureReloads = (code: string | undefined): boolean => code === "key_from_environment" || code === "key_store_unavailable";
-
-/** The ready providers, for the line under a saved key: chat works now. */
-export const anyReady = (status: ChatProviderStatus): boolean => status.providers.some((p) => p.ready);

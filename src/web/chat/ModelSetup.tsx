@@ -1,20 +1,16 @@
 import { Check, CircleCheck, Copy, ExternalLink, KeyRound, LoaderCircle, LogIn, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
-import { fetchProviderStatus } from "./api-chat.ts";
-import { type KeyProvider, cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./api-setup.ts";
-import { KEY_PAGES, PROVIDER_NAMES, failureReloads, setupView } from "./setup-words.ts";
+import { cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./api-setup.ts";
+import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, setupView } from "./setup-words.ts";
 import "./setup.css";
 
 type Provider = ChatProviderStatus["providers"][number];
 
 const KEY_PLACEHOLDERS: Record<KeyProvider, string> = { anthropic: "Paste your key (sk-ant-…)", openrouter: "Paste your key (sk-or-…)" };
 
-/** How often the page asks whether `codex login` has finished. */
-const SIGN_IN_POLL_MS = 1_500;
-
-export function CopyCommand({ command }: { command: string }) {
+function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
     // Clipboard access can be refused; the command stays selectable either way.
@@ -132,70 +128,82 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
 
   if (view.kind === "hidden") return null;
   const id = provider.id === "codex" ? null : provider.id;
+  // A key provider shows the field when it has no key, or when its saved key is being replaced.
+  const editing = id !== null && (view.kind === "paste" || (view.kind === "ready" && view.forget && replace));
+  let body: ReactNode = null;
+  if (editing) {
+    body = (
+      <PasteKey
+        token={token}
+        id={id}
+        note={view.kind === "paste" ? view.note : `keyloom checks the new key with ${name}, then replaces the saved one.`}
+        onReload={onReload}
+        onCancel={view.kind === "ready" ? () => setReplace(false) : undefined}
+        onSaved={(next, checked) => {
+          setReplace(false);
+          setSaved(checked ? "Saved. Chat uses it from the next message." : `Saved. keyloom couldn't reach ${name} to check it, so the first message will tell.`);
+          onChanged(next);
+        }}
+      />
+    );
+  } else if (view.kind === "ready") {
+    body = (
+      <>
+        <p className="setup-ready"><CircleCheck size={14} aria-hidden="true" />{view.text}</p>
+        {saved === null ? null : <p className="muted" role="status">{saved}</p>}
+        {view.forget && id !== null ? (
+          <div className="setup-actions">
+            <button type="button" className="button" disabled={busy} onClick={() => setReplace(true)}>
+              <KeyRound size={14} aria-hidden="true" />
+              Replace the key
+            </button>
+            <button type="button" className="button" disabled={busy} onClick={() => void act(() => forgetProviderKey(token, id))}>
+              <Trash2 size={14} aria-hidden="true" />
+              Forget this key
+            </button>
+          </div>
+        ) : null}
+      </>
+    );
+  } else if (view.kind === "env-only") {
+    body = (
+      <>
+        <p className="muted">{view.text} <KeyPageLink href={view.keyPage} name={name} /></p>
+        <CopyCommand command={view.command} />
+      </>
+    );
+  } else if (view.kind === "codex-waiting") {
+    body = (
+      <>
+        <p className="setup-waiting" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" />Finish signing in in your browser. keyloom picks it up when you're done.</p>
+        <div className="setup-actions">
+          {view.url === null ? null : (
+            <a className="button" href={view.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={14} aria-hidden="true" />
+              Open the sign-in page again
+            </a>
+          )}
+          <button type="button" className="button" disabled={busy} onClick={() => void act(() => cancelCodexSignIn(token))}>Stop waiting</button>
+        </div>
+      </>
+    );
+  } else if (view.kind === "codex-sign-in") {
+    body = (
+      <>
+        {view.failed === null ? <p className="muted">{view.text}</p> : <p className="chat-inline-error" role="alert">{view.failed} Try signing in again.</p>}
+        <div className="setup-actions">
+          <button type="button" className="button button-primary" disabled={busy} onClick={() => void act(() => startCodexSignIn(token))}>
+            <LogIn size={14} aria-hidden="true" />
+            Sign in with Codex
+          </button>
+        </div>
+      </>
+    );
+  }
   return (
     <li className="setup-provider" data-ready={provider.ready}>
       <strong>{name}</strong>
-      {view.kind === "ready" && !(replace && id !== null) ? (
-        <>
-          <p className="setup-ready"><CircleCheck size={14} aria-hidden="true" />{view.text}</p>
-          {saved === null ? null : <p className="muted" role="status">{saved}</p>}
-          {view.forget && id !== null ? (
-            <div className="setup-actions">
-              <button type="button" className="button" disabled={busy} onClick={() => setReplace(true)}>
-                <KeyRound size={14} aria-hidden="true" />
-                Replace the key
-              </button>
-              <button type="button" className="button" disabled={busy} onClick={() => void act(() => forgetProviderKey(token, id))}>
-                <Trash2 size={14} aria-hidden="true" />
-                Forget this key
-              </button>
-            </div>
-          ) : null}
-        </>
-      ) : view.kind === "paste" || (view.kind === "ready" && id !== null) ? (
-        id === null ? null : (
-          <PasteKey
-            token={token}
-            id={id}
-            note={view.kind === "paste" ? view.note : `keyloom checks the new key with ${name}, then replaces the saved one.`}
-            onReload={onReload}
-            onCancel={view.kind === "ready" ? () => setReplace(false) : undefined}
-            onSaved={(next, checked) => {
-              setReplace(false);
-              setSaved(checked ? "Saved. Chat uses it from the next message." : `Saved. keyloom couldn't reach ${name} to check it, so the first message will tell.`);
-              onChanged(next);
-            }}
-          />
-        )
-      ) : view.kind === "env-only" ? (
-        <>
-          <p className="muted">{view.text} <KeyPageLink href={view.keyPage} name={name} /></p>
-          <CopyCommand command={view.command} />
-        </>
-      ) : view.kind === "codex-waiting" ? (
-        <>
-          <p className="setup-waiting" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" />Finish signing in in your browser. keyloom picks it up when you're done.</p>
-          <div className="setup-actions">
-            {view.url === null ? null : (
-              <a className="button" href={view.url} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} aria-hidden="true" />
-                Open the sign-in page again
-              </a>
-            )}
-            <button type="button" className="button" disabled={busy} onClick={() => void act(() => cancelCodexSignIn(token))}>Stop waiting</button>
-          </div>
-        </>
-      ) : view.kind === "codex-sign-in" ? (
-        <>
-          {view.failed === null ? <p className="muted">{view.text}</p> : <p className="chat-inline-error" role="alert">{view.failed} Try signing in again.</p>}
-          <div className="setup-actions">
-            <button type="button" className="button button-primary" disabled={busy} onClick={() => void act(() => startCodexSignIn(token))}>
-              <LogIn size={14} aria-hidden="true" />
-              Sign in with Codex
-            </button>
-          </div>
-        </>
-      ) : null}
+      {body}
       {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
     </li>
   );
@@ -216,25 +224,9 @@ interface Props {
 /**
  * The one place a model is set up (D-496): paste an Anthropic or OpenRouter key, which keyloom checks and keeps in the system
  * keyring, or sign in with Codex. Chat, the picker, the review and the account failures all lead here. A saved key is used from
- * the next message, with no restart.
+ * the next message, with no restart. While Codex sign-in waits, `useProviderStatus` polls, so this stays a view.
  */
 export function ModelSetup({ token, status, onChanged, onReload, only, replacing = null }: Props) {
-  const waiting = status?.codexSignIn.state === "waiting";
-  // A ref, so a parent that passes a new callback each render doesn't restart the poll before it fires.
-  const changed = useRef(onChanged);
-  changed.current = onChanged;
-  useEffect(() => {
-    if (!waiting) return;
-    const controller = new AbortController();
-    const timer = window.setInterval(() => {
-      fetchProviderStatus(token, controller.signal).then((next) => changed.current(next), () => {});
-    }, SIGN_IN_POLL_MS);
-    return () => {
-      window.clearInterval(timer);
-      controller.abort();
-    };
-  }, [waiting, token]);
-
   if (status === null) {
     return (
       <div className="setup-unread" role="alert">

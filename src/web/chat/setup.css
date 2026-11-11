@@ -93,6 +93,7 @@
 }
 
 .setup-key-page {
+  color: var(--color-text);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -129,14 +130,7 @@
 }
 
 .chat-missing-key .setup-providers,
-.bar-needs-model .setup-providers {
-  margin-top: var(--space-2);
-}
-
+.bar-needs-model .setup-providers,
 .provider-picker .setup-providers {
   margin-top: var(--space-2);
-}
-
-.setup-key-page {
-  color: var(--color-text);
 }

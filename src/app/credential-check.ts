@@ -2,9 +2,10 @@
 // runs it for each key it finds, and saving a pasted key runs it before the key is stored (D-496).
 import { classifyModelError, clientFromEnv, openRouterClientFromEnv } from "../agent/anthropic-model.ts";
 import { DEFAULT_MODELS } from "../agent/provider.ts";
+import { KEY_ENV, type KeyProvider } from "./credentials.ts";
 
 /** The providers whose credential keyloom can check with an API read: the two it has a key for, not Codex's login. */
-export type KeyedProvider = "anthropic" | "openrouter";
+export type KeyedProvider = KeyProvider;
 
 /** What one provider's check found: `rejected` is the credential failing, `unchecked` is not being able to tell. */
 export type CredentialOutcome = { status: "ok" } | { status: "rejected" | "unchecked"; reason: string };
@@ -14,7 +15,7 @@ const CREDENTIAL_TIMEOUT_MS = 5_000;
 
 export async function verifyCredential(provider: KeyedProvider, env: Record<string, string | undefined>): Promise<CredentialOutcome> {
   const client = provider === "anthropic" ? clientFromEnv(env) : openRouterClientFromEnv(env);
-  if (!client) return { status: "unchecked", reason: `${provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENROUTER_API_KEY"} is not set` };
+  if (!client) return { status: "unchecked", reason: `${KEY_ENV[provider]} is not set` };
   try {
     await client.models.retrieve(DEFAULT_MODELS[provider], null, { timeout: CREDENTIAL_TIMEOUT_MS, maxRetries: 0 });
     return { status: "ok" };

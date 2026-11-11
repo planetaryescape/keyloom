@@ -16,7 +16,7 @@ import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
-import { activeProviderReady } from "../chat/provider-ready.ts";
+import { activeProviderReady, anyReady } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
 import type { Review } from "./useReview.ts";
@@ -170,6 +170,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const [details, setDetails] = useState(false);
   const [picking, setPicking] = useState(false);
   const provider = useProviderStatus(token);
+  // A model is set up but isn't the chosen one: Set up a model offers the picker, to choose the ready one; otherwise the setup.
+  const pickReady = provider.status !== null && anyReady(provider.status) && !activeProviderReady(provider.status);
   const [applying, setApplying] = useState<string | null>(null);
   const review = r.review;
   const loading = !r.loaded || r.refreshing || review?.ai.status === "pending" || review?.ai.status === "running";
@@ -348,7 +350,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
               )}
             </div>
             {details && review.ai.reason !== null ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
-            {picking && !(provider.status?.providers.some((p) => p.ready) && !activeProviderReady(provider.status)) ? (
+            {picking && !pickReady ? (
               // Nothing is set up: the same setup the chat uses (D-496). A key saved here is used by the review at once.
               <ModelSetup
                 token={token}

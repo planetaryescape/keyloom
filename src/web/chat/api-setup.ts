@@ -3,8 +3,7 @@
 import { ChatProviderKeySavedSchema, ChatProviderStatusSchema, type ChatProviderKeySaved, type ChatProviderStatus } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
-
-export type KeyProvider = "anthropic" | "openrouter";
+import type { KeyProvider } from "./setup-words.ts";
 
 export function saveProviderKey(token: string, provider: KeyProvider, key: string): Promise<ChatProviderKeySaved> {
   return request("POST", "/api/chat/provider/key", token, ChatProviderKeySavedSchema, undefined, { provider, key });
@@ -18,7 +17,10 @@ async function send(method: "DELETE" | "POST", path: string, token: string): Pro
     throw new ApiError(0, "Can't reach keyloom.");
   }
   if (!response.ok) throw await failure(response);
-  return ChatProviderStatusSchema.parse(await response.json());
+  // `request` in api-write.ts has no DELETE; this keeps its answer for a body the page can't read.
+  const parsed = ChatProviderStatusSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) throw new ApiError(response.status, "keyloom sent an answer this page can't read. Restart keyloom and reload.");
+  return parsed.data;
 }
 
 export const forgetProviderKey = (token: string, provider: KeyProvider): Promise<ChatProviderStatus> =>

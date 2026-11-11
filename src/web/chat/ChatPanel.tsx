@@ -17,11 +17,10 @@ import { AgentMotionToggle } from "./AgentWorking.tsx";
 import { ConversationList } from "./ConversationList.tsx";
 import { EmptyChat, MissingKey, ProblemNotice } from "./ChatStates.tsx";
 import { ModelSetup } from "./ModelSetup.tsx";
-import { CREDITS_PAGES } from "./setup-words.ts";
+import { CREDITS_PAGES, PROVIDER_NAMES } from "./setup-words.ts";
 import { ProviderPicker } from "./ProviderPicker.tsx";
 import { chooseProvider, fetchConversation } from "./api-chat.ts";
 
-const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" } as const;
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";

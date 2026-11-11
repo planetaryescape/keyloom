@@ -4,11 +4,11 @@ import { createPortal } from "react-dom";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { chooseProvider } from "./api-chat.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
+import { PROVIDER_NAMES } from "./setup-words.ts";
 import type { Pinned } from "./transcript.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
 
-const NAMES: Record<Provider["id"], string> = { anthropic: "Anthropic", openrouter: "OpenRouter", codex: "Codex" };
 
 interface Props {
   token: string;
@@ -16,15 +16,13 @@ interface Props {
   /** The provider and model the open conversation started on; it can't switch (D-111). */
   pinned: Pinned | null;
   onChanged: (status: ChatProviderStatus) => void;
-  /** A provider was set up in the picker: the new status, without closing it. Defaults to onChanged. */
-  onSetUp?: (status: ChatProviderStatus) => void;
   /** The command bar opens the picker from its menu and shows no model line: the model surfaces only when it fails (P3 review). */
   menuOpened?: { open: boolean; onClose: () => void };
 }
 
 // Which model answers, and the way to change it for the next conversation (19#choosing-a-provider).
 // The choice goes to the data directory's config.json; a conversation already going keeps its own.
-export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onChanged, menuOpened }: Props) {
+export function ProviderPicker({ token, status, pinned, onChanged, menuOpened }: Props) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
@@ -132,7 +130,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onC
       const next = await chooseProvider(token, { provider, ...(typed === "" || typed === chosen?.defaultModel ? {} : { model: typed }) });
       onChanged(next);
       close();
-      setSaved(next.active === null ? null : `Next conversation: ${NAMES[next.active.provider]}, ${next.active.model}.`);
+      setSaved(next.active === null ? null : `Next conversation: ${PROVIDER_NAMES[next.active.provider]}, ${next.active.model}.`);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "Couldn't save the choice.");
     } finally {
@@ -154,7 +152,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onC
           <span>No model set up</span>
         ) : (
           <>
-            <span>{NAMES[shown.provider]}</span>
+            <span>{PROVIDER_NAMES[shown.provider]}</span>
             {shown.model === null ? null : <span className="chat-provider-model">{shown.model}</span>}
           </>
         )}
@@ -165,7 +163,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onC
         )}
       </p>}
       {saved === null || open || menuOpened !== undefined ? null : (
-        <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${NAMES[pinned.provider]}.`}</p>
+        <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${PROVIDER_NAMES[pinned.provider]}.`}</p>
       )}
       {!shownOpen || status === null ? null : createPortal(
         <form
@@ -196,7 +194,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onC
                   }}
                 />
                 <span className="provider-choice-text">
-                  <strong>{NAMES[candidate.id]}</strong>
+                  <strong>{PROVIDER_NAMES[candidate.id]}</strong>
                   <span className="muted">{candidate.ready ? "Ready" : "Needs setup"}</span>
                 </span>
               </label>
@@ -213,7 +211,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onSetUp = onC
           )}
           {chosen === undefined || locked !== null ? null : (
             // Set it up, or replace or forget its saved key, right here; the choice below then saves a provider that works (D-496).
-            <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onSetUp} onReload={() => {}} />
+            <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={() => {}} />
           )}
           {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
           </div>

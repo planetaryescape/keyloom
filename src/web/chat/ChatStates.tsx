@@ -1,7 +1,7 @@
 import { KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
-import { anyReady } from "./setup-words.ts";
+import { anyReady } from "./provider-ready.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [

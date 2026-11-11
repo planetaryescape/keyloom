@@ -4,7 +4,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Credentials, type KeyStore, type SecretRunner, keychainStore, runSecretCommand, secretServiceStore, systemKeyStore, useCredentials } from "../../src/app/credentials.ts";
 import { CodexSignIn, useCodexSignIn } from "../../src/app/codex-signin.ts";
-import { forgetProviderKey, providerStatus, saveProviderKey, startCodexSignIn, CredentialError, defaultAgentModel } from "../../src/app/chat-model.ts";
+import { defaultAgentModel, providerStatus } from "../../src/app/chat-model.ts";
+import { CredentialError } from "../../src/app/errors.ts";
+import { forgetProviderKey, saveProviderKey, startCodexSignIn } from "../../src/app/provider-setup.ts";
 import { fakeBinDir, withPath } from "../helpers/fake-bin.ts";
 import { NO_CODEX } from "../helpers/no-credentials.ts";
 import { tempDir } from "../helpers/tmp.ts";
@@ -50,10 +52,10 @@ describe("the macOS Keychain store", () => {
     expect(security.calls[0]?.stdin).toContain(`-s "keyloom" -a "anthropic"`);
   });
 
-  test("a missing item reads as null and forgetting it reports nothing removed", async () => {
+  test("a missing item reads as null and forgetting it is not an error", async () => {
     const store = keychainStore(fakeSecurity().run);
     expect(await store.read("openrouter")).toBeNull();
-    expect(await store.remove("openrouter")).toBe(false);
+    await store.remove("openrouter");
   });
 
   test("refuses text that could break the interactive line, before running anything", async () => {
@@ -98,7 +100,7 @@ describe("the Secret Service store", () => {
     expect(calls[0]?.args).toEqual(["store", "--label=keyloom openrouter API key", "service", "keyloom", "account", "openrouter"]);
     expect(calls[0]?.stdin).toBe(KEY);
     expect(await store.read("openrouter")).toBe(KEY);
-    expect(await store.remove("openrouter")).toBe(true);
+    await store.remove("openrouter");
     expect(await store.read("openrouter")).toBeNull();
   });
 });
@@ -133,7 +135,7 @@ describe("environment over the store", () => {
     const creds = new Credentials(keychainStore(security.run));
     await creds.save("anthropic", KEY);
     expect((await creds.env({})).ANTHROPIC_API_KEY).toBe(KEY);
-    expect(await creds.forget("anthropic")).toBe(true);
+    await creds.forget("anthropic");
     expect(security.items.has("anthropic")).toBe(false);
     expect((await creds.env({})).ANTHROPIC_API_KEY).toBeUndefined();
   });

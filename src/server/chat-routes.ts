@@ -119,17 +119,22 @@ export async function handleChatRoute(request: Request, pathname: string, backen
   }
 }
 
-// The same rule as the editor's writes: JSON only, so a page on another site can't change the provider with a form.
-async function chooseProvider(request: Request, backend: ChatBackend): Promise<Response> {
+// The same rule as the editor's writes: JSON only, so a page on another site can't change the provider or save a key with a form.
+async function readJson(request: Request): Promise<{ json: unknown } | Response> {
   if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
     return errorResponse(415, "content_type", "Send this request as application/json.");
   }
-  let json: unknown;
   try {
-    json = await request.json();
+    return { json: await request.json() };
   } catch {
     return errorResponse(400, "usage", "the request body is not JSON");
   }
+}
+
+async function chooseProvider(request: Request, backend: ChatBackend): Promise<Response> {
+  const body = await readJson(request);
+  if (body instanceof Response) return body;
+  const json = body.json;
   const parsed = ChatProviderChoiceSchema.safeParse(json);
   if (!parsed.success) return errorResponse(400, "usage", parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
   return Response.json(ChatProviderStatusSchema.parse(await backend.chooseProvider(parsed.data)));
@@ -137,17 +142,10 @@ async function chooseProvider(request: Request, backend: ChatBackend): Promise<R
 
 // The body holds the key, so nothing here echoes it: a bad body gets a fixed message, never the parser's view of the value.
 async function saveKey(request: Request, backend: ChatBackend): Promise<Response> {
-  if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
-    return errorResponse(415, "content_type", "Send this request as application/json.");
-  }
+  const body = await readJson(request);
+  if (body instanceof Response) return body;
   if (!backend.saveKey) return errorResponse(503, "key_store_unavailable", "This keyloom can't save keys.");
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return errorResponse(400, "usage", "the request body is not JSON");
-  }
-  const parsed = ChatProviderKeySchema.safeParse(json);
+  const parsed = ChatProviderKeySchema.safeParse(body.json);
   if (!parsed.success) return errorResponse(400, "usage", "Send { provider: \"anthropic\" | \"openrouter\", key }.");
   return Response.json(ChatProviderKeySavedSchema.parse(await backend.saveKey(parsed.data)));
 }
