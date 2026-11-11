@@ -11,8 +11,12 @@ export type DockerView =
   | { kind: "none" }
   /** A start from this page is running; `verb` says whether it starts, opens (for its CLI) or restarts the engine. */
   | { kind: "starting"; engine: string; verb: "Starting" | "Opening" | "Restarting" }
-  /** A start from this page failed; `retry` repeats what failed. */
-  | { kind: "start-failed"; reason: string; retry: "start" | "restart" }
+  /**
+   * A start from this page failed. `retry` repeats what failed, or is null when repeating it would fail the same way. `restartEngine` is
+   * the engine to stop and start from scratch instead (Colima, R3-04), and `helpUrl` the engine's own troubleshooting page once that
+   * restart failed too.
+   */
+  | { kind: "start-failed"; reason: string; retry: "start" | "restart" | null; restartEngine: string | null; helpUrl: string | null }
   /** No Docker, and keyloom can install it: the Install Docker button. `stopped` when the person cancelled the last install. */
   | { kind: "install"; engine: string; note: string; alternatives: Alternative[]; stopped: boolean }
   /** No Docker, and keyloom can't install it here: the download page. */
@@ -35,12 +39,16 @@ export type DockerView =
    * Stopped. `afterInstall` is set when this page installed Docker but its first start failed or was stopped (R2-02): Docker is
    * there, so the way on is a start, not another install.
    */
-  | { kind: "down"; engine: string; canStart: boolean; afterInstall: { cancelled: boolean; reason: string } | null };
+  | { kind: "down"; engine: string; canStart: boolean; afterInstall: { cancelled: boolean; reason: string } | null; restartEngine: string | null };
+
+/** Colima's FAQ, whose Troubleshooting section covers a VM that won't start (checked 2026-11-11). */
+export const COLIMA_HELP_URL = "https://colima.run/docs/faq/";
 
 /** Server sentences are also printed in a terminal, where `code` reads well; on the page the backticks are noise. */
 export const plain = (text: string): string => text.replace(/`/g, "");
 
-export function dockerView(readiness: DockerReadinessResponse | null, starting: boolean, problem: string | null, install: InstallState | null): DockerView {
+/** `lastAction` is what this page last asked for: a start, or a restart (of the Mac app, or of Colima). */
+export function dockerView(readiness: DockerReadinessResponse | null, starting: boolean, problem: string | null, install: InstallState | null, lastAction: "start" | "restart" | null = null): DockerView {
   const down = readiness !== null && !readiness.ok ? readiness : null;
   if (install?.status === "running") return { kind: "installing", phase: install.phase ?? "installing", logTail: install.logTail };
   // A start that failed after a good install isn't an install failure: Docker is there, and the readiness below offers the start.
@@ -49,12 +57,23 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
   }
   // A Mac app that refuses keyloom is restarted rather than started, so its progress and its Try again say so.
   const restartApp = down?.problem === "no-access" ? down.access?.restartApp ?? null : null;
+  const restartEngine = down?.restartEngine ?? null;
   if (starting) {
     if (restartApp !== null) return { kind: "starting", engine: restartApp, verb: "Restarting" };
+    if (restartEngine !== null && lastAction === "restart") return { kind: "starting", engine: restartEngine, verb: "Restarting" };
     return { kind: "starting", engine: down?.engine ?? "Docker", verb: down?.problem === "cli-missing" ? "Opening" : "Starting" };
   }
   // A Docker that answers now outranks how an earlier start from this page failed.
-  if (problem !== null && readiness?.ok !== true) return { kind: "start-failed", reason: plain(problem), retry: restartApp !== null ? "restart" : "start" };
+  if (problem !== null && readiness?.ok !== true) {
+    if (restartApp !== null) return { kind: "start-failed", reason: plain(problem), retry: "restart", restartEngine: null, helpUrl: null };
+    // A Colima that wouldn't start fails the same way again, so its way on is a restart from scratch; after that, its own guide (R3-04).
+    if (restartEngine !== null) {
+      return lastAction === "restart"
+        ? { kind: "start-failed", reason: plain(problem), retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL }
+        : { kind: "start-failed", reason: plain(problem), retry: null, restartEngine, helpUrl: null };
+    }
+    return { kind: "start-failed", reason: plain(problem), retry: "start", restartEngine: null, helpUrl: null };
+  }
   if (readiness?.ok === true && install?.status === "succeeded") return { kind: "installed" };
   if (down === null) return { kind: "none" };
   if (down.problem === "not-installed" && down.install !== null) {
@@ -66,7 +85,7 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
   if (down.problem === "cli-missing" && down.engine !== null) return { kind: "cli-missing", app: down.engine };
   if (down.problem === "no-access" && down.access !== null) return { kind: "no-access", command: down.access.command, note: down.access.note, restartApp: down.access.restartApp };
   if (down.engine === null) return { kind: "other", reason: plain(down.reason), problem: down.problem };
-  return { kind: "down", engine: down.engine, canStart: down.canStart, afterInstall: afterInstall(install) };
+  return { kind: "down", engine: down.engine, canStart: down.canStart, afterInstall: afterInstall(install), restartEngine };
 }
 
 /** How this page's own install ended, when Docker is there but stopped: its first start failed, or the person stopped it. */

@@ -11,7 +11,8 @@
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
 // KEYLOOM_FAKE_INPUT_MONITORING=1 makes the flash wait for the reset key because Input Monitoring was refused; KEYLOOM_FAKE_CHECK_FINDS
 // sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
-// KEYLOOM_FAKE_DOCKER=no-access-linux|no-access-mac makes Docker refuse this account (D-497).
+// KEYLOOM_FAKE_DOCKER=no-access-linux|no-access-mac makes Docker refuse this account (D-497); colima-broken makes Colima fail to start,
+// and its Restart Colima succeed after a few seconds; colima-dead makes the restart fail too (R3-04).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
@@ -69,14 +70,20 @@ const installState = (tool: InstallState["tool"]): InstallState => {
   return { tool, status: done ? "succeeded" : "running", phase: done ? null : "installing", logTail: [`keyloom: brew install ${tool}`, `==> Pouring ${tool}--1.0.2.arm64_sequoia.bottle.tar.gz`], error: null, errorCode: null };
 };
 const dockerMode = process.env.KEYLOOM_FAKE_DOCKER;
+const colimaBroken = dockerMode === "colima-broken" || dockerMode === "colima-dead";
+let colimaRestarted = false;
 const system: SystemBackend = {
   docker: async () => dockerMode === "no-access-linux" || dockerMode === "no-access-mac"
     ? {
         ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
         canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] }),
       }
-    : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
-  startDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
+    : colimaBroken && !colimaRestarted
+      ? { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima" }
+      : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
+  startDocker: async () => colimaBroken && !colimaRestarted
+    ? (await Bun.sleep(1500), { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" })
+    : { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 },
   install: async (tool) => {
     if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false }]]);
     return installState(tool);
@@ -87,7 +94,13 @@ const system: SystemBackend = {
     if (started !== undefined && installState(tool).status === "running") started.cancelled = true;
     return installState(tool);
   },
-  restartDocker: async () => ({ ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 }),
+  restartDocker: async () => {
+    if (!colimaBroken) return { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 };
+    await Bun.sleep(3000);
+    if (dockerMode === "colima-dead") return { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" };
+    colimaRestarted = true;
+    return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
+  },
 };
 
 const server = startServer({ port, source: fake.source(), editor: fake, chat, system, token: "dev-editor-token" });

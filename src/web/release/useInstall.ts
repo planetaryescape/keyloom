@@ -12,6 +12,9 @@ const POLL_MS = 1000;
  */
 export const installEnded = (state: InstallState): boolean => state.status === "succeeded" || state.status === "failed" || state.status === "cancelled";
 
+/** Whether a page that has just opened takes up the install the server reports (R3-13). */
+export const adoptOnMount = (state: InstallState): boolean => state.status === "running";
+
 export type Install = {
   state: InstallState | null;
   /** Why the page couldn't start or stop the install; the install itself may still be running. */
@@ -27,6 +30,18 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   const done = useRef(onDone);
   done.current = onDone;
   const running = state?.status === "running";
+
+  // An install started before this page (a reload, another screen) is followed from where it is (R3-13). Only a running one is taken
+  // up: an old finished one would bring back a failure the person has already moved past.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchInstall(token, tool, controller.signal)
+      .then((now) => {
+        if (adoptOnMount(now)) setState((shown) => shown ?? now);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [token, tool]);
 
   useEffect(() => {
     if (!running) return;

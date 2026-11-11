@@ -11,7 +11,11 @@ export function classify(err: unknown, dataDir: string): Classified {
   if (err instanceof PlatformUnavailableError) return { code: EXIT.toolchain, kind: err.code, message: err.message };
   // A refused key is the provider's answer (9); a key store that failed is this computer's tooling (6); the rest are the input (2).
   if (err instanceof CredentialError) return { code: err.code === "key_rejected" ? EXIT.modelApi : err.code === "key_store_failed" ? EXIT.toolchain : EXIT.usage, kind: err.code, message: err.message };
-  if (err instanceof ModelError) return { code: EXIT.modelApi, kind: err.kind === "missing_key" ? "missing_api_key" : "model_api", message: err.message };
+  if (err instanceof ModelError) {
+    // The model's own sentence is shared with the page, which has a button for this; the terminal gets the command (R3-11).
+    const next = err.kind === "auth" ? " Save one with `keyloom provider key set <provider>`; `keyloom provider` shows which provider is in use." : "";
+    return { code: EXIT.modelApi, kind: err.kind === "missing_key" ? "missing_api_key" : "model_api", message: `${err.message}${next}` };
+  }
   if (err instanceof SchemaTooNewError) return { code: EXIT.incompatible, kind: "schema_too_new", message: err.message };
   if (err instanceof IncompatibleError) return { code: EXIT.incompatible, kind: err.kind, message: err.message };
   if (err instanceof BusyError) return { code: EXIT.usage, kind: "busy", message: err.message };

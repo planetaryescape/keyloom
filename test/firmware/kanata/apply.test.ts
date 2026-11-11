@@ -113,6 +113,11 @@ describe("apply on a kanata board", () => {
     writeFileSync(paths.kbd, "(defsrc a)\n(deflayer base a)\n");
     const r = await applyKanata(deps, source("rev_ONE"), "rev_ONE");
     expect(r).toMatchObject({ ok: false, step: "not_keyloom" });
+    // The sync engine shows this sentence on the page, so it names no command (D-512); the CLI adds its own.
+    if (!r.ok) {
+      expect(r.error).not.toContain("keyloom remap");
+      expect(r.error).not.toContain("<layout>");
+    }
     expect(readFileSync(paths.kbd, "utf8")).toBe("(defsrc a)\n(deflayer base a)\n");
     const forced = await applyKanata(deps, source("rev_ONE"), "rev_ONE", { overwriteForeign: true });
     expect(forced.ok).toBe(true);

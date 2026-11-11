@@ -2,8 +2,8 @@
 import { describe, expect, test } from "bun:test";
 import type { DockerReadinessResponse } from "../../src/api/system.ts";
 import type { InstallState } from "../../src/api/tool-install.ts";
-import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
-import { installEnded } from "../../src/web/release/useInstall.ts";
+import { COLIMA_HELP_URL, buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
+import { adoptOnMount, installEnded } from "../../src/web/release/useInstall.ts";
 
 const missing = (canInstall: boolean): DockerReadinessResponse => ({
   ok: false, problem: "not-installed", reason: "Docker is not on this computer. Install Colima with `brew install colima docker`.", engine: null, canStart: false, autoStart: true,
@@ -31,7 +31,7 @@ describe("dockerView", () => {
   });
 
   test("a stopped engine is a start, not an install, and an unknown one shows its own sentence without backticks", () => {
-    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: null });
+    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: null, restartEngine: null });
     // A daemon that refuses this account is never a Start button: on Linux the group command to copy, on a Mac the engine to reopen (D-497).
     const refused = (access: { command: string | null; note: string; restartApp: string | null }): DockerReadinessResponse => ({ ok: false, problem: "no-access", reason: "permission denied", engine: "Colima", canStart: false, autoStart: true, install: null, access });
     expect(dockerView(refused({ command: "sudo usermod -aG docker $USER", note: "Log out and back in.", restartApp: null }), false, null, null)).toEqual({ kind: "no-access", command: "sudo usermod -aG docker $USER", note: "Log out and back in.", restartApp: null });
@@ -39,14 +39,14 @@ describe("dockerView", () => {
     expect(buildBlockedReason({ kind: "no-access", command: null, note: "", restartApp: null })).toBe("Give keyloom access to Docker first.");
     expect(dockerView({ ok: false, problem: "cli-missing", reason: "its `docker` command isn't on keyloom's PATH", engine: null, canStart: false, autoStart: true, install: null, access: null }, false, null, null)).toEqual({ kind: "other", reason: "its docker command isn't on keyloom's PATH", problem: "cli-missing" });
     expect(dockerView(ready, true, null, null)).toEqual({ kind: "starting", engine: "Docker", verb: "Starting" });
-    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, "if it fails, run `colima restart`", null)).toEqual({ kind: "start-failed", reason: "if it fails, run colima restart", retry: "start" });
+    expect(dockerView({ ok: false, problem: "daemon-down", reason: "down", engine: "Colima", canStart: true, autoStart: true, install: null, access: null }, false, "if it fails, run `colima restart`", null)).toEqual({ kind: "start-failed", reason: "if it fails, run colima restart", retry: "start", restartEngine: null, helpUrl: null });
   });
 
   test("a Colima start that fails after a good install offers the start, and Build stays open (R2-02)", () => {
     const down: DockerReadinessResponse = { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null };
     const failed = install({ status: "failed", phase: null, error: "Colima did not answer within 960 s.", errorCode: "start_failed" });
     const view = dockerView(down, false, null, failed);
-    expect(view).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: { cancelled: false, reason: "Colima did not answer within 960 s." } });
+    expect(view).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: { cancelled: false, reason: "Colima did not answer within 960 s." }, restartEngine: null });
     expect(buildBlockedReason(view)).toBeNull();
     // A start stopped by Cancel after the install is the same way on.
     expect(dockerView(down, false, null, install({ status: "cancelled", phase: null }))).toMatchObject({ kind: "down", afterInstall: { cancelled: true } });
@@ -79,7 +79,21 @@ describe("dockerView", () => {
     const refused: DockerReadinessResponse = { ok: false, problem: "no-access", reason: "refused", engine: "OrbStack", canStart: false, autoStart: true, install: null, access: { command: null, note: "Quit OrbStack and open it again, then check again.", restartApp: "OrbStack" } };
     expect(dockerView(refused, false, null, null)).toMatchObject({ kind: "no-access", restartApp: "OrbStack" });
     expect(dockerView(refused, true, null, null)).toEqual({ kind: "starting", engine: "OrbStack", verb: "Restarting" });
-    expect(dockerView(refused, false, "keyloom couldn't quit OrbStack.", null)).toEqual({ kind: "start-failed", reason: "keyloom couldn't quit OrbStack.", retry: "restart" });
+    expect(dockerView(refused, false, "keyloom couldn't quit OrbStack.", null)).toEqual({ kind: "start-failed", reason: "keyloom couldn't quit OrbStack.", retry: "restart", restartEngine: null, helpUrl: null });
+  });
+
+  test("a Colima that wouldn't start offers Restart Colima, never the same start again, then its guide (R3-04)", () => {
+    const colima: DockerReadinessResponse = { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima" };
+    const failedStart = dockerView(colima, false, "keyloom couldn't start Colima: exit status 1", null, "start");
+    expect(failedStart).toEqual({ kind: "start-failed", reason: "keyloom couldn't start Colima: exit status 1", retry: null, restartEngine: "Colima", helpUrl: null });
+    expect(failedStart.kind === "start-failed" && failedStart.reason).not.toContain("terminal");
+    expect(dockerView(colima, true, null, null, "restart")).toEqual({ kind: "starting", engine: "Colima", verb: "Restarting" });
+    expect(dockerView(colima, true, null, null, "start")).toEqual({ kind: "starting", engine: "Colima", verb: "Starting" });
+    // The restart failed too: no button that repeats it, and Colima's own guide.
+    expect(dockerView(colima, false, "Colima did not answer within 120 s", null, "restart")).toEqual({ kind: "start-failed", reason: "Colima did not answer within 120 s", retry: null, restartEngine: null, helpUrl: COLIMA_HELP_URL });
+    // After a good install whose first start failed, the way on carries the engine to restart.
+    const failed = install({ status: "failed", phase: null, error: "Colima did not answer within 960 s.", errorCode: "start_failed" });
+    expect(dockerView(colima, false, null, failed)).toMatchObject({ kind: "down", restartEngine: "Colima", afterInstall: { cancelled: false } });
   });
 
   test("an engine keyloom can't start blocks Build, and one that is only slow doesn't", () => {
@@ -102,7 +116,7 @@ describe("buildBlockedReason and recheckDocker", () => {
   test("Build firmware waits for an install, never for a stopped engine the build starts itself", () => {
     expect(buildBlockedReason(dockerView(missing(true), false, null, null))).toBe("Install Docker first.");
     expect(buildBlockedReason(dockerView(missing(true), false, null, install({})))).toBe("Waiting for Docker to finish installing.");
-    expect(buildBlockedReason({ kind: "down", engine: "Colima", canStart: true, afterInstall: null })).toBeNull();
+    expect(buildBlockedReason({ kind: "down", engine: "Colima", canStart: true, afterInstall: null, restartEngine: "Colima" })).toBeNull();
     expect(buildBlockedReason({ kind: "none" })).toBeNull();
   });
 
@@ -125,6 +139,14 @@ describe("flashStepView", () => {
 
   test("plain drops terminal backticks", () => {
     expect(plain("run `keyloom sync`")).toBe("run keyloom sync");
+  });
+});
+
+describe("adoptOnMount", () => {
+  test("a page that opens takes up an install already running, and leaves a finished one behind (R3-13)", () => {
+    expect(adoptOnMount(install({}))).toBe(true);
+    expect(adoptOnMount(install({ phase: "stopping" }))).toBe(true);
+    for (const status of ["idle", "succeeded", "failed", "cancelled"] as const) expect(adoptOnMount(install({ status, phase: null }))).toBe(false);
   });
 });
 

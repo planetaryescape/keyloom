@@ -14,9 +14,11 @@ export type Docker = {
   starting: boolean;
   /** Why a start or restart from this page failed. */
   problem: string | null;
+  /** What this page last asked for, so a restart that failed isn't offered as the way on again (R3-04). */
+  lastAction: "start" | "restart" | null;
   /** Starts the engine; for `cli-missing` the server opens the app instead (R2-07). */
   start: () => void;
-  /** Quits and reopens the Mac app, for `no-access` (R2-07). */
+  /** Quits and reopens the Mac app, for `no-access` (R2-07), or stops and starts Colima when it won't start (R3-04). */
   restart: () => void;
   refresh: () => void;
 };
@@ -26,6 +28,7 @@ export function useDocker(token: string): Docker {
   const [unanswered, setUnanswered] = useState(false);
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
   const [asks, setAsks] = useState(0);
 
   useEffect(() => {
@@ -46,9 +49,10 @@ export function useDocker(token: string): Docker {
     return () => controller.abort();
   }, [token, asks]);
 
-  const run = useCallback((ask: (token: string) => Promise<DockerStartResponse>) => {
+  const run = useCallback((action: "start" | "restart", ask: (token: string) => Promise<DockerStartResponse>) => {
     setStarting(true);
     setProblem(null);
+    setLastAction(action);
     ask(token)
       .then((result) => {
         if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
@@ -57,11 +61,11 @@ export function useDocker(token: string): Docker {
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
       .finally(() => setStarting(false));
   }, [token]);
-  const start = useCallback(() => run(startDockerEngine), [run]);
-  const restart = useCallback(() => run(restartDockerApp), [run]);
+  const start = useCallback(() => run("start", startDockerEngine), [run]);
+  const restart = useCallback(() => run("restart", restartDockerApp), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
-  return { readiness, unanswered, starting, problem, start, restart, refresh };
+  return { readiness, unanswered, starting, problem, lastAction, start, restart, refresh };
 }
 
 const RECHECK_MS = 4000;

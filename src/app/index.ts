@@ -32,14 +32,14 @@ export { type CandidateView, type DetectedKeyboard, type KeyboardDeps, detectKey
 export { type PutInput, type PutOutcome, type PutPreview, type PutProposal, previewPut, putConfig } from "./keyboard-put.ts";
 export { renderLayoutText, renderPositionGrid, selectLayers } from "./render.ts";
 export { type CredentialOverrides, type DoctorCheck, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks } from "./doctor.ts";
-export { type DockerReadiness, type EnsureDockerResult, type ToolchainOverrides, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker, startDocker } from "./toolchain.ts";
+export { type DockerReadiness, type EnsureDockerResult, type ToolchainOverrides, dockerAutoStart, dockerReadiness, ensureDocker, reasonWithHint, restartDocker, startDocker } from "./toolchain.ts";
 export {
   type RemapperOverrides, EXIT_CHORD_WINDOW_MS, applyToRemapper, confirmExitChord, disableRemapperFor, lookAtRemapper, probeRemapper, readRemapper, remapperDoctor, setupRemapper,
 } from "./remapper.ts";
 export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, rebootKeyboard } from "./keyboard.ts";
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
-  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelFlash,
+  drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelBuild, cancelFlash, waitForBuild,
 } from "./firmware.ts";
 export { type FlashCheck, type FlashCheckFound, checkFlashAgain } from "./flash-check.ts";
 export {
@@ -47,7 +47,7 @@ export {
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
 export {
-  BoardRevisionNeededError, BuildFailedError, EmulateFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError,
+  BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, EmulateFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError,
 } from "./firmware-errors.ts";
 export { type BuildArtifact, type RevealDeps, buildArtifact, revealBuildArtifact } from "./firmware-artifact.ts";
 export type { FlashPlan, FlashTool } from "./firmware-flash-plan.ts";

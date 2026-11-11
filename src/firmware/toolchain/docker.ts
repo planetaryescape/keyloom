@@ -102,10 +102,17 @@ export type EngineFinding =
   /** No engine found at all. */
   | { kind: "none" };
 
-/** What a start attempt found. `waitedMs` is how long the engine took to answer. */
+/**
+ * What a start attempt found. `waitedMs` is how long the engine took to answer. A failure keeps the engine's terminal `hint` apart from
+ * its `reason`, so the CLI prints it and the page shows a button instead. `restartEngine` names the engine keyloom can restart from
+ * scratch when a start failed (Colima, R3-04), so the page offers that rather than the same start again.
+ */
 export type DockerStartResult =
   | { ok: true; version: string; engine: string; waitedMs: number }
-  | { ok: false; engine: string | null; reason: string };
+  | { ok: false; engine: string | null; reason: string; hint?: string; restartEngine?: string };
+
+/** A failed start's reason with the engine's terminal hint, for the CLI and the build log. */
+export const reasonWithHint = (result: { reason: string; hint?: string }): string => (result.hint === undefined ? result.reason : `${result.reason}. ${result.hint}`);
 
 /** Another engine the person may prefer to the one keyloom installs, with the page that installs it. */
 export type DockerAlternative = { name: string; url: string };
@@ -383,6 +390,8 @@ export type StartDockerOptions = {
    * the app (R2-07), where the socket can lag behind the app.
    */
   relaunch?: boolean;
+  /** False for a restart of Colima: a failure then has no restart to offer, because that was it. */
+  offerRestart?: boolean;
 };
 
 const platformIsMac = (opts: StartDockerOptions): boolean => (opts.platform ?? process.platform) === "darwin";
@@ -457,15 +466,20 @@ async function launchAndWait(engine: DockerEngine, opts: StartDockerOptions, l: 
   if (deadline - Date.now() < Math.min(MIN_LAUNCH_MS, timeoutMs / 4)) return { ok: false, engine: engine.name, reason: `Docker didn't answer in time, so keyloom didn't start ${engine.name}. Check again in a minute.` };
   const launched = await start(engine, deadline - Date.now(), opts.signal);
   if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped starting ${engine.name}.` };
+  // A Colima that won't start is stopped hard and started again (restartColima); any other engine keeps its own hint.
+  const restart = engine.command[0] === "colima" && opts.offerRestart !== false ? { restartEngine: engine.name } : {};
+  const hint = engine.hint ? { hint: engine.hint } : {};
   if (!launched.ok) {
-    return { ok: false, engine: engine.name, reason: `keyloom couldn't start ${engine.name}${launched.detail ? `: ${launched.detail}` : ""}${engine.hint ? `. ${engine.hint}` : ""}` };
+    return { ok: false, engine: engine.name, reason: `keyloom couldn't start ${engine.name}${launched.detail ? `: ${launched.detail}` : ""}`, ...hint, ...restart };
   }
 
   // Asked at least once after the launch, even when the launch used the whole window: `colima start` returns once Docker is up.
+  let last: DockerStatus | null = null;
   for (;;) {
     if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped waiting for ${engine.name}.` };
     await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())), opts.signal);
     const next = await status();
+    last = next;
     if (next.ok) {
       const waitedMs = Date.now() - startedAt;
       opts.onProgress?.(`keyloom: ${engine.name} is up after ${Math.round(waitedMs / 1000)} s`);
@@ -481,6 +495,10 @@ async function launchAndWait(engine: DockerEngine, opts: StartDockerOptions, l: 
       break;
     }
   }
+  // A daemon that answers, only slowly, is up and may be running a build, so it is never restarted (D-497).
+  if (last?.ok === false && last.kind === "slow") return { ok: false, engine: engine.name, reason: `${engine.name} started, but Docker is answering slowly. It may be busy, so keyloom didn't restart it. Check again in a minute.` };
+  // Colima has no window to open and wait on; its way on is a restart.
+  if (restart.restartEngine !== undefined) return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s`, ...hint, ...restart };
   return { ok: false, engine: engine.name, reason: `${engine.name} did not answer within ${Math.round(timeoutMs / 1000)} s. Open it, wait for it to say it is running, then build again.` };
 }
 
@@ -557,4 +575,27 @@ export async function restartDockerApp(engine: DockerEngine, opts: StartDockerOp
   if (!closed) return { ok: false, engine: engine.name, reason: `${engine.name} is still quitting. Wait until it has closed, then restart it again.` };
   // Opened whatever the daemon says now: a socket that still refuses, or answers slowly, while the app shuts down mustn't leave it quit.
   return startDockerEngine({ ...opts, relaunch: true, detect: async () => ({ kind: "engine", engine }) });
+}
+
+/** Stops and starts the engine's VM, for `colima stop --force`'s own commands; the real one runs them. A test passes a fake. */
+export type ColimaStop = (command: string[], budgetMs: number, signal?: AbortSignal) => Promise<{ ok: boolean; detail?: string }>;
+
+const COLIMA_STOP_MS = 60_000;
+
+/**
+ * Stops Colima without a graceful shutdown, then starts it and waits for Docker (R3-04). That is Colima's own fix for a VM that won't
+ * start or shows as broken (colima.run/docs/faq, "Colima shows Broken status", checked 2026-11-11), and what restored the daemon in
+ * docs/research/workload-evaluator.md. A stop that fails is said and the start still runs: a VM that was never up has nothing to stop.
+ */
+export async function restartColima(engine: DockerEngine, opts: StartDockerOptions & { stop?: ColimaStop } = {}): Promise<DockerStartResult> {
+  if (engine.command[0] !== "colima") return { ok: false, engine: engine.name, reason: `${engine.name} isn't Colima, so keyloom can't restart it this way.` };
+  const at = engine.command.indexOf("--profile");
+  const profile = at < 0 ? [] : engine.command.slice(at, at + 2);
+  const stop = opts.stop ?? ((command, budgetMs, signal) => runStart({ name: "Colima", command }, budgetMs, signal));
+  opts.onProgress?.(`keyloom: stopping ${engine.name} so it starts from scratch`);
+  const stopped = await stop(["colima", "stop", "--force", ...profile], COLIMA_STOP_MS, opts.signal);
+  if (opts.signal?.aborted) return { ok: false, engine: engine.name, reason: `Stopped restarting ${engine.name}.` };
+  if (!stopped.ok) opts.onProgress?.(`keyloom: ${engine.name} didn't stop cleanly${stopped.detail ? ` (${stopped.detail})` : ""}; starting it anyway`);
+  const fresh: DockerEngine = { ...engine, command: ["colima", "start", ...profile] };
+  return startDockerEngine({ ...opts, relaunch: true, offerRestart: false, detect: async () => ({ kind: "engine", engine: fresh }) });
 }

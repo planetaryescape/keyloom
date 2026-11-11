@@ -85,7 +85,7 @@ test("tests that stopped for Docker show the Docker callout from the code, not t
 
 test("a readiness request that failed still offers Check again, and asks again by itself (#277 review)", () => {
   const noop = () => {};
-  const docker = { readiness: null, unanswered: true, starting: false, problem: null, start: noop, restart: noop, refresh: noop };
+  const docker = { readiness: null, unanswered: true, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
   const html = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("couldn&#x27;t ask whether Docker is ready");
@@ -93,4 +93,18 @@ test("a readiness request that failed still offers Check again, and asks again b
   // While the first request is still out, there is nothing to say yet.
   const asking = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker: { ...docker, unanswered: false }, install, busy: false, onRetry: noop }));
   expect(asking).not.toContain("Check again");
+});
+
+test("Docker installed from the activity tests says it is ready once, with Test again (R3-14)", () => {
+  const noop = () => {};
+  const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop };
+  const install = { state: { tool: "docker" as const, status: "succeeded" as const, phase: null, logTail: [], error: null, errorCode: null }, problem: null, start: noop, cancel: noop };
+  const html = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install, busy: false, onRetry: noop }));
+  expect(html).toContain("Docker is installed and running. Test again to see the results.");
+  expect(html).not.toContain("Docker is ready now.");
+  expect(html).not.toContain("You can build now.");
+  expect(html).toContain("Test again");
+  // Docker that came up some other way still gets its one line.
+  const other = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install: { ...install, state: null }, busy: false, onRetry: noop }));
+  expect(other.match(/Docker is ready now\./g)).toHaveLength(1);
 });

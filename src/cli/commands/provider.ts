@@ -105,7 +105,7 @@ export function registerProviderCommands(program: Command, ctx: CliContext & { q
     .option("--json", "print JSON, whatever the output format")
     .action(async (providerArg: string, opts: { json?: boolean }) => {
       if (!isKeyProvider(providerArg)) throw new UsageError(`"${providerArg}" takes no API key; choose one of ${KEY_PROVIDERS.join(", ")}`);
-      const pasted = await readPipedKey(io);
+      const pasted = await readPipedKey(io, providerArg);
       const saved = await withApp((app) => saveProviderKey(app.dataDir, providerArg, pasted));
       const credential = saved.status.providers.find((p) => p.id === providerArg)?.credential;
       print(io, opts.json ? "json" : format(), {
@@ -133,9 +133,10 @@ export function registerProviderCommands(program: Command, ctx: CliContext & { q
 }
 
 /** A key piped in on stdin: never an argument, where `ps` and shell history would show it. */
-async function readPipedKey(io: CliContext["io"]): Promise<string> {
+async function readPipedKey(io: CliContext["io"], provider: string): Promise<string> {
   const stdin = io.stdin ?? { isTTY: Boolean(process.stdin.isTTY), text: () => Bun.stdin.text() };
-  if (stdin.isTTY) throw new UsageError("pipe the key in, so it isn't shown or kept in your history, for example: pbpaste | keyloom provider key set anthropic");
+  // The example names the provider being set up, so it can be pasted as it is (R3-25).
+  if (stdin.isTTY) throw new UsageError(`pipe the key in, so it isn't shown or kept in your history, for example: pbpaste | keyloom provider key set ${provider}`);
   const key = (await stdin.text()).trim();
   if (key === "") throw new UsageError("no key arrived on standard input");
   return key;

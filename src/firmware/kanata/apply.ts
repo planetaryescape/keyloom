@@ -54,7 +54,7 @@ export async function applyKanata(deps: ApplyDeps, source: KanataSource, revisio
       if (!opts.overwriteForeign) {
         return {
           ok: false, step: "not_keyloom", written: false,
-          error: `${paths.kbd} wasn't written by keyloom${header ? " (it has been edited by hand)" : ""}, so keyloom left it alone. Move it aside, or apply with the overwrite option to keep a copy and replace it.`,
+          error: `${paths.kbd} wasn't written by keyloom${header ? " (it has been edited by hand)" : ""}, so keyloom left it alone. Move it aside, or replace it and keep a copy.`,
         };
       }
       await writeFile(`${paths.kbd}.before-keyloom`, before);

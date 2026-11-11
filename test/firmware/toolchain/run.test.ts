@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { LockTimeoutError, withLock } from "../../../src/firmware/toolchain/lock.ts";
+import { LockAbortedError, LockTimeoutError, withLock } from "../../../src/firmware/toolchain/lock.ts";
 import { LogSink, capture, run } from "../../../src/firmware/toolchain/run.ts";
 import { parseDfFreeBytes } from "../../../src/firmware/toolchain/docker.ts";
 import { parseUsbDevices } from "../../../src/firmware/toolchain/usb.ts";
@@ -118,6 +118,22 @@ describe("withLock", () => {
     let waited: number | undefined;
     await expect(withLock(dir, async () => "no", { timeoutMs: 150, pollMs: 20, onWait: (pid) => void (waited = pid) })).rejects.toBeInstanceOf(LockTimeoutError);
     expect(waited).toBe(process.ppid);
+  });
+
+  test("a cancelled build stops waiting for the lock at once, instead of waiting out another build (#285 review)", async () => {
+    const dir = join(tempDir(), "x.lock");
+    await Bun.$`mkdir -p ${dir}`;
+    await Bun.write(join(dir, "pid"), String(process.ppid)); // alive, and never let go
+    const control = new AbortController();
+    let ran = false;
+    const started = Date.now();
+    const waiting = withLock(dir, async () => void (ran = true), { timeoutMs: 60_000, pollMs: 10_000, signal: control.signal });
+    setTimeout(() => control.abort(), 50);
+    await expect(waiting).rejects.toBeInstanceOf(LockAbortedError);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(ran).toBe(false);
+    // The other holder's lock is still there.
+    expect(await Bun.file(join(dir, "pid")).text()).toBe(String(process.ppid));
   });
 
   test("the first use on a machine, when the parent directory doesn't exist yet", async () => {

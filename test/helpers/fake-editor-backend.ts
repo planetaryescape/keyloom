@@ -69,7 +69,7 @@ const FLASH_LOG: readonly string[] = [
 export class FakeEditor implements EditorBackend {
   private history: Revision[];
   private counter = 0;
-  private readonly builds = new Map<string, { build: Build; revisionId: string }>();
+  private readonly builds = new Map<string, { build: Build; revisionId: string; cancelledAt?: number }>();
   private readonly flashes = new Map<string, { flash: Flash; startedAt: number; cancelledAt?: number; checkedAt?: number }>();
   private readonly options: Required<FakeOptions>;
   private readonly proposals = new Map<string, StoredProposal>();
@@ -230,7 +230,23 @@ export class FakeEditor implements EditorBackend {
 
   async getBuild(id: string): Promise<Build | null> {
     const entry = this.builds.get(id);
-    return entry === undefined ? null : this.progressBuild(id, entry.revisionId, entry.build.startedAt);
+    if (entry === undefined) return null;
+    if (entry.cancelledAt !== undefined) {
+      return { ...this.progressBuild(id, entry.revisionId, entry.build.startedAt), status: "failed", error: "Build stopped.", errorCode: "cancelled", finishedAt: entry.cancelledAt };
+    }
+    return this.progressBuild(id, entry.revisionId, entry.build.startedAt);
+  }
+
+  /** Stops a running build (R3-10); a finished one is refused like the real backend refuses it. */
+  async cancelBuild(id: string): Promise<Build> {
+    const build = await this.getBuild(id);
+    const entry = this.builds.get(id);
+    if (build === null || entry === undefined) throw new EditorError(404, "not_found", "No such build.");
+    if (build.status !== "running") throw new EditorError(409, "build_finished", "The build has already finished.");
+    entry.cancelledAt = Date.now();
+    const stopped = await this.getBuild(id);
+    if (stopped === null) throw new EditorError(404, "not_found", "No such build.");
+    return stopped;
   }
 
   async startFlash(buildId: string): Promise<Flash> {

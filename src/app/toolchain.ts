@@ -2,11 +2,11 @@
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
   DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
-  dockerInstall, dockerStatus, findDockerEngine, restartDockerApp, startDockerEngine,
+  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
-export { type DockerStatus, dockerStatus };
+export { type DockerStatus, dockerStatus, reasonWithHint };
 
 /** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
 export type DockerReadiness =
@@ -22,6 +22,8 @@ export type DockerReadiness =
       install: DockerInstall | null;
       /** How to get this account access, when the daemon refuses it (`no-access`); null otherwise. */
       access: DockerAccessFix | null;
+      /** The engine keyloom can stop and start from scratch when a start fails (Colima, R3-04); null otherwise. */
+      restartEngine: string | null;
     };
 
 /**
@@ -60,6 +62,8 @@ export type ToolchainOverrides = {
   startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
   /** Quits and reopens a Mac engine app; the real one runs osascript and `open -a`. */
   restartApp?: typeof restartDockerApp;
+  /** Stops Colima hard and starts it again; the real one runs `colima stop --force` and `colima start`. */
+  restartColima?: typeof restartColima;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
@@ -98,11 +102,56 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
     access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
+    // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
+    restartEngine: now.kind === "daemon-down" && found?.command[0] === "colima" ? found.name : null,
   };
+}
+
+/**
+ * One engine action at a time in this process: a page's Start, a page's Restart, and a build's own start. A restart runs `colima stop
+ * --force`, which would kill a start in progress, so a restart is refused while anything holds this; a start waits its turn, then finds
+ * Docker up and returns at once.
+ */
+let engineHolder: { kind: "start" | "restart"; done: Promise<void> } | null = null;
+
+class EngineWaitAborted extends Error {}
+
+async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  // Each waiter checks again when it wakes: the first to run takes it before the others resume.
+  while (engineHolder !== null) {
+    if (signal?.aborted) throw new EngineWaitAborted();
+    const held = engineHolder.done;
+    await new Promise<void>((resolve) => {
+      const stop = () => resolve();
+      signal?.addEventListener("abort", stop, { once: true });
+      void held.then(() => {
+        signal?.removeEventListener("abort", stop);
+        resolve();
+      });
+    });
+  }
+  if (signal?.aborted) throw new EngineWaitAborted();
+  let release!: () => void;
+  engineHolder = { kind, done: new Promise<void>((resolve) => (release = resolve)) };
+  try {
+    return await fn();
+  } finally {
+    engineHolder = null;
+    release();
+  }
 }
 
 /** Starts the engine and waits for it, whatever the person's setting says: what an explicit click or flag asks for. */
 export async function startDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  try {
+    return await holdEngine("start", () => startDockerUnheld(opts), opts.signal);
+  } catch (err) {
+    if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    throw err;
+  }
+}
+
+function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides }): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
   const start = over.startEngine ?? startDockerEngine;
   return start({
@@ -114,16 +163,38 @@ export async function startDocker(opts: { onProgress?: (line: string) => void; s
 }
 
 /**
- * Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (`no-access`, R2-07). Anything that isn't a
- * Mac app keeps its own fix, so this says so instead of guessing. A Docker that answers is left running.
+ * Restarts what runs Docker, for the two cases a start can't fix: the Mac app that refuses this account its socket (`no-access`,
+ * R2-07), and a Colima whose daemon is down (R3-04), which is stopped hard and started again. Anything else keeps its own fix, so this
+ * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
 export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing.
+  if (engineHolder !== null) {
+    const what = engineHolder.kind === "restart" ? "restarting" : "starting";
+    return { ok: false, engine: null, reason: `keyloom is already ${what} Docker, for this page or for a build. Wait for that to finish, then check again.` };
+  }
+  return holdEngine("restart", () => restartDockerUnheld(opts));
+}
+
+async function restartDockerUnheld(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides }): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
-  // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal is restarted.
+  // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is restarted.
   const now = await (over.status ?? (() => dockerStatus()))();
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
+  // A slow daemon is up and may be busy: `colima stop --force` would kill the build it runs, such as an auto-sync's (D-497).
+  if (now.kind === "slow") return { ok: false, engine: null, reason: "Docker is answering slowly, so it may be running a build. keyloom didn't restart it, because that would stop the build. Check again in a minute." };
+  if (now.kind === "daemon-down") {
+    const finding = await (over.detect ?? findDockerEngine)();
+    if (finding.kind === "engine" && finding.engine.command[0] === "colima") {
+      return (over.restartColima ?? restartColima)(finding.engine, {
+        ...(over.status === undefined ? {} : { status: over.status }),
+        ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+      });
+    }
+  }
   if (now.kind !== "no-access") {
-    return { ok: false, engine: null, reason: `keyloom restarts a Docker app only when it refuses this account, and this isn't that: ${now.reason}` };
+    return { ok: false, engine: null, reason: `keyloom restarts Colima when it won't start, or a Docker app when it refuses this account, and this isn't either: ${now.reason}` };
   }
   const finding = await (over.detect ?? findDockerEngine)();
   const engine = finding.kind === "engine" ? finding.engine : null;
@@ -164,11 +235,18 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   }
 
   const start = over.startEngine ?? startDockerEngine;
-  const result = await start({
-    status,
-    detect,
-    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
-    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-  });
-  return result.ok ? { ok: true, started: true, engine: result.engine } : { ok: false, reason: result.reason, engine: result.engine };
+  let result: DockerStartResult;
+  try {
+    result = await holdEngine("start", () => start({
+      status,
+      detect,
+      ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    }), opts.signal);
+  } catch (err) {
+    if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    throw err;
+  }
+  // The build log is read like a terminal, so a failure keeps the engine's hint.
+  return result.ok ? { ok: true, started: true, engine: result.engine } : { ok: false, reason: reasonWithHint(result), engine: result.engine };
 }

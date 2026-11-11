@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { dfuProblem, readDfuSuffix } from "../../../src/firmware/qmk/dfu.ts";
-import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp, resetInstruction } from "../../../src/firmware/qmk/flash.ts";
+import { HANDS_FREE_INSTRUCTION, RESET_INSTRUCTION, type FlashState, flashWithZapp, resetInstruction, zappMissing } from "../../../src/firmware/qmk/flash.ts";
 import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { keyboardWriteInProgress } from "../../../src/firmware/toolchain/write-guard.ts";
 import { dfuImage, fakeBinDir } from "../../helpers/fake-bin.ts";
@@ -113,7 +113,10 @@ describe("flashWithZapp (fake zapp)", () => {
 
   test("zapp not installed, a missing file and a wrong-revision binary never reach zapp", async () => {
     const none = await setup(undefined);
-    expect((await none.flash({ zapp: join(none.dir, "no-such-zapp") })).error).toContain("brew install zapp");
+    expect((await none.flash({ zapp: join(none.dir, "no-such-zapp") })).error).toBe(zappMissing());
+    expect(zappMissing("darwin")).toContain("brew install zapp");
+    expect(zappMissing("linux")).toContain("github.com/zsa/zapp/releases");
+    expect(zappMissing("linux")).not.toContain("brew");
 
     const calls = await setup('echo called >> "$0.calls"; exit 0');
     const wrongRev = await calls.flash({ bootloader: REVA });

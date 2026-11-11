@@ -104,7 +104,7 @@ function checkHandAuthored(board: Board, issues: CheckIssue[]): void {
     return;
   }
   if (board.definition.firmware !== "kanata") issues.push({ level: "error", message: "hand-authored geometry is for software-remapper boards; firmware boards derive it from their pinned tree" });
-  if (!geometry.source.verified) issues.push({ level: "warning", message: "geometry.json is hand-authored and not yet checked against the device (S36)" });
+  if (!geometry.source.verified) issues.push({ level: "warning", message: "geometry.json is hand-authored and not yet checked against the device; check the key order and widths on it, then set source.verified to true" });
   const keys = geometry.keys;
   for (let a = 0; a < keys.length; a++) {
     for (let b = a + 1; b < keys.length; b++) {

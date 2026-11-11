@@ -39,7 +39,7 @@ describe("doctor: the model credential", () => {
       env: { ANTHROPIC_API_KEY: "sk-ant-bad" },
       verify: async () => ({ status: "rejected", reason: "Anthropic rejected the API key (401). Check ANTHROPIC_API_KEY." }),
     });
-    expect(checks).toEqual([{ name: "model credential (anthropic)", ok: false, detail: "Anthropic rejected the API key (401). Check ANTHROPIC_API_KEY." }]);
+    expect(checks).toEqual([{ name: "model credential (anthropic)", ok: false, detail: "Anthropic rejected the API key (401). Check ANTHROPIC_API_KEY. Save one with `keyloom provider key set anthropic`." }]);
   });
 
   test("a check that couldn't run warns instead of failing doctor", async () => {

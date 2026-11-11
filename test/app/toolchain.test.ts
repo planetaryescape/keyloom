@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker, startDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
@@ -96,8 +96,41 @@ describe("a daemon that refuses this account (D-497)", () => {
     expect(await restartDocker({ overrides: { platform: "darwin", status: async () => ({ ok: true, version: "28.4" }), detect, restartApp } })).toMatchObject({ ok: true, version: "28.4" });
     const stopped = await restartDocker({ overrides: { platform: "darwin", status: async () => down, detect, restartApp } });
     expect(stopped).toMatchObject({ ok: false });
-    if (!stopped.ok) expect(stopped.reason).toContain("only when it refuses this account");
+    if (!stopped.ok) expect(stopped.reason).toContain("a Docker app when it refuses this account");
     expect(restarted).toBe(0);
+  });
+
+  test("a Colima that won't start is stopped and started from scratch; one that answers, or refuses, is left alone (R3-04)", async () => {
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start", "--profile", "work"], hint: "if it fails, run `colima restart` in a terminal and build again" } };
+    const restarted: string[] = [];
+    const restartColima = async (engine: { name: string; command: string[] }) => (restarted.push(engine.command.join(" ")), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
+    expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } })).toMatchObject({ ok: true, engine: "Colima" });
+    expect(restarted).toEqual(["colima start --profile work"]);
+    expect(await restartDocker({ overrides: { status: async () => ({ ok: true, version: "29" }), detect: async () => colima, restartColima } })).toMatchObject({ ok: true, waitedMs: 0 });
+    expect(restarted).toHaveLength(1);
+    // Readiness says which engine the page may restart, and only for a dead daemon.
+    expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ restartEngine: "Colima" });
+    expect(await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} })).toMatchObject({ restartEngine: null });
+  });
+
+  test("a slow Colima is busy, not broken: it is never restarted, so a build running in it survives (D-497, #285 review)", async () => {
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } };
+    const slow = async () => ({ ok: false as const, kind: "slow" as const, reason: "Docker did not answer within 15 s; it may still be starting." });
+    let restarted = 0;
+    const restartColima = async () => (restarted++, { ok: true as const, version: "29", engine: "Colima", waitedMs: 1 });
+    const result = await restartDocker({ overrides: { status: slow, detect: async () => colima, restartColima } });
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) {
+      expect(result.reason).toContain("may be running a build");
+      expect(result.restartEngine).toBeUndefined();
+    }
+    expect(restarted).toBe(0);
+    expect(await dockerReadiness({ status: slow, detect: async () => colima, env: {} })).toMatchObject({ problem: "slow", restartEngine: null });
+  });
+
+  test("a build log keeps the engine's terminal hint (R3-04)", async () => {
+    const result = await ensureDocker({ overrides: { status: async () => down, env: {}, startEngine: async () => ({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1", hint: "if it fails, run `colima restart` in a terminal and build again", restartEngine: "Colima" }) } });
+    expect(result).toMatchObject({ ok: false, reason: "keyloom couldn't start Colima: exit status 1. if it fails, run `colima restart` in a terminal and build again" });
   });
 
   test("doctor says the engine's own fix: Colima's commands, the Linux group, or the app to restart (#274)", () => {
@@ -196,11 +229,11 @@ describe("after Install Docker, when Colima's first start failed (R2-02, #277 re
   const lookup = { platform: "darwin" as const, installed: () => false, has: (c: string) => c === "colima" || c === "docker" || c === "brew", context: async () => ({ name: "default", host: "unix:///var/run/docker.sock" }), colimaRunning: async () => false };
   const failedInstall = { tool: "docker" as const, status: "failed" as const, phase: null, logTail: [], error: "Colima did not answer within 960 s.", errorCode: "start_failed" as const };
 
-  test("readiness names Colima, the page offers Start it now, and Build isn't blocked", async () => {
+  test("readiness names Colima as one keyloom can restart, the page offers Restart Colima, and Build isn't blocked", async () => {
     const readiness = await dockerReadiness({ status: async () => down, detect: () => findDockerEngine(lookup), env: {}, platform: "darwin" });
     expect(readiness).toMatchObject({ ok: false, problem: "daemon-down", engine: "Colima", canStart: true });
     const view = dockerView(readiness, false, null, failedInstall);
-    expect(view).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: { cancelled: false, reason: "Colima did not answer within 960 s." } });
+    expect(view).toEqual({ kind: "down", engine: "Colima", canStart: true, afterInstall: { cancelled: false, reason: "Colima did not answer within 960 s." }, restartEngine: "Colima" });
     expect(buildBlockedReason(view)).toBeNull();
     const cancelled = dockerView(readiness, false, null, { ...failedInstall, status: "cancelled", error: null, errorCode: null });
     expect(cancelled).toMatchObject({ kind: "down", afterInstall: { cancelled: true } });
@@ -211,5 +244,61 @@ describe("after Install Docker, when Colima's first start failed (R2-02, #277 re
     const result = await startDockerEngine({ status: (() => { let n = 0; return async () => (n++ === 0 ? down : { ok: true as const, version: "29.0" }); })(), detect: () => findDockerEngine(lookup), start: async (engine) => (launched.push(engine.command), { ok: true }), sleep: async () => {} });
     expect(launched).toEqual([["colima", "start"]]);
     expect(result).toMatchObject({ ok: true, engine: "Colima" });
+  });
+});
+
+describe("one engine action at a time (#285 review)", () => {
+  const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } };
+  const gate = () => {
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    return { open, opened };
+  };
+
+  test("a restart while a start is running is refused with a reason, so `colima stop --force` can't kill that start", async () => {
+    const held = gate();
+    const starting = startDocker({ overrides: { startEngine: async () => (await held.opened, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    let restarted = 0;
+    const restartColima = async () => (restarted++, { ok: true as const, version: "29", engine: "Colima", waitedMs: 1 });
+    const refused = await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } });
+    expect(refused).toMatchObject({ ok: false, engine: null });
+    if (!refused.ok) expect(refused.reason).toContain("already starting");
+    expect(restarted).toBe(0);
+    held.open();
+    expect(await starting).toMatchObject({ ok: true });
+    // Once the start has ended, a restart runs.
+    expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima } })).toMatchObject({ ok: true });
+    expect(restarted).toBe(1);
+  });
+
+  test("a build's start waits for a restart to end, then finds Docker up instead of starting it over the restart", async () => {
+    const held = gate();
+    let up = false;
+    const restarting = restartDocker({ overrides: { status: async () => down, detect: async () => colima, restartColima: async () => (await held.opened, up = true, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    const order: string[] = [];
+    const building = ensureDocker({ overrides: { env: {}, status: async () => (up ? { ok: true, version: "29" } : down), startEngine: async (o) => {
+      order.push("start");
+      const now = await o?.status?.();
+      return now?.ok ? { ok: true, version: now.version, engine: "Colima", waitedMs: 0 } : { ok: false, engine: "Colima", reason: "down" };
+    } } });
+    await Bun.sleep(20);
+    expect(order).toEqual([]);
+    held.open();
+    expect(await restarting).toMatchObject({ ok: true });
+    expect(await building).toMatchObject({ ok: true });
+    expect(order).toEqual(["start"]);
+  });
+
+  test("a cancelled build stops waiting for the engine", async () => {
+    const held = gate();
+    const starting = startDocker({ overrides: { startEngine: async () => (await held.opened, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    const control = new AbortController();
+    let started = 0;
+    const building = ensureDocker({ signal: control.signal, overrides: { env: {}, status: async () => down, startEngine: async () => (started++, { ok: true, version: "29", engine: "Colima", waitedMs: 0 }) } });
+    control.abort();
+    expect(await building).toMatchObject({ ok: false });
+    expect(started).toBe(0);
+    held.open();
+    await starting;
   });
 });

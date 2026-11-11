@@ -173,6 +173,6 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       say(`keyloom: wrote ${input.artifactPath} (${build.targets.map((t) => `${t.id}.uf2`).join(", ")})`);
       return { artifactPath: input.artifactPath, bytes: zip.length, durationMs: Date.now() - started };
     },
-    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) },
+    { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }

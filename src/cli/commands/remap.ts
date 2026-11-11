@@ -8,6 +8,7 @@ import type { Command } from "commander";
 import type { CliContext } from "./context.ts";
 import { print } from "../output.ts";
 import { ROOT_KANATA_PATH, noteKanataSeen } from "../../app/remapper.ts";
+import { commandArg } from "../../app/command-words.ts";
 
 const DEFAULT_BOARD = "apple/macbook-ansi";
 
@@ -67,7 +68,7 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
     .option("--overwrite", "replace a keyloom.kbd keyloom didn't write")
     .action(async (ref: string, opts: { overwrite?: boolean }) => {
       const r = await withApp((app) => applyToRemapper(app, ref, undefined, over, opts.overwrite ? { overwriteForeign: true } : {}));
-      if (!r.ok) throw new UsageError(`${r.step}: ${r.error}`);
+      if (!r.ok) throw new UsageError(remapApplyFailure(r.step, r.error, ref));
       print(io, format(), { json: { ok: true, revision_id: r.revisionId, ms: r.ms }, table: `applied ${r.revisionId} in ${r.ms} ms; kanata reports it` });
     });
 
@@ -107,4 +108,10 @@ export function registerRemapCommands(program: Command, deps: RemapCommandDeps):
       }
       print(io, format(), { json: { ok: true, recorded: true }, table: "recorded. `keyloom autosync on apple/macbook-ansi` can turn auto-apply on." });
     });
+}
+
+/** The apply's own sentence is shared with the page (D-512), so only the terminal adds the command that replaces a foreign file. */
+export function remapApplyFailure(step: string, error: string, ref: string): string {
+  const next = step === "not_keyloom" ? ` To replace it and keep a copy, run \`keyloom remap apply ${commandArg(ref)} --overwrite\`.` : "";
+  return `${step}: ${error}${next}`;
 }

@@ -27,6 +27,16 @@ function screen(id: string) {
 }
 
 describe("cancelShownFlash", () => {
+  test("a Cancel that never reached keyloom says so, and leaves the flash on screen with its Cancel (R3-20)", async () => {
+    const s = screen("fl_old");
+    await cancelShownFlash("fl_old", s.deps({
+      cancel: async () => { throw new ApiError(0, "Can't reach keyloom.", { code: "unreachable" }); },
+      read: async () => { throw new ApiError(0, "Can't reach keyloom.", { code: "unreachable" }); },
+    }));
+    expect(s.notes[0]).toContain("keyloom didn't answer");
+    expect(s.flashes).toEqual([]);
+  });
+
   test("shows the cancelled flash and its note while it is still on screen", async () => {
     const s = screen("fl_old");
     await cancelShownFlash("fl_old", s.deps({ cancel: async (id) => flash(id, "waiting_for_bootloader") }));

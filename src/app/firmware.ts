@@ -8,7 +8,8 @@ import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
-import { LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
+import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
+import { commandArg } from "./command-words.ts";
 import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
@@ -24,7 +25,7 @@ import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
-import { BoardRevisionNeededError, BuildFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
+import { BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
 import { ensureDocker } from "./toolchain.ts";
@@ -39,8 +40,8 @@ export type BuildView = {
   boardRevision: string;
   status: "running" | "succeeded" | "failed";
   error: string | null;
-  /** Why it failed as a code the UI acts on: "docker_unavailable" shows the Docker callout (D-488). */
-  errorCode: "docker_unavailable" | null;
+  /** Why it failed as a code the UI acts on: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a stop the person asked for (R3-10). */
+  errorCode: "docker_unavailable" | "cancelled" | null;
   /** What flashing this build will need, so the dialog knows before anyone clicks (D-489, D-490). */
   flashPlan: FlashPlan;
   startedAt: number;
@@ -93,6 +94,9 @@ const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few sec
 const flashInstructions = new Map<string, string | null>();
 
 const buildTasks = new Map<string, Promise<void>>();
+// What stops a build running in this process (R3-10). A build never flashes, so stopping one can't reach a keyboard; a sync that was
+// going to flash it sees a failed build and doesn't.
+const buildControllers = new Map<string, AbortController>();
 const flashTasks = new Map<string, Promise<void>>();
 // What a running flash in this process lets the page do: cancel it until the keyboard is in its bootloader, and name the permission it
 // waits on (D-501). `committed` is set when the flasher writes or says keyloom put the keyboard in its bootloader, and never goes back,
@@ -179,7 +183,7 @@ async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
   const board = boardOf(app, row.layoutId);
   return {
     id: row.id, revisionId: row.revisionId, layoutId: row.layoutId, boardRevision: row.boardRevision, status: row.status, error: row.error,
-    errorCode: row.errorCode === "docker_unavailable" ? "docker_unavailable" : null,
+    errorCode: row.errorCode === "docker_unavailable" || row.errorCode === "cancelled" ? row.errorCode : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
@@ -228,13 +232,22 @@ export async function startBuild(app: App, ref: string, opts: BuildOptions = {})
   const boardRevision = await resolveBoardRevision(view.board, opts.boardRevision);
   const id = newBuildId();
   const row = createBuild(app.db, { id, revisionId: view.revision.id, layoutId: view.layout.id, boardRevision, logPath: `logs/build-${id}.log` });
-  const task = runBuild(app, view, row, opts.onProgress, opts.signal);
+  const control = new AbortController();
+  buildControllers.set(id, control);
+  // The caller's signal (a CLI's Ctrl-C, a sync's stop) and the page's Cancel both stop the same build.
+  const signal = opts.signal === undefined ? control.signal : AbortSignal.any([opts.signal, control.signal]);
+  const task = runBuild(app, view, row, opts.onProgress, signal, control.signal);
   buildTasks.set(id, task);
-  void task.finally(() => buildTasks.delete(id));
+  void task.finally(() => {
+    buildTasks.delete(id);
+    buildControllers.delete(id);
+  });
   return toBuildView(app, row);
 }
 
-async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: ((line: string) => void) | undefined, signal: AbortSignal | undefined): Promise<void> {
+const BUILD_STOPPED = "Build stopped.";
+
+async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: ((line: string) => void) | undefined, signal: AbortSignal, cancelled: AbortSignal): Promise<void> {
   const log = new LogSink(absolute(app, row.logPath));
   const say = (line: string) => {
     log.line(line);
@@ -244,7 +257,8 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     say(`keyloom: build ${row.id} of "${view.layout.name}" (${view.revision.id}) for ${view.board.definition.id} ${row.boardRevision}`);
     // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte clone, and should not be
     // the person's job to fix: keyloom starts the engine it finds and says so in this log (D-486).
-    const docker = await ensureDocker({ onProgress: say, ...(signal === undefined ? {} : { signal }) });
+    const docker = await ensureDocker({ onProgress: say, signal });
+    if (cancelled.aborted) throw new BuildFailure(BUILD_STOPPED, "cancelled");
     if (!docker.ok) throw new BuildFailure(docker.reason, "docker_unavailable");
     const driver = driverFor(view.board);
     let source: GeneratedSource;
@@ -259,7 +273,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     await driver.build({
       view, boardRevision: row.boardRevision, source, checkoutDir, imageContextDir: join(cacheDir(), "images", view.board.definition.id.replace("/", "-")),
       artifactPath: absolute(app, artifactRel), log, containerName: `keyloom-${row.id}`, ...(onProgress ? { onLine: onProgress } : {}),
-      ...(signal ? { signal } : {}),
+      signal,
     });
     finishBuild(app.db, row.id, { artifactPath: artifactRel });
     appendLog(app.dataDir, {
@@ -272,7 +286,14 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
       artifactRel,
     });
   } catch (err) {
-    const known = err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError;
+    // A Cancel ends the build as stopped, whichever step it interrupted: a checkout, a Docker start or the container (R3-10).
+    if (cancelled.aborted) {
+      log.line("keyloom: build stopped");
+      finishBuild(app.db, row.id, { error: BUILD_STOPPED, errorCode: "cancelled" });
+      appendLog(app.dataDir, { event: "build", buildId: row.id, layoutId: view.layout.id, revisionId: row.revisionId, boardId: view.board.definition.id, status: "failed", error: BUILD_STOPPED });
+      return;
+    }
+    const known = err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError || err instanceof LockAbortedError;
     if (!known) log.line(`keyloom: unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     const message = known ? (err as Error).message : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
     log.line(`keyloom: build failed: ${message}`);
@@ -297,6 +318,22 @@ export async function getBuild(app: App, id: string): Promise<BuildView> {
   return toBuildView(app, reapBuild(app, row));
 }
 
+/**
+ * Stops a build running in this process (R3-10): its Docker start, checkout, wait for another build's lock or container is stopped, and
+ * the container removed by the driver's own cleanup. Answers at once with the build as it is now: removing a container on a busy VM can
+ * take longer than a request should wait, so the poll (or waitForBuild) sees it end as stopped.
+ */
+export async function cancelBuild(app: App, id: string): Promise<BuildView> {
+  const row = findBuild(app.db, id);
+  if (!row) throw new NotFoundError(`no build "${id}"`);
+  const control = buildControllers.get(id);
+  if (control === undefined) {
+    throw new BuildNotCancellableError(row.status === "running" ? `build ${id} runs in another keyloom, so it can't be stopped from here` : `build ${id} has already finished, so there is nothing to stop`);
+  }
+  control.abort();
+  return getBuild(app, id);
+}
+
 /** Waits for a build started in this process to finish; resolves at once for one that has already finished or runs elsewhere. */
 export async function waitForBuild(app: App, id: string): Promise<BuildView> {
   await buildTasks.get(id);
@@ -314,8 +351,23 @@ export async function buildAndWait(app: App, ref: string, opts: BuildOptions = {
   const started = await startBuild(app, ref, opts);
   await buildTasks.get(started.id);
   const done = await getBuild(app, started.id);
-  if (done.status !== "succeeded") throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"} (log: ${done.logPath})`, done.id, done.logPath, done.errorCode);
+  if (done.status !== "succeeded") {
+    // Only the terminal gets the command: the page has its own Go back for a layout that doesn't fit (D-502).
+    const view = getLayout(app, started.layoutId, started.revisionId);
+    throw new BuildFailedError(`build ${done.id} failed: ${done.error ?? "unknown error"}${misfitHint(view)} (log: ${done.logPath})`, done.id, done.logPath, done.errorCode);
+  }
   return done;
+}
+
+/**
+ * The way back for a layout whose layers no longer have one binding per key on its board, which no build can fix (R3-11): the last
+ * version that fit. Empty for any other layout.
+ */
+export function misfitHint(view: LayoutView): string {
+  const keys = view.board.definition.keyCount;
+  if (view.document.layers.every((layer) => layer.bindings.length === keys)) return "";
+  const name = commandArg(view.layout.name);
+  return `. Its layers no longer match the ${keys} keys of ${view.board.definition.name}; find a version that did with \`keyloom version list ${name}\`, then go back to it with \`keyloom version restore ${name} <version>\``;
 }
 
 // --- flash ----------------------------------------------------------------------------------
@@ -417,6 +469,9 @@ function chooseBuild(app: App, opts: FlashOptions): BuildRow {
     if (all.length !== 1) throw new UsageError(`say what to flash: --build <id> or --layout <layout> (${all.length} layouts saved)`);
     layoutId = (all[0] as { id: string }).id;
   }
+  // A kanata board has no build to flash, so `keyloom build` would only refuse again: its way on is a sync (R3-11).
+  const board = boardOf(app, layoutId);
+  if (board?.definition.firmware === "kanata") throw new UsageError(`${board.definition.name} is applied by writing a config file, not flashed; use \`keyloom sync ${commandArg(opts.layout ?? layoutId)}\``);
   const row = latestSuccessfulBuild(app.db, layoutId);
   if (!row) throw new UsageError(`no successful build of this layout yet; run \`keyloom build ${opts.layout ?? layoutId}\` first`);
   return row;

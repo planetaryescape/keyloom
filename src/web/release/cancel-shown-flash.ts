@@ -26,7 +26,8 @@ export async function cancelShownFlash(id: string, deps: CancelShownFlashDeps): 
   } catch (e: unknown) {
     if (!stillShown()) return;
     // Refused because the write began, or it already ended: the note says why, the flash as it is now says where it is, and Cancel goes away.
-    deps.setNote(e instanceof ApiError && e.code !== undefined ? cancelNote({ refused: e.code }) : null);
+    // A cancel that never reached keyloom says so too, or the page would look as if nothing happened (R3-20).
+    deps.setNote(cancelNote({ refused: e instanceof ApiError ? e.code : undefined }));
     const now = await deps.read(id).catch(() => undefined);
     if (now !== undefined && stillShown()) deps.setFlash(now);
   }

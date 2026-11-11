@@ -62,6 +62,8 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   POST /api/layouts/:ref/undo         UndoRequest   -> UndoResponse      (409 when the head moved)
 //   POST /api/layouts/:ref/builds       BuildRequest  -> Build             (202; poll GET /api/builds/:id; 400 board_revision_needed when no keyboard says which revision)
 //   GET  /api/builds/:id                              -> Build
+//   POST /api/builds/:id/cancel         {}            -> Build             (R3-10; 202 at once, poll GET /api/builds/:id for the stop; 409 build_finished
+//                                                                           when it ended, or runs in another keyloom; a build never flashes)
 //   POST /api/builds/:id/flashes        {}            -> Flash             (202; poll GET /api/flashes/:id)
 //   GET  /api/flashes/:id                             -> Flash
 //   POST /api/flashes/:id/cancel        {}            -> Flash             (D-501; 409 flash_writing once a write began, flash_finished when it isn't waiting)
@@ -184,8 +186,9 @@ export const BuildSchema = z.object({
   revisionId: z.string().min(1),
   status: z.enum(["running", "succeeded", "failed"]),
   error: z.string().nullable(),
-  // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488).
-  errorCode: z.enum(["docker_unavailable"]).nullable(),
+  // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a build the
+  // person stopped, which the page shows as the Build firmware step again (R3-10).
+  errorCode: z.enum(["docker_unavailable", "cancelled"]).nullable(),
   flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),

@@ -3,7 +3,7 @@
 import { Command, CommanderError, Option } from "commander";
 import {
   requireCommandSupport, type App, type ImportOutcome, type WorkloadDeps, dataDir as dataDirOf, PROVIDERS, boardDevView, closeApp, shutdownDeviceConnections, checkBoard, exportLayout, getLayout, importLayout, layoutSettings, listBoardDefinitions, listLayouts, openApp, upgradeLayout, backfillLayerRefs, backfillConditionalLayers,
-  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, restartDocker, startDocker, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
+  loadUserBoards, regenerateGeometry, renderLayoutText, renderPositionGrid, runCredentialChecks, runDeviceHelperCheck, runDoctor, runKeyboardChecks, runRemapperChecks, runToolchainChecks, reasonWithHint, restartDocker, startDocker, type HandsFreeOverrides, type SyncDeps, selectLayers, showBoard, UsageError, IncompatibleError, ValidationFailedError,
 } from "../app/index.ts";
 import { registerChangeCommands } from "./commands/change.ts";
 import { registerConfigCommands } from "./commands/config.ts";
@@ -373,7 +373,7 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
     .option("--start-docker", "start Docker Desktop (or whatever runs the daemon here) when it isn't running, then check the toolchain")
     // Flags on doctor rather than an `install` command: like --start-docker, each fixes what the docker check reports, and the check runs after.
     .option("--install-docker", "install Docker (Colima, with Homebrew on a Mac) and start it, then check the toolchain")
-    .option("--restart-docker", "quit and reopen the Mac app that runs Docker, when it refuses this account its socket, then check the toolchain")
+    .option("--restart-docker", "restart what runs Docker: the Mac app, when it refuses this account its socket, or Colima, when it won't start; then check the toolchain")
     .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean; installDocker?: boolean; restartDocker?: boolean }) => {
       const helper = await runDeviceHelperCheck();
       // Progress goes to stderr, so `--format json` stays one document on stdout.
@@ -388,9 +388,13 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string 
       }
       if (options.restartDocker && !options.deviceHelperOnly) {
         const restarted = await restartDocker({ onProgress: say });
-        if (!restarted.ok) say(`keyloom: ${restarted.reason}`);
+        if (!restarted.ok) say(`keyloom: ${reasonWithHint(restarted)}`);
       }
-      if (options.startDocker && !options.deviceHelperOnly) await startDocker({ onProgress: say });
+      if (options.startDocker && !options.deviceHelperOnly) {
+        // The checks below say Docker is down; this says why the start failed and what to try next (R3-11).
+        const started = await startDocker({ onProgress: say });
+        if (!started.ok) say(`keyloom: ${reasonWithHint(started)}`);
+      }
       const checks = options.deviceHelperOnly ? [helper] : [
         helper,
         ...runDoctor(globals().dataDir === undefined ? {} : { dataDir: globals().dataDir as string }),

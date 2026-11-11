@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerStatus, adoptBundledDockerCli, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerEngine, type DockerStatus, adoptBundledDockerCli, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -157,9 +157,49 @@ describe("starting it", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.reason).toContain("couldn't start the Docker service: permission denied");
-      expect(result.reason).toContain("sudo systemctl start docker");
+      expect(result.reason).toBe("keyloom couldn't start the Docker service: permission denied");
+      // The hint is kept apart, so the CLI prints it and the page can offer a button instead (R3-04).
+      expect(result.hint).toContain("sudo systemctl start docker");
+      expect(reasonWithHint(result)).toContain("permission denied. if it asked for a password");
+      expect(result.restartEngine).toBeUndefined();
     }
+  });
+
+  test("a Colima start that fails, or never answers, names Colima as the engine to restart (R3-04)", async () => {
+    const colima: DockerEngine = { name: "Colima", command: ["colima", "start"], hint: "if it fails, run `colima restart` in a terminal and build again" };
+    const failed = await startDockerEngine({ status: scriptedStatus([down]).status, detect: async () => ({ kind: "engine", engine: colima }), start: async () => ({ ok: false, detail: "exit status 1" }), sleep: async () => {} });
+    expect(failed).toMatchObject({ ok: false, reason: "keyloom couldn't start Colima: exit status 1", restartEngine: "Colima" });
+    const silent = await startDockerEngine({ status: scriptedStatus([down, down]).status, detect: async () => ({ kind: "engine", engine: colima }), start: async () => ({ ok: true }), sleep: async () => {}, timeoutMs: 40 });
+    expect(silent).toMatchObject({ ok: false, restartEngine: "Colima" });
+    if (!silent.ok) expect(silent.reason).not.toContain("Open it");
+    // Started, but still only slow at the deadline: it is up and may be busy, so no restart is offered (#285 review).
+    const slow: DockerStatus = { ok: false, kind: "slow", reason: "Docker did not answer within 5 s; it may still be starting." };
+    const busy = await startDockerEngine({ status: scriptedStatus([down, slow]).status, detect: async () => ({ kind: "engine", engine: colima }), start: async () => ({ ok: true }), sleep: async () => {}, timeoutMs: 40 });
+    expect(busy).toMatchObject({ ok: false, engine: "Colima" });
+    if (!busy.ok) {
+      expect(busy.restartEngine).toBeUndefined();
+      expect(busy.reason).toContain("busy");
+    }
+  });
+
+  test("Restart Colima stops it hard, then starts it and waits, and its own failure offers no second restart (R3-04)", async () => {
+    const commands: string[] = [];
+    const lines: string[] = [];
+    const engine: DockerEngine = { name: "Colima", command: ["colima", "restart", "--profile", "work"] };
+    const ok = await restartColima(engine, {
+      stop: async (command) => (commands.push(command.join(" ")), { ok: false, detail: "colima is not running" }),
+      start: async (e) => (commands.push(e.command.join(" ")), { ok: true }),
+      status: scriptedStatus([{ ok: true, version: "29.0" }]).status,
+      sleep: async () => {}, onProgress: (line) => lines.push(line),
+    });
+    expect(commands).toEqual(["colima stop --force --profile work", "colima start --profile work"]);
+    expect(ok).toMatchObject({ ok: true, engine: "Colima" });
+    // A stop that fails is said, and the start still runs: a VM that was never up has nothing to stop.
+    expect(lines.some((line) => line.includes("didn't stop cleanly"))).toBe(true);
+    const failed = await restartColima(engine, { stop: async () => ({ ok: true }), start: async () => ({ ok: false, detail: "exit status 1" }), status: scriptedStatus([down]).status, sleep: async () => {} });
+    expect(failed).toMatchObject({ ok: false, reason: "keyloom couldn't start Colima: exit status 1" });
+    if (!failed.ok) expect(failed.restartEngine).toBeUndefined();
+    expect(await restartColima({ name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] })).toMatchObject({ ok: false });
   });
 
   test("an engine that never answers is given up on, with what to do", async () => {

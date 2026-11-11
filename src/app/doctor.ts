@@ -127,7 +127,8 @@ export async function runCredentialChecks(over: CredentialOverrides = {}): Promi
     const outcome = await verify(provider, env);
     const name = `model credential (${provider})`;
     if (outcome.status === "ok") checks.push({ name, ok: true, detail: `${DEFAULT_MODELS[provider]} resolves` });
-    else if (outcome.status === "rejected") checks.push({ name, ok: false, detail: outcome.reason });
+    // doctor runs in a terminal, so the refusal ends with the command that saves a new key (R3-11).
+    else if (outcome.status === "rejected") checks.push({ name, ok: false, detail: `${outcome.reason} Save one with \`keyloom provider key set ${provider}\`.` });
     else checks.push({ name, ok: true, warn: true, detail: `couldn't check: ${outcome.reason}` });
   }
   return checks;
@@ -198,7 +199,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     name: "zapp",
     ok: true,
     ...(zapp ? {} : { warn: true }),
-    detail: zapp ?? "not on PATH; install it with `brew install zapp` to flash from keyloom",
+    detail: zapp ?? (process.platform === "darwin" ? "not on PATH; install it with `brew install zapp` to flash from keyloom" : "not on PATH; install it from https://github.com/zsa/zapp/releases, with ZSA's udev rules, to flash from keyloom"),
   });
 
   // The DFU tools a derived board's flash recipe runs (22, D-365). keyloom doesn't install them; a warning names the formula.

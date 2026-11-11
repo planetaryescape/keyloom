@@ -16,6 +16,20 @@ describe("appSystemBackend", () => {
     expect(restarts).toBe(1);
   });
 
+  test("a failed Colima start reaches the page without its terminal hint, which the Restart button replaces; others keep theirs (R3-04)", async () => {
+    const hint = "if it fails, run `colima restart` in a terminal and build again";
+    const colima = appSystemBackend({}, { start: async () => ({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1", hint, restartEngine: "Colima" }) });
+    expect(await colima.startDocker()).toEqual({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1" });
+    const service = appSystemBackend({}, { start: async () => ({ ok: false, engine: "the Docker service", reason: "keyloom couldn't start the Docker service: permission denied", hint: "if it asked for a password, run `sudo systemctl start docker`" }) });
+    expect(await service.startDocker()).toMatchObject({ reason: "keyloom couldn't start the Docker service: permission denied. if it asked for a password, run `sudo systemctl start docker`" });
+  });
+
+  test("a failed restart reaches the page without the terminal hint: the page offers Colima's guide, not a terminal (#285 review)", async () => {
+    const hint = "if it fails, run `colima restart` in a terminal and build again";
+    const backend = appSystemBackend({}, { restart: async () => ({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1", hint }) });
+    expect(await backend.restartDocker()).toEqual({ ok: false, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1" });
+  });
+
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

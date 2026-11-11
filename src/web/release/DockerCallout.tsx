@@ -1,6 +1,6 @@
 // What keyloom says about the Docker a build needs, with the button that fixes it (D-486 to D-488). Shared by the
 // release dialog and the board review's activity tests, so both offer the same Install or Start.
-import { AppWindow, CircleAlert, CircleCheck, Download, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert } from "lucide-react";
+import { AppWindow, CircleAlert, CircleCheck, Download, ExternalLink, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert } from "lucide-react";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
@@ -23,7 +23,21 @@ function Alternatives({ items, lead = "Prefer an app?" }: { items: Array<{ name:
   );
 }
 
-export function DockerCallout({ view, docker, install }: { view: DockerView; docker: Docker; install: Install }) {
+/** Stops and starts an engine from scratch, where starting it again would fail the same way (R3-04). */
+function RestartEngine({ engine, docker }: { engine: string; docker: Docker }) {
+  return (
+    <button type="button" className="button button-primary" onClick={docker.restart}>
+      <RotateCcw size={14} aria-hidden="true" />
+      Restart {engine}
+    </button>
+  );
+}
+
+/**
+ * `buildFailed`: a build just stopped at Docker, after it had tried to start the engine itself when it may (D-486). `readyNext` is what
+ * the person can do once Docker installed from here is running, said where they are.
+ */
+export function DockerCallout({ view, docker, install, buildFailed = false, readyNext = "You can build now." }: { view: DockerView; docker: Docker; install: Install; buildFailed?: boolean; readyNext?: string }) {
   const problem = install.problem === null ? null : <p className="callout-note" role="alert">{install.problem}</p>;
   switch (view.kind) {
     case "none":
@@ -41,8 +55,16 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
           <CircleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
             <p>{view.reason}</p>
+            {view.helpUrl === null ? null : <p className="callout-note">Restarting didn't help either. Colima's guide covers a virtual machine that won't start.</p>}
             <div className="callout-actions">
-              <button type="button" className="button" onClick={view.retry === "restart" ? docker.restart : docker.start}>Try again</button>
+              {view.restartEngine === null ? null : <RestartEngine engine={view.restartEngine} docker={docker} />}
+              {view.retry === null ? null : <button type="button" className="button" onClick={view.retry === "restart" ? docker.restart : docker.start}>Try again</button>}
+              {view.helpUrl === null ? null : (
+                <a className="button" href={view.helpUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} aria-hidden="true" />
+                  Open Colima's guide
+                </a>
+              )}
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
           </div>
@@ -133,7 +155,7 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
       return (
         <div className="callout callout-success" role="status">
           <CircleCheck size={18} aria-hidden="true" />
-          <p>Docker is installed and running. You can build now.</p>
+          <p>Docker is installed and running. {readyNext}</p>
         </div>
       );
     case "other":
@@ -196,10 +218,30 @@ export function DockerCallout({ view, docker, install }: { view: DockerView; doc
                   : `Docker is installed, but ${view.engine} didn't start. ${view.afterInstall.reason}`}
               </p>
               <div className="callout-actions">
-                <button type="button" className="button button-primary" onClick={docker.start}>
-                  <Play size={14} aria-hidden="true" />
-                  Start it now
-                </button>
+                {/* A first start that failed fails the same way again, so a Colima gets a restart from scratch instead (R3-04). */}
+                {view.restartEngine !== null && !view.afterInstall.cancelled ? (
+                  <RestartEngine engine={view.restartEngine} docker={docker} />
+                ) : (
+                  <button type="button" className="button button-primary" onClick={docker.start}>
+                    <Play size={14} aria-hidden="true" />
+                    Start it now
+                  </button>
+                )}
+                <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      // The build already started this engine and it didn't come up, so starting it once more would fail the same way (R3-04).
+      if (buildFailed && view.canStart && view.restartEngine !== null) {
+        return (
+          <div className="callout callout-warning" role="alert">
+            <TriangleAlert size={18} aria-hidden="true" />
+            <div className="callout-body">
+              <p>{view.engine} didn't start, so the build stopped before it began. Restarting {view.restartEngine} from scratch usually fixes this.</p>
+              <div className="callout-actions">
+                <RestartEngine engine={view.restartEngine} docker={docker} />
                 <button type="button" className="button" onClick={docker.refresh}>Check again</button>
               </div>
             </div>

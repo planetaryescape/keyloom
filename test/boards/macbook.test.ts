@@ -12,7 +12,7 @@ describe("apple/macbook-ansi", () => {
   test("boards check passes, with a warning that the geometry is hand-written and unverified", async () => {
     const result = await checkBoardDir(dir);
     expect(result.ok).toBe(true);
-    expect(result.issues.map((i) => i.message)).toEqual([expect.stringContaining("hand-authored and not yet checked against the device (S36)")]);
+    expect(result.issues.map((i) => i.message)).toEqual([expect.stringContaining("hand-authored and not yet checked against the device; check the key order")]);
   });
 
   test("77 keys with a hand, a finger and a row each, and no mirror", () => {
