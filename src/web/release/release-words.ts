@@ -114,6 +114,14 @@ export function buildBlockedReason(view: DockerView): string | null {
   }
 }
 
+/**
+ * Why Build firmware is off, said beside it (R4-19): Docker's reason first, then a board revision not chosen yet. Null when it can run.
+ */
+export function buildDisabledReason(docker: string | null, needsBoardRevision: boolean, boardRevision: string | null, boardName: string): string | null {
+  if (docker !== null) return docker;
+  return needsBoardRevision && boardRevision === null ? `Choose which ${boardName} this is first.` : null;
+}
+
 /** Whether the dialog should ask the server again by itself: only while Docker is missing and nothing is running. */
 export const recheckDocker = (view: DockerView): boolean => view.kind === "install" || view.kind === "download" || view.kind === "other" || view.kind === "cli-missing";
 

@@ -9,7 +9,7 @@ import type { Release } from "./useRelease.ts";
 import { useDockerRecheck } from "./useDocker.ts";
 import { DockerCallout } from "./DockerCallout.tsx";
 import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
-import { buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
+import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import "./release.css";
@@ -80,6 +80,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
   const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction);
   const blocked = buildBlockedReason(dockerNow);
+  const buildOff = buildDisabledReason(blocked, release.needsBoardRevision, release.boardRevision, boardName);
   // While Docker is missing, the dialog asks again by itself, so installing it elsewhere needs no click here (D-488).
   useDockerRecheck(docker, open && recheckDocker(dockerNow));
 
@@ -214,14 +215,14 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                   <button
                     type="button"
                     className="button button-primary"
-                    disabled={starting !== null || blocked !== null || (release.needsBoardRevision && release.boardRevision === null)}
-                    {...(blocked === null ? {} : { "aria-describedby": "build-blocked" })}
+                    disabled={starting !== null || buildOff !== null}
+                    {...(buildOff === null ? {} : { "aria-describedby": "build-blocked" })}
                     onClick={() => release.buildNow(head.id)}
                   >
                     {starting === "build" ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Hammer size={14} aria-hidden="true" />}
                     {starting === "build" ? "Starting" : "Build firmware"}
                   </button>
-                  {blocked === null ? null : <p id="build-blocked" className="blocked-reason">{blocked}</p>}
+                  {buildOff === null ? null : <p id="build-blocked" className="blocked-reason">{buildOff}</p>}
                 </div>
               </>
             ) : build.status === "running" ? (

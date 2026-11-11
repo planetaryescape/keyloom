@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import type { DockerReadinessResponse } from "../../src/api/system.ts";
 import type { InstallState } from "../../src/api/tool-install.ts";
-import { COLIMA_HELP_URL, buildBlockedReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
+import { COLIMA_HELP_URL, buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "../../src/web/release/release-words.ts";
 import { adoptOnMount, installEnded } from "../../src/web/release/useInstall.ts";
 
 const missing = (canInstall: boolean): DockerReadinessResponse => ({
@@ -172,5 +172,14 @@ describe("Docker that keyloom is already starting, or that won't come back (R4-0
     expect(buildBlockedReason(view)).toContain("install another engine");
     // A first failed start isn't a reason to block: Restart Colima is the way on, and a build would try it too.
     expect(buildBlockedReason(dockerView(colima, false, "keyloom couldn't start Colima", null, "start"))).toBeNull();
+  });
+});
+
+describe("buildDisabledReason (R4-19)", () => {
+  test("a board revision not chosen yet is said beside Build firmware; Docker's reason comes first", () => {
+    expect(buildDisabledReason(null, true, null, "Moonlander")).toBe("Choose which Moonlander this is first.");
+    expect(buildDisabledReason(null, true, "reva", "Moonlander")).toBeNull();
+    expect(buildDisabledReason(null, false, null, "Moonlander")).toBeNull();
+    expect(buildDisabledReason("Install Docker first.", true, null, "Moonlander")).toBe("Install Docker first.");
   });
 });
