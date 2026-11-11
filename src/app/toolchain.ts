@@ -107,8 +107,51 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   };
 }
 
+/**
+ * One engine action at a time in this process: a page's Start, a page's Restart, and a build's own start. A restart runs `colima stop
+ * --force`, which would kill a start in progress, so a restart is refused while anything holds this; a start waits its turn, then finds
+ * Docker up and returns at once.
+ */
+let engineHolder: { kind: "start" | "restart"; done: Promise<void> } | null = null;
+
+class EngineWaitAborted extends Error {}
+
+async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  // Each waiter checks again when it wakes: the first to run takes it before the others resume.
+  while (engineHolder !== null) {
+    if (signal?.aborted) throw new EngineWaitAborted();
+    const held = engineHolder.done;
+    await new Promise<void>((resolve) => {
+      const stop = () => resolve();
+      signal?.addEventListener("abort", stop, { once: true });
+      void held.then(() => {
+        signal?.removeEventListener("abort", stop);
+        resolve();
+      });
+    });
+  }
+  if (signal?.aborted) throw new EngineWaitAborted();
+  let release!: () => void;
+  engineHolder = { kind, done: new Promise<void>((resolve) => (release = resolve)) };
+  try {
+    return await fn();
+  } finally {
+    engineHolder = null;
+    release();
+  }
+}
+
 /** Starts the engine and waits for it, whatever the person's setting says: what an explicit click or flag asks for. */
 export async function startDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  try {
+    return await holdEngine("start", () => startDockerUnheld(opts), opts.signal);
+  } catch (err) {
+    if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    throw err;
+  }
+}
+
+function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides }): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
   const start = over.startEngine ?? startDockerEngine;
   return start({
@@ -125,6 +168,15 @@ export async function startDocker(opts: { onProgress?: (line: string) => void; s
  * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
 export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult> {
+  // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing.
+  if (engineHolder !== null) {
+    const what = engineHolder.kind === "restart" ? "restarting" : "starting";
+    return { ok: false, engine: null, reason: `keyloom is already ${what} Docker, for this page or for a build. Wait for that to finish, then check again.` };
+  }
+  return holdEngine("restart", () => restartDockerUnheld(opts));
+}
+
+async function restartDockerUnheld(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides }): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
   // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is restarted.
   const now = await (over.status ?? (() => dockerStatus()))();
@@ -183,12 +235,18 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   }
 
   const start = over.startEngine ?? startDockerEngine;
-  const result = await start({
-    status,
-    detect,
-    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
-    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-  });
+  let result: DockerStartResult;
+  try {
+    result = await holdEngine("start", () => start({
+      status,
+      detect,
+      ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    }), opts.signal);
+  } catch (err) {
+    if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    throw err;
+  }
   // The build log is read like a terminal, so a failure keeps the engine's hint.
   return result.ok ? { ok: true, started: true, engine: result.engine } : { ok: false, reason: reasonWithHint(result), engine: result.engine };
 }
