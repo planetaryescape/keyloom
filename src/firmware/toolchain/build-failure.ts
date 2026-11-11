@@ -14,7 +14,9 @@ export class BuildFailure extends Error {
  * The last two fail the same way every time for this revision, so the UI offers the last revision that built and a question to keyloom,
  * never Build again. A failure with no code may pass (a download, a full disk), so Build again stays for it.
  */
-export type BuildErrorCode = "docker_unavailable" | "cancelled" | "compile_error" | "too_large";
+export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large"] as const;
+export type BuildErrorCode = (typeof BUILD_ERROR_CODES)[number];
+export const isBuildErrorCode = (code: string | null): code is BuildErrorCode => (BUILD_ERROR_CODES as readonly string[]).includes(code ?? "");
 
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
 export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large"]);
@@ -47,4 +49,18 @@ export function firmwareOverflow(lines: readonly string[]): { bytes: number | nu
 export function tooLargeMessage(boardName: string, overflow: { bytes: number | null }): string {
   const by = overflow.bytes === null ? "" : ` by ${overflow.bytes} ${overflow.bytes === 1 ? "byte" : "bytes"}`;
   return `The firmware is too big for the ${boardName}'s memory${by}. Fewer combos, macros or features make it smaller.`;
+}
+
+/**
+ * The failure a build that exited non-zero ends in, in D-523's order: Docker's own trouble first (`docker`, a full disk or a stopped daemon),
+ * since it can pass; then a firmware too big to fit; then the driver's compile error (`compileError`, from its own locators); then the
+ * driver's `generic` sentence. Only the middle two carry a code, because only they fail the same way every time.
+ */
+export function classifyBuildFailure(output: readonly string[], driver: { boardName: string; docker: string | undefined; compileError: () => string | undefined; generic: string }): BuildFailure {
+  if (driver.docker !== undefined) return new BuildFailure(driver.docker);
+  const overflow = firmwareOverflow(output);
+  if (overflow !== null) return new BuildFailure(tooLargeMessage(driver.boardName, overflow), "too_large");
+  const compiled = driver.compileError();
+  if (compiled !== undefined) return new BuildFailure(compiled, "compile_error");
+  return new BuildFailure(driver.generic);
 }

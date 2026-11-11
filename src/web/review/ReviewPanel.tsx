@@ -19,9 +19,8 @@ import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { CREDITS_PAGES } from "../chat/setup-words.ts";
-import { ApiError } from "../api.ts";
 import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
-import type { Review } from "./useReview.ts";
+import { type Review, asFailure } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
 
@@ -188,7 +187,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     void onApply(card).then((outcome) => {
       if (outcome !== undefined) setApplyFailure({ itemId, view: APPLIED_NOT_SHOWN, showAgain: outcome.showAgain });
     }, (error: unknown) => {
-      setApplyFailure({ itemId, view: applyFailureWords(error instanceof ApiError ? error : { code: undefined, status: -1, message: error instanceof Error ? error.message : String(error) }) });
+      setApplyFailure({ itemId, view: applyFailureWords(asFailure(error)) });
     }).finally(() => setApplying(null));
   };
   const review = r.review;

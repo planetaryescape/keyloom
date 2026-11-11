@@ -146,7 +146,9 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   announce("running");
 
   const started = now();
-  const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = [], code: string | null = null) => {
+  const finish = (status: "done" | "unavailable" | "failed", given: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = [], code: string | null = null) => {
+    // Stop (R5-17) aborts the run like a closing keyloom does; whichever step it interrupted, the review says the person stopped it.
+    const reason = status === "failed" && stoppedByPerson(hooks.signal) ? STOPPED_WORDS : given;
     const updated = transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
       if (!ownsReviewRun(app.db, row)) return false;
@@ -164,12 +166,10 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     if (updated) announce(status);
   };
 
-  // Stop (R5-17) and a closing keyloom both abort the run; only the words differ.
-  const aborted = () => (stoppedByPerson(hooks.signal) ? STOPPED_WORDS : "keyloom was closed while it was looking. It will look again after your next change.");
   const workloadSignal = hooks.signal ? AbortSignal.any([hooks.signal, AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS)]) : AbortSignal.timeout(REVIEW_WORKLOAD_TIMEOUT_MS);
   const baseline = await measureReviewBaseline(app, row, workloadSignal, deps.workload ?? {});
   if (hooks.signal?.aborted || (workloadSignal.aborted && reviewActivities(app.db, row.layoutId).length > 0) || getLayout(app, row.layoutId).revision.id !== row.revisionId) {
-    finish("failed", stoppedByPerson(hooks.signal) ? STOPPED_WORDS : "The review stopped or the layout changed while its workload was being tested.", null, []);
+    finish("failed", "The review stopped or the layout changed while its workload was being tested.", null, []);
     const stopped = findReview(app.db, row.id);
     if (!stopped) throw new NotFoundError(`no review "${row.id}"`);
     return toReview(app, stopped);
@@ -211,7 +211,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       verified.push(item);
     }
     if (!current() || (workloadSignal.aborted && reviewWorkload(app.db, row.id))) {
-      finish("failed", stoppedByPerson(hooks.signal) ? STOPPED_WORDS : "The review stopped or the layout changed while its suggestions were being tested.", model.model, [], proposed);
+      finish("failed", "The review stopped or the layout changed while its suggestions were being tested.", model.model, [], proposed);
     } else finish("done", reason, model.model, verified, withdrawn);
   };
   try {
@@ -226,7 +226,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       return results;
     };
     if (!current()) {
-      finish("failed", hooks.signal?.aborted ? aborted() : "Your layout changed before keyloom could look at it; it will look at the new version.", model.model, []);
+      finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "Your layout changed before keyloom could look at it; it will look at the new version.", model.model, []);
     } else {
       const signal = reviewWorkload(app.db, row.id) ? workloadSignal : hooks.signal;
       const outcome = await runReviewAgent({ model, ports, checks, workload: reviewWorkloadRequest(reviewWorkload(app.db, row.id)), ...(signal ? { signal } : {}) });
@@ -237,7 +237,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
       // The review is about the revision it was made for. If the layout moved while the model worked, its suggestions are against a
       // head that is gone; the newer revision gets its own review.
       if (!current()) {
-        finish("failed", hooks.signal?.aborted ? aborted() : "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
+        finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "Your layout changed while keyloom was looking; it will look at the new version.", model.model, [], proposed);
       } else if (outcome.status === "done") {
         const attached = attachProposals(app, outcome.items, proposed, listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
         const single = onePerProblem(app, groundedItems(app, row, attached.items, now), listReviewItems(app.db, row.id).filter((i) => i.source === "check"));
@@ -255,7 +255,7 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
     }
   } catch (err) {
     if (hooks.signal?.aborted || (workloadSignal.aborted && reviewWorkload(app.db, row.id))) {
-      finish("failed", hooks.signal?.aborted ? aborted() : "The activity review reached its time limit. Try fewer activities, then run it again.", model.model, [], proposed);
+      finish("failed", hooks.signal?.aborted ? "keyloom was closed while it was looking. It will look again after your next change." : "The activity review reached its time limit. Try fewer activities, then run it again.", model.model, [], proposed);
       return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
     }
     if (err instanceof UsageError) {

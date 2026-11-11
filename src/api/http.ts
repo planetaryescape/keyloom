@@ -304,11 +304,14 @@ export const QuestionCardSchema = z.object({
 });
 export type QuestionCard = z.infer<typeof QuestionCardSchema>;
 
+/** The longest chat message the server takes. */
+export const CHAT_MESSAGE_MAX = 8000;
+
 export const ChatRequestSchema = z.object({
   presentationVersion: z.literal(1, { error: "Unsupported presentation version. Upgrade keyloom or omit presentationVersion for legacy chat." }).optional(),
   // Omitted to start a conversation; its id comes back in the `start` event.
   conversationId: z.string().min(1).optional(),
-  message: z.string().min(1).max(8000).optional(),
+  message: z.string().min(1).max(CHAT_MESSAGE_MAX).optional(),
   // The answer to the question the conversation is waiting on, in place of a message (D-382).
   answer: z.object({ toolUseId: z.string().min(1), text: z.string().min(1).max(500) }).optional(),
   // The keys selected in the editor when the message was sent (D-012).

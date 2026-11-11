@@ -33,11 +33,11 @@ interface Props {
   status: ReleaseStatus;
   now: number;
   /** Goes back to an earlier revision as a new one (D-502), then shows it; for a build that fails the same way every time (R5-02). */
-  onGoBack?: (to: string) => Promise<void>;
+  onGoBack: (to: string) => Promise<void>;
   /** Reads the layout again, after the server refused Go back because the layout had moved on (D-506). */
-  onShowLatest?: () => Promise<void>;
+  onShowLatest: () => Promise<void>;
   /** Closes the dialog and puts a question about this build, with its log, in the chat for the person to send (R5-02). */
-  onAskAboutBuild?: (build: Build) => void;
+  onAskAboutBuild: (build: Build) => void;
 }
 
 type StepState = "todo" | "active" | "done" | "failed" | "warning" | "locked";
@@ -117,24 +117,18 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
   const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision) : null;
+  // A failed read of the latest version keeps "Show the latest version" with its reason.
+  const showLatest = (failed: string) => onShowLatest().then(() => setGoBackRefused(null), () => setGoBackRefused({ text: failed, next: "reload" }));
   const goBack = async (to: { revisionId: string; summary: string }) => {
-    if (onGoBack === undefined) return;
     setGoingBack(true);
     setGoBackRefused(null);
     try {
       await onGoBack(to.revisionId);
+      setWentBackTo(to.summary);
+      // The new revision is made; Go back stays hidden after this, so it can't be made twice.
+      await showLatest(`keyloom went back to “${headline(to.summary)}”, but couldn't show it yet.`);
     } catch (problem) {
       setGoBackRefused(problem instanceof ApiError ? goBackRefusal(problem.code, problem.message) : { text: problem instanceof Error ? problem.message : "keyloom couldn't go back.", next: null });
-      setGoingBack(false);
-      return;
-    }
-    setWentBackTo(to.summary);
-    // The new revision is made; a page that can't read it yet says so, and Show the latest version reads it again. Go back stays hidden,
-    // so it can't be made twice.
-    try {
-      await onShowLatest?.();
-    } catch {
-      setGoBackRefused({ text: `keyloom went back to “${headline(to.summary)}”, but couldn't show it yet.`, next: "reload" });
     } finally {
       setGoingBack(false);
     }
@@ -303,7 +297,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 <div className="step-actions">
                   {/* A layout that doesn't compile or fit fails the same way again, so Build again is only for a failure that may pass (R5-02). */}
                   {failure?.kind === "same_every_time" ? (
-                    failure.goBack === null || onGoBack === undefined || goBackRefused !== null ? null : (
+                    failure.goBack === null || goBackRefused !== null ? null : (
                       <button type="button" className="button button-primary" disabled={goingBack} onClick={() => failure.goBack !== null && void goBack(failure.goBack)}>
                         {goingBack ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}
                         Go back to the last version that built
@@ -314,7 +308,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                       Build again
                     </button>
                   )}
-                  {failure?.kind === "docker" || onAskAboutBuild === undefined ? null : (
+                  {failure?.kind === "docker" ? null : (
                     <button type="button" className="button" onClick={() => onAskAboutBuild(build)}>
                       <MessageCircle size={14} aria-hidden="true" />
                       Ask keyloom about this build
@@ -322,8 +316,8 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                   )}
                   {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
                   {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
-                  {goBackRefused?.next !== "reload" || onShowLatest === undefined ? null : (
-                    <button type="button" className="button" onClick={() => void onShowLatest().then(() => setGoBackRefused(null), (problem: unknown) => setGoBackRefused({ text: `keyloom couldn't read the latest version: ${problem instanceof Error ? problem.message : String(problem)}`, next: "reload" }))}>
+                  {goBackRefused?.next !== "reload" ? null : (
+                    <button type="button" className="button" onClick={() => void showLatest("keyloom couldn't read the latest version yet.")}>
                       <RefreshCw size={14} aria-hidden="true" />
                       Show the latest version
                     </button>

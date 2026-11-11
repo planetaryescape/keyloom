@@ -31,7 +31,6 @@ import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
 import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
-import { followApply } from "./proposals/follow-apply.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
@@ -986,22 +985,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     );
   }
 
-  // Only the Apply's own refusal is an Apply failure; a new layout that couldn't be read after it is said as applied (R5-08).
   async function labApply(card: ProposalCard) {
     const result = await applyChangeSet(token, card.changeSetId);
     setLabOpen(false);
-    if (!(await followApply(() => onProposalApplied(card, result), appliedNotShown))) return;
+    if (!(await onProposalApplied(card, result))) return;
     toasts.show({ kind: "success", message: "Applied", detail: `${card.title}. Type again in a few days to see if it stuck.` });
   }
 
   // The change is in the config but the board still shows the old layout: say so, and Show the new layout reads it again. A read that
   // fails again says so the same way, with the same button (R5-08, R5-09).
-  function appliedNotShown(error: unknown) {
+  function showAppliedNotShown(error: unknown) {
     toasts.show({
       kind: "error",
       message: APPLIED_NOT_SHOWN.words,
       ...(error instanceof Error && error.message.trim() !== "" ? { detail: error.message } : {}),
-      action: { label: "Show the new layout", run: () => void onChanged().catch(appliedNotShown) },
+      action: { label: "Show the new layout", run: () => void onChanged().catch(showAppliedNotShown) },
     });
   }
 
@@ -1402,13 +1400,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setPinnedProposal(unpin ? null : card);
   }
 
-  // A proposal was applied on the server: show the new layout, on the layer where it changed.
-  async function onProposalApplied(card: ProposalCard, result: ApplyResponse) {
+  // A proposal was applied on the server: show the new layout, on the layer where it changed. True once it is on screen. A layout that
+  // couldn't be read afterwards is not an Apply failure, wherever the Apply came from (R5-08): the toast says it is applied and offers to
+  // show it, and this resolves false. A caller that says so in place passes its own `notShown`.
+  async function onProposalApplied(card: ProposalCard, result: ApplyResponse, notShown: (error: unknown) => void = showAppliedNotShown): Promise<boolean> {
     setHoveredProposal(null);
     setPinnedProposal(null);
     // The apply lands on the board, not in the bar: the bar closes and the changed caps press (P3 review).
     setChatOpen(false);
-    await onChanged();
+    try {
+      await onChanged();
+    } catch (error) {
+      notShown(error);
+      return false;
+    }
     const changed = [...card.validation.diff.changed, ...card.validation.diff.retuned];
     const here = changed.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? changed[0];
     if (here !== undefined) {
@@ -1420,6 +1425,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
     const run = afterApplyRun(next.action, afterApplyKeyboard, () => onOpenRelease());
     toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
+    return true;
   }
 
   // The panel stays on the key after an apply, so the next slot can be filled straight away (16#the-key-panel).
@@ -1772,7 +1778,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 pinnedId={pinnedProposal?.changeSetId ?? null}
                 onPreview={setHoveredProposal}
                 onPin={pinProposal}
-                onApplied={onProposalApplied}
+                onApplied={async (card, result) => { await onProposalApplied(card, result); }}
                 onOpenRelease={onOpenRelease}
                 commands={chatCommands}
                 drafts={chatDrafts}
@@ -2348,8 +2354,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
                 setWaitingRead((read) => read + 1);
-                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied".
-                try { await onProposalApplied(card, result); } catch { return { showAgain: onChanged }; }
+                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied". The panel says so beside it.
+                if (!(await onProposalApplied(card, result, () => {}))) return { showAgain: onChanged };
               }}
               onShowLayer={(id) => setLayerId(id)}
                  onPlanRepair={(item) => {
@@ -2388,7 +2394,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 const result = await applyChangeSet(token, card.changeSetId);
                 setWaitingRead((read) => read + 1);
                 // The Apply landed; a layout that couldn't be read afterwards is not "Apply failed" on the card (R5-08).
-                await followApply(() => onProposalApplied(card, result), appliedNotShown);
+                await onProposalApplied(card, result);
               }}
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}

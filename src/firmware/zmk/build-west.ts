@@ -6,7 +6,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
-import { BuildFailure, firmwareOverflow, tooLargeMessage } from "../toolchain/build-failure.ts";
+import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
@@ -141,17 +141,18 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       if (result.timedOut) throw new BuildFailure(`The build took longer than ${Math.round((input.timeoutMs ?? BUILD_TIMEOUT_MS) / 60_000)} minutes and was stopped.`);
       if (result.aborted) throw new BuildFailure("The build was cancelled.");
       if (result.exitCode !== 0) {
-        const keymapFile = input.source.files.find((f) => f.path.endsWith(".keymap"));
-        const at = locateCompileError(output);
-        const conf = locateConfError(output, input.source.files.find((f) => f.path.endsWith(".conf"))?.content ?? "");
-        // Docker's own trouble first: it can pass. A layout that doesn't compile or fit fails the same way every time (R5-02).
-        const docker = hint(output);
-        if (docker !== undefined) throw new BuildFailure(docker);
-        const overflow = firmwareOverflow(output);
-        if (overflow !== null) throw new BuildFailure(tooLargeMessage(input.board.name, overflow), "too_large");
-        if (conf !== undefined) throw new BuildFailure(conf, "compile_error");
-        if (at && keymapFile) throw new BuildFailure(`The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymapFile.content, at, keymapFile.path)}.`, "compile_error");
-        throw new BuildFailure(`The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
+        throw classifyBuildFailure(output, {
+          boardName: input.board.name,
+          docker: hint(output),
+          compileError: () => {
+            const conf = locateConfError(output, input.source.files.find((f) => f.path.endsWith(".conf"))?.content ?? "");
+            if (conf !== undefined) return conf;
+            const keymapFile = input.source.files.find((f) => f.path.endsWith(".keymap"));
+            const at = locateCompileError(output);
+            return at && keymapFile ? `The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymapFile.content, at, keymapFile.path)}.` : undefined;
+          },
+          generic: `The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`,
+        });
       }
 
       const bundle: Record<string, Uint8Array> = {};

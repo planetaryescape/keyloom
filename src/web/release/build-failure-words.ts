@@ -1,5 +1,5 @@
 // What a failed build's step says and offers (R5-02), by the build's code, never its text. Pure, so each case is tested without a browser.
-import type { Build } from "../../api/http.ts";
+import { type Build, CHAT_MESSAGE_MAX } from "../../api/http.ts";
 import { headline } from "../../layout/history-summary.ts";
 
 /**
@@ -23,8 +23,8 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt">, 
   return { kind: "same_every_time", next, goBack };
 }
 
-// A chat request is at most 8000 characters (ChatPanel's repair request); the log keeps its newest lines within what is left.
-const MAX_REQUEST = 8000;
+// The log keeps its newest lines within what a chat message may hold.
+const MAX_REQUEST = CHAT_MESSAGE_MAX;
 const MAX_LOG_LINES = 60;
 
 /** The question "Ask keyloom about this build" puts in the chat for the person to check and send: what failed and the log's last lines. */

@@ -141,15 +141,15 @@ export function successfulFlashes(db: Database, layoutId: string): { buildStarte
   return rows.map((r) => ({ buildStartedAt: r.build_started_at, flashedAt: r.flashed_at }));
 }
 
-/** The newest successful build of exactly this revision for this board revision, so a sync that failed after its build can flash it again instead of building twice. */
-/** The IDs of a layout's revisions that have at least one build that succeeded. */
-export function builtRevisionIds(db: Database, layoutId: string): Set<string> {
+/** The IDs of a layout's revisions that have at least one build for `boardRevision` that succeeded. */
+export function builtRevisionIds(db: Database, layoutId: string, boardRevision: string): Set<string> {
   const rows = db
-    .query("SELECT DISTINCT b.revision_id AS id FROM builds b JOIN revisions r ON r.id = b.revision_id WHERE r.layout_id = ? AND b.status = 'succeeded'")
-    .all(layoutId) as { id: string }[];
+    .query("SELECT DISTINCT b.revision_id AS id FROM builds b JOIN revisions r ON r.id = b.revision_id WHERE r.layout_id = ? AND b.board_revision = ? AND b.status = 'succeeded'")
+    .all(layoutId, boardRevision) as { id: string }[];
   return new Set(rows.map((r) => r.id));
 }
 
+/** The newest successful build of exactly this revision for this board revision, so a sync that failed after its build can flash it again instead of building twice. */
 export function latestSuccessfulBuildOfRevision(db: Database, revisionId: string, boardRevision: string): BuildRow | undefined {
   const row = db
     .query(

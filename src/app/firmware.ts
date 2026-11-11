@@ -5,7 +5,7 @@ import { requirePlatformSupport } from "../firmware/toolchain/platform-support.t
 import { join, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
-import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES } from "../firmware/toolchain/build-failure.ts";
+import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES, isBuildErrorCode } from "../firmware/toolchain/build-failure.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
@@ -186,25 +186,23 @@ export async function generateFirmware(
 async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
   const logPath = absolute(app, row.logPath);
   const board = boardOf(app, row.layoutId);
+  const errorCode = isBuildErrorCode(row.errorCode) ? row.errorCode : null;
   return {
     id: row.id, revisionId: row.revisionId, layoutId: row.layoutId, boardRevision: row.boardRevision, status: row.status, error: row.error,
-    errorCode: isBuildErrorCode(row.errorCode) ? row.errorCode : null,
-    lastBuilt: row.status === "failed" && isBuildErrorCode(row.errorCode) && DETERMINISTIC_BUILD_CODES.has(row.errorCode) ? lastBuiltBefore(app, row) : null,
+    errorCode,
+    lastBuilt: row.status === "failed" && errorCode !== null && DETERMINISTIC_BUILD_CODES.has(errorCode) ? lastBuiltBefore(app, row) : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
   };
 }
 
-const BUILD_ERROR_CODES: ReadonlySet<string> = new Set<BuildErrorCode>(["docker_unavailable", "cancelled", "compile_error", "too_large"]);
-const isBuildErrorCode = (code: string | null): code is BuildErrorCode => code !== null && BUILD_ERROR_CODES.has(code);
-
 /**
- * The newest revision before `row`'s, in its own history, that has a build that succeeded (R5-02). Going back to it is the undo with `to`
+ * The newest revision before `row`'s, in its own history, with a build for the same board revision that succeeded (R5-02). Going back to it is the undo with `to`
  * (D-502): a new revision, so the one that failed stays in History.
  */
 function lastBuiltBefore(app: App, row: BuildRow): { revisionId: string; summary: string } | null {
-  const built = builtRevisionIds(app.db, row.layoutId);
+  const built = builtRevisionIds(app.db, row.layoutId, row.boardRevision);
   const found = revisionChain(app.db, row.layoutId, row.revisionId).slice(1).find((r) => built.has(r.id));
   return found === undefined ? null : { revisionId: found.id, summary: found.summary };
 }

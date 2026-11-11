@@ -6,7 +6,8 @@ import { ApiError } from "../api.ts";
 import * as api from "./api-review.ts";
 import { type ReviewAction, type ReviewProblem, reviewProblemWords } from "./review-words.ts";
 
-const asFailure = (error: unknown) =>
+/** An error as the words functions read it: an ApiError's status and code, or a transport failure as status -1. */
+export const asFailure = (error: unknown): { code: string | undefined; status: number; message: string } =>
   error instanceof ApiError ? error : { code: undefined, status: -1, message: error instanceof Error ? error.message : String(error) };
 
 // The board review of the config on screen (D-340): read when the page opens, again whenever the head moves, and again on each `review`
@@ -18,7 +19,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   // The request that failed, in words, and the way on: the same request again, or a fresh read when it was refused (R5-10).
   // A failed read has no `again`: Try again reads with the current `load`.
   const [failure, setFailure] = useState<{ action: ReviewAction; view: ReviewProblem; again: (() => void) | null } | null>(null);
-  const [action, setAction] = useState<{ token: string; layoutId: string; serial: number; kind: "refresh" | "dismissal" | "stop" } | null>(null);
+  const [action, setAction] = useState<{ token: string; layoutId: string; serial: number; kind: Exclude<ReviewAction, "load"> } | null>(null);
   const busy = action?.token === token && action.layoutId === layoutId;
   // The fixed items of a review that arrived while the page was open, for the tick and the toast; once per review.
   const [justFixed, setJustFixed] = useState<{ reviewId: string; items: FixedItem[] } | null>(null);
@@ -59,7 +60,7 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     return () => controller.abort();
   }, [load]);
 
-  const act = async (kind: "refresh" | "dismissal" | "stop", action: ReviewAction, run: () => Promise<ReviewResponse>): Promise<void> => {
+  const act = async (kind: Exclude<ReviewAction, "load">, run: () => Promise<ReviewResponse>): Promise<void> => {
     const serial = ++request.current;
     setAction({ token, layoutId, serial, kind });
     try {
@@ -70,14 +71,14 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
       setFailure(null);
     } catch (error) {
       if (serial !== request.current) return;
-      setFailure({ action, view: reviewProblemWords(action, asFailure(error)), again: () => void act(kind, action, run) });
+      setFailure({ action: kind, view: reviewProblemWords(kind, asFailure(error)), again: () => void act(kind, run) });
     } finally {
       setAction((pending) => pending?.serial === serial ? null : pending);
     }
   };
 
   const review = response?.review ?? null;
-  const refreshing = response === null || saved?.headRevisionId !== headRevisionId || event !== settledEvent || (busy && action?.kind === "refresh");
+  const refreshing = response === null || saved?.headRevisionId !== headRevisionId || event !== settledEvent || (busy && action?.kind === "run");
   return {
     review,
     activities: response?.workloadActivities ?? [],
@@ -95,13 +96,13 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     refreshing,
     justFixed: justFixed !== null && review !== null && justFixed.reviewId === review.id ? justFixed.items : [],
     clearJustFixed: () => setJustFixed(null),
-    run: (force = false, activities?: ReviewActivity[]) => act("refresh", "run", () => api.runReview(token, layoutId, force, activities)),
+    run: (force = false, activities?: ReviewActivity[]) => act("run", () => api.runReview(token, layoutId, force, activities)),
     /** Stops the activity tests and the look they belong to (R5-17); the engine removes their container. */
-    stop: () => act("stop", "stop", () => api.stopReview(token, layoutId)),
+    stop: () => act("stop", () => api.stopReview(token, layoutId)),
     /** True while a Stop waits for the run to end. */
     stopping: busy && action?.kind === "stop",
-    dismiss: (id: string) => act("dismissal", "dismiss", () => api.dismissItem(token, layoutId, id)),
-    restore: (id: string) => act("dismissal", "restore", () => api.restoreItem(token, layoutId, id)),
+    dismiss: (id: string) => act("dismiss", () => api.dismissItem(token, layoutId, id)),
+    restore: (id: string) => act("restore", () => api.restoreItem(token, layoutId, id)),
     reload: () => void load(),
   };
 }
