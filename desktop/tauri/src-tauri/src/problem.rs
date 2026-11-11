@@ -211,7 +211,7 @@ pub fn view(stop: &Stop, updates: &Updates) -> View {
             body: format!("keyloom's server stopped {times} times in {RESTART_WINDOW_WORDS}, so the app stopped starting it again."),
             note: Some(match tail(output) {
                 Some(_) => "These are the last lines it wrote before it stopped. The log has the rest.".into(),
-                None => "It wrote nothing before it stopped. The log shows what the app saw.".into(),
+                None => "keyloom has no output from it to show here. The log shows what the app saw.".into(),
             }),
             detail: tail(output),
             busy: false,

@@ -140,13 +140,14 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
                     }
                 };
                 let origin = format!("{}://{}:{}", parsed.scheme(), parsed.host_str().unwrap_or("127.0.0.1"), parsed.port().unwrap_or(80));
+                // A new server's tail starts empty, owned or not, so a later window never shows an earlier server's last lines.
+                app.state::<AppState>().server_tail.lock().unwrap().clear();
                 if owned {
                     remember_port(app, parsed.port().unwrap_or(0));
                     crate::log::say(app, "keyloom's server started");
                     // Keep draining so the pipe never fills, into the log so Show log can say why it stopped; report an exit so quit
                     // can wait for it and the watcher can start it again.
                     let log_app = app.clone();
-                    app.state::<AppState>().server_tail.lock().unwrap().clear();
                     tauri::async_runtime::spawn(async move {
                         while let Some(ev) = rx.recv().await {
                             match ev {

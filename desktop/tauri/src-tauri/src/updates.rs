@@ -53,7 +53,7 @@ pub async fn watch(app: AppHandle, menu: Menu<Wry>, item: MenuItem<Wry>) {
     let state = app.state::<AppState>();
     // "Download the latest keyloom", in the menu only while an install has failed (R3-15).
     let download = MenuItem::with_id(&app, problem::DOWNLOAD, "Download the latest keyloom", true, None::<&str>).ok();
-    loop {
+    'check: loop {
         let _ = item.set_text("Checking for updates…");
         let _ = item.set_enabled(false);
         set(&app, Updates::Checking);
@@ -91,7 +91,8 @@ pub async fn watch(app: AppHandle, menu: Menu<Wry>, item: MenuItem<Wry>) {
                         let _ = menu.remove(download);
                     }
                     if !should_install {
-                        break;
+                        // The next check is due: check now, rather than wait out another interval with the offer withdrawn.
+                        continue 'check;
                     }
                     let _ = item.set_text(problem::installing_words(&version, None));
                     set(&app, Updates::Installing { version: version.clone(), percent: None });

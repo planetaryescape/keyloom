@@ -3,9 +3,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import { boardDisplayName, boardTitle } from "../shell/Header.tsx";
 import { createConfig } from "../configs/api-configs.ts";
-import { ApiError } from "../api.ts";
+import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
-import { acceptsFile, guideFor, importCommand, offersStartBlank } from "./export-steps.ts";
+import { acceptsFile, firstFreeName, guideFor, importCommand, offersStartBlank } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -144,7 +144,9 @@ function BoardCard({ board, token, onImported, onStartedBlank, activities }: { b
     setBusy(true);
     setProblem(null);
     try {
-      const config = await createConfig(token, { from: "blank", name: `${boardDisplayName(board.name)} daily`, board: board.id });
+      // Config names are unique, so a second Start blank takes the next free "… daily N" rather than failing the same way each time.
+      const taken = (await fetchLayouts(token, new AbortController().signal)).map((layout) => layout.name);
+      const config = await createConfig(token, { from: "blank", name: firstFreeName(`${boardDisplayName(board.name)} daily`, taken), board: board.id });
       onStartedBlank(config.id);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "keyloom couldn't start a blank config.");

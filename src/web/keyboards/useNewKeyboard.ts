@@ -86,6 +86,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     const controller = new AbortController();
     setProblem(null);
     setPreviewProblem(null);
+    // The drawing of the old home row or controller must not stay up while the new one is read, or a failed read would hide behind it.
+    setPreview(null);
     api.previewKeyboard(token, {
       candidate: step.candidate.id,
       ...(step.homeRow === null ? {} : { homeRow: step.homeRow }),

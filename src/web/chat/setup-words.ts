@@ -87,13 +87,14 @@ export function setupView(provider: Provider, status: Pick<ChatProviderStatus, "
   return { kind: "paste", note: `keyloom checks the key with ${PROVIDER_NAMES[id]}, then keeps it in ${STORE_NAMES[status.keyStore]}.` };
 }
 
+// The desktop app's way to set a key: a line in the login shell's profile, read when it opens (D-443).
+const profileLine = (id: KeyProvider): string => `export ${ENV_NAMES[id]}=<your key>`;
+const profileStep = (id: KeyProvider): string => `Put this line in your shell profile (such as ~/.zshrc), replacing any ${ENV_NAMES[id]} line there, then quit keyloom and open it again.`;
+
 /**
  * The way round a key store that refuses to save (R2-16): keyloom reads the key from its environment variable instead. The desktop
  * app takes that variable from the login shell's profile when it opens (D-443); a terminal `keyloom serve` takes it from its command.
  */
-const profileLine = (id: KeyProvider): string => `export ${ENV_NAMES[id]}=<your key>`;
-const profileStep = (id: KeyProvider): string => `Put this line in your shell profile (such as ~/.zshrc), replacing any ${ENV_NAMES[id]} line there, then quit keyloom and open it again.`;
-
 export function storeFallback(id: KeyProvider, desktop: boolean): { text: string; command: string } {
   const name = ENV_NAMES[id];
   return desktop
