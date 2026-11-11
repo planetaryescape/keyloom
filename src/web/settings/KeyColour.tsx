@@ -1,3 +1,4 @@
+import { openPlace } from "../shell/open-place.ts";
 import { colourAt, hsvToHex, isDark } from "../../layout/colour.ts";
 import type { Hsv, Layer } from "../../layout/schema.ts";
 import { ColourChoice } from "./ColourChoice.tsx";
@@ -25,7 +26,12 @@ export function KeyColour({ layer, position, onPick, busy }: Props) {
         <p className="muted">This physical key&rsquo;s LED, not the on-screen layer colour.</p>
         <ColourChoice label={`LED colour for this key on ${layer.name}`} value={own} onChange={onPick} />
         {own === null ? null : <button type="button" className="link-button" onClick={() => onPick(null)}>Follow the layer LEDs</button>}
-        {layer.lighting === undefined ? <p className="muted">{layer.name} has no LED colours yet, so the other keys on it go dark. Set the layer&rsquo;s LED lighting in Settings to light them.</p> : null}
+        {layer.lighting === undefined ? (
+          <p className="muted">
+            {layer.name} has no LED colours yet, so the other keys on it go dark. Set the layer&rsquo;s LED lighting in{" "}
+            <button type="button" className="link-button" onClick={() => openPlace("settings")}>Settings</button> to light them.
+          </p>
+        ) : null}
       </fieldset>
     </details>
   );

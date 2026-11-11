@@ -27,6 +27,14 @@ describe("the import cards", () => {
     expect(importCommand(board("moergo/glove80", ["zmk-layout-editor-keymap"]), ["prose", "shortcuts"])).toBe("keyloom import --board moergo/glove80 --activities prose,shortcuts <file>");
   });
 
+  // R1-24: the card opens the editor its steps start in, and reads the Mac's hidden Karabiner file with a button.
+  test("Oryx and the Layout Editor are linked, and only Karabiner's card reads from this Mac", () => {
+    expect(guideFor(board("zsa/moonlander", ["oryx-source"])).link?.href).toBe("https://configure.zsa.io");
+    expect(guideFor(board("moergo/glove80", ["zmk-layout-editor-keymap"])).link?.href).toBe("https://my.glove80.com");
+    expect(guideFor(board("apple/macbook", ["karabiner-json"])).readFromMac).toBe(true);
+    expect(guideFor(board("foostan/corne", ["zmk-keymap"])).readFromMac).toBeUndefined();
+  });
+
   test("every importer the boards declare has a guide", async () => {
     const { IMPORTER_IDS } = await import("../../src/boards/schema.ts");
     for (const id of IMPORTER_IDS) expect(guideFor(board("x/y", [id])).tool).not.toBe("your editor");

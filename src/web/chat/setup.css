@@ -134,3 +134,15 @@
 .provider-picker .setup-providers {
   margin-top: var(--space-2);
 }
+
+/* The way round a key store that refuses (R2-16), under the field whose Save is the Try again. */
+.setup-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Why only one provider is listed: KEYLOOM_PROVIDER or --provider fixed it (R2-04). */
+.setup-locked {
+  margin: 0 0 var(--space-2);
+}

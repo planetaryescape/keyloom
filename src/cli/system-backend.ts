@@ -1,5 +1,6 @@
 // The server's system interface over the app (rung 25). Starting Docker takes up to about two minutes, and a
 // second click should join the attempt already running rather than launch a second engine.
+import { readKarabinerConfig } from "../app/karabiner-config.ts";
 import { dockerReadiness, restartDocker, startDocker } from "../app/toolchain.ts";
 import { type InstallDeps, installJobs } from "../app/tool-install.ts";
 import type { DockerStartResponse } from "../api/system.ts";
@@ -20,6 +21,7 @@ export function appSystemBackend(installDeps: InstallDeps = {}, docker: { restar
     install: async (tool) => installs.start(tool),
     stopInstalls: () => installs.cancelAll(),
     installState: async (tool) => installs.get(tool),
+    karabinerConfig: () => readKarabinerConfig(),
     cancelInstall: async (tool) => installs.cancel(tool),
     restartDocker: () => {
       restarting ??= (docker.restart ?? restartDocker)().then(response).finally(() => { restarting = null; });

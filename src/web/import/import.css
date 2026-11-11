@@ -119,6 +119,22 @@
   line-height: 1.5;
 }
 
+/* The editor to export from, and the Mac read, beside the steps (R1-24). */
+.board-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.board-card-actions a.sheet-action {
+  text-decoration: none;
+}
+
+.board-card-reload {
+  align-self: flex-start;
+}
+
 .dropzone {
   display: flex;
   flex-wrap: wrap;

@@ -77,6 +77,7 @@ import { KeyMoves } from "./panel/KeyMoves.tsx";
 import { LibraryPane } from "./panel/LibraryPane.tsx";
 import { UpgradeOffer } from "./settings/UpgradeOffer.tsx";
 import { KeyColour } from "./settings/KeyColour.tsx";
+import { type Place, onOpenPlace } from "./shell/open-place.ts";
 import { SettingsPane } from "./settings/SettingsPane.tsx";
 import { type LightingDraft, withKeyColour, withLighting } from "./settings/lighting-ops.ts";
 import { colourAt, hsvToHex, isDark } from "../layout/colour.ts";
@@ -1568,6 +1569,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       else setChatOpen(true);
     },
   }; });
+  // "in Settings" and "ask the chat" in copy deeper down open those places (R1-23).
+  const placeOpener = useRef<(place: Place) => void>(() => {});
+  placeOpener.current = (place) => (place === "settings" ? setSettingsOpen(true) : setChatOpen(true));
+  useEffect(() => onOpenPlace((place) => placeOpener.current(place)), []);
   const beginViewRequest = (): OpenRequestedView => {
     let expected = viewGeneration.current.n;
     return async (destination, signal) => {
@@ -1969,7 +1974,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
-          <SetupCard flow={newBoard} onImport={() => {
+          <SetupCard flow={newBoard} hasConfigs={putSources.length > 0} onImport={() => {
             if (editing !== null) closeEditor(false);
             setSidebar(null);
             chrome.onImport();

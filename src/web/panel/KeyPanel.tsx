@@ -812,7 +812,8 @@ export function KeyPanel(props: Props) {
               {applying ? null : <kbd aria-hidden="true">↵</kbd>}
             </button>
           </div>
-          {whyNot === null ? null : <span id="apply-why" className="sr-only">{whyNot}</span>}
+          {/* The note above already shows the reason once a binding exists; before that, it shows here, beside the disabled Apply (R1-26). */}
+          {whyNot === null ? null : <span id="apply-why" className={binding === null ? "card-foot-why" : "sr-only"}>{whyNot}</span>}
         </footer>
       ) : null}
     </section>

@@ -1,3 +1,4 @@
+import { openPlace } from "../shell/open-place.ts";
 import { RotateCcw } from "lucide-react";
 import { useId } from "react";
 import type { OptionSpec } from "../../layout/firmware-options.ts";
@@ -82,7 +83,12 @@ export function SettingRow({ spec, value, baseline, blockedBy, forced, changed, 
       )}
       {blockedBy === null ? null : <p className="setting-note">{blockedBy}</p>}
       {forced === null ? null : <p className="setting-note">{forced}</p>}
-      {sourceText === undefined ? null : <p className="setting-note">This is set to {sourceText} in your source, which the sliders can't show. Ask the chat to change it.</p>}
+      {sourceText === undefined ? null : (
+        <p className="setting-note">
+          This is set to {sourceText} in your source, which the sliders can't show.{" "}
+          <button type="button" className="link-button" onClick={() => openPlace("chat")}>Ask the chat</button> to change it.
+        </p>
+      )}
       {keptOwn.length === 0 ? null : (
         <p className="setting-note">
           {keptOwn.join(" and ")} {keptOwn.length === 1 ? "keeps" : "keep"} its own value for this, so keys that use {keptOwn.length === 1 ? "it" : "them"} won&rsquo;t follow the change. Tune that from one of its keys.

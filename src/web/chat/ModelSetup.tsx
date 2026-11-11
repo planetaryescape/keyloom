@@ -3,7 +3,8 @@ import { type ReactNode, useId, useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./api-setup.ts";
-import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, setupView } from "./setup-words.ts";
+import { inDesktopApp } from "../shell/server-gone.ts";
+import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, lockWords, setupProviders, setupView, storeFallback } from "./setup-words.ts";
 import "./setup.css";
 
 type Provider = ChatProviderStatus["providers"][number];
@@ -50,6 +51,8 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The store itself refused (not the key): Save stays as the Try again, and the environment variable is offered beside it.
+  const [storeRefused, setStoreRefused] = useState(false);
   async function save() {
     setSaving(true);
     setProblem(null);
@@ -61,6 +64,7 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       setProblem(error instanceof Error ? error.message : "keyloom couldn't save the key.");
+      if (code === "key_store_failed") setStoreRefused(true);
       if (failureReloads(code)) onReload();
     } finally {
       setSaving(false);
@@ -95,10 +99,21 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
         </button>
       </div>
       {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
+      {storeRefused ? <StoreFallback id={id} /> : null}
       <p id={`${field}-note`} className="muted">
         {note} <KeyPageLink href={KEY_PAGES[id]} name={PROVIDER_NAMES[id]} />
       </p>
       {onCancel === undefined ? null : <button type="button" className="link-button" onClick={onCancel}>Keep the saved key</button>}
+    </div>
+  );
+}
+
+function StoreFallback({ id }: { id: KeyProvider }) {
+  const fallback = storeFallback(id, inDesktopApp());
+  return (
+    <div className="setup-fallback">
+      <p className="muted">{fallback.text}</p>
+      <CopyCommand command={fallback.command} />
     </div>
   );
 }
@@ -187,6 +202,22 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
         </div>
       </>
     );
+  } else if (view.kind === "codex-install") {
+    body = (
+      <>
+        <p className="muted">{view.text}</p>
+        <div className="setup-actions">
+          <a className="button button-primary" href={view.page} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} aria-hidden="true" />
+            Get Codex
+          </a>
+          <button type="button" className="button" onClick={onReload}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Check again
+          </button>
+        </div>
+      </>
+    );
   } else if (view.kind === "codex-sign-in") {
     body = (
       <>
@@ -238,12 +269,17 @@ export function ModelSetup({ token, status, onChanged, onReload, only, replacing
       </div>
     );
   }
-  const shown = status.providers.filter((p) => only === undefined || only.includes(p.id));
+  // A provider fixed at startup is the only one that answers, so it is the only one offered (R2-04).
+  const shown = setupProviders(status, only);
+  const locked = lockWords(status);
   return (
-    <ul className="setup-providers" aria-label="Ways to set up a model">
-      {shown.map((provider) => (
-        <ProviderSetup key={provider.id} token={token} provider={provider} status={status} onChanged={onChanged} onReload={onReload} replacing={replacing === provider.id} />
-      ))}
-    </ul>
+    <>
+      {locked === null ? null : <p className="muted setup-locked">{locked}</p>}
+      <ul className="setup-providers" aria-label="Ways to set up a model">
+        {shown.map((provider) => (
+          <ProviderSetup key={provider.id} token={token} provider={provider} status={status} onChanged={onChanged} onReload={onReload} replacing={replacing === provider.id} />
+        ))}
+      </ul>
+    </>
   );
 }

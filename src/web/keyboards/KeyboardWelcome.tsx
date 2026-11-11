@@ -65,7 +65,7 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
       <section className="onboarding-stage" aria-label="Keyboard setup">
         {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={phone && split ? half : null} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
         <NewKeyboardCard flow={flow} />
-        <SetupCard flow={flow} onImport={() => setImporting(true)} onMade={onMade} />
+        <SetupCard flow={flow} hasConfigs={sources.length > 0} onImport={() => setImporting(true)} onMade={onMade} />
         {flow.step.kind === "idle" ? <div className="onboarding-choices">
           <label className="keyboard-picker-search"><Search size={16} /><input type="search" aria-label="Find a keyboard to add" placeholder="Keyboard or maker" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
           <div className="onboarding-catalogue">
@@ -73,7 +73,7 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
               const removed = collection.some((keyboard) => keyboard.boardId === board.id && keyboard.removedAt !== null);
               return <button key={board.id} type="button" onClick={() => removed ? onManage(true) : flow.chooseKnown(board)}>{board.keys ? <Silhouette keys={board.keys} display={board.display} width={48} height={24} /> : null}<span>{board.name}<small>{removed ? "Removed · restore" : board.vendor}</small></span></button>;
             })}
-            {collection !== null && rows.length === 0 ? <p>No supported board matches. Search the firmware catalogue below, or use the contribution guide.</p> : null}
+            {collection !== null && rows.length === 0 ? <p>No supported board matches. <button type="button" className="link-button" onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Search QMK and ZMK</button> for it, or read <a href="https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">the contribution guide</a>.</p> : null}
           </div>
           <button type="button" className="sheet-action" disabled={collection === null} onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
           {firmwareSearch && collection !== null ? <div className="nb-list">{query.trim().length < 2 ? <p>Type at least two letters in the search above.</p> : flow.found.map((candidate) => <button key={candidate.id} type="button" onClick={() => flow.chooseCandidate(candidate)}>{candidate.displayName}<small>{candidate.detail}</small></button>)}</div> : null}
@@ -83,6 +83,7 @@ export function KeyboardWelcome({ token, choices, sync, sources, onMade, onManag
       </section>
       {panel ? <aside className="onboarding-panel"><NewBoardPanel flow={flow} sources={sources} onMade={(id) => onMade(id, flow.step.kind === "put" && flow.step.source !== null)} /><button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import an existing keymap instead</button></aside> : null}
     </div>
-    <p className="onboarding-contribution">No custom case yet? Your keys still use the physical renderer. <a href="https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Model and contribute your keyboard</a> with <code>/add-keyboard</code> in a clone.</p>
+    {/* Words for someone who isn't a developer (R1-30): the app prepares the folder; the guide is for whoever takes it further. */}
+    <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href="https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>
   </div>;
 }

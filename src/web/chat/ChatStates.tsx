@@ -2,7 +2,7 @@ import { ArrowRightLeft, KeyRound, MessageSquareText, RefreshCw, Send, TriangleA
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
 import { retryOffer } from "./provider-ready.ts";
-import { PROVIDER_NAMES } from "./setup-words.ts";
+import { PROVIDER_NAMES, setupLead } from "./setup-words.ts";
 import type { Problem } from "./useChat.ts";
 
 export const EXAMPLE_PROMPTS = [
@@ -51,7 +51,7 @@ export function MissingKey({ setup, retry }: { setup: Setup; retry?: Retry | und
         <KeyRound size={22} />
       </span>
       <h3>Chat needs a model</h3>
-      <p>Paste an API key, or sign in with Codex. Chat can use it straight away.</p>
+      <p>{setupLead(setup.status)}</p>
       <ModelSetup {...setup} />
       {offer.kind === "send" && retry?.onRetry !== undefined ? (
         <button type="button" className="button button-primary" onClick={retry.onRetry}>

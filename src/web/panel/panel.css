@@ -774,3 +774,10 @@
   background: var(--color-accent-bg);
   color: var(--color-accent);
 }
+
+/* Why Apply is disabled, beside it (R1-26): the same words screen readers get through aria-describedby. */
+.card-foot-why {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  text-align: right;
+}
