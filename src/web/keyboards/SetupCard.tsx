@@ -5,8 +5,10 @@ import "./keyboards.css";
 
 // The "known board, no config" card (D-336): keyloom recognizes the keyboard on USB but has nothing on it yet. Without this the board is
 // invisible, because the board switch lists only boards that have a config. Every choice is a visible button, as on the new-keyboard card.
-export function SetupCard({ flow, onImport, onMade }: {
+export function SetupCard({ flow, hasConfigs, onImport, onMade }: {
   flow: NewKeyboard;
+  /** False on a first run: with no config to put on it, that choice is not offered (R1-25). */
+  hasConfigs: boolean;
   /** Opens the import screen, where the board's own export (Oryx, the MoErgo editor, a zmk-config) is dropped. */
   onImport: () => void;
   onMade: (configId: string) => void;
@@ -28,13 +30,15 @@ export function SetupCard({ flow, onImport, onMade }: {
         <button type="button" className="sheet-close" aria-label="Not now" onClick={flow.notNow}><X size={16} aria-hidden="true" /></button>
       </header>
       <p className="nb-lead">
-        keyloom knows this keyboard, but nothing of yours is on it. Put one of your configs on it, import the layout you already use, or start
-        from a blank one. Nothing is written to the keyboard until you apply a change.
+        keyloom knows this keyboard, but nothing of yours is on it. {hasConfigs ? "Put one of your configs on it, import" : "Import"} the layout you
+        already use, or start from a blank one. Nothing is written to the keyboard until you apply a change.
       </p>
       <div className="nb-list nb-setup-list">
-        <button type="button" onClick={flow.startPut}>
-          <span className="nb-setup-body"><b>Put one of my configs on it</b><small>Map a config you already use onto this keyboard, as a new config.</small></span>
-        </button>
+        {hasConfigs ? (
+          <button type="button" onClick={flow.startPut}>
+            <span className="nb-setup-body"><b>Put one of my configs on it</b><small>Map a config you already use onto this keyboard, as a new config.</small></span>
+          </button>
+        ) : null}
         <button type="button" onClick={onImport}>
           <span className="nb-setup-body"><b>Import a layout</b><small>Drop the export from Oryx, the MoErgo editor or your zmk-config.</small></span>
         </button>

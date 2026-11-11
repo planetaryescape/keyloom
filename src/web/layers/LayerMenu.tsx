@@ -1,3 +1,4 @@
+import { openPlace } from "../shell/open-place.ts";
 import { ArrowLeft, ArrowRight, Copy, Ellipsis, Eraser, GitMerge, PaintBucket, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { LAYER_COLOR_COUNT, SHORT_LABEL_MAX, cleanShortLabel, layerColorOf, layerShortLabel } from "../../layout/layer-ops.ts";
@@ -168,7 +169,10 @@ function LookForm({ layer, colorIndex, onBack, onSave }: { layer: Layer; colorIn
         onSave(cleanShortLabel(label), color);
       }}
     >
-      <p className="muted">For keyloom&rsquo;s display, not keyboard LEDs. LED lighting is separate in Settings.</p>
+      <p className="muted">
+        For keyloom&rsquo;s display, not keyboard LEDs. LED lighting is separate, in{" "}
+        <button type="button" className="link-button" onClick={() => openPlace("settings")}>Settings</button>.
+      </p>
       <p className="muted">Saved with this config. Saving may trigger auto-sync to your keyboard.</p>
       <label htmlFor={labelId}>Short label <span className="muted">Up to {SHORT_LABEL_MAX} characters</span></label>
       <input id={labelId} value={label} maxLength={SHORT_LABEL_MAX} placeholder={layerShortLabel({ name: layer.name })} onChange={(event) => setLabel(event.target.value)} />

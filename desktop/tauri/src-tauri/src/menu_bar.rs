@@ -1,6 +1,6 @@
 // Mirrors GET /api/events into the menu-bar extra and native notifications. The server words everything (`menuBar` in each frame,
 // src/server/menu-bar.ts), so this file only displays strings and relays clicks (D-325).
-use crate::{sidecar, AppState};
+use crate::{log, sidecar, AppState};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use std::time::Duration;
@@ -59,7 +59,7 @@ pub fn parse_frame(frame: &str) -> Option<MenuBar> {
 
 fn notify(app: &AppHandle, title: &str, body: &str) {
     if let Err(err) = app.notification().builder().title(title).body(body).show() {
-        eprintln!("keyloom-desktop: notification failed: {err}");
+        log::say(app, &format!("notification failed: {err}"));
     }
 }
 
@@ -99,11 +99,9 @@ pub fn separator(app: &AppHandle) -> tauri::Result<PredefinedMenuItem<Wry>> {
 
 const GIVE_UP_ATTACHED_AFTER: u32 = 3;
 
-pub async fn watch(app: AppHandle, tray: TrayIcon, items: Items) {
-    // macOS shows a notification only after the user has allowed it; this asks on first launch.
-    if let Err(err) = app.notification().request_permission() {
-        eprintln!("keyloom-desktop: notification permission failed: {err}");
-    }
+/// Mirrors the server into the menu bar, and returns once the server is gone: the one this shell started has exited, or one it
+/// attached to stopped answering. The supervisor (lib.rs) then starts one again, through the same path as at launch.
+pub async fn watch(app: &AppHandle, tray: &TrayIcon, items: &Items) {
     let client = reqwest::Client::new();
     let mut failures = 0u32;
     loop {
@@ -123,30 +121,22 @@ pub async fn watch(app: AppHandle, tray: TrayIcon, items: Items) {
                     while let Some(end) = buf.find("\n\n") {
                         let frame: String = buf.drain(..end + 2).collect();
                         if let Some(bar) = parse_frame(&frame) {
-                            apply(&app, &tray, &items, &bar);
+                            apply(app, tray, items, &bar);
                         }
                     }
                 }
             }
-            Ok(resp) => eprintln!("keyloom-desktop: /api/events answered {}", resp.status()),
-            Err(err) => eprintln!("keyloom-desktop: /api/events: {err}"),
+            // A server that keeps refusing would write a line every 2 s for as long as the app runs; the 1st, 2nd, 4th, 8th… are enough.
+            Ok(resp) if (failures + 1).is_power_of_two() => log::say(app, &format!("/api/events answered {}", resp.status())),
+            Err(err) if (failures + 1).is_power_of_two() => log::say(app, &format!("/api/events: {err}")),
+            _ => {}
         }
         failures += 1;
-        // A server we attached to can be stopped by whoever started it (BK's browser one). The shell then starts its own, once the old one is clearly gone.
-        if !owned && failures >= GIVE_UP_ATTACHED_AFTER {
-            match sidecar::start(&app, sidecar::Mode::Reuse).await {
-                Ok(server) => {
-                    crate::navigate(&app, &server.url);
-                    *app.state::<AppState>().server.lock().unwrap() = Some(server);
-                    failures = 0;
-                }
-                // A server that came back and can't work with this app: say so where the person looks, in the CLI's words.
-                Err(sidecar::Failure::Incompatible { words, .. }) => {
-                    eprintln!("keyloom-desktop: {words}");
-                    let _ = items.summary.set_text(&words);
-                }
-                Err(err) => eprintln!("keyloom-desktop: could not take over serving: {err}"),
-            }
+        // The server this shell started has exited; or one it attached to (BK's browser one) stopped answering, and whoever started it
+        // may have stopped it. Either way the shell starts its own, the way it did at launch, once the old one is clearly gone.
+        let gone = if owned { sidecar::exited(app) } else { failures >= GIVE_UP_ATTACHED_AFTER };
+        if gone {
+            return;
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
@@ -163,6 +153,7 @@ pub fn sync_now(app: &AppHandle) {
             None => return,
         }
     };
+    let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let res = reqwest::Client::new()
             .post(format!("{origin}/api/sync"))
@@ -170,7 +161,7 @@ pub fn sync_now(app: &AppHandle) {
             .json(&serde_json::json!({ "layoutId": layout_id }))
             .send()
             .await;
-        eprintln!("keyloom-desktop: sync now -> {:?}", res.map(|r| r.status()));
+        log::say(&app, &format!("sync now -> {:?}", res.map(|r| r.status())));
     });
 }
 

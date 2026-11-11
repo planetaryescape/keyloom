@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>keyloom</title>
+<!--
+  The window the shell opens when keyloom's server can't start or keeps stopping (R2-03, R2-09). It has no Tauri IPC: the shell puts
+  what to show in the URL's fragment (problem.rs), and each button is a keyloom-desktop:// link the shell catches before it loads.
+  Text goes in with textContent only. The colours are the web app's tokens (src/web/tokens.css), copied because this page shows when
+  the server that serves them is down.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --color-page: #e4e5e8;
+    --color-surface: #ffffff;
+    --color-panel: #f3f3f5;
+    --color-border: #d9dade;
+    --color-border-strong: #84878f;
+    --color-text: #141519;
+    --color-text-muted: #464a52;
+    --color-error: #a3170f;
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-code: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-page: #0e0f12;
+      --color-surface: #191a1e;
+      --color-panel: #141518;
+      --color-border: #2a2c31;
+      --color-border-strong: #646973;
+      --color-text: #eef0f3;
+      --color-text-muted: #b3b7bf;
+      --color-error: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: var(--color-page);
+    color: var(--color-text);
+    font: 14px/1.5 var(--font-ui);
+  }
+  main {
+    width: min(100%, 520px);
+    padding: 24px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+  }
+  .icon { display: block; margin-bottom: 12px; color: var(--color-error); }
+  .icon[data-busy="true"] { color: var(--color-text-muted); animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .icon[data-busy="true"] { animation: none; } }
+  h1 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  .note { color: var(--color-text-muted); }
+  details { margin: 0 0 16px; }
+  summary { cursor: pointer; color: var(--color-text-muted); }
+  pre {
+    max-height: 160px;
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    overflow: auto;
+    border-radius: 6px;
+    background: var(--color-panel);
+    font: 12px/1.45 var(--font-code);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .button {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    padding: 4px 12px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .button:hover { background: var(--color-panel); }
+  .button:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+  .button[data-primary="true"] { border-color: var(--color-text); background: var(--color-text); color: var(--color-page); }
+  .button[data-primary="true"]:hover { background: color-mix(in srgb, var(--color-text) 82%, var(--color-page)); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main aria-live="polite">
+  <!-- lucide's triangle-alert and loader-circle, inline: the icon library is the web app's, and it isn't running. -->
+  <svg id="alert" class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+  <svg id="busy" class="icon" data-busy="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+  <h1 id="title">Starting keyloom…</h1>
+  <p id="body"></p>
+  <p id="note" class="note" hidden></p>
+  <details id="details" hidden>
+    <summary>What keyloom said</summary>
+    <pre id="detail"></pre>
+  </details>
+  <div id="actions" class="actions"></div>
+</main>
+<script>
+  // { title, body, note?, detail?, busy, actions: [{ id, label, primary }] }, from problem.rs.
+  function render() {
+    let state;
+    try {
+      state = JSON.parse(new URLSearchParams(location.hash.slice(1)).get("state") || "null");
+    } catch {
+      state = null;
+    }
+    if (state === null) return;
+    document.getElementById("title").textContent = state.title;
+    document.title = state.title;
+    document.getElementById("body").textContent = state.body;
+    const note = document.getElementById("note");
+    note.textContent = state.note || "";
+    note.hidden = !state.note;
+    document.getElementById("alert").hidden = state.busy;
+    document.getElementById("busy").hidden = !state.busy;
+    document.getElementById("detail").textContent = state.detail || "";
+    document.getElementById("details").hidden = !state.detail;
+    const actions = document.getElementById("actions");
+    actions.replaceChildren(...state.actions.map((action) => {
+      const link = document.createElement("a");
+      link.className = "button";
+      link.href = "keyloom-desktop://" + action.id;
+      link.dataset.primary = String(action.primary);
+      link.textContent = action.label;
+      return link;
+    }));
+    actions.querySelector("[data-primary=true]")?.focus();
+  }
+  addEventListener("hashchange", render);
+  render();
+</script>
+</body>
+</html>

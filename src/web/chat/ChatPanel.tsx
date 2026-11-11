@@ -704,6 +704,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     switchTo={readyOthers}
                     onSwitch={switchProvider}
                     onSetUpModel={() => setSetupOpen(usedProvider ?? "anthropic")}
+                    onNewConversation={newConversation}
                     creditsUrl={usedProvider === "anthropic" || usedProvider === "openrouter" ? CREDITS_PAGES[usedProvider] : undefined}
                     compact={variant === "bar"}
                     motionPaused={motionPaused}

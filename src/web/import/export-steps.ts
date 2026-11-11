@@ -1,7 +1,13 @@
 import type { BoardChoice } from "../../api/http.ts";
 import type { ReviewActivity } from "../../api/review.ts";
 
-export type ExportGuide = { tool: string; steps: string; accepts: string; extensions: readonly string[] };
+export type ExportGuide = {
+  tool: string; steps: string; accepts: string; extensions: readonly string[];
+  /** The editor the steps start in, linked so the person can open it from the card (R1-24). */
+  link?: { label: string; href: string };
+  /** The file is in a fixed place on this Mac that a file picker hides, so the card can read it with a button (R1-24). */
+  readFromMac?: boolean;
+};
 
 // Which file each importer reads and where it comes from. The importers' ids are the boards' own (boards/*/board.json),
 // so a new board with a known importer needs no change here.
@@ -11,12 +17,14 @@ const GUIDES: Record<string, ExportGuide> = {
     steps: "Open your layout in Oryx, choose Download source, and drop the .zip it gives you.",
     accepts: ".zip",
     extensions: [".zip"],
+    link: { label: "Open Oryx", href: "https://configure.zsa.io" },
   },
   "zmk-layout-editor-keymap": {
     tool: "the Layout Editor",
     steps: "Open your layout in the MoErgo Layout Editor, choose Export, and drop the .keymap file.",
     accepts: ".keymap",
     extensions: [".keymap"],
+    link: { label: "Open the Layout Editor", href: "https://my.glove80.com" },
   },
   "zmk-keymap": {
     tool: "your ZMK config",
@@ -26,9 +34,10 @@ const GUIDES: Record<string, ExportGuide> = {
   },
   "karabiner-json": {
     tool: "Karabiner-Elements",
-    steps: "Drop a copy of ~/.config/karabiner/karabiner.json. keyloom only reads it: your rules stay in the file, and keyloom shows the edit that stops Karabiner grabbing the built-in keyboard.",
+    steps: "Read Karabiner's settings from this Mac, or drop a copy of ~/.config/karabiner/karabiner.json. keyloom only reads it: your rules stay in the file, and keyloom shows the edit that stops Karabiner grabbing the built-in keyboard.",
     accepts: ".json",
     extensions: [".json"],
+    readFromMac: true,
   },
   "qmk-keymap": {
     tool: "your QMK keymap",

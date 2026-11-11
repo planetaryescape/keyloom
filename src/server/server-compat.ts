@@ -38,7 +38,8 @@ export function assessServer(live: Pick<RunningRecord, "version" | "protocol">, 
   return {
     compatible: false,
     replaceLabel: null,
-    words: `${dir} is already being served by keyloom ${live.version}, which is newer than this ${mine.version}. Update this keyloom (or the app) instead; replacing the server would downgrade it.`,
+    // Only the desktop app passes --client-protocol, so these words are the app's; its problem window offers the update beside them.
+    words: `${dir} is already being served by keyloom ${live.version}, which is newer than this ${mine.version}. Update the app to use it: replacing a newer server would downgrade it.`,
   };
 }
 

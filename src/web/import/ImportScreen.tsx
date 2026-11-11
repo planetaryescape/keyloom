@@ -1,8 +1,9 @@
-import { ArrowLeft, Check, Copy, FileUp, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import { boardTitle } from "../shell/Header.tsx";
-import { fetchBoards, uploadLayout } from "./api-import.ts";
+import { ApiError } from "../api.ts";
+import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
 import { acceptsFile, guideFor, importCommand } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
@@ -88,14 +89,16 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // Saved, but the answer couldn't be read: the page reloads to show it, and the card takes nothing more until then (R2-17).
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const command = importCommand(board, activities);
 
-  async function take(files: FileList | null) {
+  async function take(files: FileList | readonly File[] | null) {
     const file = files?.[0];
-    if (file === undefined) return;
+    if (file === undefined || busy || saved) return;
     if (!acceptsFile(guide, file.name)) {
       setProblem(`${file.name} isn't a ${guide.accepts} file. ${guide.steps}`);
       return;
@@ -105,12 +108,29 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
     try {
       onImported(await uploadLayout(token, board.id, file, activities));
     } catch (error) {
+      if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
       setProblem(error instanceof Error ? error.message : "The import didn't go through.");
     } finally {
       setBusy(false);
       // The same file can be chosen again after a fix.
       if (picker.current !== null) picker.current.value = "";
     }
+  }
+
+  // Karabiner keeps its settings in a hidden folder a file picker doesn't show, so the server reads them from their fixed place.
+  async function readFromMac() {
+    setBusy(true);
+    setProblem(null);
+    let file: File;
+    try {
+      file = await readKarabinerConfig(token);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "keyloom couldn't read Karabiner's settings.");
+      return;
+    } finally {
+      setBusy(false);
+    }
+    await take([file]);
   }
 
   function copy() {
@@ -156,10 +176,26 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
         <p className="muted">{board.vendor} · {board.keyCount} keys</p>
       </header>
       <p className="board-card-steps">{guide.steps}</p>
+      {guide.link === undefined && !guide.readFromMac ? null : (
+        <div className="board-card-actions">
+          {guide.link === undefined ? null : (
+            <a className="sheet-action" href={guide.link.href} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} aria-hidden="true" />
+              {guide.link.label}
+            </a>
+          )}
+          {guide.readFromMac ? (
+            <button type="button" className="sheet-action" disabled={busy || saved} onClick={() => void readFromMac()}>
+              <Laptop size={13} aria-hidden="true" />
+              Read it from this Mac
+            </button>
+          ) : null}
+        </div>
+      )}
       <div className="dropzone">
         {busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <FileUp size={16} aria-hidden="true" />}
         <p>{busy ? "Importing…" : `Drop the ${guide.accepts} here, or`}</p>
-        <button type="button" className="sheet-action dropzone-choose" disabled={busy} onClick={() => picker.current?.click()}>
+        <button type="button" className="sheet-action dropzone-choose" disabled={busy || saved} onClick={() => picker.current?.click()}>
           choose it
         </button>
         <input
@@ -173,6 +209,12 @@ function BoardCard({ board, token, onImported, activities }: { board: BoardChoic
         />
       </div>
       {problem === null ? null : <p className="board-card-problem" role="alert"><TriangleAlert size={14} aria-hidden="true" />{problem}</p>}
+      {saved ? (
+        <button type="button" className="button button-primary board-card-reload" onClick={() => window.location.reload()}>
+          <RefreshCw size={14} aria-hidden="true" />
+          Reload
+        </button>
+      ) : null}
       {/* The terminal way stays, folded: most people never need it (23#chrome-recedes). */}
       <details className="board-card-terminal">
         <summary>Or from the terminal</summary>
