@@ -32,7 +32,7 @@ interface Props {
   /** The offer to read Oryx colours into the model, shown above the layer colours when there are some to read (D-193). */
   offer?: ReactNode;
   onClose: () => void;
-  /** Resolves once the new layout is on screen. */
+  /** Shows the new layout. Never rejects for a failed read: the change is written, so the Viewer says so with Show the new layout (R6-03). */
   onApplied: (summary: string) => Promise<void>;
   onStale: () => void;
   /** The drawn board's pinned colourway (D-395), applied at once and kept per board in this browser. */

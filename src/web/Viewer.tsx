@@ -31,6 +31,8 @@ import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
 import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
+import { readAfterApply } from "./editor/read-after-apply.ts";
+import { LATEST_NOT_SHOWN, STALE_EDIT, STALE_UNDO } from "./editor/stale-edit-words.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
@@ -776,14 +778,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }
 
   // One change set from the board or the tabs. A change that would drop the only copy of a function asks first (D-092).
-  const change = useChange({ token, layoutRef, revisionId: revision.id, onChanged, onStale });
+  const change = useChange({ token, layoutRef, revisionId: revision.id, onChanged, onNotShown: showAppliedNotShown, onStale });
 
   async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean } = {}): Promise<ChangeOutcome> {
     setChanging(true);
     const outcome = await change(ops, summary);
     setChanging(false);
     if (outcome.ok) {
-      toasts.show({ kind: "success", message: "Applied", detail: [summary, outcome.warnings[0]].filter(Boolean).join(". ") });
+      // A change that landed but couldn't be shown already has its toast, with Show the new layout (R6-03).
+      if (outcome.shown) toasts.show({ kind: "success", message: "Applied", detail: [summary, outcome.warnings[0]].filter(Boolean).join(". ") });
     } else if (outcome.lost.length > 0 && options.dropReason !== undefined) {
       setPendingDrop({ ops, summary, lost: outcome.lost, reason: options.dropReason });
     } else if (options.quiet !== true && !outcome.stale) {
@@ -1434,34 +1437,44 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (editing === null) return;
     const { layerId: appliedLayer, position } = editing;
     setLastChange({ layerId: appliedLayer, position, ...change });
-    await onChanged();
+    // The draft is written either way, so it is cleared either way; only the toast depends on the read (R6-03).
+    const shown = await readAfterApply(onChanged, showAppliedNotShown);
     setApplied({ layerId: appliedLayer, position });
     setDraft(CLEAN);
     setPlacements([]);
     setPlacing(null);
-    toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+    if (shown) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
   }
 
   async function onRepeated(summaryText: string, firstPosition: number) {
-    await onChanged();
+    const shown = await readAfterApply(onChanged, showAppliedNotShown);
     if (chatSelection !== null) {
       setLayerId(chatSelection.layerId);
       setApplied({ layerId: chatSelection.layerId, position: firstPosition });
     }
-    toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+    if (shown) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
     setRepeating(false);
   }
 
-  // The layout moved on (another tab, the CLI): nothing was written, so say so and show the latest.
+  // The layout moved on (another tab, the CLI): nothing was written, so say so and show the latest. The toast says the latest version
+  // is showing only once it is; a read that fails says so, with a button that reads it again (R6-03).
   function onStale() {
-    toasts.show({
-      kind: "error",
-      message: "The layout changed while you were editing",
-      detail: "Your change was not applied. The latest version is showing, so you can make it again.",
-    });
     closeEditor(true);
     setRepeating(false);
-    void onChanged().catch(() => {});
+    showLatest(STALE_EDIT);
+  }
+
+  function showLatest(words: { words: string; shown: string }) {
+    const notShown = (error: unknown) =>
+      toasts.show({
+        kind: "error",
+        message: words.words,
+        detail: [LATEST_NOT_SHOWN, error instanceof Error ? error.message.trim() : ""].filter(Boolean).join(" "),
+        action: { label: "Show the latest version", run: () => showLatest(words) },
+      });
+    void readAfterApply(onChanged, notShown).then((shown) => {
+      if (shown) toasts.show({ kind: "error", message: words.words, detail: words.shown });
+    });
   }
 
   const chatDrafts = useMemo(() => draftsForChat(parked), [parked]);
@@ -1627,7 +1640,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const restored = target === undefined && revision.origin === "undo";
     try {
       await undoChange(token, layoutRef, { revisionId: revision.id, ...(target === undefined ? {} : { to: target.id }) });
-      await onChanged();
+      // The step is written; a failed read says so with Show the new layout, never "Couldn't undo" (R6-03).
+      if (!(await readAfterApply(onChanged, showAppliedNotShown))) return true;
       toasts.show(
         target === undefined
           ? { kind: "info", message: restored ? "Change restored" : "Undone", detail: undone.replace(/^(Undo|Redo): /, "") }
@@ -1636,12 +1650,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       return true;
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
-      toasts.show({
-        kind: "error",
-        message: stale ? "The layout changed since this page loaded" : target === undefined ? "Couldn't undo" : "Couldn't go back",
-        ...(stale ? { detail: "Showing the latest version now." } : error instanceof Error ? { detail: error.message } : {}),
-      });
-      if (stale) void onChanged().catch(() => {});
+      if (stale) showLatest(STALE_UNDO);
+      else toasts.show({ kind: "error", message: target === undefined ? "Couldn't undo" : "Couldn't go back", ...(error instanceof Error ? { detail: error.message } : {}) });
       return false;
     } finally {
       setUndoing(false);
@@ -1666,14 +1676,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The one place a stored layout's Oryx code is read into the model, and only on the button (D-193).
   async function upgradeNow() {
     const out = await upgradeStoredLayout(token, layoutRef);
-    await onChanged();
+    if (!(await readAfterApply(onChanged, showAppliedNotShown))) return;
     toasts.show({ kind: out.changed ? "success" : "info", message: out.changed ? "Updated" : "Nothing to update", detail: out.message });
   }
   const offer = detail.upgrade === null || detail.upgrade === undefined ? null : <UpgradeOffer offer={detail.upgrade} onUpgrade={upgradeNow} />;
 
   async function onTuned(summaryText: string) {
-    await onChanged();
-    toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+    if (await readAfterApply(onChanged, showAppliedNotShown)) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
   }
 
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
@@ -1828,10 +1837,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   setComboPicking(false);
                 }}
                 onApplied={async (summaryText) => {
-                  await onChanged();
+                  const shown = await readAfterApply(onChanged, showAppliedNotShown);
                   setComboDraft(null);
                   setComboPicking(false);
-                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+                  if (shown) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
                 }}
                 onStale={onStale}
               />
@@ -2231,9 +2240,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 boardName={boardDisplayName(board.name)}
                 onClose={() => setSettingsOpen(false)}
                 onApplied={async (summaryText) => {
-                  await onChanged();
+                  const shown = await readAfterApply(onChanged, showAppliedNotShown);
                   setLightingDraft(new Map());
-                  toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+                  if (shown) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
                 }}
                 onStale={onStale}
               />

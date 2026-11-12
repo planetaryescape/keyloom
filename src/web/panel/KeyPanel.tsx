@@ -97,9 +97,9 @@ interface Props {
   onPlace: (request: PlaceRequest | null) => void;
   onUnplace: (fn: string) => void;
   onClose: () => void;
-  /** Resolves once the new layout is on screen. `change` is what the key was and became, for "repeat on selection". */
+  /** Shows the new layout. Never rejects for a failed read: the change is written, so the Viewer says so with Show the new layout (R6-03). `change` is what the key was and became, for "repeat on selection". */
   onApplied: (summary: string, change: { before: Binding; after: Binding }) => Promise<void>;
-  /** A hold-tap's timing was tuned. */
+  /** A hold-tap's timing was tuned. Never rejects for a failed read, like `onApplied`. */
   onTuned: (summary: string) => Promise<void>;
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;

@@ -4,7 +4,7 @@ import "./settings.css";
 
 interface Props {
   offer: { colours: boolean; tapDances: boolean };
-  /** Resolves once the new layout is on screen; throws with a sentence for the person when it can't be done. */
+  /** Shows the updated layout; throws with a sentence for the person when the update wasn't made. A failed read after it is the Viewer's to say (R6-03). */
   onUpgrade: () => Promise<void>;
 }
 

@@ -19,7 +19,7 @@ interface Props {
   positions: readonly number[];
   last: LastChange;
   onClose: () => void;
-  /** Resolves once the new layout is on screen. */
+  /** Shows the new layout. Never rejects for a failed read: the change is written, so the Viewer says so with Show the new layout (R6-03). */
   onApplied: (summary: string, firstPosition: number) => Promise<void>;
   onStale: () => void;
 }
