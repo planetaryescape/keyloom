@@ -65,9 +65,11 @@ export async function failure(response: Response): Promise<ApiError> {
   try {
     const parsed = ApiErrorBodySchema.safeParse(await response.json());
     if (parsed.success) {
-      // A server exception or an unknown address gets the page's own words (R7-01); every other code keeps the server's sentence.
-      return new ApiError(response.status, failureWords(parsed.data.error.code, parsed.data.error.message), {
-        code: parsed.data.error.code,
+      // A server exception or the catch-all for an unknown address gets the page's own words (R7-01); every other code, a route's own
+      // `not_found` included, keeps the server's sentence.
+      const { code, message, generic } = parsed.data.error;
+      return new ApiError(response.status, failureWords(code, generic === true ? null : message), {
+        code,
         ...(parsed.data.validation === undefined ? {} : { validation: parsed.data.validation }),
         ...(parsed.data.error.board === undefined ? {} : { board: parsed.data.error.board }),
         ...(parsed.data.error.boardName === undefined ? {} : { boardName: parsed.data.error.boardName }),
@@ -78,8 +80,23 @@ export async function failure(response: Response): Promise<ApiError> {
   }
   // No code from the server: the page gives one, so no screen shows a status number (R7-01).
   const code = failureCode(response.status, undefined);
-  return new ApiError(response.status, failureWords(code, ""), { code });
+  return new ApiError(response.status, failureWords(code, null), { code });
 }
+
+/**
+ * Removes something the person asked to drop, such as a priority or a decision. One that is already gone (`not_found`: another tab or the
+ * CLI removed it) counts as removed, so its row leaves the list instead of showing an error whose Try again fails the same way (D-534).
+ */
+export async function removeOrGone(remove: () => Promise<void>): Promise<void> {
+  try {
+    await remove();
+  } catch (error) {
+    if (!isGone(error)) throw error;
+  }
+}
+
+/** keyloom no longer has the thing a request named (`not_found`), so the same request fails the same way on a repeat. */
+export const isGone = (error: unknown): boolean => error instanceof ApiError && error.code === "not_found";
 
 const layoutPath = (ref: string, action: string) => `/api/layouts/${encodeURIComponent(ref)}/${action}`;
 

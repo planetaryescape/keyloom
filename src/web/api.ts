@@ -64,7 +64,7 @@ async function getJson<T>(
   if (!response.ok) {
     const body = ApiErrorBodySchema.safeParse(await response.json().catch(() => null));
     const code = failureCode(response.status, body.success ? body.data.error.code : undefined);
-    throw new ApiError(response.status, failureWords(code, body.success ? body.data.error.message : ""), { code });
+    throw new ApiError(response.status, failureWords(code, body.success && body.data.error.generic !== true ? body.data.error.message : null), { code });
   }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {

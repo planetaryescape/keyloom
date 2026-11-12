@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DecisionCard, DecisionPatch, OutcomeAnswer, OutcomeQuestionsResponse } from "../../api/http.ts";
+import { removeOrGone } from "../api-write.ts";
 import { answerOutcome, fetchDecisions, fetchOutcomeQuestions, patchDecision, retireDecision } from "./api-decisions.ts";
 
 export type DecisionsState =
@@ -41,7 +42,7 @@ export function useDecisions(token: string, layoutRef: string, revisionId: strin
       replace(await patchDecision(token, id, patch));
     },
     async retire(id: string) {
-      await retireDecision(token, id);
+      await removeOrGone(() => retireDecision(token, id));
       setState((s) => (s.status === "ready" ? { status: "ready", items: s.items.filter((d) => d.id !== id) } : s));
     },
   };

@@ -8,6 +8,7 @@ export type OpenRequestedView = (view: AgentView, signal: AbortSignal) => Promis
 
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
+import { removeOrGone } from "../api-write.ts";
 import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn } from "./transcript.ts";
 
@@ -332,7 +333,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
   /** Rejects with the server's message, so the chip can say why it is still there. */
   const removePriority = useCallback(
     async (id: string) => {
-      await forgetPriority(token, id);
+      await removeOrGone(() => forgetPriority(token, id));
       dispatch({ type: "priorityRemoved", id });
     },
     [token],

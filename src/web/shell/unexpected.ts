@@ -8,28 +8,38 @@ export const INTERNAL_WORDS = "keyloom hit a problem it didn't expect. The detai
  * answers, so the route doesn't exist there. Asking again can't help with either; a restart loads the page that matches keyloom.
  */
 export const NOT_FOUND_WORDS = "keyloom couldn't find what this page asked for. It may have been deleted, or this page is newer than the keyloom running now. Restarting keyloom opens the page that matches it.";
+/** A body over the server's cap, which Bun refuses with a bare 413 before any route can say so in its own words. */
+export const TOO_LARGE_WORDS = "That is too large for keyloom to take.";
 /** An answer the page can't read, or a refusal with no code: keyloom and this page are different versions. */
 export const UNREADABLE_WORDS = "keyloom sent an answer this page can't read, which happens when keyloom and this page are different versions. Restarting keyloom opens the page that matches it.";
 
 export type UnexpectedCode = "internal" | "not_found" | "unreadable";
 
 /**
- * The code for a failed answer: the server's own when it sent one. Without one, a 404 is an address keyloom doesn't know, a 5xx is an
- * exception, and any other refusal is a request this keyloom doesn't understand, which is a version mismatch.
+ * The code for a failed answer: the server's own when it sent one. Without one, a 404 is an address keyloom doesn't know, a 413 is a body
+ * over the server's cap (Bun answers it before any route runs), a 5xx is an exception, and any other refusal is a request this keyloom
+ * doesn't understand, which is a version mismatch.
  */
 export function failureCode(status: number, code: string | undefined): string {
   if (code !== undefined) return code;
   if (status === 404) return "not_found";
+  if (status === 413) return "too_large";
   if (status >= 500) return "internal";
   return "unreadable";
 }
 
-/** The sentence the page shows: its own for these codes, the server's for every other code, which each screen maps further. */
-export function failureWords(code: string, serverMessage: string): string {
+/**
+ * The sentence the page shows. An exception and an unreadable answer always get the page's own words. Every other code keeps the server's
+ * sentence, which each screen maps further, such as a route's "This build has no firmware file. Build it again.". `serverMessage` is null
+ * when the server said nothing a person can read: no code at all, or its catch-all `not_found` (`generic`). Then the page says it.
+ */
+export function failureWords(code: string, serverMessage: string | null): string {
   if (code === "internal") return INTERNAL_WORDS;
-  if (code === "not_found") return NOT_FOUND_WORDS;
   if (code === "unreadable") return UNREADABLE_WORDS;
-  return serverMessage;
+  if (serverMessage !== null) return serverMessage;
+  if (code === "not_found") return NOT_FOUND_WORDS;
+  if (code === "too_large") return TOO_LARGE_WORDS;
+  return UNREADABLE_WORDS;
 }
 
 /**

@@ -199,8 +199,10 @@ function coded(status: number, code: "internal" | "not_found", message: string):
   return Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 }
 
+// `generic` marks the catch-all, whose "not found" is no sentence for a person: the page says it in its own words, and keeps a route's own
+// `not_found` sentence, such as "This build has no firmware file. Build it again." (D-534).
 function notFound(): Response {
-  return coded(404, "not_found", "not found");
+  return Response.json({ error: { code: "not_found", message: "not found", generic: true } } satisfies ApiErrorBody, { status: 404 });
 }
 
 // The ref is the single path segment after /api/layouts/. A malformed escape is a 404,

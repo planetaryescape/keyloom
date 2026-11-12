@@ -2,10 +2,12 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { z } from "zod";
 import type { Layout } from "../../src/layout/schema.ts";
-import { failure, request } from "../../src/web/api-write.ts";
-import { fetchLayouts } from "../../src/web/api.ts";
+import { IMPORT_TOO_LARGE } from "../../src/api/http.ts";
+import { failure, isGone, removeOrGone, request } from "../../src/web/api-write.ts";
+import { ApiError, fetchLayouts } from "../../src/web/api.ts";
+import { uploadLayout } from "../../src/web/import/api-import.ts";
 import { HistoryPanel } from "../../src/web/history/HistoryPanel.tsx";
-import { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS, failureCode, failureWords, unexpectedWayOut } from "../../src/web/shell/unexpected.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, TOO_LARGE_WORDS, UNREADABLE_WORDS, failureCode, failureWords, unexpectedWayOut } from "../../src/web/shell/unexpected.ts";
 
 let mock: ReturnType<typeof spyOn> | undefined;
 afterEach(() => mock?.mockRestore());
@@ -15,16 +17,23 @@ test("a failure with no code gets one from its status, so no screen shows a stat
   expect(failureCode(500, undefined)).toBe("internal");
   expect(failureCode(502, undefined)).toBe("internal");
   expect(failureCode(404, undefined)).toBe("not_found");
+  // Bun refuses a body over the server's cap with a bare 413 before any route runs (#301 review).
+  expect(failureCode(413, undefined)).toBe("too_large");
   expect(failureCode(405, undefined)).toBe("unreadable");
   expect(failureCode(409, "stale_base")).toBe("stale_base");
 });
 
-test("the page says unexpected failures in its own words and keeps every other code's sentence", () => {
+test("the page says unexpected failures in its own words and keeps every other code's sentence, a route's own not_found included", () => {
   expect(failureWords("internal", "internal error")).toBe(INTERNAL_WORDS);
-  expect(failureWords("not_found", 'no layout "x"')).toBe(NOT_FOUND_WORDS);
-  expect(failureWords("unreadable", "")).toBe(UNREADABLE_WORDS);
+  expect(failureWords("unreadable", null)).toBe(UNREADABLE_WORDS);
   expect(failureWords("stale_base", "The layout changed.")).toBe("The layout changed.");
-  for (const words of [INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS]) expect(words).not.toMatch(/internal error|answered \d|terminal|reload/i);
+  // A route's not_found names the way on, which the restart words would replace (#301 review).
+  expect(failureWords("not_found", "This build has no firmware file. Build it again.")).toBe("This build has no firmware file. Build it again.");
+  // No sentence from the server: no code, or its catch-all.
+  expect(failureWords("not_found", null)).toBe(NOT_FOUND_WORDS);
+  expect(failureWords("too_large", null)).toBe(TOO_LARGE_WORDS);
+  for (const words of [INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS, TOO_LARGE_WORDS]) expect(words).not.toMatch(/internal error|answered \d|terminal|reload/i);
+  expect(TOO_LARGE_WORDS).not.toMatch(/version|restart/i);
 });
 
 test("Try again only where repeating is safe and can pass; Restart keyloom always; nothing for a screen's own code", () => {
@@ -46,6 +55,38 @@ test("failure() maps the server's coded exception and an uncoded answer to the p
   expect(bare).toMatchObject({ code: "internal", message: INTERNAL_WORDS });
   const refused = await failure(json({ error: { code: "stale_base", message: "The layout changed." } }, 409));
   expect(refused).toMatchObject({ code: "stale_base", message: "The layout changed." });
+});
+
+test("failure() keeps a route's own not_found sentence and uses the restart words only for the server's catch-all (#301 review)", async () => {
+  const route = await failure(json({ error: { code: "not_found", message: "This build has no firmware file. Build it again." } }, 404));
+  expect(route).toMatchObject({ code: "not_found", message: "This build has no firmware file. Build it again." });
+  const catchAll = await failure(json({ error: { code: "not_found", message: "not found", generic: true } }, 404));
+  expect(catchAll).toMatchObject({ code: "not_found", message: NOT_FOUND_WORDS });
+  // An older keyloom's bare body has no code, so the page gives it one with its own words.
+  const old = await failure(json({ error: "not found" }, 404));
+  expect(old).toMatchObject({ code: "not_found", message: NOT_FOUND_WORDS });
+});
+
+test("a body Bun refused for size is too_large, never the version-mismatch words (#301 review)", async () => {
+  expect(await failure(new Response("", { status: 413 }))).toMatchObject({ code: "too_large", message: TOO_LARGE_WORDS });
+  // A route's own too_large keeps its sentence.
+  const route = await failure(json({ error: { code: "too_large", message: "The request body is too large." } }, 413));
+  expect(route).toMatchObject({ code: "too_large", message: "The request body is too large." });
+});
+
+test("an import over the cap says the import route's words, whether Bun or the route refused it", async () => {
+  for (const answer of [() => new Response("", { status: 413 }), () => json({ error: { code: "too_large", message: IMPORT_TOO_LARGE } }, 413)]) {
+    mock = spyOn(globalThis, "fetch").mockImplementation((async () => answer()) as unknown as typeof fetch);
+    await expect(uploadLayout("t", "zsa/moonlander", new File(["x"], "big.zip"))).rejects.toMatchObject({ code: "too_large", message: IMPORT_TOO_LARGE });
+    mock.mockRestore();
+  }
+});
+
+test("removing something another tab already removed counts as removed; any other failure still throws", async () => {
+  await expect(removeOrGone(async () => { throw new ApiError(404, 'no priority "p1"', { code: "not_found" }); })).resolves.toBeUndefined();
+  await expect(removeOrGone(async () => { throw new ApiError(500, INTERNAL_WORDS, { code: "internal" }); })).rejects.toMatchObject({ code: "internal" });
+  expect(isGone(new ApiError(404, "x", { code: "not_found" }))).toBe(true);
+  expect(isGone(new ApiError(409, "x", { code: "stale_base" }))).toBe(false);
 });
 
 test("an answer the page can't read is `unreadable`, with words that send the person to Restart keyloom (R7-09)", async () => {

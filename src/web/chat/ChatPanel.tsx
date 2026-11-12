@@ -194,7 +194,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [invalidRecovery, setInvalidRecovery] = useState<string | null>(null);
   // A request the send found out of date (`invalidRecovery`) gets the out-of-date words and buttons too, not "check before sending" (R7-14).
-  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent && invalidRecovery !== repairDraft.id, checking: repairChecking });
+  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent && invalidRecovery !== repairDraft.id, checking: repairChecking, replying: streaming });
   const repairGate = useRef<(id: string, request: string) => boolean>(() => false);
   useLayoutEffect(() => {
     repairGate.current = (id, request) => repairDraft?.id === id && repairDraft.request === request && repairDraft.request.length <= 8000 && repairCurrent && !streaming && !repairDraft.sent && !draft.trim() && drafts.length === 0;
@@ -843,7 +843,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         <div className="repair-request-actions">
           <button type="button" className="bar-apply" disabled={!repairCurrent || invalidRecovery === repairDraft.id || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === "" || repairDraft.request.length > 8000} onClick={sendRepair}>Send request</button>
           {repairView?.offer === "open_history" ? <button type="button" className="sheet-action" onClick={showHistory}>Open history</button> : null}
-          {repairView?.offer === "show_proposal" && "source" in repairDraft ? <button type="button" className="sheet-action" onClick={() => void showProposal(repairDraft.id, repairDraft.source)}>Dismiss and show the proposal</button> : null}
+          {repairView?.offer === "show_proposal" && "source" in repairDraft ? <button type="button" className="sheet-action" disabled={repairView.offerWaits !== undefined} onClick={() => void showProposal(repairDraft.id, repairDraft.source)}>Dismiss and show the proposal</button> : null}
+          {repairView?.offerWaits === undefined ? null : <p className="blocked-reason">{repairView.offerWaits}</p>}
           {repairView?.offer === "fresh_review" && onFreshReview !== undefined ? <button type="button" className="sheet-action" onClick={() => { onRepairSent?.(repairDraft.id); onFreshReview(); }}>Dismiss and run a fresh review</button> : null}
           <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairView?.dismissLabel}</button>
         </div>

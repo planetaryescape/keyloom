@@ -3,6 +3,9 @@ import { connect } from "node:net";
 import { LayoutDetailSchema, LayoutListResponseSchema } from "../../src/api/http.ts";
 import type { LayoutSource } from "../../src/server/layout-source.ts";
 import { startServer, type RunningServer } from "../../src/server/start-server.ts";
+import { MAX_IMPORT_BYTES } from "../../src/server/editor-routes.ts";
+import { failure } from "../../src/web/api-write.ts";
+import { TOO_LARGE_WORDS } from "../../src/web/shell/unexpected.ts";
 import { checkHost, checkToken } from "../../src/server/guard.ts";
 import { loadFixture } from "./fixture.ts";
 
@@ -243,8 +246,18 @@ describe("Host check covers the page and its assets", () => {
     expect(foreign).not.toContain("<script>");
     const json = await api(port, "/api/nope", goodHeaders);
     expect(json.status).toBe(404);
-    expect(await json.json()).toEqual({ error: { code: "not_found", message: "not found" } });
+    expect(await json.json()).toEqual({ error: { code: "not_found", message: "not found", generic: true } });
   });
+});
+
+test("a body over the import cap gets Bun's bare 413 before any route, which the page reads as too_large, not a version mismatch (#301 review)", async () => {
+  const { port } = start();
+  const response = await fetch(`http://127.0.0.1:${port}/api/import?board=zsa%2Fmoonlander&filename=big.zip`, {
+    method: "POST", headers: { ...goodHeaders, "content-type": "application/octet-stream" }, body: new Uint8Array(MAX_IMPORT_BYTES + 1),
+  });
+  expect(response.status).toBe(413);
+  expect(await failure(response.clone())).toMatchObject({ code: "too_large", message: TOO_LARGE_WORDS });
+  expect(await response.text()).toBe("");
 });
 
 describe("api path handling", () => {
