@@ -301,6 +301,8 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   const status = over.status ?? (() => dockerStatus());
   // A forced restart stops every container, even on a Docker that answers. A build or replay that gets here while one runs waits for it,
   // so it never starts a container between the restart's last check for running work and its stop (D-529).
+  // The wait can take minutes, so the build log says why it has stopped moving.
+  if (engineHolder?.kind === "restart") opts.onProgress?.("keyloom: waiting for keyloom to finish restarting Docker");
   try {
     await waitForEngine(opts.signal, "restart");
   } catch (err) {

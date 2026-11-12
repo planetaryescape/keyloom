@@ -384,12 +384,13 @@ export function engineRestartBlocked(running: readonly string[]): string {
  */
 export function engineRestartBlocker(app: App): string | null {
   const building = buildTasks.size > 0 || runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
-  const running = [
-    ...(building ? ["a build"] : []),
-    ...(flashing(app) || keyboardWriteInProgress() ? ["a flash"] : []),
-    ...containerWorkRunning(),
-  ];
-  return running.length === 0 ? null : engineRestartBlocked(running);
+  const running = [...(building ? ["a build"] : []), ...containerWorkRunning()];
+  // A flash or a keyboard write uses no Docker, so a restart wouldn't stop it; the restart still waits, so nothing else happens to the
+  // keyboard during a write, and the words say that instead of "would stop it".
+  const writing = flashing(app) || keyboardWriteInProgress();
+  if (!writing) return running.length === 0 ? null : engineRestartBlocked(running);
+  const wait = "keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.";
+  return running.length === 0 ? wait : `${engineRestartBlocked(running)} keyloom is also writing to a keyboard; wait for that too.`;
 }
 
 /** Builds and waits. Throws BuildFailedError (exit 7) when the build fails. */

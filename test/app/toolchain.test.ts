@@ -320,13 +320,14 @@ describe("one engine action at a time (#285 review)", () => {
     const up = async () => ({ ok: true as const, version: "29" });
     const restarting = restartDocker({ force: true, blocker: () => null, overrides: { status: async () => (await held.opened, { ok: true, version: "29" }), detect: async () => colima, restartColima: async () => (order.push("colima stop --force"), { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
     await Bun.sleep(10);
-    const building = ensureDocker({ overrides: { env: {}, status: up } }).then((r) => (order.push(`build proceeds ok=${r.ok}`), r));
+    const building = ensureDocker({ onProgress: (line) => order.push(line), overrides: { env: {}, status: up } }).then((r) => (order.push(`build proceeds ok=${r.ok}`), r));
     await Bun.sleep(20);
-    expect(order).toEqual([]);
+    // The build log says why it stopped moving.
+    expect(order).toEqual(["keyloom: waiting for keyloom to finish restarting Docker"]);
     held.open();
     expect(await restarting).toMatchObject({ ok: true });
     expect(await building).toMatchObject({ ok: true, started: false });
-    expect(order).toEqual(["colima stop --force", "build proceeds ok=true"]);
+    expect(order).toEqual(["keyloom: waiting for keyloom to finish restarting Docker", "colima stop --force", "build proceeds ok=true"]);
   });
 
   test("a forced restart asks what is running inside the lock, right before the stop, so work that began after the click is not stopped (D-529)", async () => {

@@ -241,8 +241,11 @@ describe("startBuild / getBuild / buildAndWait", () => {
     const again = holdContainerWork("a lab analysis");
     expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests, and restarting Docker now would stop them. Restart Docker once they have finished.");
     const write = holdKeyboardWrite();
-    expect(engineRestartBlocker(e.app)).toContain("running a flash, a lab analysis and a board review's tests,");
-    for (const release of [lab, tests, again, write]) release();
+    // A keyboard write uses no Docker, so it isn't something a restart "would stop": it is named on its own (#297 re-review).
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests, and restarting Docker now would stop them. Restart Docker once they have finished. keyloom is also writing to a keyboard; wait for that too.");
+    for (const release of [lab, tests, again]) release();
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.");
+    write();
     expect(engineRestartBlocker(e.app)).toBeNull();
     e.closeApp();
   });
