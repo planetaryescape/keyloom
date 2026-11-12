@@ -2,6 +2,8 @@
 // from a fixture: the guard, detect and search, a preview that draws the board without storing it, the name it shows beside a board of the
 // same name, add with its confirmations, and a put previewed, made with a chosen placement, and listed on the config's page.
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ProposalsResponseSchema } from "../../src/api/configs.ts";
 import { ApiErrorBodySchema } from "../../src/api/http.ts";
 import { AddResponseSchema, DetectResponseSchema, PreviewResponseSchema, PutPreviewResponseSchema, PutResponseSchema } from "../../src/api/keyboards.ts";
@@ -30,13 +32,13 @@ const tree = async (url: string): Promise<string> => {
 const servers: Array<{ stop: (force?: boolean) => void }> = [];
 afterAll(() => servers.forEach((s) => s.stop(true)));
 
-async function serve(opts: { hideCommittedCorne?: boolean } = {}) {
+async function serve(opts: { hideCommittedCorne?: boolean; fetchText?: (url: string) => Promise<string>; cacheDir?: string } = {}) {
   const app = openApp({ dataDir: tempDir() });
   const boards = opts.hideCommittedCorne === false ? listBoards() : listBoards().filter((b) => b.definition.id !== "foostan/corne");
   const found = await detectKeyboards({ usb: async () => [corne], boards });
   // The engine's side of it: what its last read saw. The routes never read USB themselves.
   const engine = { newKeyboards: () => found, notifyApplied: () => {} } as unknown as SyncEngine;
-  const keyboards = appKeyboardsBackend(app, engine, { fetchText: tree, cacheDir: tempDir(), boards });
+  const keyboards = appKeyboardsBackend(app, engine, { fetchText: opts.fetchText ?? tree, cacheDir: opts.cacheDir ?? tempDir(), boards });
   const configs = appConfigsBackend(app, engine);
   const server = Bun.serve({
     port: 0,
@@ -133,6 +135,22 @@ describe("a Corne keyloom has never seen", () => {
     const p = PreviewResponseSchema.parse(await (await post("/api/keyboards/preview", { candidate: "zmk:corne" })).json());
     expect(p.layouts).toEqual([]);
     expect(p.boardProblemCode).toBeNull();
+  });
+
+  // R7-11: a derived board that fails the boards check keeps its code, so the page shows the guide instead of Add again.
+  test("a derived board that fails the boards check answers 400 board_check_failed", async () => {
+    // No cache, and a layout file that reads differently the second time, so the check disagrees with the board it checks.
+    const cacheDir = join(tempDir(), "not-a-folder");
+    writeFileSync(cacheDir, "");
+    let reads = 0;
+    const drifting = async (url: string): Promise<string> => {
+      const text = await tree(url);
+      return ++reads === 1 ? text : text.replace("<&key_physical_attrs 100 100    0   37", "<&key_physical_attrs 100 100    0   97");
+    };
+    const { post } = await serve({ fetchText: drifting, cacheDir });
+    const refused = await post("/api/keyboards/add", { candidate: "zmk:corne", homeRow: 2, controller: "nice_nano//zmk" });
+    expect(refused.status).toBe(400);
+    expect(ApiErrorBodySchema.parse(await refused.json()).error.code).toBe("board_check_failed");
   });
 
   test("add needs the home row, refuses a controller that doesn't fit, and stores the board", async () => {

@@ -134,7 +134,8 @@ interface ViewerProps {
     selectedId: string;
     onSelect: (id: string) => void;
     onHome?: (() => void) | undefined;
-    onImport: () => void;
+    /** `boardId`: show only that board's card, for that board's setup (R7-13). */
+    onImport: (boardId?: string | null) => void;
     /** What a switch carries to the next layout (D-317): the layer by name, and the chat if it was open. */
     arrival?: Arrival | null;
     /** Opens another layout with what the switch carries; without it, a switch is a plain `onSelect`. */
@@ -1551,6 +1552,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     chrome.onReload?.(configId);
   }
 
+  /** The new-keyboard steps' Import: the import screen at that board's card when the board is known (R7-13), or at every card. */
+  function importForBoard(boardId: string | null) {
+    if (editing !== null) closeEditor(false);
+    setSidebar(null);
+    chrome.onImport(boardId);
+  }
+
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
@@ -2144,11 +2152,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
-          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={() => {
-            if (editing !== null) closeEditor(false);
-            setSidebar(null);
-            chrome.onImport();
-          }} onMade={openMadeConfig} />
+          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={importForBoard} onMade={openMadeConfig} />
           {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
           {newBoardDrawn !== null && shownHalf !== null ? (
             <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>
@@ -2156,7 +2160,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           {/* A phone has no column: the new keyboard's questions are a sheet at the stage's foot, as the lab's read-out is (D-336). */}
           {narrow && newBoardPanel ? (
             <div className="lab-sheet nb-sheet">
-              <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+              <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} onImport={importForBoard} />
             </div>
           ) : null}
           {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease(), onOpenInputMonitoring: openInputMonitoring }} /> : null}
@@ -2367,7 +2371,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             from the panel takes its place and the conversation waits, still mounted. */}
         {newBoardPanel && !narrow ? (
           <div className="nb-column">
-            <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+            <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} onImport={importForBoard} />
           </div>
         ) : reviewShown ? (
           <div className={narrow ? "lab-sheet br-sheet" : "nb-column"}>
