@@ -78,7 +78,7 @@ echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/config}"; prev="$a"; done
 ${fakeSha256Probe("/config")}
-case " $* " in *" --entrypoint sh "*) [ -f "$vol/config/default.nix" ] || exit 1; rm -f "$vol/glove80.uf2"; exit 0;; esac
+case " $* " in *" --entrypoint sh "*) [ -f "$vol/config/default.nix" ] || exit 86; rm -f "$vol/glove80.uf2"; exit 0;; esac
 case "$FAKE_MODE" in
   ok) cp "$FAKE_UF2" "$vol/glove80.uf2"; echo "building zmk_glove80_lh.drv"; exit 0;;
   nobin) echo "nix-build finished"; exit 0;;

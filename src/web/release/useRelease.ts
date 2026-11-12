@@ -107,6 +107,8 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [restartLog, setRestartLog] = useState<readonly string[]>([]);
   // Ends the wait a restart is in, if any (R7-04).
   const restartWait = useRef<AbortController | null>(null);
+  // Whether the log poll saw this restart running, so its last lines are read once it ends.
+  const restartSeen = useRef(false);
   // Counts build requests, so a restart that ends after a newer one doesn't start its own build over it.
   const buildRequests = useRef(0);
   const docker = useDocker(token);
@@ -203,9 +205,10 @@ export function useRelease(token: string, layoutRef: string): Release {
     const wait = new AbortController();
     restartWait.current = wait;
     setRestartLog([]);
+    restartSeen.current = false;
     void restartThenBuild({
       restart: () => restartDockerApp(token, undefined, true),
-      waitingFor: () => fetchRestartLog(token).then((log) => log.waitingFor, () => null),
+      waitingFor: (signal) => fetchRestartLog(token, signal).then((log) => log.waitingFor, () => null),
       requests: () => buildRequests.current,
       build: () => buildNow(revisionId),
       show: setEngineRestart,
@@ -220,12 +223,23 @@ export function useRelease(token: string, layoutRef: string): Release {
     setEngineRestart(RESTART_IDLE);
     return () => restartWait.current?.abort();
   }, [buildId]);
-  // While the restart runs, its progress shows in the build log tail (R7-04). A server without the route gives no lines.
+  // While the restart runs, its progress shows in the build log tail (R7-04). A server without the route gives no lines. Once a restart
+  // the poll saw running ends, its log is read once more, so lines written after the last poll still show (PR #303 CodeRabbit). A refused
+  // request never ran, so it reads nothing: the server keeps an earlier restart's lines, which aren't this one's.
   useEffect(() => {
-    if (!engineRestart.running) return;
+    const publish = (lines: readonly string[]) => setRestartLog((now) => (now.length === lines.length && now.at(-1) === lines.at(-1) ? now : lines));
+    if (!engineRestart.running) {
+      if (!restartSeen.current) return;
+      restartSeen.current = false;
+      const controller = new AbortController();
+      fetchRestartLog(token, controller.signal).then((log) => publish(log.lines), () => {});
+      return () => controller.abort();
+    }
     const noop = () => {};
     return poll((signal) => fetchRestartLog(token, signal), (log) => {
-      if (log.running) setRestartLog((now) => (now.length === log.lines.length && now.at(-1) === log.lines.at(-1) ? now : log.lines));
+      if (!log.running) return;
+      restartSeen.current = true;
+      publish(log.lines);
     }, (log) => !log.running, noop, noop, RESTART_LOG_MS);
   }, [token, engineRestart.running]);
 
@@ -331,8 +345,8 @@ export const RESTART_WAIT_LIMIT_MS = 30 * 60_000;
  */
 export async function restartThenBuild(deps: {
   restart: () => Promise<{ ok: true } | { ok: false; reason: string; code?: string | undefined }>;
-  /** What a forced restart would wait for now, or null when the server can't say. */
-  waitingFor: () => Promise<readonly string[] | null>;
+  /** What a forced restart would wait for now, or null when the server can't say or the read was stopped. */
+  waitingFor: (signal: AbortSignal) => Promise<readonly string[] | null>;
   /** How many builds were asked for so far; `build` adds one. */
   requests: () => number;
   build: () => void;
@@ -350,13 +364,19 @@ export async function restartThenBuild(deps: {
   const superseded = () => deps.requests() !== asked;
   const sleep = deps.sleep ?? wait;
   const started = now();
+  // A Cancel, a newer build or the page going ends the wait; checked after every read and before every restart (PR #303 CodeRabbit).
+  const ended = () => deps.signal.aborted || superseded();
   for (;;) {
+    if (ended()) return deps.show(RESTART_IDLE);
     deps.show({ ...RESTART_IDLE, running: true });
     let result: Awaited<ReturnType<typeof deps.restart>>;
     try {
       result = await deps.restart();
     } catch (e) {
-      deps.show(superseded() ? RESTART_IDLE : { ...RESTART_IDLE, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted." });
+      if (superseded()) return deps.show(RESTART_IDLE);
+      deps.show({ ...RESTART_IDLE, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted." });
+      // The request may have stopped the engine before it failed, so Docker is read again.
+      deps.failed?.();
       return;
     }
     if (superseded()) return deps.show(RESTART_IDLE);
@@ -370,7 +390,8 @@ export async function restartThenBuild(deps: {
       deps.failed?.();
       return;
     }
-    let waitingFor = await deps.waitingFor();
+    let waitingFor = await deps.waitingFor(deps.signal);
+    if (ended()) return deps.show(RESTART_IDLE);
     // Nothing named to wait for: an older server, or work that ended between the refusal and this read. The button stays for either.
     if (waitingFor === null || waitingFor.length === 0) return deps.show({ ...RESTART_IDLE, problem: result.reason });
     while (waitingFor.length > 0) {
@@ -379,9 +400,10 @@ export async function restartThenBuild(deps: {
       }
       deps.show({ ...RESTART_IDLE, waitingFor });
       await sleep(RESTART_WAIT_MS, deps.signal);
-      if (deps.signal.aborted || superseded()) return deps.show(RESTART_IDLE);
+      if (ended()) return deps.show(RESTART_IDLE);
       // A read that fails keeps waiting on what it last named.
-      waitingFor = (await deps.waitingFor()) ?? waitingFor;
+      waitingFor = (await deps.waitingFor(deps.signal)) ?? waitingFor;
+      if (ended()) return deps.show(RESTART_IDLE);
     }
   }
 }

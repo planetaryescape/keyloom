@@ -24,6 +24,19 @@ export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_er
 export type BuildErrorCode = (typeof BUILD_ERROR_CODES)[number];
 export const isBuildErrorCode = (code: string | null): code is BuildErrorCode => (BUILD_ERROR_CODES as readonly string[]).includes(code ?? "");
 
+/**
+ * The exit the drivers' "can the container see the checkout" probes use when their sentinel file is missing, which is what Docker
+ * mounting an empty folder looks like. Docker's own failures (125 to 127, a pull that failed) and a cleanup after the test exit otherwise,
+ * so only this one is `folder_not_shared` (PR #303 CodeRabbit).
+ */
+export const NOT_SHARED_EXIT = 86;
+
+/** A probe that didn't pass: the folder isn't shared only when its sentinel test said so; anything else may pass on a second try. */
+export function probeFailure(exitCode: number | null, checkoutDir: string, notShared: string): BuildFailure {
+  if (exitCode === NOT_SHARED_EXIT) return new BuildFailure(notShared, "folder_not_shared");
+  return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again once Docker runs containers.`);
+}
+
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
 export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large", "source_error"]);
 

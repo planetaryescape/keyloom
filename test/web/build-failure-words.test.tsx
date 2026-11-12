@@ -168,7 +168,7 @@ describe("a build the engine's own state stopped", () => {
       engineRestart: { running: false, problem: "Docker Desktop didn't come back.", again: false, waitingFor: null, log: [] },
       docker: { readiness: down, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop },
     });
-    expect(html).toContain("Build again starts Docker Desktop once more.");
+    expect(html).toContain("Build again starts Docker Desktop if it isn&#x27;t running.");
     expect(html).toContain("Start it now");
   });
   test("a restart refused while a build runs keeps the button with its reason; one that failed shows why and Build again", () => {
@@ -181,7 +181,7 @@ describe("a build the engine's own state stopped", () => {
     expect(failed).toContain("Build again");
     // The words match the button left: no "Restarting Colima clears this" beside a Build again that hits the same state (PR #297 review).
     // Build again starts the engine itself, so the words point at it, never at a terminal (R7-03).
-    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Build again starts Colima once more.");
+    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Build again starts Colima if it isn&#x27;t running.");
     expect(failed).not.toContain("yourself");
     expect(failed).not.toContain("Restarting Colima clears this");
   });

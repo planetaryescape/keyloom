@@ -114,7 +114,7 @@ echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/qmk_firmware}"; prev="$a"; done
 ${fakeSha256Probe("/qmk_firmware")}
-case " $* " in *" test -f Makefile "*) [ -f "$vol/Makefile" ] && exit 0 || exit 1;; esac
+case " $* " in *" test -f Makefile "*) [ -f "$vol/Makefile" ] && exit 0 || exit 86;; esac
 for a in "$@"; do target="$a"; done
 id="$(echo "\${target%%:*}" | tr / _)_keyloom"
 case "$id" in *reva*) bin="$FAKE_BIN_REVA";; *) bin="$FAKE_BIN_REVB";; esac

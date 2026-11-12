@@ -6,7 +6,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
-import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, NOT_SHARED_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
@@ -101,10 +101,8 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       }
 
       // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
-      const visible = await run({ cmd: [...base, build.image, "test", "-f", "config/west.yml"], log: input.log, timeoutMs: 5 * 60_000 });
-      if (visible.exitCode !== 0) {
-        throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`, "folder_not_shared");
-      }
+      const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000 });
+      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
 
       await awaitMountedFiles({
         image: build.image,

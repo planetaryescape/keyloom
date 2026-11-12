@@ -2401,7 +2401,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 const result = await applyChangeSet(token, card.changeSetId);
                 setWaitingRead((read) => read + 1);
                 // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied". The panel says so beside it.
-                if (!(await onProposalApplied(card, result, () => {}))) return { showAgain: onChanged };
+                // The panel recovers in place; the editor's line also marks the old revision once the panel closes (R7-06, PR #303 CodeRabbit).
+                if (!(await onProposalApplied(card, result, () => setNotShownOn(revision.id)))) return { showAgain: onChanged };
               }}
               onShowLayer={(id) => setLayerId(id)}
                  onPlanRepair={(item) => {

@@ -121,6 +121,33 @@ describe("restartThenBuild", () => {
     expect(h.shown.filter((s) => s.waitingFor !== null).length).toBe(RESTART_WAIT_LIMIT_MS / 60_000);
   });
 
+  test("a Cancel or a newer build while a read of the work is out never restarts, even when the read says nothing runs (PR #303 CodeRabbit)", async () => {
+    for (const end of ["cancel", "newer"] as const) {
+      let restarts = 0;
+      let requests = 0;
+      const shown: EngineRestartRun[] = [];
+      const cancel = new AbortController();
+      const read = Promise.withResolvers<readonly string[]>();
+      let reads = 0;
+      const run = restartThenBuild({
+        restart: async () => (restarts++, restarts === 1 ? busy : { ok: true }),
+        waitingFor: () => (++reads === 1 ? Promise.resolve(["a build"]) : read.promise),
+        requests: () => requests,
+        build: () => requests++,
+        show: (state) => shown.push(state),
+        signal: cancel.signal,
+        sleep: async () => {},
+      });
+      await Bun.sleep(0);
+      if (end === "cancel") cancel.abort();
+      else requests++;
+      read.resolve([]);
+      await run;
+      expect(restarts).toBe(1);
+      expect(shown.at(-1)).toEqual(IDLE);
+    }
+  });
+
   test("engine_busy waits like build_running", async () => {
     const h = harness({ results: [{ ok: false, reason: "keyloom is already starting Docker", code: "engine_busy" }, { ok: true }], waits: [["a Docker start"], []] });
     await h.run;
@@ -136,5 +163,7 @@ describe("restartThenBuild", () => {
     const lost = harness({ results: [new Error("keyloom stopped answering")] });
     await lost.run;
     expect(lost.shown.at(-1)).toEqual({ ...IDLE, problem: "keyloom stopped answering" });
+    // The request may have stopped the engine before it failed, so Docker is read again (PR #303 CodeRabbit).
+    expect(lost.failed()).toBe(1);
   });
 });

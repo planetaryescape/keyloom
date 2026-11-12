@@ -40,8 +40,8 @@ function engineRestartView(code: "stale_mount" | "stuck_container", engine: stri
   const text = code === "stale_mount"
     ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
     : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
-  // Build again starts the engine itself (ensureDocker), so the way on is that button, never a terminal (R7-03).
-  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Build again starts ${engine} once more.`, button: null, busy: null };
+  // Build again starts the engine itself when it is down (ensureDocker), so the way on is that button, never a terminal (R7-03).
+  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Build again starts ${engine} if it isn't running.`, button: null, busy: null };
   if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
   return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
 }
