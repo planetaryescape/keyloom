@@ -113,7 +113,8 @@ describe("quoting", () => {
     expect(shell).not.toContain("sudo");
   });
 
-  test("nothing from keyloom's environment reaches the root script: no shell function, no variable, no xtrace hook (#300 re-review)", async () => {
+  // macOS only: the password dialog is, and there /bin/sh is bash, which imports functions. Linux's dash doesn't, so the attack can't be shown.
+  test.skipIf(process.platform !== "darwin")("nothing from keyloom's environment reaches the root script: no shell function, no variable, no xtrace hook (#300 re-review)", async () => {
     // What whoever starts keyloom could put in its environment. bash, macOS's /bin/sh, runs an exported function in place of `cd`, and
     // runs PS4's command under SHELLOPTS=xtrace.
     const poisoned = { PATH: process.env.PATH ?? "/usr/bin:/bin", KLTEST: "leaked", "BASH_FUNC_cd%%": "() { echo FUNC-RAN; }", SHELLOPTS: "xtrace", PS4: "$(echo PS4-RAN >&2)" };
