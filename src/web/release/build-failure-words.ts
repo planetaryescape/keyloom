@@ -13,7 +13,7 @@ import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
  */
 export type BuildFailureView =
   | { kind: "docker" }
-  | { kind: "restart_engine"; text: string; next: string; button: string | null }
+  | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
   | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
@@ -34,8 +34,8 @@ function engineRestartView(code: "stale_mount" | "stuck_container", engine: stri
   const text = code === "stale_mount"
     ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
     : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
-  if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null };
-  return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again` };
+  if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
+  return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
 }
 
 /** The log lines a restart_engine step shows: without keyloom's closing "build failed" line, which repeats the terminal advice. */

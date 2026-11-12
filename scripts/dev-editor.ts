@@ -8,7 +8,9 @@
 // KEYLOOM_FAKE_NO_KEYBOARD=0 makes the fake detect a keyboard (the default asks for Rev A or B);
 // KEYLOOM_FAKE_BUILD_MS and KEYLOOM_FAKE_FLASH_STEP_MS change how long they take.
 // KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488); =compile fails it with a compile
-// error that repeats every time, naming the previous revision as the last that built (R5-02).
+// error that repeats every time, naming the previous revision as the last that built (R5-02); =stale fails every build on a stale Colima
+// mount until Restart Colima and build again (a forced restart, about 3 s) clears it (R6-09); with KEYLOOM_FAKE_FORCE=busy that restart is
+// refused because a build runs, and with =fail it fails.
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
 // KEYLOOM_FAKE_INPUT_MONITORING=1 makes the flash wait for the reset key because Input Monitoring was refused; KEYLOOM_FAKE_CHECK_FINDS
 // sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
@@ -46,6 +48,7 @@ const fake = new FakeEditor(fixture, {
   flashPlan,
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
   failBuildCompile: process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile",
+  failBuildStale: process.env.KEYLOOM_FAKE_FAIL_BUILD === "stale",
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
   flashResult: process.env.KEYLOOM_FAKE_FLASH_RESULT === "unverified" ? "unverified" : process.env.KEYLOOM_FAKE_FLASH_RESULT === "files_and_folders" ? "permission_files_and_folders" : "verified",
@@ -121,7 +124,15 @@ const system: SystemBackend = {
     if (started !== undefined && installState(tool).status === "running") started.cancelled = true;
     return installState(tool);
   },
-  restartDocker: async () => {
+  restartDocker: async (opts) => {
+    if (opts?.force === true) {
+      const force = process.env.KEYLOOM_FAKE_FORCE;
+      if (force === "busy") return { ok: false, code: "build_running", reason: "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.", engine: null };
+      await Bun.sleep(3000);
+      if (force === "fail") return { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" };
+      fake.staleMount = false;
+      return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
+    }
     if (!colimaBroken) return { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 };
     if (engineAction() !== null) return { ok: false, code: "engine_busy", reason: "keyloom is already starting Docker, for this page or for a build. Wait for that to finish, then check again.", engine: null };
     await Bun.sleep(3000);

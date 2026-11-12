@@ -108,7 +108,7 @@ describe("a build the engine's own state stopped", () => {
   });
   test("a stuck container names the Mac app keyloom restarts", () => {
     const view = buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: "Docker Desktop" }, false);
-    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again" });
+    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…" });
   });
   test("an engine keyloom can't restart says so and keeps Build again", () => {
     const html = failedStep("stale_mount", { error: stale, restartEngine: null });

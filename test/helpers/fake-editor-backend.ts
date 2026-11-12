@@ -25,6 +25,8 @@ export interface FakeOptions {
   failBuildDocker?: boolean;
   /** Fail the build with a compile error that repeats every time, coded, naming the newest earlier revision as the last that built (R5-02). */
   failBuildCompile?: boolean;
+  /** Fail builds as a stale Colima mount (R6-09) until `staleMount` is set false, as a forced engine restart does in the dev editor. */
+  failBuildStale?: boolean;
   /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */
   flashPlan?: FlashPlan;
   /** How a flash that isn't failed ends (D-501): verified by default, written but not confirmed, or refused by Files and Folders. */
@@ -68,7 +70,11 @@ const FLASH_LOG: readonly string[] = [
   "zapp: verifying",
 ];
 
+const STALE_MOUNT_ERROR = "Docker still sees an old or missing copy of keymap.c after 30 s, so the build would not use what keyloom wrote. This is a stale shared folder (Colima's sshfs mount); restart it with `colima restart`, or move XDG_CACHE_HOME to a folder it shares reliably, then build again.";
+
 export class FakeEditor implements EditorBackend {
+  /** The pretend stale mount `failBuildStale` fails on; a forced restart in the dev editor clears it. */
+  staleMount = true;
   private history: Revision[];
   private counter = 0;
   private readonly builds = new Map<string, { build: Build; revisionId: string; cancelledAt?: number }>();
@@ -81,7 +87,7 @@ export class FakeEditor implements EditorBackend {
     options: FakeOptions = {},
   ) {
     this.options = {
-      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false,
+      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false, failBuildStale: false,
       flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
       ...options,
@@ -400,7 +406,8 @@ export class FakeEditor implements EditorBackend {
 
   private progressBuild(id: string, revisionId: string, startedAt: number): Build {
     const { buildMs, failBuildDocker, failBuildCompile } = this.options;
-    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true;
+    const stale = this.options.failBuildStale === true && this.staleMount;
+    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
@@ -414,8 +421,9 @@ export class FakeEditor implements EditorBackend {
       id,
       revisionId,
       status: !done ? "running" : failBuild ? "failed" : "succeeded",
-      error: done && failBuild ? (failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
-      errorCode: done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : null,
+      error: done && failBuild ? (stale ? STALE_MOUNT_ERROR : failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
+      errorCode: done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : done && stale ? "stale_mount" : null,
+      ...(done && stale ? { restartEngine: "Colima" } : {}),
       ...(done && failBuildCompile ? { lastBuilt: this.lastBuiltBefore(revisionId) } : {}),
       flashPlan: this.options.flashPlan,
       startedAt,

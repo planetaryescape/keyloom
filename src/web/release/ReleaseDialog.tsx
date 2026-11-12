@@ -324,20 +324,20 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     // Building again hits the same engine state, so the restart comes first and the build follows it.
                     <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id)}>
                       {release.engineRestart.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-                      {failure.button}
+                      {release.engineRestart.running ? failure.busy : failure.button}
                     </button>
                   ) : (
                     <button type="button" className="button" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
                       Build again
                     </button>
                   )}
-                  {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
                   {failure?.kind === "docker" ? null : (
                     <button type="button" className="button" onClick={() => onAskAboutBuild(build)}>
                       <MessageCircle size={14} aria-hidden="true" />
                       Ask keyloom about this build
                     </button>
                   )}
+                  {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
                   {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
                   {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
                   {goBackRefused?.next !== "reload" ? null : (
