@@ -2,11 +2,14 @@
 //   GET  /api/lab/:layout/passages               -> LabPassagesResponse (the passages, and whether this board can be recorded)
 //   GET  /api/lab/:layout/sessions               -> LabSessionsResponse (newest first)
 //   POST /api/lab/:layout/recording   StartRecordingRequest -> RecordingResponse (201; 400 usage when no keyboard is listening,
-//                                                   409 busy when a recording is already running)
+//                                                   409 recording_running when a recording is already running, 409 busy when
+//                                                   another app holds the keyboard)
 //   POST /api/lab/recording/stop      StopRecordingRequest  -> LabSessionResponse (the session saved; 400 usage when no keys were heard)
 //   POST /api/lab/recording/cancel    {}                    -> {} (nothing is saved)
 //   GET  /api/lab/sessions/:id                    -> LabReadoutResponse (the session and its read-out, or null when not analysed)
-//   POST /api/lab/sessions/:id/analyse {}         -> LabReadoutResponse (replays the recording; proposes what it proves)
+//   POST /api/lab/sessions/:id/analyse {}         -> LabReadoutResponse (replays the recording; proposes what it proves; 503
+//                                                   docker_unavailable when Docker stopped the replay, 500 replay_failed for any
+//                                                   other replay failure)
 //   POST /api/lab/sessions/:id/delete  {}         -> {}
 // The read-out carries counts, sentences, per-finger rows and positions to mark on caps, never the typed text or the raw trace.
 import { z } from "zod";

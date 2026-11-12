@@ -1,7 +1,7 @@
 // What the typing lab offers beside a problem, from the server's code (R1-19). A keyloom build that can't stream yet is fixed by putting
 // keyloom's current build on it: Sync now when keyloom syncs this board, Build and flash otherwise or when the sync fails. Firmware keyloom
 // didn't build is Build and flash's alone, because a sync never replaces it. macOS's refusal opens Input Monitoring (R3-09).
-export type LabFix = { id: "sync_now" | "open_release" | "reload" | "open_input_monitoring" | "retry" | "restart"; label: string };
+export type LabFix = { id: "sync_now" | "open_release" | "reload" | "open_input_monitoring" | "retry" | "restart" | "read_again" | "stop_recording"; label: string };
 
 export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
   if (loadFailed) return [{ id: "reload", label: "Try again" }];
@@ -12,6 +12,11 @@ export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
   if (code === "busy" || code === "connection_lost") return [{ id: "retry", label: "Try again" }];
   // A stuck connection outlives every try in this keyloom, so restarting keyloom is the way on (R5-15).
   if (code === "restart_required") return [{ id: "restart", label: "Restart keyloom" }];
+  // A recording still running, here or in another tab, or one a Cancel failed to stop, is stopped from here (R6-20). Starting again
+  // before it stops is refused the same way, so there is no Try again.
+  if (code === "recording_running" || code === "cancel_failed") return [{ id: "stop_recording", label: "Stop that recording" }];
+  // A replay that failed for any reason but Docker may pass on a second read: the recording is saved (R6-02). Docker gets its own callout.
+  if (code === "replay_failed") return [{ id: "read_again", label: "Read it again" }];
   return [];
 }
 
@@ -21,8 +26,21 @@ export function labProblemText(code: string | null, message: string): string {
   if (code === "foreign_firmware") return "Your keyboard runs firmware keyloom didn't build, so it can't stream its keys. Build and flash puts keyloom's build on it.";
   if (code === "connection_lost") return "keyloom's connection to the keyboard stopped answering. Try again, and keyloom opens a new one.";
   if (code === "restart_required") return "keyloom's connection to the keyboard is stuck, and only restarting keyloom clears it. Then start listening again.";
+  if (code === "recording_running") return "A recording is already running in keyloom. Stop that recording, then start listening again.";
+  if (code === "cancel_failed") return `keyloom couldn't stop listening, so it may still be recording your keyboard. ${message}`;
+  if (code === "replay_failed") return `keyloom couldn't play your recording back through the board's firmware. ${message.trim().replace(/([^.!?])$/, "$1.")} Your recording is saved.`;
   return message;
 }
+
+/** What the lab says when Docker stopped a read-out (R6-02), beside the same Docker callout a build gets. */
+export const LAB_NEEDS_DOCKER = {
+  need: "keyloom reads a recording by playing it through your board's firmware in Docker, and Docker isn't ready on this computer. Your recording is saved.",
+  again: "Read it again",
+  readyNext: "Read it again to see how you typed.",
+} as const;
+
+/** True when the lab's problem is Docker, so the page shows the Docker callout instead of the problem line. */
+export const labNeedsDocker = (code: string | null): boolean => code === "docker_unavailable";
 
 /**
  * Why Apply on a lab fix failed (R3-02), and the way on. A layout changed since the recording no longer takes the fix as it was tried, so

@@ -1,7 +1,7 @@
 // The server's typing lab over the app (rung 22, D-314): it holds the one recording in progress, so the browser starts and stops it
 // and the keyboard's stream lives in this process. The keyboard and the emulator come from LabDeps, so tests run on a fake keyboard.
 import {
-  LabCaptureError, LabStartError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, incompleteRecording, labPassages, labReadout, labSessions,
+  EmulateFailedError, LabCaptureError, LabStartError, NotFoundError, UsageError, analyseSession, beginRecording, cannotRecord, deleteSession, endRecording, getLayout, incompleteRecording, labPassages, labReadout, labSessions,
   type App, type LabDeps, type RecordingInProgress,
 } from "../app/index.ts";
 import { LabError, type LabBackend } from "../server/lab-backend.ts";
@@ -15,6 +15,13 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     // Before UsageError, which it extends: the code puts Sync now beside the problem (R1-19).
     if (err instanceof LabStartError) throw new LabError(400, err.code, err.message);
     if (err instanceof UsageError) throw new LabError(400, "usage", err.message);
+    // A replay that stopped at Docker gets the Docker callout; any other gets its own words, never "internal error" (R6-02). The log
+    // path is for the terminal and the server's log, not the page.
+    if (err instanceof EmulateFailedError) {
+      const words = err.logPath === null ? err.message : err.message.replace(` (log: ${err.logPath})`, "");
+      if (err.logPath !== null) console.error(`keyloom: typing lab replay failed; log: ${err.logPath}`);
+      throw err.code === "docker_unavailable" ? new LabError(503, "docker_unavailable", words) : new LabError(500, "replay_failed", words);
+    }
     throw err;
   }
 }
@@ -44,7 +51,8 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
     sessions: (ref) => translate(() => labSessions(app, ref).map(sessionView)),
     start: (ref, request) => {
       const operation = translate(async () => {
-        if (cancellation !== undefined || recording !== null || starting.size > 0) throw new LabError(409, "busy", "A recording is already running. Stop it first.");
+        // Its own code, apart from a keyboard another app holds (`busy`): the lab offers Stop that recording for this one (R6-20).
+        if (cancellation !== undefined || recording !== null || starting.size > 0) throw new LabError(409, "recording_running", "A recording is already running. Stop it first.");
         const why = cannotRecord(getLayout(app, ref).board.definition);
         if (why !== null) throw new UsageError(why);
         recording = await beginRecording(app, ref, deps, { ...(request.passageId ? { passageId: request.passageId } : {}), ...(request.text !== undefined ? { text: request.text } : {}) });

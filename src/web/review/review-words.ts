@@ -90,10 +90,18 @@ export function placeWords(positions: readonly number[], rows: Readonly<Record<s
  * the provider, so it offers the setup, Add credits when the code says the account ran out, and Try again for after it is fixed at the
  * provider, where keyloom can't see it (#288 review). Anything else that stopped the look can be tried again. By the code, never the text.
  */
-export type AiMissingAction = "credits" | "set_up" | "retry";
-export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean };
-export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
+export type AiMissingAction = "credits" | "set_up" | "switch" | "set_up_other" | "retry";
+export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean; reasonShown?: true };
+/** `canSwitch` is false when --provider or KEYLOOM_PROVIDER fixes the model, so no other one can take the review. */
+export function aiMissingWords(ai: BoardReview["ai"], canSwitch = true): AiMissing {
   if (ai.status === "unavailable" && ai.model === null) return { words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false };
+  // A used-up plan stays used up until it resets, so Try again alone is no way on: another model is, as in chat (R5-04, R6-01). The
+  // reason is Codex's reset sentence in keyloom's words, so it shows in place, not behind Details.
+  if (ai.status === "unavailable" && ai.code === "usage_limit") {
+    const why = ai.reason === null ? "" : ` ${sentence(ai.reason)}`;
+    if (!canSwitch) return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Try again once the limit lifts.`, actions: ["retry"], refused: false, reasonShown: true };
+    return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Switch to another model, or try again once the limit lifts.`, actions: ["switch", "set_up_other", "retry"], refused: false, reasonShown: true };
+  }
   if (ai.status === "unavailable" && ai.code === "no_credits") {
     return { words: "The model account is out of credits, so there are no suggestions this time. Add credits, then try again.", actions: ["credits", "set_up", "retry"], refused: true };
   }
@@ -136,7 +144,7 @@ export type ReviewAction = "load" | "run" | "dismiss" | "restore" | "stop";
  */
 export type ReviewProblem = { words: string; button: "Try again" | "Read the review again"; next: "repeat" | "reload" };
 export function reviewProblemWords(action: ReviewAction, error: { code: string | undefined; status: number; message: string }): ReviewProblem {
-  const what = action === "load" ? "keyloom couldn't read this config's review." : action === "run" ? "keyloom couldn't start the review." : action === "stop" ? "keyloom couldn't stop the tests." : action === "dismiss" ? "keyloom couldn't hide that." : "keyloom couldn't show that again.";
+  const what = action === "load" ? "keyloom couldn't read this config's review." : action === "run" ? "keyloom couldn't start the review." : action === "stop" ? "keyloom couldn't stop the review." : action === "dismiss" ? "keyloom couldn't hide that." : "keyloom couldn't show that again.";
   const refused = action !== "load" && error.status >= 400 && error.status < 500;
   if (refused) return { words: `${what} ${sentence(error.message)}`, button: "Read the review again", next: "reload" };
   // Each of these requests is safe to repeat: a second run replaces the first, and hiding a hidden item hides it.

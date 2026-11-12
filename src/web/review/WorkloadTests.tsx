@@ -11,21 +11,28 @@ import { type Install, useInstall } from "../release/useInstall.ts";
 /** Whether the last test run stopped for Docker, from the server's code rather than its sentence (R1-12). */
 export const testsNeedDocker = (evidence: ReviewWorkload | undefined): boolean => evidence?.status === "unavailable" && evidence.reasonCode === "docker";
 
-/** The release dialog's Docker callout, with Test again once Docker answers: the same Install, Start or Open as a build gets. */
-function TestsNeedDocker({ token, busy, onRetry }: { token: string; busy: boolean; onRetry: () => void }) {
+/** What a Docker callout outside the release dialog says: why Docker is needed, the button once it answers, and what that does. */
+export type NeedsDockerWords = { need: string; again: string; readyNext: string };
+const TESTS_NEED_DOCKER: NeedsDockerWords = { need: "Activity tests run in Docker, and Docker isn't ready on this computer.", again: "Test again", readyNext: "Test again to see the results." };
+
+/**
+ * The release dialog's Docker callout, with a button to go on once Docker answers: the same Install, Start or Open as a build gets. The
+ * activity tests and the typing lab (R6-02) both use it.
+ */
+export function NeedsDocker({ token, busy, onRetry, words }: { token: string; busy: boolean; onRetry: () => void; words: NeedsDockerWords }) {
   const docker = useDocker(token);
   const install = useInstall(token, "docker", docker.refresh);
-  return <TestsNeedDockerView docker={docker} install={install} busy={busy} onRetry={onRetry} />;
+  return <NeedsDockerView docker={docker} install={install} busy={busy} onRetry={onRetry} words={words} />;
 }
 
 /** Split from its hooks so a test can render each state. A readiness request that failed keeps asking and offers Check again. */
-export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) {
+export function NeedsDockerView({ docker, install, busy, onRetry, words }: { docker: Docker; install: Install; busy: boolean; onRetry: () => void; words: NeedsDockerWords }) {
   const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state, docker.lastAction);
   useDockerRecheck(docker, recheckDocker(view) || docker.unanswered);
   const ready = docker.readiness?.ok === true;
   return <div className="br-test-results">
     {/* Docker installed from here says it is running in its own callout, so this line would only repeat it (R3-14). */}
-    {view.kind === "installed" ? null : <p>{ready ? "Docker is ready now." : "Activity tests run in Docker, and Docker isn't ready on this computer."}</p>}
+    {view.kind === "installed" ? null : <p>{ready ? "Docker is ready now." : words.need}</p>}
     {docker.unanswered ? <div className="callout callout-warning" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="callout-body">
@@ -33,10 +40,12 @@ export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker
         <div className="callout-actions"><button type="button" className="button" onClick={docker.refresh}>Check again</button></div>
       </div>
     </div> : null}
-    <DockerCallout view={view} docker={docker} install={install} readyNext="Test again to see the results." />
-    {ready ? <div className="br-actions br-actions-start"><button type="button" className="sheet-action" disabled={busy} onClick={onRetry}>Test again</button></div> : null}
+    <DockerCallout view={view} docker={docker} install={install} readyNext={words.readyNext} />
+    {ready ? <div className="br-actions br-actions-start"><button type="button" className="sheet-action" disabled={busy} onClick={onRetry}>{words.again}</button></div> : null}
   </div>;
 }
+
+export const TestsNeedDockerView = (props: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) => <NeedsDockerView {...props} words={TESTS_NEED_DOCKER} />;
 
 export function ActivityChoices({ value, onChange, disabled = false }: { value: readonly ReviewActivity[]; onChange: (value: ReviewActivity[]) => void; disabled?: boolean }) {
   return <fieldset className="br-activities" disabled={disabled}>
@@ -56,13 +65,15 @@ export function WorkloadTests({ token, firmware, activities, evidence, busy, onR
     <ActivityChoices value={selected} onChange={setSelected} disabled={busy} />
     <p>Test short US-ANSI samples, then check suggestions against the same tasks. Uses Docker, may download firmware, and can take several minutes. Never types on or flashes your keyboard.</p>
     <div className="br-actions br-actions-start">
-      <button type="button" className="sheet-action" disabled={busy || selected.length === 0} onClick={() => onRun(selected)}>Test and review</button>
+      <button type="button" className="sheet-action" disabled={busy || selected.length === 0} aria-describedby={selected.length === 0 ? "br-activities-why" : undefined} onClick={() => onRun(selected)}>Test and review</button>
       {activities.length ? <button type="button" className="sheet-action" disabled={busy} onClick={() => { setSelected([]); onRun([]); }}>Turn off tests</button> : null}
     </div>
+    {/* Test and review waits for a choice; the line says so (R6-24). */}
+    {selected.length === 0 ? <p id="br-activities-why" className="muted">Choose at least one activity to test.</p> : null}
   </>;
   return <section className="br-workloads" aria-label="Activity tests">
     {activities.length ? <details className="br-test-results"><summary>Activity tests · {activities.map((id) => REVIEW_ACTIVITY_LABELS[id]).join(", ")}</summary>{choices}</details> : choices}
-    {testsNeedDocker(evidence) ? <TestsNeedDocker token={token} busy={busy} onRetry={() => onRun(activities)} />
+    {testsNeedDocker(evidence) ? <NeedsDocker token={token} busy={busy} onRetry={() => onRun(activities)} words={TESTS_NEED_DOCKER} />
       : evidence ? <BaselineResults evidence={evidence} active={busy} /> : <p>{activities.length ? "Selected activities will be tested when this config is reviewed." : "No activities assumed. Choose the samples that matter to you."}</p>}
     <p>These are selected routes, not a whole-layout score or a prediction of speed or comfort.</p>
   </section>;

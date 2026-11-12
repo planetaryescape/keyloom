@@ -63,6 +63,17 @@ describe("no suggestions says why and offers the fix (R4-10)", () => {
     expect(view).toMatchObject({ actions: ["credits", "set_up", "retry"], refused: true });
     expect(view.words).toContain("out of credits");
   });
+  test("a used-up Codex plan shows the reset time in place and offers another model, then Try again for after it (R6-01)", () => {
+    const limited = { status: "unavailable" as const, reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" };
+    const view = aiMissingWords(limited);
+    expect(view.actions).toEqual(["switch", "set_up_other", "retry"]);
+    expect(view.words).toBe("Your Codex usage limit is reached, so there are no suggestions this time. Your ChatGPT plan has used up its Codex allowance until 3:45 PM. Switch to another model, or try again once the limit lifts.");
+    expect(view.reasonShown).toBe(true);
+    // --provider or KEYLOOM_PROVIDER fixes the model, so no other can take the review: only Try again, and the words don't offer a switch.
+    const fixed = aiMissingWords(limited, false);
+    expect(fixed.actions).toEqual(["retry"]);
+    expect(fixed.words).not.toContain("Switch");
+  });
   test("a look that stopped for another reason tries again", () => {
     expect(aiMissingWords(ai("failed", "claude-opus-5-5")).actions).toEqual(["retry"]);
   });

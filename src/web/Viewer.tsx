@@ -1787,6 +1787,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 continueCopy={chrome.arrival?.continueCopy}
                 repairDraft={repairDraft}
                 repairCurrent={currentRepair()}
+                onFreshReview={() => { setReviewOpen(true); void boardReview.run(true); }}
                 onPlanRecovery={planRecovery}
                 onRepairDraftChange={(id, request) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, request })}
                 onRepairSentStateChange={(id, sent) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, sent })}

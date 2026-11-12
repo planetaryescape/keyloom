@@ -60,3 +60,13 @@ export function splitByLife(decisions: readonly DecisionCard[]): { active: Decis
 export function successorOf(d: DecisionCard, all: readonly DecisionCard[]): DecisionCard | undefined {
   return d.supersededBy === null ? undefined : all.find((x) => x.id === d.supersededBy);
 }
+
+/**
+ * What Save waits for, as a visible line beside it (R6-24): the empty fields by their labels, or null when nothing is missing.
+ * "Fill in Goal and Why to save."
+ */
+export function missingFieldsWords(missing: readonly string[]): string | null {
+  if (missing.length === 0) return null;
+  const names = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}`;
+  return `Fill in ${names} to save.`;
+}

@@ -23,6 +23,7 @@ import { chooseProvider, fetchConversation } from "./api-chat.ts";
 
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
+import { repairWords } from "./repair-words.ts";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { madeConfigs } from "../configs/agent-made-configs.ts";
 import { useConfigCards } from "../configs/useConfigCards.ts";
@@ -87,6 +88,8 @@ interface Props {
   continueCopy?: boolean | undefined;
   repairDraft?: FindingRepairDraft | null;
   repairCurrent?: boolean;
+  /** Runs a fresh board review and shows it, for a finding's repair request that went out of date (R6-23). */
+  onFreshReview?: () => void;
   onRepairDraftChange?: (id: string, request: string) => void;
   onRepairSentStateChange?: (id: string, sent: boolean) => void;
   onRepairSent?: (id: string) => void;
@@ -120,7 +123,7 @@ const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onPlanRecovery, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames }: Props) {
+export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onPlanRecovery, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames, onFreshReview }: Props) {
   const beginView = useRef<() => OpenRequestedView>(() => async () => ({ version: 1, status: "unavailable", reason: "unsupported" }));
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation, beginViewRequest === undefined ? undefined : () => beginView.current());
   const arrived = useRef(false);
@@ -133,6 +136,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   }, [initialConversation, continueCopy, chat.open, chat.send]);
   const repairSending = useRef(false);
   const repairSent = repairDraft?.sent === true;
+  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent });
   const repairRunId = useRef<string | null>(null);
   const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);
@@ -493,6 +497,14 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     });
   };
 
+  // Reading the conversation again brings its proposals' statuses up to date, so a card applied or set aside elsewhere says so (R6-06).
+  const readProposals = async () => {
+    const id = transcript.conversationId;
+    if (id === null) return;
+    const failed = await chat.open(id);
+    if (typeof failed === "string") throw new Error(failed);
+  };
+
   const newConversation = () => {
     if (streaming) return;
     chat.newConversation();
@@ -626,6 +638,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
             onApply={apply}
             onAskAgain={planProposal}
             onOpenRelease={onOpenRelease}
+            onReadAgain={streaming ? undefined : readProposals}
             compact
             line
           />
@@ -725,6 +738,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                     onSetUpModel={() => setSetupOpen(usedProvider ?? "anthropic")}
                     onSetUpOther={() => setSetupOpen(usedProvider === "anthropic" ? "openrouter" : "anthropic")}
                     onOpenHistory={showHistory}
+                    onReadProposals={readProposals}
                     onNewConversation={startOverWithLastMessage}
                     creditsUrl={usedProvider === "anthropic" || usedProvider === "openrouter" ? CREDITS_PAGES[usedProvider] : undefined}
                     compact={variant === "bar"}
@@ -802,14 +816,16 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       {repairDraft === null ? null : <section className="repair-request" aria-label="Repair request" tabIndex={0}>
         <p className="repair-request-title">{"source" in repairDraft ? "Request for a revised proposal" : "buildId" in repairDraft ? "Question about a failed build" : "Request for one review finding"}</p>
         {"source" in repairDraft ? <details><summary>{repairDraft.context.goalBasis === "request" ? "Original request" : "Saved intent (not a verbatim request)"}</summary><p>{repairDraft.context.goal}</p></details> : null}
-        <p className="repair-request-scope">{repairSent ? "Already sent. If the reply was interrupted, check chat history before taking another action; keyloom will not resend it." : repairCurrent ? ("buildId" in repairDraft ? "Check the question before sending. It sends the build log to the model; nothing is applied." : "Check the request before sending. It asks for a proposal; nothing is applied.") : "source" in repairDraft ? "The layout or source changed. Your original goal and edits are kept. Dismiss this request and select its recovery action again before sending." : "buildId" in repairDraft ? "The layout changed since this build, so this question no longer fits it. Dismiss it, and ask about the newest build if that one fails too." : "This finding is no longer current. Your request is kept, but cannot be sent from this review."}</p>
+        <p className="repair-request-scope">{repairView?.scope}</p>
         {repairDraft.request.length > 8000 ? <p role="status">This request exceeds 8000 characters. Edit it shorter before sending; the original source has not changed.</p> : null}
         {draft.trim() || drafts.length ? <p>Finish or clear your composer and key drafts before sending this request. They have been kept.</p> : null}
         <label htmlFor="repair-request-text">Request</label>
         <textarea id="repair-request-text" value={repairDraft.request} onChange={(event) => onRepairDraftChange?.(repairDraft.id, event.currentTarget.value)} disabled={repairSent} rows={5} />
         <div className="repair-request-actions">
           <button type="button" className="bar-apply" disabled={!repairCurrent || invalidRecovery === repairDraft.id || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === "" || repairDraft.request.length > 8000} onClick={sendRepair}>Send request</button>
-          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairSent ? "Dismiss request" : "Cancel"}</button>
+          {repairView?.offer === "open_history" ? <button type="button" className="sheet-action" onClick={showHistory}>Open history</button> : null}
+          {repairView?.offer === "fresh_review" && onFreshReview !== undefined ? <button type="button" className="sheet-action" onClick={onFreshReview}>Run a fresh review</button> : null}
+          <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairView?.dismissLabel}</button>
         </div>
       </section>}
     </section>

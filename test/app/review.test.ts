@@ -382,6 +382,19 @@ describe("why there is no model", () => {
     expect(refused.ai.reason).not.toContain("message");
   });
 
+  test("a used-up Codex plan keeps its code and Codex's reset time, so the page offers another model (R6-01)", async () => {
+    const w = await reviewWorld();
+    const { review } = createReview(w.app, w.layoutId, "manual");
+    const codex: AgentModel = {
+      provider: "codex", model: "gpt-5.5", effort: "medium",
+      run: () => Promise.reject(codexErrorFor("You've hit your usage limit. Upgrade to Pro or try again at 3:45 PM.")),
+      classifyError: (err) => (err instanceof CodexError ? { kind: err.kind, message: err.message } : null),
+    };
+    const limited = await runReviewAi(w.app, review.id, { model: async () => codex });
+    expect(limited.ai).toMatchObject({ status: "unavailable", code: "usage_limit", model: "gpt-5.5" });
+    expect(limited.ai.reason).toContain("3:45 PM");
+  });
+
   test("a provider that was chosen but has no key is said so, and is not 'no provider'", async () => {
     const w = await reviewWorld();
     writeAgentConfig(w.dir, { provider: "openrouter" });

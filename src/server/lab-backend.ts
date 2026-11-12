@@ -15,7 +15,7 @@ export interface LabBackend {
 
 export class LabError extends Error {
   constructor(
-    readonly status: 400 | 404 | 409,
+    readonly status: 400 | 404 | 409 | 500 | 503,
     readonly code: string,
     message: string,
   ) {

@@ -108,3 +108,11 @@ test("Docker installed from the activity tests says it is ready once, with Test 
   const other = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install: { ...install, state: null }, busy: false, onRetry: noop }));
   expect(other.match(/Docker is ready now\./g)).toHaveLength(1);
 });
+
+test("Test and review says what it waits for while no activity is chosen (R6-24)", () => {
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: [], evidence: undefined, busy: false, onRun: () => {} }));
+  expect(html).toContain("Choose at least one activity to test.");
+  expect(html).toContain('aria-describedby="br-activities-why"');
+  const chosen = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
+  expect(chosen).not.toContain("Choose at least one activity");
+});

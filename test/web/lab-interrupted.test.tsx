@@ -8,7 +8,7 @@ const fixes = { onSync: () => {}, onOpenRelease: () => {}, onOpenInputMonitoring
 const baseLab = (over: Partial<Lab>): Lab => ({
   token: "t", phase: { kind: "start" }, passages: [], canRecord: { ok: true, why: null }, sessions: [], typed: "", problem: null, problemCode: null, loadFailed: false, reload: () => {},
   setTyped: () => {}, start: async () => {}, retry: async () => {}, stop: async () => {}, cancel: async () => {},
-  showSession: async () => {}, remove: async () => {}, openFinding: () => {}, tryFix: () => {}, again: () => {}, ...over,
+  showSession: async () => {}, remove: async () => {}, openFinding: () => {}, tryFix: () => {}, again: () => {}, readAgain: null, ...over,
 });
 
 for (const phone of [false, true]) {
@@ -87,4 +87,32 @@ test("an incomplete recording in Earlier sessions says why it can't be read and 
   expect(html).toContain("incomplete, so it can&#x27;t be read");
   expect(html).toMatch(/<span class="lab-past-row" data-incomplete="true">/);
   expect(html).toMatch(/<button type="button" class="lab-past-row">/);
+});
+
+test("a read-out Docker stopped shows the Docker callout, never \"internal error\" (R6-02)", () => {
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "Docker is not on this computer.", problemCode: "docker_unavailable", readAgain: () => undefined })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("in Docker, and Docker isn&#x27;t ready on this computer. Your recording is saved.");
+  expect(html).not.toContain("internal error");
+  // No Try again: the callout's own Install or Start is the way on, and Read it again appears once Docker answers.
+  expect(html).not.toContain("Try again");
+});
+
+test("any other replay failure says so in words, keeps the recording, and offers Read it again (R6-02)", () => {
+  expect(labFixes("replay_failed", false)).toEqual([{ id: "read_again", label: "Read it again" }]);
+  expect(labProblemText("replay_failed", "the emulator image didn't download")).toBe("keyloom couldn't play your recording back through the board's firmware. the emulator image didn't download. Your recording is saved.");
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "the emulator image didn't download", problemCode: "replay_failed", readAgain: () => undefined })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("Read it again");
+  // With no session to read again, the button would do nothing, so it isn't offered.
+  const none = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "x", problemCode: "replay_failed" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(none).not.toContain("Read it again");
+});
+
+test("a Cancel that failed, or a start refused because a recording runs, offers Stop that recording, never Try again (R6-20)", () => {
+  for (const code of ["cancel_failed", "recording_running"]) expect(labFixes(code, false)).toEqual([{ id: "stop_recording", label: "Stop that recording" }]);
+  // Another app holding the keyboard is not a recording keyloom can stop: it keeps Try again.
+  expect(labFixes("busy", false)).toEqual([{ id: "retry", label: "Try again" }]);
+  expect(labProblemText("cancel_failed", "The server didn't answer.")).toBe("keyloom couldn't stop listening, so it may still be recording your keyboard. The server didn't answer.");
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "A recording is already running. Stop it first.", problemCode: "recording_running" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("Stop that recording");
+  expect(html).not.toContain("Try again");
 });
