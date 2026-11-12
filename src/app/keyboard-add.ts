@@ -113,6 +113,14 @@ function resolveCandidate(id: string): Candidate {
 
 const isMissing = (err: unknown): boolean => err instanceof GeometryError && /returned 404/.test(err.message);
 
+/** A QMK info.json: `null`, a list or a bare value parses as JSON but isn't one, and `layoutSource` reads `.layouts` from each file. */
+function qmkInfo(text: string): Json {
+  const value: unknown = JSON.parse(text);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new SyntaxError("not a JSON object");
+  // SAFETY: Json is QMK's info.json as read; layoutSource checks its layouts with a schema before any key is used.
+  return value as Json;
+}
+
 /**
  * A file from the pinned tree. A 404 is passed on, because the QMK chain looks for files that may not exist. Any other failure is GitHub
  * not answering, which a later try can fix (R6-14); the cache path is for the CLI, and the page names no path. `read` is how the caller
@@ -168,9 +176,8 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
       const files: Array<{ path: string; info: Json }> = [];
       for (const path of infoChainPaths(e.target)) {
         try {
-          const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, JSON.parse);
-          // SAFETY: Json is QMK's info.json as read; layoutSource checks its layouts with a schema before any key is used.
-          files.push({ path, info: parsed(c, path, () => JSON.parse(text) as Json) });
+          const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, qmkInfo);
+          files.push({ path, info: parsed(c, path, () => qmkInfo(text)) });
         } catch (err) {
           if (!isMissing(err)) throw err;
         }
@@ -180,9 +187,8 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
         for (const communityDir of ["layouts/community", "layouts/default"]) {
           const path = `${communityDir}/${layout}/info.json`;
           try {
-            const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, JSON.parse);
-            // SAFETY: as above, layoutSource checks the layouts with a schema.
-            const communityInfo = parsed(c, path, () => JSON.parse(text) as Json);
+            const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, qmkInfo);
+            const communityInfo = parsed(c, path, () => qmkInfo(text));
             files.push({ path, info: communityInfo });
             found = layoutSource(files, layout);
             if (found) break;

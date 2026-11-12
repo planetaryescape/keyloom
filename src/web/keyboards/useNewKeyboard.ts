@@ -322,7 +322,11 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setBusy(false);
       }
     },
-    chooseSource: (id: string) => setStep((s) => (s.kind === "put" ? { ...s, source: id, choices: {} } : s)),
+    chooseSource: (id: string) => {
+      // A refused Start a config doesn't follow to the config just picked; a refused make stays, and its Restore makes the one picked now.
+      setRemoved((r) => (r === "blank" ? null : r));
+      setStep((s) => (s.kind === "put" ? { ...s, source: id, choices: {} } : s));
+    },
     choosePlacement: (source: number, target: number) => setStep((s) => (s.kind === "put" ? { ...s, choices: { ...s.choices, [String(source)]: target } } : s)),
     /** Makes the config with its proposals. Resolves to what was made, so the page can open it. */
     make: async (): Promise<PutResponse | null> => {

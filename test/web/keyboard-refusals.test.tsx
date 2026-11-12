@@ -13,7 +13,7 @@ import { catalogueNote } from "../../src/web/keyboards/catalogue-words.ts";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { putProblem } from "../../src/web/keyboards/put-words.ts";
-import { RestoreKeyboard, keyboardRemoved, removedWords } from "../../src/web/keyboards/RestoreKeyboard.tsx";
+import { RestoreKeyboard, keyboardRemoved, removedWords, restoreThenRetry } from "../../src/web/keyboards/RestoreKeyboard.tsx";
 import { SearchFailed } from "../../src/web/keyboards/SearchFailed.tsx";
 import { knownBoardOf, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
@@ -109,6 +109,18 @@ describe("R6-08: a config refused because its keyboard was removed", () => {
     expect(html).toContain(removedWords("Glove80", "import this layout"));
     expect(html).toMatch(/Restore Glove80<\/button>/);
     expect(html).not.toContain("keyloom keyboard restore");
+  });
+
+  // #299 review (CodeRabbit): a file chosen while Restore ran replaced the refusal, so the old import must not run after it.
+  test("Restore does the refused thing again only while its refusal is still on screen", async () => {
+    let retried = 0;
+    const retry = () => { retried += 1; };
+    expect(await restoreThenRetry(async () => ({}), retry, () => true)).toBeNull();
+    expect(retried).toBe(1);
+    expect(await restoreThenRetry(async () => ({}), retry, () => false)).toBeNull();
+    expect(retried).toBe(1);
+    expect(await restoreThenRetry(async () => { throw new Error("keyloom stopped answering."); }, retry, () => true)).toBe("keyloom stopped answering.");
+    expect(retried).toBe(1);
   });
 
   test("on the Put step offers Restore, which makes the config again", () => {

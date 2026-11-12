@@ -1,7 +1,7 @@
 // `keyboard add` for QMK keyboards and the refusals (22#building-the-board-definition). The pinned QMK tree is replaced by fixtures
 // copied from it, so nothing here reads the network.
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type AddDeps, addKeyboard, openApp, previewKeyboard, showBoard } from "../../src/app/index.ts";
 import { PINNED_SOURCES } from "../../src/boards/derive/pins.ts";
@@ -146,6 +146,13 @@ describe("a QMK keyboard", () => {
     await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).rejects.toMatchObject({ code: "layout_unreadable" });
     portal = false;
     await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+  });
+
+  test("an info.json that is valid JSON but not an object is unreadable, and isn't cached", async () => {
+    const cacheDir = tempDir();
+    const nulled = async (url: string) => (url.endsWith("keyboards/crkbd/rev1/keyboard.json") ? "null" : tree(url));
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: nulled, cacheDir, boards: [] })).rejects.toMatchObject({ code: "layout_unreadable" });
+    expect(existsSync(join(cacheDir, PINNED_SOURCES.qmk.sha, "keyboards/crkbd/rev1/keyboard.json"))).toBe(false);
   });
 
   test("a cache that can't be written doesn't fail the read or blame the network", async () => {
