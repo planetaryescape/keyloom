@@ -177,19 +177,22 @@ export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: tru
  * - A Colima VM that root runs from this folder holds its files, so the script stops with `colima_vm_running` and changes nothing.
  *   keyloom won't run Colima as root to stop it; the command to copy does.
  * - A process running as the person can rename and link in any folder the person can write. A file found by name and changed by name
- *   later could by then be a hard link to one of macOS's own files. So no name is changed while the person can change it:
- *   1. Every folder goes to root, top down, with group and other write and any ACL taken off. Each change is made from inside the
- *      folder, on `.`, and the folder recorded is the one changed: a disk image the person mounts on a folder they own changes what its
- *      name means without a write to the parent, so a change made by name could land on the image while the real folder stays theirs
- *      (#300 re-review).
- *   2. Each file with one name that isn't the person's goes to them, from its own folder, and only once that folder (`.`, which no name
- *      change can move) is checked in the same shell: root's, with no group or other write and no ACL, and one step 1 recorded. A
- *      folder that fails stops the step there, so nothing more changes. In a folder the person can't write, a name can't change between
- *      find's look and chown, and a file with one name, found inside ~/.colima, is not a file elsewhere.
- *   3. Folders go back to the person bottom up, each while its parent is still root's, with any mode step 1 changed put back, setuid,
- *      setgid and sticky bits included. Only a folder step 1 gave to root goes back: a name can point at one only inside a folder that
- *      is still root's.
+ *   later could by then be a hard link to one of macOS's own files. So root changes a name only from inside a folder the person can't
+ *   change: every step that changes something runs from `.`, the folder find is in, and checks it first, in the same shell: root's, with
+ *   no group or other write and no ACL, and (in steps 2 and 3) one step 1 recorded.
+ *   1. Every folder goes to root, top down, with group and other write and any ACL taken off, each from a parent already root's. Each
+ *      change is made from inside the folder, on `.`, and the folder recorded is the one changed: a disk image the person mounts on a
+ *      folder they own changes what its name means without a write to the parent, so a change made by name could land on the image while
+ *      the real folder stays theirs (#300 re-review). A parent that isn't root's stops the step at that folder.
+ *   2. Each file with one name that isn't the person's goes to them, from its own folder, once that folder passes the check. A folder that
+ *      fails stops the step there, so nothing more changes. A file with one name, found inside ~/.colima, is not a file elsewhere.
+ *   3. Folders go back to the person bottom up, each from a parent that passes the check, so its parent is still root's, with any mode
+ *      step 1 changed put back, setuid, setgid and sticky bits included. Only a folder step 1 recorded goes back. Step 3 walks every
+ *      folder, the ones step 1 never took included, and the person can move a folder already given back into one of those; from there it
+ *      is passed over (#300 third review).
  *   A folder root can't take stops step 1 at that folder, and step 2 never runs, so no file is changed by a name the person can swap.
+ *   Root still reads by name in folders the person can write: find's looks, the `stat` of each folder's mode before step 1, and each
+ *   `ha.pid`, whose text reaches only `ps`, as digits.
  * - `find -P` never follows a link; `-xdev` stays on its disk; `chown -h` changes a link itself; `-execdir` runs each change from the
  *   file's own folder, with `./` before the name so a name that starts with `-` is never read as an option.
  * Every value is quoted, the uid is a number, and nothing in the script comes from the page.
@@ -202,24 +205,34 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
   const root = String(tools.root ?? 0);
   if (!/^\d+$/.test(root)) throw new Error("root's uid must be a number");
   const find = "/usr/bin/find -P . -xdev";
-  // Step 1, run per folder from its parent. `cd -P` first, so every change lands on the one folder `.` is, whatever its name means later,
-  // and the ID recorded is that folder's. The ID is printed right after the owner change, so step 3 gives back a folder whose later
-  // change failed.
+  // `.`, the folder a step runs from, is one the person can't rename or link in: root's, with no group or other write and no ACL
+  // (`ls -lde` prints one line more for each ACL entry; the pattern matches `stat`'s symbolic mode). `.` is the folder find is in, which no
+  // name change can move, and the check is in the same shell as the change, so nothing can change `.` between. `$s` keeps its ID.
+  const held = (otherwise: string) => [
+    `s=$(/usr/bin/stat -f '%u %d:%i %Sp' .) || exit 1`,
+    `case $s in "${root} "*" "d????-??-?) ;; *) ${otherwise};; esac`,
+    `a=$(/bin/ls -lde .) || exit 1; case $a in *"\n"*) ${otherwise};; esac`,
+  ];
+  // ...and one step 1 recorded, so not a folder that only looks like one (#300 re-review).
+  const recorded = (otherwise: string) => `k=\${s#* }; k=\${k%% *}; case $KEYLOOM_LOCKED in *" $k "*) ;; *) ${otherwise};; esac`;
+  // Step 1, run per folder from its parent, which must be root's already. The walk reaches a folder only through its parent, but a disk
+  // image mounted on that parent for just its change, and gone before the walk goes in, leaves the real parent the person's (#300 third
+  // review). The starting folder `.` has no parent in the walk. `cd -P` first, so every change lands on the one folder `.` is, whatever
+  // its name means later, and the ID recorded is that folder's. The ID is printed right after the owner change, so step 3 gives back a
+  // folder whose later change failed.
   const lock = [
+    `if [ "$1" != . ]; then ${held("exit 1").join("; ")}; fi`,
     `cd -P "./$1" || exit 1`,
     `${chown} -h 0 . && /usr/bin/stat -f ' %d:%i ' . && /bin/chmod -N . && exec /bin/chmod go-w .`,
   ].join("; ");
-  // Step 2, run per file from its folder: `.` is checked, then the file changes owner, in one shell, so nothing can change `.` between.
-  // `ls -lde` prints one line more for each ACL entry; the patterns match `stat`'s symbolic mode, which has no group or other write.
-  const give = [
-    `s=$(/usr/bin/stat -f '%u %d:%i %Sp' .) || exit 1`,
-    `case $s in "${root} "*" "d????-??-?) ;; *) exit 1;; esac`,
-    `k=\${s#* }; k=\${k%% *}; case $KEYLOOM_LOCKED in *" $k "*) ;; *) exit 1;; esac`,
-    `a=$(/bin/ls -lde .) || exit 1; case $a in *"\n"*) exit 1;; esac`,
-    `exec ${chown} -h ${uid} "./$1"`,
-  ].join("; ");
-  // Run per folder in step 3, from the folder's parent: the folder goes back only when step 1 recorded it, then gets its mode back.
+  // Step 2, run per file from its folder: `.` is checked, then the file changes owner.
+  const give = [...held("exit 1"), recorded("exit 1"), `exec ${chown} -h ${uid} "./$1"`].join("; ");
+  // Step 3, run per folder from its parent: only from a parent that is still root's and recorded, since a folder the person can write can
+  // hold any name by the time root acts on it, a recorded folder moved there included (#300 third review). A folder there is already the
+  // person's or never was root's, so it is passed over. The folder goes back only when step 1 recorded it, then gets its mode back.
   const giveBack = [
+    ...held("exit 0"),
+    recorded("exit 0"),
     `k=$(/usr/bin/stat -f %d:%i "./$1") || exit 1`,
     `case $KEYLOOM_LOCKED in *" $k "*) ;; *) exit 0;; esac`,
     `case $KEYLOOM_MODES in *" $k:"*) m=\${KEYLOOM_MODES#*" $k:"}; /bin/chmod "\${m%% *}" "./$1" || exit 1;; esac`,

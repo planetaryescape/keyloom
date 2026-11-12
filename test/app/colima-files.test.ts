@@ -6,8 +6,9 @@ import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { COLIMA_VM_RUNNING, type ColimaFilesPlan, colimaLinkedFileSeen, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, parsePsLine, parseAccountHome, realPlanDeps, runColimaRootSteps } from "../../src/app/colima-files.ts";
-import { dockerAccessFix, dockerReadiness, ensureDocker, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
+import { COLIMA_LINKED_FILE_HELD, dockerAccessFix, dockerReadiness, ensureDocker, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
+import { shellQuote } from "../../src/app/remapper-setup.ts";
 import { buildBlockedReason, dockerView, linkedFileAfter } from "../../src/web/release/release-words.ts";
 
 const colima = { name: "Colima", command: ["colima", "restart", "--profile", "work"] };
@@ -307,6 +308,83 @@ ${RECORDING_CHOWN}`);
     expect(s.calls().filter((line) => line.includes(" inode=") && line.startsWith(`${join(s.dir, "work")}|`))).toEqual([]);
   });
 
+  /** The folders directly in `folder`, in the order macOS's find walks them, so a test can time the person's move. */
+  const walkOrder = (folder: string) =>
+    Bun.spawnSync(["/usr/bin/find", "-P", folder, "-mindepth", "1", "-maxdepth", "1", "-type", "d"]).stdout.toString().trim().split("\n").map((p) => p.slice(folder.length + 1));
+  /** ~/.colima for `setup(name)`, so a test can make folders, and name them in its stand-in chown, before setup writes it. */
+  const colimaOf = (name: string) => join(root, name, "it's $(touch pwned) home", ".colima");
+  const q_ = shellQuote;
+
+  test("step 3 gives a folder back only from a parent still root's and recorded, so a folder moved out of reach is passed over (#300 third review)", async () => {
+    const outside = join(root, "moved-outside");
+    writeFileSync(outside, "root's file\n");
+    chmodSync(outside, 0o600);
+    const outsideInode = statSync(outside).ino;
+    const dir = colimaOf("moved");
+    for (const name of ["x1", "x2"]) mkdirSync(join(dir, name), { recursive: true });
+    // Q is walked before P, so step 3 reads P after Q has gone back.
+    const order = walkOrder(dir).filter((n) => n === "x1" || n === "x2");
+    expect(order).toHaveLength(2);
+    const [q = "", p = ""] = order;
+    const Q = join(dir, q);
+    const P = join(dir, p);
+    // L's 0777 is recorded, so step 3 would put that mode on whatever ./L is when it gets there.
+    mkdirSync(join(Q, "L", "m"), { recursive: true });
+    chmodSync(join(Q, "L"), 0o777);
+    const stop = join(root, "moved-stop");
+    // The person's moves: P is a folder root can't take (uchg), so step 1 passes it by. Once Q is the person's again, L moves into P, and
+    // from then on P/L keeps turning into a hard link to a file outside ~/.colima and back.
+    const swapper = `i=0; while [ ! -e ${q_(stop)} ] && [ $i -lt 3000 ]; do
+  /bin/mv L L.real 2>/dev/null && { /bin/ln ${q_(outside)} L 2>/dev/null; /bin/rm -f L; /bin/mv L.real L; }; i=$((i+1))
+done; : > ${q_(`${stop}.done`)}`;
+    const s = setup("moved", `if [ "$2" = 0 ] && [ "$(/bin/pwd -P)" = ${q_(P)} ]; then exit 1; fi
+( ${RECORDING_CHOWN} )
+if [ "$2" != 0 ] && [ "$3" = ./${q} ] && [ "$(/bin/pwd -P)" = ${q_(dir)} ]; then
+  /bin/mv ./${q}/L ${q_(join(P, "L"))} && echo moved >> "$LOG.moved"
+  (cd ${q_(P)} && ${swapper}) </dev/null >/dev/null 2>&1 &
+fi`);
+    try {
+      const r = await s.run();
+      expect(readFileSync(`${join(s.base, "chown.log")}.moved`, "utf8").trim()).toBe("moved");
+      expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+      // Nothing in step 3 ran from P or below it, and the file outside kept its mode and owner.
+      expect(s.calls().filter((line) => line.startsWith(`${P}|`) || line.startsWith(`${P}/`))).toEqual([]);
+      expect(s.calls().flatMap((line) => line.match(/inode=(\d+)$/)?.[1] ?? []).map(Number)).not.toContain(outsideInode);
+      // m, L and Q went back before the move, bottom up, each from a parent that was still root's.
+      expect(s.calls().filter((line) => line.startsWith(`${Q}/`) || line.startsWith(`${Q}|`) || line.endsWith(` ./${q}`))).toEqual([
+        `${Q}|-h 0 .`, `${join(Q, "L")}|-h 0 .`, `${join(Q, "L", "m")}|-h 0 .`,
+        `${join(Q, "L")}|-h ${other} ./m`, `${Q}|-h ${other} ./L`, `${dir}|-h ${other} ./${q}`,
+      ]);
+    } finally {
+      writeFileSync(stop, "");
+      for (let i = 0; i < 200 && !existsSync(`${stop}.done`); i++) await Bun.sleep(25);
+    }
+    expect(statSync(outside).mode & 0o7777).toBe(0o600);
+    expect(statSync(outside).nlink).toBe(1);
+  }, 30_000);
+
+  test("step 1 takes a folder only from a parent that is root's, so a name in a folder that stopped being root's is never followed (#300 third review)", async () => {
+    const outsideDir = join(root, "parent-outside");
+    mkdirSync(outsideDir);
+    chmodSync(outsideDir, 0o777);
+    const C = join(colimaOf("parent"), "c");
+    for (const name of ["g1", "g2"]) mkdirSync(join(C, name), { recursive: true });
+    const order = walkOrder(C);
+    expect(order).toHaveLength(2);
+    const [first = "", second = ""] = order;
+    // As root takes C's first folder, C is the person's again, as it is when the walk went into C's real folder after a disk image on it
+    // took root's change; then C's second folder becomes a link to a folder outside ~/.colima.
+    const s = setup("parent", `if [ "$2" = 0 ] && [ "$(/bin/pwd -P)" = ${q_(join(C, first))} ]; then
+  cd .. && /bin/chmod u+w . && /bin/mv ${second} ${second}.real && /bin/ln -s ${q_(outsideDir)} ${second} && /bin/chmod g+w . && cd ${first}
+fi
+${RECORDING_CHOWN}`);
+    const r = await s.run();
+    expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+    expect(existsSync(join(C, `${second}.real`))).toBe(true);
+    expect(s.calls().filter((line) => line.startsWith(`${outsideDir}|`))).toEqual([]);
+    expect(statSync(outsideDir).mode & 0o7777).toBe(0o777);
+  });
+
   test("a folder's whole mode comes back, its sticky bit included (#300 re-review)", async () => {
     const s = setup("sticky", RECORDING_CHOWN);
     // macOS's chmod: Bun's chmodSync drops the sticky bit.
@@ -564,7 +642,8 @@ describe("what the page shows (D-533)", () => {
   test("a linked file the server reports holds back the command on a fresh page too, and says why (PR #300 CodeRabbit)", () => {
     const held = { ...refused, access: { ...access, command: null, linkedFile: true } };
     const view = dockerView(held, false, null, null);
-    expect(view).toMatchObject({ kind: "no-access", command: null, fix: { offered: true, note: expect.stringContaining("doesn't offer Colima's command") } });
+    // The same sentence `keyloom doctor` prints (#300 third review).
+    expect(view).toMatchObject({ kind: "no-access", command: null, fix: { offered: true, note: COLIMA_LINKED_FILE_HELD } });
     expect(dockerView(held, false, "You cancelled the password dialog.", null, "fix-files", "cancelled")).toMatchObject({ command: null, fix: { offered: true } });
   });
 

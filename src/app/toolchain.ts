@@ -146,6 +146,12 @@ async function accessFix(platform: NodeJS.Platform, engine: DockerEngine | null,
   return linked ? { ...fix, command: null, linkedFile: true } : fix;
 }
 
+/**
+ * Why Colima's command is held back, said in place of its note. The page says the same (`release-words.ts`, which can't import this
+ * folder); a test keeps the two equal.
+ */
+export const COLIMA_LINKED_FILE_HELD = "A file in Colima's folder also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.";
+
 /** Fix Colima's files stopped at a linked file, and no fix has completed since. Reset when this process starts; the look covers that. */
 let colimaLinkedFileFound = false;
 
