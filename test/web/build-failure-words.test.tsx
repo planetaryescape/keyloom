@@ -50,6 +50,9 @@ describe("buildQuestion", () => {
     const hugeError = buildQuestion({ boardName: "Glove80", error: "z".repeat(20000), logTail: ["make: *** [keymap.o] Error 1"] });
     expect(hugeError.length).toBeLessThanOrEqual(8000);
     expect(hugeError).toEndWith("```\nmake: *** [keymap.o] Error 1\n```");
+    const hugeName = buildQuestion({ boardName: "b".repeat(20000), error: "z".repeat(20000), logTail: ["make: *** [keymap.o] Error 1"] });
+    expect(hugeName.length).toBeLessThanOrEqual(8000);
+    expect(hugeName).toEndWith("```\nmake: *** [keymap.o] Error 1\n```");
   });
 });
 

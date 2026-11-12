@@ -26,17 +26,18 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt">, 
 }
 
 // The log keeps its newest lines within what a chat message may hold. The error and each line are capped first, so one huge line or
-// error can never push the whole log out: with these caps, the heading and the newest line always fit.
+// error (or board name) can never push the whole log out: with these caps, the heading and the newest line always fit.
 const MAX_REQUEST = CHAT_MESSAGE_MAX;
 const MAX_LOG_LINES = 60;
 const MAX_ERROR = 2000;
 const MAX_LINE = 1000;
+const MAX_BOARD_NAME = 200;
 const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
 
 /** The question "Ask keyloom about this build" puts in the chat for the person to check and send: what failed and the log's last lines. */
 export function buildQuestion(input: { boardName: string; error: string | null; logTail: readonly string[] }): string {
   const head = [
-    `My firmware build for the ${input.boardName} failed. Explain what went wrong in plain words, and what I can change in my layout so it builds.`,
+    `My firmware build for the ${clip(input.boardName, MAX_BOARD_NAME)} failed. Explain what went wrong in plain words, and what I can change in my layout so it builds.`,
     `keyloom said: ${clip(input.error ?? "The build failed.", MAX_ERROR)}`,
     "The last lines of the build log:",
   ].join("\n\n");
