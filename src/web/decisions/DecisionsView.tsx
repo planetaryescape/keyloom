@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import type { DecisionCard, DecisionPatch } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
-import { STATUS_WORDS, keysLine, kindWords, splitByLife, successorOf } from "./decision-text.ts";
+import { STATUS_WORDS, keysLine, kindWords, missingFieldsWords, splitByLife, successorOf } from "./decision-text.ts";
 import type { DecisionsState } from "./useDecisions.ts";
 import "./decisions.css";
 
@@ -190,7 +190,14 @@ function EditForm({ decision: d, busy, onCancel, onSave }: { decision: DecisionC
     d.status === "tried_helpful" || d.status === "tried_unhelpful" ? d.status : "hypothesis",
   );
   const choiceRow = d.kind === "choice";
-  const empty = goal.trim() === "" || reason.trim() === "" || (choiceRow && choice.trim() === "");
+  const goalLabel = d.kind === "priority" ? "What you said" : "Goal";
+  const missing = [
+    ...(goal.trim() === "" ? [goalLabel] : []),
+    ...(choiceRow && choice.trim() === "" ? ["What was chosen"] : []),
+    ...(reason.trim() === "" ? ["Why"] : []),
+  ];
+  const empty = missing.length > 0;
+  const why = missingFieldsWords(missing);
 
   function save() {
     const patch: DecisionPatch = {};
@@ -204,7 +211,7 @@ function EditForm({ decision: d, busy, onCancel, onSave }: { decision: DecisionC
 
   return (
     <form className="decision-edit" onSubmit={(event) => { event.preventDefault(); if (!empty) save(); }}>
-      <label htmlFor={`${id}-goal`}>{d.kind === "priority" ? "What you said" : "Goal"}</label>
+      <label htmlFor={`${id}-goal`}>{goalLabel}</label>
       <textarea id={`${id}-goal`} rows={2} value={goal} onChange={(e) => setGoal(e.target.value)} disabled={busy} autoFocus />
       {!choiceRow ? null : (
         <>
@@ -225,12 +232,13 @@ function EditForm({ decision: d, busy, onCancel, onSave }: { decision: DecisionC
         </>
       )}
       <div className="decision-actions">
-        <button type="submit" className="button button-primary" disabled={busy || empty}>
+        <button type="submit" className="button button-primary" disabled={busy || empty} aria-describedby={why === null ? undefined : `${id}-why`}>
           {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
           Save
         </button>
         <button type="button" className="button" disabled={busy} onClick={onCancel}>Cancel</button>
       </div>
+      {why === null ? null : <p id={`${id}-why`} className="muted">{why}</p>}
     </form>
   );
 }

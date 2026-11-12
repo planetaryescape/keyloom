@@ -369,6 +369,9 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   // A forced restart stops every container, even on a Docker that answers, and Fix Colima's files stops Colima. A build or replay that
   // gets here while one runs waits for it, so it never starts a container between the last check for running work and the stop (D-529,
   // D-533).
+  // The wait can take minutes, so the build log says why it has stopped moving.
+  if (engineHolder?.kind === "restart") opts.onProgress?.("keyloom: waiting for keyloom to finish restarting Docker");
+  if (engineHolder?.kind === "fix-files") opts.onProgress?.("keyloom: waiting for keyloom to finish fixing Colima's files");
   try {
     await waitForEngine(opts.signal, ["restart", "fix-files"]);
   } catch (err) {

@@ -633,3 +633,9 @@
   outline: 0;
   box-shadow: none;
 }
+
+/* A restore that failed (R6-08) is an error under advice that still stands: Restore is still the way on. */
+.nb-restore-failed {
+  margin-top: var(--space-1);
+  color: var(--bad);
+}

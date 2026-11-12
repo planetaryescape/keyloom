@@ -143,7 +143,7 @@ export function registerKeyboardCommands(program: Command, deps: KeyboardCommand
         ...(opts.layout === undefined ? {} : { layout: opts.layout }),
         ...(opts.controller === undefined ? {} : { controller: opts.controller }),
       };
-      const preview = await previewKeyboard(input, deps.keyboards);
+      const preview = await previewKeyboard({ ...input, ...(opts.force ? { force: true } : {}) }, deps.keyboards);
       if (preview.needs.length > 0) {
         const rows = preview.rows.map((r) => `  row ${r.row}: ${r.keys} keys${r.row === preview.guessedHomeRow ? "  (keyloom's guess for the home row)" : ""}`).join("\n");
         const controllers = preview.controllers.length > 0 ? `\ncontrollers keyloom can write the flash steps for: ${preview.controllers.map((c) => c.id).join(", ")}` : "";

@@ -88,7 +88,7 @@ export async function handleEditorRoute(
   try {
     return await route.run(backend, id, request);
   } catch (error) {
-    if (error instanceof EditorError) return fail(error.status, error.code, error.message, error.validation);
+    if (error instanceof EditorError) return fail(error.status, error.code, error.message, error.validation, error.board);
     throw error;
   }
 }
@@ -127,8 +127,8 @@ function decode(segment: string): string | null {
   }
 }
 
-function fail(status: number, code: string, message: string, validation?: ApiErrorBody["validation"]): Response {
-  const body: ApiErrorBody = { error: { code, message }, ...(validation === undefined ? {} : { validation }) };
+function fail(status: number, code: string, message: string, validation?: ApiErrorBody["validation"], board?: string): Response {
+  const body: ApiErrorBody = { error: { code, message, ...(board === undefined ? {} : { board }) }, ...(validation === undefined ? {} : { validation }) };
   return Response.json(body, { status });
 }
 

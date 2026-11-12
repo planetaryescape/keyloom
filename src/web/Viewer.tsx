@@ -41,6 +41,7 @@ import { formatFindingRepairRequest, type FindingRepairDraft } from "../api/revi
 import { formatProposalRecoveryRequest, type RecoveryContext, type RecoverySource } from "../validation/proposal-recovery.ts";
 import { proposalContext } from "./chat/recovery-context.ts";
 import { PreviewBanner } from "./chat/PreviewBanner.tsx";
+import { findingRepairState } from "./chat/repair-words.ts";
 import { layerName } from "./chat/proposal-facts.ts";
 import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./chat/preview.ts";
 import { Reminders } from "./decisions/Reminders.tsx";
@@ -1744,17 +1745,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   useEffect(() => () => viewRequest?.resolve({ version: 1, status: "unavailable", reason: "cancelled" }), [viewRequest]);
 
   if (layer === undefined) return null;
-  function currentRepair(): boolean {
-    if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return false;
+  function repairState(): "current" | "checking" | "stale" {
+    if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return "stale";
     // A question about a build stays good to send whatever the review says; its log is in it.
-    if ("buildId" in repairDraft) return true;
+    if ("buildId" in repairDraft) return "current";
     if ("source" in repairDraft) {
       const source = repairDraft.source;
-      return source.conversationId !== undefined || (source.kind === "proposal" && waiting?.some((proposal) => proposal.changeSetId === source.proposalId && proposal.status === "proposed") === true);
+      return source.conversationId !== undefined || (source.kind === "proposal" && waiting?.some((proposal) => proposal.changeSetId === source.proposalId && proposal.status === "proposed") === true) ? "current" : "stale";
     }
-    const review = boardReview.review;
-    return review?.id === repairDraft.reviewId && review.revisionId === repairDraft.headRevisionId && !boardReview.stale && !boardReview.busy && !boardReview.refreshing && review.items.some((item) => item.id === repairDraft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"));
+    return findingRepairState(repairDraft, boardReview);
   }
+  const repair = repairState();
   const chatContent = (
             <>
               {reminders.length === 0 ? null : (
@@ -1800,7 +1801,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 initialConversation={chrome.arrival?.conversationId}
                 continueCopy={chrome.arrival?.continueCopy}
                 repairDraft={repairDraft}
-                repairCurrent={currentRepair()}
+                repairCurrent={repair === "current"}
+                repairChecking={repair === "checking"}
+                onFreshReview={() => { setReviewOpen(true); void boardReview.run(true); }}
                 onPlanRecovery={planRecovery}
                 onRepairDraftChange={(id, request) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, request })}
                 onRepairSentStateChange={(id, sent) => repairDraft?.id === id && onRepairDraft(id, { ...repairDraft, sent })}
@@ -2126,7 +2129,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
-          <SetupCard flow={newBoard} hasConfigs={putSources.length > 0} onImport={() => {
+          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={() => {
             if (editing !== null) closeEditor(false);
             setSidebar(null);
             chrome.onImport();

@@ -1,12 +1,17 @@
 import { LoaderCircle, Plus, Usb, X } from "lucide-react";
 import { useState } from "react";
+import type { BoardChoice } from "../../api/http.ts";
+import { importLine } from "../import/export-steps.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
+import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
 import "./keyboards.css";
 
 // The "known board, no config" card (D-336): keyloom recognizes the keyboard on USB but has nothing on it yet. Without this the board is
 // invisible, because the board switch lists only boards that have a config. Every choice is a visible button, as on the new-keyboard card.
-export function SetupCard({ flow, hasConfigs, onImport, onMade }: {
+export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
   flow: NewKeyboard;
+  /** The boards keyloom has, for where the layout of the one being set up comes from (R6-11). */
+  boards?: readonly BoardChoice[];
   /** False on a first run: with no config to put on it, that choice is not offered (R1-25). */
   hasConfigs: boolean;
   /** Opens the import screen, where the board's own export (Oryx, the MoErgo editor, a zmk-config) is dropped. */
@@ -40,7 +45,7 @@ export function SetupCard({ flow, hasConfigs, onImport, onMade }: {
           </button>
         ) : null}
         <button type="button" onClick={onImport}>
-          <span className="nb-setup-body"><b>Import a layout</b><small>Drop the export from Oryx, the MoErgo editor or your zmk-config.</small></span>
+          <span className="nb-setup-body"><b>Import a layout</b><small>{importLine(boards.find((b) => b.id === step.boardId))}</small></span>
         </button>
       </div>
       <div className="nb-blank">
@@ -53,6 +58,9 @@ export function SetupCard({ flow, hasConfigs, onImport, onMade }: {
           </button>
         </div>
       </div>
+      {flow.removed === null ? null : (
+        <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
+      )}
       {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       <footer className="nb-foot">
         <span className="nb-note">keyloom only reads the keyboard. Nothing is written to it.</span>

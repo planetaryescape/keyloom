@@ -1,10 +1,11 @@
 // How the board review's words are drawn (D-340): a title or body carries `{key:<layerId>:<position>}` and `{layer:<layerId>}` markers,
 // which the screen draws as caps and chips; the marker, the counts and the line under the config name in words. Pure.
+import type { ChatProviderStatus } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { ReviewItem } from "../../validation/review-item.ts";
 
 /** A message as a sentence that ends in a full stop. */
-const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
+export const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
 
 export type Segment = { kind: "text"; text: string } | { kind: "key"; layerId: string; position: number } | { kind: "layer"; layerId: string };
 
@@ -90,10 +91,23 @@ export function placeWords(positions: readonly number[], rows: Readonly<Record<s
  * the provider, so it offers the setup, Add credits when the code says the account ran out, and Try again for after it is fixed at the
  * provider, where keyloom can't see it (#288 review). Anything else that stopped the look can be tried again. By the code, never the text.
  */
-export type AiMissingAction = "credits" | "set_up" | "retry";
-export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean };
-export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
+export type AiMissingAction = "credits" | "set_up" | "switch" | "set_up_other" | "retry";
+export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean; reasonShown?: true };
+/**
+ * `canSwitch` is false when --provider or KEYLOOM_PROVIDER fixes the model, so no other one can take the review, and while the provider
+ * status is unread, so a lock is not known yet. `nowOn` names the provider keyloom uses now when it is no longer the one the look failed
+ * on (a switch in chat since): Try again runs on that one, so the words say so and offer no switch.
+ */
+export function aiMissingWords(ai: BoardReview["ai"], canSwitch = true, nowOn: string | null = null): AiMissing {
   if (ai.status === "unavailable" && ai.model === null) return { words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false };
+  // A used-up plan stays used up until it resets, so Try again alone is no way on: another model is, as in chat (R5-04, R6-01). The
+  // reason is Codex's reset sentence in keyloom's words, so it shows in place, not behind Details.
+  if (ai.status === "unavailable" && ai.code === "usage_limit") {
+    const why = ai.reason === null ? "" : ` ${sentence(ai.reason)}`;
+    if (nowOn !== null) return { words: `Your Codex usage limit was reached, so there are no suggestions this time.${why} keyloom now uses ${nowOn}, so Try again runs the review on ${nowOn}.`, actions: ["retry"], refused: false, reasonShown: true };
+    if (!canSwitch) return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Try again once the limit lifts.`, actions: ["retry"], refused: false, reasonShown: true };
+    return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Switch to another model, or try again once the limit lifts.`, actions: ["switch", "set_up_other", "retry"], refused: false, reasonShown: true };
+  }
   if (ai.status === "unavailable" && ai.code === "no_credits") {
     return { words: "The model account is out of credits, so there are no suggestions this time. Add credits, then try again.", actions: ["credits", "set_up", "retry"], refused: true };
   }
@@ -101,6 +115,19 @@ export function aiMissingWords(ai: BoardReview["ai"]): AiMissing {
     return { words: "The model provider refused this key or account, so there are no suggestions this time. Fix the account or change the key, then try again.", actions: ["set_up", "retry"], refused: true };
   }
   return { words: "keyloom's own look didn't finish, so there are no suggestions this time.", actions: ["retry"], refused: false };
+}
+
+/** The provider a look failed on, by its code: `usage_limit` comes only from Codex (src/agent/codex/errors.ts). Null when not known. */
+export const failedProvider = (ai: BoardReview["ai"]): ChatProviderStatus["providers"][number]["id"] | null => (ai.code === "usage_limit" ? "codex" : null);
+
+/**
+ * The ready providers a review can switch to: none while the status is unread or a lock fixes the model, and never the one in use or the
+ * one the look failed on, so a switch can't lead back to a used-up plan (R6-01 review).
+ */
+export function switchTargets(status: ChatProviderStatus | null, failedOn: ChatProviderStatus["providers"][number]["id"] | null): ChatProviderStatus["providers"][number]["id"][] {
+  if (status === null || status.lockedBy !== null) return [];
+  const active = status.active?.provider;
+  return status.providers.filter((p) => p.ready && p.id !== active && p.id !== failedOn).map((p) => p.id);
 }
 
 /**
@@ -122,7 +149,9 @@ export function appliedNotShown(error: unknown): ApplyFailure {
 export function applyFailureWords(error: { code: string | undefined; status: number; message: string }): ApplyFailure {
   if (error.status < 400) return { words: "keyloom didn't confirm this Apply, so it may have gone through. Check before applying it again.", action: "check" };
   if (error.code === "stale_base" || error.code === "validation_failed") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };
-  if (error.code === "not_found" || error.code === "usage") return { words: "This suggestion is no longer open, so nothing was applied.", action: "fresh_review" };
+  if (error.code === "not_found" || error.code === "not_open") return { words: "This suggestion is no longer open, so nothing was applied.", action: "fresh_review" };
+  // A review suggestion that no longer preserves the config is refused as usage; a fresh review makes one that does.
+  if (error.code === "usage") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };
   return { words: `Nothing was applied: ${error.message}`, action: "retry" };
 }
 
@@ -136,7 +165,7 @@ export type ReviewAction = "load" | "run" | "dismiss" | "restore" | "stop";
  */
 export type ReviewProblem = { words: string; button: "Try again" | "Read the review again"; next: "repeat" | "reload" };
 export function reviewProblemWords(action: ReviewAction, error: { code: string | undefined; status: number; message: string }): ReviewProblem {
-  const what = action === "load" ? "keyloom couldn't read this config's review." : action === "run" ? "keyloom couldn't start the review." : action === "stop" ? "keyloom couldn't stop the tests." : action === "dismiss" ? "keyloom couldn't hide that." : "keyloom couldn't show that again.";
+  const what = action === "load" ? "keyloom couldn't read this config's review." : action === "run" ? "keyloom couldn't start the review." : action === "stop" ? "keyloom couldn't stop the review." : action === "dismiss" ? "keyloom couldn't hide that." : "keyloom couldn't show that again.";
   const refused = action !== "load" && error.status >= 400 && error.status < 500;
   if (refused) return { words: `${what} ${sentence(error.message)}`, button: "Read the review again", next: "reload" };
   // Each of these requests is safe to repeat: a second run replaces the first, and hiding a hidden item hides it.

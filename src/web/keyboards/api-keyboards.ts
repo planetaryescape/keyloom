@@ -1,6 +1,7 @@
 // The new-keyboard calls (src/api/keyboards.ts, D-336), and the config page's open proposals (src/api/configs.ts).
 import { ProposalsResponseSchema } from "../../api/configs.ts";
 import {
+  CollectionKeyboardSchema, type CollectionKeyboard,
   AddResponseSchema, DetectResponseSchema, PreviewResponseSchema, PutPreviewResponseSchema, PutResponseSchema, type AddRequest, type AddResponse, type DetectResponse,
   type PreviewRequest, type PreviewResponse, type PutPreviewResponse, type PutRequest, type PutResponse,
 } from "../../api/keyboards.ts";
@@ -17,3 +18,6 @@ export const previewPut = (token: string, body: PutRequest, signal?: AbortSignal
 export const putConfig = (token: string, body: PutRequest): Promise<PutResponse> => request("POST", "/api/keyboards/put", token, PutResponseSchema, undefined, body);
 export const fetchOpenProposals = async (token: string, ref: string, signal?: AbortSignal): Promise<ProposalCard[]> =>
   (await request("GET", `/api/configs/${encodeURIComponent(ref)}/proposals`, token, ProposalsResponseSchema, signal)).proposals;
+/** Your keyboards' Restore, for a refusal that names a removed keyboard (R6-08). Syncing stays paused (D-476). */
+export const restoreKeyboard = (token: string, board: string): Promise<CollectionKeyboard> =>
+  request("POST", "/api/keyboards/restore", token, CollectionKeyboardSchema, undefined, { board });

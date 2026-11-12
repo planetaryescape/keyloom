@@ -75,7 +75,7 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
   try {
     // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte download (D-486).
     const docker = await ensureDocker({ ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }), ...(opts.signal === undefined ? {} : { signal: opts.signal }) });
-    if (!docker.ok) throw new BuildFailure(docker.reason);
+    if (!docker.ok) throw new BuildFailure(docker.reason, "docker_unavailable");
     const slug = board.id.replace("/", "-");
     const result = await emulator({
       board,
@@ -97,7 +97,7 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
     const known = err instanceof EmulationError || err instanceof BuildFailure || err instanceof CheckoutError || err instanceof LockTimeoutError;
     if (!known) throw err;
     log.line(`keyloom: emulation failed: ${err.message}`);
-    throw new EmulateFailedError(`${err.message} (log: ${logPath})`, logPath);
+    throw new EmulateFailedError(`${err.message} (log: ${logPath})`, logPath, err instanceof BuildFailure && err.code === "docker_unavailable" ? "docker_unavailable" : null);
   } finally {
     releaseWork();
     if (!opts.log) log.close();

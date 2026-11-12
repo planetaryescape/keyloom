@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityChoices, SuggestionTestResults, TestsNeedDockerView, WorkloadTests, testsNeedDocker } from "../../src/web/review/WorkloadTests.tsx";
+import { ActivityChoices, SuggestionTestResults, NeedsDockerView, TESTS_NEED_DOCKER, WorkloadTests, testsNeedDocker } from "../../src/web/review/WorkloadTests.tsx";
 import { ReviewWorkloadSchema } from "../../src/layout/review-workload.ts";
 
 const baseline = { id: "prose-prose", status: "verified" as const, requestedOutputs: 21, physicalKeydowns: 22, maxSimultaneousKeys: 2, layerEntries: 1, modifierEntries: 0, busyKeys: [] };
@@ -87,11 +87,11 @@ test("a readiness request that failed still offers Check again, and asks again b
   const noop = () => {};
   const docker = { readiness: null, unanswered: true, starting: false, problem: null, problemCode: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
-  const html = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install, busy: false, onRetry: noop }));
+  const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("couldn&#x27;t ask whether Docker is ready");
   expect(html).toContain("Check again");
   // While the first request is still out, there is nothing to say yet.
-  const asking = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker: { ...docker, unanswered: false }, install, busy: false, onRetry: noop }));
+  const asking = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker: { ...docker, unanswered: false }, install, busy: false, onRetry: noop }));
   expect(asking).not.toContain("Check again");
 });
 
@@ -99,14 +99,22 @@ test("Docker installed from the activity tests says it is ready once, with Test 
   const noop = () => {};
   const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: { tool: "docker" as const, status: "succeeded" as const, phase: null, logTail: [], error: null, errorCode: null }, problem: null, start: noop, cancel: noop };
-  const html = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install, busy: false, onRetry: noop }));
+  const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("Docker is installed and running. Test again to see the results.");
   expect(html).not.toContain("Docker is ready now.");
   expect(html).not.toContain("You can build now.");
   expect(html).toContain("Test again");
   // Docker that came up some other way still gets its one line.
-  const other = renderToStaticMarkup(createElement(TestsNeedDockerView, { docker, install: { ...install, state: null }, busy: false, onRetry: noop }));
+  const other = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install: { ...install, state: null }, busy: false, onRetry: noop }));
   expect(other.match(/Docker is ready now\./g)).toHaveLength(1);
+});
+
+test("Test and review says what it waits for while no activity is chosen (R6-24)", () => {
+  const html = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: [], evidence: undefined, busy: false, onRun: () => {} }));
+  expect(html).toContain("Choose at least one activity to test.");
+  expect(html).toContain('aria-describedby="br-activities-why"');
+  const chosen = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
+  expect(chosen).not.toContain("Choose at least one activity");
 });
 
 test("a refusing Colima on a Mac offers Fix Colima's files, keeps the command below it, and keeps the button after a closed dialog (D-533)", () => {
@@ -115,7 +123,7 @@ test("a refusing Colima on a Mac offers Fix Colima's files, keeps the command be
   const readiness = { ok: false as const, problem: "no-access" as const, reason: "refused", engine: "Colima", canStart: false, autoStart: true, install: null, access };
   const docker = { readiness, unanswered: false, starting: false, problem: null, problemCode: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
-  const render = (d: typeof docker | Record<string, unknown>) => renderToStaticMarkup(createElement(TestsNeedDockerView, { docker: d as typeof docker, install, busy: false, onRetry: noop }));
+  const render = (d: typeof docker | Record<string, unknown>) => renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker: d as typeof docker, install, busy: false, onRetry: noop }));
   const offered = render(docker);
   expect(offered).toContain("Fix Colima&#x27;s files</button>");
   expect(offered).toContain("Or run Colima&#x27;s command in Terminal yourself");

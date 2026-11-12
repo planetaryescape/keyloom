@@ -24,7 +24,7 @@ import { restoreProblems } from "../validation/restore.ts";
 import { type Evaluation, evaluate } from "../validation/validate.ts";
 import type { App } from "./context.ts";
 import { decisionFactsFor, pinnedFor } from "./decisions.ts";
-import { NotFoundError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+import { NotFoundError, NotOpenError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { closeOpenQuestion } from "./question-skip.ts";
 
@@ -200,7 +200,7 @@ export function applyChange(app: App, changeSetId: string): ApplyOutcome {
   const applied = transact(app.db, () => {
     const cs = findChangeSet(app.db, changeSetId);
     if (!cs) throw new NotFoundError(`no change set "${changeSetId}"`);
-    if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
+    if (cs.status !== "proposed") throw new NotOpenError(`change set ${cs.id} is ${cs.status}, not proposed`);
     const automatic = proposalReview(app.db, cs.id);
     if (automatic && (automatic.review.runId !== automatic.runId || automatic.review.ai.status !== "done" || !reviewFreshness(app, automatic.review).current)) {
       throw new StaleBaseError("This automatic recommendation is no longer current. Run a fresh review before applying it.", []);
@@ -261,7 +261,7 @@ export function rejectChange(app: App, changeSetId: string): ChangeSetView {
   return transact(app.db, () => {
     const cs = findChangeSet(app.db, changeSetId);
     if (!cs) throw new NotFoundError(`no change set "${changeSetId}"`);
-    if (cs.status !== "proposed") throw new UsageError(`change set ${cs.id} is ${cs.status}, not proposed`);
+    if (cs.status !== "proposed") throw new NotOpenError(`change set ${cs.id} is ${cs.status}, not proposed`);
     markRejected(app.db, cs.id);
     return toView(findChangeSet(app.db, cs.id) as ChangeSetRow);
   });

@@ -6,6 +6,14 @@ export class UsageError extends Error {
 }
 
 /**
+ * A change set that is no longer proposed (applied, rejected or superseded elsewhere). Its own code, `not_open`, so the page says the
+ * proposal is closed without reading every usage refusal that way (R6-06). Still a usage error to the CLI (exit 2).
+ */
+export class NotOpenError extends UsageError {
+  override name = "NotOpenError";
+}
+
+/**
  * Two keyloom binaries that cannot work together: a desktop app and a `serve` that speak different protocols, or a running server this
  * one must not attach to or replace (D-454). Exit 10; `kind` says which.
  */
@@ -92,6 +100,18 @@ export class LabCaptureError extends Error {
 export class CredentialError extends Error {
   override name = "CredentialError";
   constructor(readonly code: "key_malformed" | "key_rejected" | "key_from_environment" | "key_store_unavailable" | "key_store_failed" | "codex_missing", message: string) {
+    super(message);
+  }
+}
+
+/**
+ * A refusal about a keyboard that the page answers with a button (R6-08, R6-18): `keyboard_removed` offers Restore {board}, then the
+ * import or the new config again; `layout_for_other_board` offers Import it as a {board} config. `board` is the board the button acts
+ * on. The message is the CLI's. Exit 2 like any usage error.
+ */
+export class BoardRefusal extends UsageError {
+  override name = "BoardRefusal";
+  constructor(readonly code: "keyboard_removed" | "layout_for_other_board", readonly board: string, message: string) {
     super(message);
   }
 }

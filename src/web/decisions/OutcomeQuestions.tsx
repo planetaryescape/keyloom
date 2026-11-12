@@ -71,12 +71,14 @@ function Ask({ decision, flashedAt, onAnswer }: { decision: DecisionCard; flashe
           <label htmlFor={`${id}-note`} className="outcome-meta">What did you notice?</label>
           <input id={`${id}-note`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} disabled={busy} autoFocus />
           <div className="outcome-actions">
-            <button type="submit" className="button button-primary" disabled={busy || note.trim() === ""}>
+            <button type="submit" className="button button-primary" disabled={busy || note.trim() === ""} aria-describedby={note.trim() === "" ? `${id}-why` : undefined}>
               {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               Save
             </button>
             <button type="button" className="button" disabled={busy} onClick={() => setVerdict(null)}>Back</button>
           </div>
+          {/* Save waits for the note; the line says so where the button is (R6-24). */}
+          {note.trim() === "" ? <p id={`${id}-why`} className="muted">Write what you noticed to save it.</p> : null}
         </form>
       )}
       {problem === null ? null : <p role="alert" className="decision-problem">{problem}</p>}

@@ -64,6 +64,16 @@ describe("the guard", () => {
     expect(removed.status).toBe(200);
     expect((await removed.json()).removedAt).not.toBeNull();
     expect((await (await call("/api/keyboards/collection")).json()).keyboards[0]).toMatchObject({ boardId: "foostan/corne", layoutId: config.id });
+    // R6-08: a config for a removed keyboard is refused with a code the page answers with Restore, by the put and by a new config alike.
+    const elsewhere = newConfig(app, { name: "Collection elsewhere", from: "blank", board: "moergo/glove80" });
+    const put = await post("/api/keyboards/put", { from: elsewhere.id, board: "foostan/corne" });
+    expect(put.status).toBe(400);
+    expect(ApiErrorBodySchema.parse(await put.json()).error).toMatchObject({ code: "keyboard_removed", board: "foostan/corne" });
+    const created = await post("/api/configs", { from: "blank", name: "Collection second", board: "foostan/corne" });
+    expect(created.status).toBe(400);
+    const createdError = ApiErrorBodySchema.parse(await created.json()).error;
+    expect(createdError.code).toBe("keyboard_removed");
+    expect(createdError.message).toContain("keyloom keyboard restore foostan/corne");
     expect((await (await post("/api/keyboards/restore", { board: "foostan/corne" })).json())).toMatchObject({ removedAt: null, paused: true });
     const bundle = await post("/api/keyboards/contribute", { board: "foostan/corne" });
     expect(bundle.headers.get("content-type")).toBe("application/zip");
@@ -114,11 +124,12 @@ describe("a Corne keyloom has never seen", () => {
   });
 
   // R5-06: the page gets a code for a keyboard keyloom can't add yet, not only the CLI's sentence with its flags.
-  test("a keyboard keyloom can't add yet answers 400 with its code, and a preview always carries layouts and a problem code", async () => {
+  // R6-07: a keyboard keyloom has answers with board_known and the board, so the page offers to put a config on it.
+  test("a keyboard keyloom can't add answers 400 with its code, and a preview always carries layouts and a problem code", async () => {
     const { post } = await serve();
-    const noPositions = await post("/api/keyboards/preview", { candidate: "zmk:glove80" });
-    expect(noPositions.status).toBe(400);
-    expect(ApiErrorBodySchema.parse(await noPositions.json()).error.code).toBe("no_key_positions");
+    const known = await post("/api/keyboards/preview", { candidate: "zmk:glove80" });
+    expect(known.status).toBe(400);
+    expect(ApiErrorBodySchema.parse(await known.json()).error).toMatchObject({ code: "board_known", board: "moergo/glove80", boardName: "Glove80" });
     const p = PreviewResponseSchema.parse(await (await post("/api/keyboards/preview", { candidate: "zmk:corne" })).json());
     expect(p.layouts).toEqual([]);
     expect(p.boardProblemCode).toBeNull();

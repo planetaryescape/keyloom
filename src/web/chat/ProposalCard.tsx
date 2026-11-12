@@ -13,6 +13,7 @@ import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
 import { changeWords, keyLabel, leadSentence, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
 import { AfterApplyNote } from "../release/AfterApply.tsx";
+import { CLOSED_WORDS, proposalApplyFailure } from "./proposal-apply-words.ts";
 import "./proposal.css";
 
 interface Props {
@@ -36,24 +37,34 @@ interface Props {
   line?: boolean;
   /** A later proposal revised this one (D-452), so a superseded card says "by the revised proposal". Absent for one set aside because a sibling was applied. */
   revised?: boolean;
+  /**
+   * Reads the proposals again, offered when Apply found this one no longer open (R6-06). Rejects when the read failed, so the card says so
+   * and keeps the button. Absent where nothing can read them again (a reply still streaming).
+   */
+  onReadAgain?: (() => void | Promise<void>) | undefined;
 }
 
 const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false, revised = false }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false, revised = false, onReadAgain }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [failure, setFailure] = useState<{ message: string; stale: boolean; reasons: string[] } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; stale: boolean; closed: boolean; reasons: string[] } | null>(null);
+  const [reading, setReading] = useState(false);
+  // Once the read shows it applied or superseded, its badge says so, and the failure would only repeat it.
+  useEffect(() => {
+    if (proposal.status === "applied" || proposal.status === "superseded") setFailure(null);
+  }, [proposal.status]);
   const open = proposal.status === "proposed";
   // History describes the saved operation, not an attempt to replay non-idempotent ops on today's head.
   const currentValidation = useMemo(() => open ? evaluate(board, layout, proposal.ops).result : proposal.validation, [open, board, layout, proposal.ops, proposal.validation]);
   const effectiveValidation = currentValidation.ok ? proposal.validation : currentValidation;
-  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true;
+  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true && failure?.closed !== true;
   const recoveryReasons = failure?.reasons.length ? failure.reasons : validationReasons(effectiveValidation.errors, layout);
-  const recoverable = proposal.status === "proposed" && (failure?.stale === true || recoveryReasons.length > 0);
+  const recoverable = proposal.status === "proposed" && failure?.closed !== true && (failure?.stale === true || recoveryReasons.length > 0);
   const recovery = recoverable ? <button type="button" className="bar-link" onClick={() => onAskAgain(proposal, recoveryReasons.length ? recoveryReasons : [failure?.message ?? "The proposal no longer applies cleanly.", `Proposal targets: ${proposal.validation.diff.changed.map((slot) => keyIn(layout, slot)).join("; ") || "no key target recorded"}.`])}>Plan a revised proposal</button> : null;
   const [justApplied, setJustApplied] = useState(false);
   const outcome = useRef<HTMLDivElement>(null);
@@ -96,17 +107,31 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     } catch (error) {
       setConfirming(false);
       setFailure({
-        message:
-          error instanceof ApiError && error.code === "stale_base"
-            ? "The layout changed after this was proposed, so it no longer applies cleanly."
-            : error instanceof Error ? error.message : "Couldn't apply this.",
-        stale: error instanceof ApiError && error.code === "stale_base",
+        ...proposalApplyFailure(error instanceof ApiError ? error : error instanceof Error ? { message: error.message } : null),
         reasons: error instanceof ApiError && error.validation ? validationReasons(error.validation.errors, layout) : [],
       });
     } finally {
       setApplying(false);
     }
   }
+
+  function readAgain() {
+    if (onReadAgain === undefined) return;
+    setReading(true);
+    void Promise.resolve().then(onReadAgain).then(
+      () => setReading(false),
+      () => {
+        setReading(false);
+        setFailure((f) => f === null ? f : { ...f, message: `${CLOSED_WORDS} keyloom couldn't read the proposals again.` });
+      },
+    );
+  }
+  // A closed proposal's one way on: read the proposals, so the card shows what happened to it.
+  const readAgainButton = failure?.closed === true && onReadAgain !== undefined ? (
+    <button type="button" className="bar-link" disabled={reading} onClick={readAgain}>
+      {reading ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : null}Read proposals again
+    </button>
+  ) : null;
 
   function requestApply() {
     if (!canApply) return;
@@ -160,6 +185,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         <strong className="proposal-line-title" title={proposal.title}>{shortTitle(proposal.title, 44)}</strong>
         {dropped.length === 0 ? null : <span className="proposal-line-drop">Drops {dropped.map((d) => functionName(d.function, layout)).join(", ")}</span>}
         {failure === null ? null : <span className="proposal-line-problem" role="alert">{failure.message}</span>}
+        {readAgainButton}
         {recovery}
         {confirming ? <span className="proposal-line-problem" role="alert">Replaces {natives.length === 1 ? "a custom key" : `${natives.length} custom keys`} keyloom can&apos;t write back; Undo restores it.</span> : null}
         <span className="proposal-bar-gap" />
@@ -217,6 +243,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <TriangleAlert size={16} aria-hidden="true" />
             <div>
               <p>{failure.message}</p>
+              {readAgainButton}
               {recovery}
             </div>
           </div>
@@ -340,6 +367,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
           <TriangleAlert size={16} aria-hidden="true" />
           <div>
             <p>{failure.message}</p>
+            {readAgainButton}
             {recovery}
           </div>
         </div>
