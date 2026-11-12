@@ -825,7 +825,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         <div className="repair-request-actions">
           <button type="button" className="bar-apply" disabled={!repairCurrent || invalidRecovery === repairDraft.id || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === "" || repairDraft.request.length > 8000} onClick={sendRepair}>Send request</button>
           {repairView?.offer === "open_history" ? <button type="button" className="sheet-action" onClick={showHistory}>Open history</button> : null}
-          {repairView?.offer === "fresh_review" && onFreshReview !== undefined ? <button type="button" className="sheet-action" onClick={onFreshReview}>Run a fresh review</button> : null}
+          {repairView?.offer === "fresh_review" && onFreshReview !== undefined ? <button type="button" className="sheet-action" onClick={() => { onRepairSent?.(repairDraft.id); onFreshReview(); }}>Dismiss and run a fresh review</button> : null}
           <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairView?.dismissLabel}</button>
         </div>
       </section>}

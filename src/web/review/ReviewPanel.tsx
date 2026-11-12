@@ -439,7 +439,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                 <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
               ) : null}
               {missing.actions.includes("retry") ? (
-                <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
+                // Not while a switch is on its way: a run started now would hold the old model, and the switch's run would join it.
+                <button type="button" className="sheet-action" disabled={r.busy || switching !== null} onClick={() => void r.run(true)}>Try again</button>
               ) : null}
               {review.ai.reason === null || missing.reasonShown ? null : (
                 <button type="button" className="sheet-action" aria-expanded={details} onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "Details"}</button>
@@ -454,7 +455,14 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             )}
             {settingUpOther && switchTo.length === 0 ? (
               // Another provider, set up here; once it is ready, Switch to it appears above.
-              <ModelSetup token={token} status={provider.status} only={others} onReload={() => void provider.reload()} onChanged={provider.replace} />
+              <ModelSetup token={token} status={provider.status} only={others} onReload={() => void provider.reload()} onChanged={(next) => {
+                provider.replace(next);
+                // A provider set up here can become the chosen one by itself (no choice saved yet); then the review runs on it at once.
+                if (next.active?.provider !== activeId && activeProviderReady(next)) {
+                  setSettingUpOther(false);
+                  void r.run(true);
+                }
+              }} />
             ) : null}
             {picking && (!pickReady || missing.refused) ? (
               // Nothing is set up, or the provider refused the account: the same setup the chat uses (D-496), with the refused provider's

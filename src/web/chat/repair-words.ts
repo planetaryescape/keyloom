@@ -16,5 +16,7 @@ export function repairWords(kind: RepairKind, state: { sent: boolean; current: b
   }
   if (kind === "proposal") return { scope: "The layout or source changed. Your original goal and edits are kept. Dismiss this request and select its recovery action again before sending.", dismissLabel: "Dismiss request", offer: null };
   if (kind === "build") return { scope: "The layout changed since this build, so this question no longer fits it. Dismiss it, and ask about the newest build if that one fails too.", dismissLabel: "Dismiss request", offer: null };
-  return { scope: "This finding is out of date, so this request can't be sent. Run a fresh review, then plan a repair from the finding it shows.", dismissLabel: "Dismiss request", offer: "fresh_review" };
+  // A fresh review's finding gets a request of its own, and Plan a repair waits while this one is up: the button dismisses it and runs
+  // the review in one press, and says so.
+  return { scope: "This finding is out of date, so this request can't be sent. Dismiss it and run a fresh review, then plan a repair from the finding it shows.", dismissLabel: "Dismiss request", offer: "fresh_review" };
 }

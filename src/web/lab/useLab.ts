@@ -25,6 +25,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const [failedRead, setFailedRead] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const listening = useRef(false);
+  const cancelling = useRef(false);
   // What was last asked for, so Try again after a refusal (an Input Monitoring prompt, a busy keyboard) starts the same passage.
   const lastChoice = useRef<{ passageId?: string; text?: string }>({});
 
@@ -113,6 +114,9 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   // Also Stop that recording, after a Cancel that failed or a start refused because one is running. A failed stop says so with that
   // button, instead of a start screen that would only be refused (R6-20).
   const cancel = useCallback(async () => {
+    // Held Escape repeats; a second cancel landing after a new start would hide that recording.
+    if (cancelling.current) return;
+    cancelling.current = true;
     listening.current = false;
     try {
       await api.cancelRecording(token);
@@ -122,6 +126,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
       setFailedRead(null);
       setProblem(error instanceof Error ? error.message : "The server didn't answer.");
       setProblemCode("cancel_failed");
+    } finally {
+      cancelling.current = false;
     }
     setPhase({ kind: "start" });
   }, [token]);

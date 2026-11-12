@@ -23,8 +23,9 @@ test("a request that went out of date says Dismiss, which is what its button say
   }
 });
 
-test("an out-of-date finding offers Run a fresh review, the way to a finding that can be sent", () => {
+test("an out-of-date finding offers to dismiss it and run a fresh review, the way to a finding that can be sent", () => {
   const view = repairWords("finding", { sent: false, current: false });
   expect(view.offer).toBe("fresh_review");
-  expect(view.scope).toContain("Run a fresh review");
+  // Plan a repair waits while a request is up, so the fresh review's button dismisses this one, and the words say so.
+  expect(view.scope).toContain("Dismiss it and run a fresh review");
 });
