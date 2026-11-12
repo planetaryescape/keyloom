@@ -966,10 +966,12 @@ a.menu-item {
     margin: 0 auto auto;
   }
 
-  /* The board is at the top of a phone's stage, so the banners and toasts sit at the bottom of it. */
+  /* The board is at the top of a narrow stage, so the banners and toasts sit at the bottom of it. The notes are over the floor's layer
+     (z-index 7 over 6), so they sit above all of the floor: the strip, and the view controls that stand a row above it here (PR #303
+     review). */
   .stage-notes {
     top: auto;
-    bottom: var(--space-3);
+    bottom: calc(var(--floor-room) + var(--space-7));
   }
 
   .toasts {
@@ -1470,6 +1472,11 @@ a.menu-item {
 
   .view-controls {
     display: none;
+  }
+
+  /* No view controls above a phone's strip, so the notes need only clear the strip. */
+  .stage-notes {
+    bottom: var(--floor-room);
   }
 
   .caption-aside {

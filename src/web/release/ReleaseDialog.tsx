@@ -90,6 +90,11 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const [goBackRefusedState, setGoBackRefused] = useState<GoBackProblem | null>(null);
   const [wentBackTo, setWentBackTo] = useState<WentBack | null>(null);
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
+  // The revision on screen now, read by a restart that waits, so it never builds one the dialog no longer shows (PR #303 review).
+  const shownHead = useRef(head.id);
+  useEffect(() => {
+    shownHead.current = head.id;
+  }, [head.id]);
   const lastBuildId = lastBuild?.id ?? null;
   const goBackRefused = shownGoBackProblem(goBackRefusedState, lastBuildId);
   // Record the revision the Go back made, so wentBackSummary can tell it from a later edit.
@@ -366,7 +371,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     </button>
                   ) : failure?.kind === "restart_engine" && failure.button !== null ? (
                     // Building again hits the same engine state, so the restart comes first and the build follows it.
-                    <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id)}>
+                    <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id, () => shownHead.current)}>
                       {release.engineRestart.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
                       {release.engineRestart.running ? failure.busy : failure.button}
                     </button>

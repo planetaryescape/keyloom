@@ -12,7 +12,7 @@ const RUNNING: EngineRestartRun = { ...IDLE, running: true };
  * `results` answers each restart in turn, `waits` each read of what the restart waits for. `sleeps` answers each wait: true to go on,
  * false to cancel it, as Cancel restart does. `clock` moves forward by `stepMs` on every wait.
  */
-function harness(opts: { results: Array<Result | Error>; waits?: Array<readonly string[] | null>; sleeps?: boolean[]; stepMs?: number; onSleep?: () => void }) {
+function harness(opts: { results: Array<Result | Error>; waits?: Array<readonly string[] | null>; sleeps?: boolean[]; stepMs?: number; onSleep?: () => void; current?: () => boolean }) {
   let requests = 0;
   let clock = 0;
   const built: number[] = [];
@@ -32,6 +32,7 @@ function harness(opts: { results: Array<Result | Error>; waits?: Array<readonly 
     },
     waitingFor: async () => (waits.length === 0 ? [] : waits.shift() ?? null),
     requests: () => requests,
+    ...(opts.current ? { current: opts.current } : {}),
     build: () => built.push(++requests),
     show: (state) => shown.push(state),
     signal: cancel.signal,
@@ -101,6 +102,36 @@ describe("restartThenBuild", () => {
     await h.run;
     expect(h.restarts).toHaveLength(1);
     expect(h.shown.at(-1)).toEqual(IDLE);
+  });
+
+  test("a change to the revision on screen while it waits ends the wait: nothing restarts, and the old revision isn't built (PR #303 review)", async () => {
+    let shown = "rev-1";
+    const h = harness({ results: [busy, { ok: true }], waits: [["a lab analysis"], []], onSleep: () => (shown = "rev-2"), current: () => shown === "rev-1" });
+    await h.run;
+    expect(h.restarts).toHaveLength(1);
+    expect(h.built).toEqual([]);
+    expect(h.shown.at(-1)).toEqual(IDLE);
+  });
+
+  test("a restart that went through while the revision on screen changed builds nothing (PR #303 review)", async () => {
+    let shown = "rev-1";
+    const restart = Promise.withResolvers<Result>();
+    const built: string[] = [];
+    const states: EngineRestartRun[] = [];
+    const run = restartThenBuild({
+      restart: () => restart.promise,
+      waitingFor: async () => [],
+      requests: () => built.length,
+      current: () => shown === "rev-1",
+      build: () => built.push("rev-1"),
+      show: (state) => states.push(state),
+      signal: new AbortController().signal,
+    });
+    shown = "rev-2";
+    restart.resolve({ ok: true });
+    await run;
+    expect(built).toEqual([]);
+    expect(states.at(-1)).toEqual(IDLE);
   });
 
   test("a refusal with nothing named to wait for shows its reason and keeps the button: an older server, or work that just ended", async () => {

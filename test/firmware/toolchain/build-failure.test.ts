@@ -31,12 +31,21 @@ test("a compile error in another generated file names the file, and one outside 
 });
 
 test("a probe is folder_not_shared only when its sentinel is missing; a failed cleanup or Docker's own failure says so and keeps no code (R7-02, PR #303)", () => {
-  expect(probeFailure(NOT_SHARED_EXIT, "/c", "Docker can't see /c.")).toMatchObject({ code: "folder_not_shared", message: "Docker can't see /c." });
-  const cleanup = probeFailure(PROBE_CLEANUP_EXIT, "/c", "Docker can't see /c.");
+  expect(probeFailure(NOT_SHARED_EXIT, [], "/c", "Docker can't see /c.")).toMatchObject({ code: "folder_not_shared", message: "Docker can't see /c." });
+  const cleanup = probeFailure(PROBE_CLEANUP_EXIT, [], "/c", "Docker can't see /c.");
   expect(cleanup.code).toBeNull();
   expect(cleanup.message).toBe("keyloom couldn't clear the last build's output in /c. The error is in the build log; build again.");
-  const docker = probeFailure(125, "/c", "Docker can't see /c.");
+  const docker = probeFailure(125, ["docker: Error response from daemon: no such image"], "/c", "Docker can't see /c.");
   expect(docker.code).toBeNull();
   expect(docker.message).toContain("(exit 125)");
-  expect(probeFailure(null, "/c", "x").message).toContain("it was stopped");
+  expect(probeFailure(null, [], "/c", "x").message).toContain("it was stopped");
+});
+
+test("Docker Desktop's refused mount is folder_not_shared, and the CLI's words name File sharing (PR #303 review)", () => {
+  // Docker Desktop's words for a path outside its File sharing list; `docker run` exits 125 before the container starts.
+  const denied = ["docker: Error response from daemon: Mounts denied: ", "The path /c is not shared from the host and is not known to Docker.", "You can configure shared paths from Docker -> Preferences... -> Resources -> File Sharing."];
+  const failure = probeFailure(125, denied, "/c", "Docker can't see /c.");
+  expect(failure.code).toBe("folder_not_shared");
+  expect(failure.message).toBe("Docker Desktop doesn't share /c. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.");
+  expect(probeFailure(125, ["docker: Error response from daemon: mounts denied: /c"], "/c", "x").code).toBe("folder_not_shared");
 });

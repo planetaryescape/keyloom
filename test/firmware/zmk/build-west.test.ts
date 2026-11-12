@@ -231,5 +231,12 @@ describe("buildZmkWest (fake docker)", () => {
     expect((other as BuildFailure).code).toBeNull();
     expect((other as BuildFailure).message).toMatch(/exit 125/);
     expect((other as BuildFailure).message).not.toMatch(/can't see/);
+    // Docker Desktop refuses a folder outside File sharing before the container starts: exit 125 with its own words (PR #303 review).
+    const denied = await withPath(fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
+      buildZmkWest({
+        board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w3"), imageContextDir: join(s.dir, "i"),
+        artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l3.log")), containerName: "x",
+      })).catch((x: unknown) => x);
+    expect(denied).toMatchObject({ code: "folder_not_shared", message: expect.stringContaining("Resources > File sharing") });
   });
 });

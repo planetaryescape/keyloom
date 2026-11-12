@@ -34,11 +34,21 @@ export const NOT_SHARED_EXIT = 86;
 export const PROBE_CLEANUP_EXIT = 87;
 
 /**
- * A probe that didn't pass: the folder isn't shared only when its sentinel test said so. A cleanup that failed, or Docker's own failure,
- * says what it was, with its words in the build log, and may pass on a second try.
+ * Docker Desktop's refusal of a bind mount outside its File sharing list. It refuses before the container starts, so `docker run` exits
+ * 125 with "docker: Error response from daemon: Mounts denied: The path … is not shared from the host and is not known to Docker." (PR #303
+ * review). Colima mounts an empty folder instead, which the sentinel exit catches.
  */
-export function probeFailure(exitCode: number | null, checkoutDir: string, notShared: string): BuildFailure {
+const MOUNTS_DENIED = /Mounts denied|is not shared from the host/i;
+
+/**
+ * A probe that didn't pass. The folder isn't shared when its sentinel test said so, or when Docker Desktop refused the mount (its words in
+ * `output`). A cleanup that failed, or Docker's own failure, says what it was, with its words in the build log, and may pass on a second try.
+ */
+export function probeFailure(exitCode: number | null, output: readonly string[], checkoutDir: string, notShared: string): BuildFailure {
   if (exitCode === NOT_SHARED_EXIT) return new BuildFailure(notShared, "folder_not_shared");
+  if (exitCode !== 0 && output.some((line) => MOUNTS_DENIED.test(line))) {
+    return new BuildFailure(`Docker Desktop doesn't share ${checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`, "folder_not_shared");
+  }
   if (exitCode === PROBE_CLEANUP_EXIT) return new BuildFailure(`keyloom couldn't clear the last build's output in ${checkoutDir}. The error is in the build log; build again.`);
   return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again.`);
 }

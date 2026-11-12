@@ -101,8 +101,10 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       }
 
       // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
-      const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000 });
-      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+      // Docker Desktop instead refuses the mount in its own words, before the container starts.
+      const probeOutput: string[] = [];
+      const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000, onLine: (line) => probeOutput.push(line) });
+      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
 
       await awaitMountedFiles({
         image: build.image,

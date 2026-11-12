@@ -110,8 +110,10 @@ describe("the failed build step", () => {
     expect(html).not.toContain("Build again");
   });
   test("a folder Docker Desktop doesn't share offers Open Docker Desktop and Build again, and no XDG advice (R7-02)", () => {
-    const error = "Docker can't see /x. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.";
-    const html = failedStep("folder_not_shared", { error, folderNotShared: { folder: "/x", engine: "Docker Desktop" }, logTail: ["docker: mounts denied", `keyloom: build failed: ${error}`] });
+    // What Docker Desktop's refused mount leaves: its own words, then the probe's failure (probeFailure).
+    const error = "Docker Desktop doesn't share /x. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.";
+    const logTail = ["docker: Error response from daemon: Mounts denied: ", "The path /x is not shared from the host and is not known to Docker.", `keyloom: build failed: ${error}`];
+    const html = failedStep("folder_not_shared", { error, folderNotShared: { folder: "/x", engine: "Docker Desktop" }, logTail });
     expect(html).toContain("Open Docker Desktop");
     expect(html).toContain(">Build again<");
     expect(html).toContain("Ask keyloom about this build");

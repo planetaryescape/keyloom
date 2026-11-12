@@ -61,11 +61,17 @@ export interface Release {
   /** Opens the System Settings pane a permission code names (D-492, D-501). */
   openSettings: (pane: SettingsPaneName) => void;
   settingsProblem: string | null;
-  /** Restarts the Docker engine whatever it answers, then builds `revisionId` again, for a `stale_mount` or `stuck_container` (R6-09). */
-  restartAndBuild: (revisionId: string) => void;
+  /**
+   * Restarts the Docker engine whatever it answers, then builds `revisionId` again, for a `stale_mount` or `stuck_container` (R6-09).
+   * `shown` reads the revision the dialog shows now: once it isn't `revisionId`, the restart stops waiting and builds nothing (PR #303 review).
+   */
+  restartAndBuild: (revisionId: string, shown: () => string) => void;
   /** That restart: running, and why it didn't go through. `again` is false once a restart has failed, so it isn't offered twice (D-511). */
   engineRestart: EngineRestart;
-  /** Stops waiting for the work a restart waits for (R7-04); nothing restarts, and the restart is offered again. */
+  /**
+   * Stops waiting for the work a restart waits for (R7-04); nothing restarts, and the restart is offered again. Closing the dialog calls
+   * it too, so no restart starts with nothing on screen to show it (PR #303 review).
+   */
   cancelRestartWait: () => void;
 }
 
@@ -200,7 +206,7 @@ export function useRelease(token: string, layoutRef: string): Release {
     else setResumes((n) => n + 1);
   }, [last, buildNow, flashNow, refreshBuild]);
 
-  const restartAndBuild = useCallback((revisionId: string) => {
+  const restartAndBuild = useCallback((revisionId: string, shown: () => string) => {
     restartWait.current?.abort();
     const wait = new AbortController();
     restartWait.current = wait;
@@ -209,6 +215,7 @@ export function useRelease(token: string, layoutRef: string): Release {
       restart: () => restartDockerApp(token, undefined, true),
       waitingFor: (signal) => fetchRestartLog(token, signal).then((log) => log.waitingFor, () => null),
       requests: () => buildRequests.current,
+      current: () => shown() === revisionId,
       build: () => buildNow(revisionId),
       show: setEngineRestart,
       signal: wait.signal,
@@ -339,7 +346,8 @@ export const RESTART_WAIT_LIMIT_MS = 30 * 60_000;
  * so asking early is refused again and the wait goes on (D-529). A refusal with no work named, or a wait past RESTART_WAIT_LIMIT_MS,
  * shows the reason with the button. One that failed says why and isn't offered again (D-511), and Build again stays. A build asked for
  * while the restart ran or waited is newer: the restart starts nothing over it and says nothing about itself under it, since that build
- * has its own result (PR #297 CodeRabbit).
+ * has its own result (PR #297 CodeRabbit). So is a change to the revision on screen: the restart never builds a revision that is no longer
+ * the one shown (PR #303 review).
  */
 export async function restartThenBuild(deps: {
   restart: () => Promise<{ ok: true } | { ok: false; reason: string; code?: string | undefined }>;
@@ -347,9 +355,11 @@ export async function restartThenBuild(deps: {
   waitingFor: (signal: AbortSignal) => Promise<readonly string[] | null>;
   /** How many builds were asked for so far; `build` adds one. */
   requests: () => number;
+  /** False once the revision the restart builds is no longer the one on screen; absent means always true. */
+  current?: () => boolean;
   build: () => void;
   show: (state: EngineRestartRun) => void;
-  /** Aborted when the person cancels the wait, or a newer build or the page ends it. */
+  /** Aborted when the person cancels the wait or closes the dialog, or a newer build or the page ends it. */
   signal: AbortSignal;
   /** Waits `ms`; a test passes one that returns at once. */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
@@ -359,7 +369,7 @@ export async function restartThenBuild(deps: {
 }): Promise<void> {
   const now = deps.now ?? Date.now;
   const asked = deps.requests();
-  const superseded = () => deps.requests() !== asked;
+  const superseded = () => deps.requests() !== asked || deps.current?.() === false;
   const sleep = deps.sleep ?? wait;
   const started = now();
   // A Cancel, a newer build or the page going ends the wait; checked after every read and before every restart (PR #303 CodeRabbit).
