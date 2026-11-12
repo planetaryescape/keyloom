@@ -275,3 +275,14 @@
   background: var(--bad);
   color: #fff;
 }
+
+/* Why the dialog's action is off (R6-24): advice under the field, quiet until there is something to say. */
+.config-waits {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.config-waits:empty {
+  display: none;
+}

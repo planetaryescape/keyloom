@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, LoaderCircle, RefreshCw, Search, Zap } from "lucide-react";
+import { ArrowLeft, BookOpen, FilePlus2, LoaderCircle, RefreshCw, Search, Zap } from "lucide-react";
 import { useState } from "react";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import "../review/review.css";
@@ -11,8 +11,10 @@ import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
 import "../editor/editor.css";
 import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
 import { CONTRIBUTION_GUIDE } from "./search-words.ts";
+import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
 
-export type PutSource = { id: string; name: string; boardName: string; note: string | null };
+/** `boardId` leaves out the configs already on the board being put on: a put copies across boards, and `config new` copies within one. */
+export type PutSource = { id: string; name: string; boardName: string; boardId?: string; note: string | null };
 
 const ROW_WORDS = ["Top row", "Second row", "Third row", "Fourth row", "Fifth row", "Sixth row"];
 /** "Top row", "Middle row" and "Bottom row" on a three-row board; counted from the top on others. */
@@ -67,9 +69,25 @@ export function NewBoardPanel({ flow, sources, onMade }: { flow: NewKeyboard; so
   const { step, preview } = flow;
   if (step.kind === "confirm") return <Confirm flow={flow} preview={preview} />;
   if (step.kind === "review") return <Review flow={flow} preview={preview} />;
-  if (step.kind === "put") return <Put flow={flow} sources={sources} preview={flow.putPreview} onMade={onMade} />;
+  if (step.kind === "put") return <Put flow={flow} sources={sources.filter((s) => s.boardId !== step.boardId)} preview={flow.putPreview} onMade={onMade} />;
   return null;
 }
+
+/** The keyboard picked as new is one keyloom already has (R6-07): put a config on that board, or pick another keyboard. */
+function KnownBoard({ flow, name }: { flow: NewKeyboard; name: string }) {
+  return (
+    <div className="nb-problem nb-cant" role="alert">
+      <p>keyloom knows this keyboard, so there is nothing to add. Put one of your configs on it, or start one of its own.</p>
+      <p className="nb-actions">
+        <button type="button" className="sheet-action" onClick={flow.putOnKnown}><FilePlus2 size={13} aria-hidden="true" />Put a config on it</button>
+        <button type="button" className="sheet-action" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Pick another keyboard</button>
+      </p>
+    </div>
+  );
+}
+
+/** keyloom has a board for this candidate: its preview was refused with the board's id (R6-07). */
+const knownBoard = (flow: Pick<NewKeyboard, "previewProblemCode" | "previewProblemBoard">): boolean => flow.previewProblemCode === "board_known" && flow.previewProblemBoard !== null;
 
 /** A keyboard keyloom can't add yet (R5-06): why, in words, the contribution guide that says how it learns one, and another keyboard. */
 function CantAdd({ flow, problem }: { flow: NewKeyboard; problem: DeriveProblem }) {
@@ -88,11 +106,12 @@ function CantAdd({ flow, problem }: { flow: NewKeyboard; problem: DeriveProblem 
 // keyboard says why without a Try again that would fail the same way (R5-06).
 function Reading({ flow, name }: { flow: NewKeyboard; name: string }) {
   if (flow.previewProblem === null) return <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Reading…</p>;
+  if (knownBoard(flow)) return <KnownBoard flow={flow} name={name} />;
   const known = deriveProblem(flow.previewProblemCode, name);
   if (known?.blocked === true) return <CantAdd flow={flow} problem={known} />;
   return (
     <div className="nb-problem" role="alert">
-      <p>keyloom couldn't draw this board. {flow.previewProblem}</p>
+      <p>{known?.text ?? `keyloom couldn't draw this board. ${flow.previewProblem}`}</p>
       <button type="button" className="sheet-action" onClick={flow.retryPreview}><RefreshCw size={13} aria-hidden="true" />Try again</button>
     </div>
   );
@@ -110,14 +129,16 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
   const problem = preview === null ? null : deriveProblem(preview.boardProblemCode, name);
   // The board is drawn on keyloom's guess until the person picks a layout, and a guess is never added (D-525).
   const layoutPending = preview !== null && layoutUnpicked(step, preview);
-  const cantAdd = problem?.blocked === true || (preview === null && deriveProblem(flow.previewProblemCode, name)?.blocked === true);
+  const cantAdd = problem?.blocked === true || (preview === null && (knownBoard(flow) || deriveProblem(flow.previewProblemCode, name)?.blocked === true));
   let number = 0;
+  // Nothing is drawn for a keyboard keyloom has, so the heading says that instead of how its firmware draws it (R6-07).
+  const known = preview === null && knownBoard(flow);
   return (
     <section className="nb-panel" aria-label="Confirm the keyboard">
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Candidates</button>
-        <h2>Your {preview?.displayName ?? step.candidate.name}, as {step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it</h2>
-        <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : cantAdd ? `${preview.keyCount} keys from the firmware's own layout.` : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>
+        <h2>{known ? `keyloom already has the ${name}` : `Your ${name}, as ${step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it`}</h2>
+        {known ? null : <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : cantAdd ? `${preview.keyCount} keys from the firmware's own layout.` : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>}
       </header>
       <div className="nb-panel-body">
         {preview === null ? <Reading flow={flow} name={name} /> : cantAdd && problem !== null ? (
@@ -135,13 +156,16 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
                   onChange={flow.setLayout} />
               </div>
             ) : null}
-            <div className="nb-step">
-              <h3><span>{++number}</span>Where do your fingers rest?</h3>
-              <p>Click any key in that row on the board, or pick it here. keyloom's guess is marked.</p>
-              <ChoiceGroup legend="Home row" legendHidden variant="pills" value={homeRow === null ? null : String(homeRow)}
-                choices={preview.rows.map((r) => ({ value: String(r.row), label: `${rowWord(r.row, rows)}${r.row === preview.guessedHomeRow ? " · guess" : ""}` }))}
-                onChange={(row) => flow.setHomeRow(Number(row))} />
-            </div>
+            {/* Picking a layout resets the home row to keyloom's guess for it, so the home row waits for the layout (R6-13). */}
+            {layoutPending ? null : (
+              <div className="nb-step">
+                <h3><span>{++number}</span>Where do your fingers rest?</h3>
+                <p>Click any key in that row on the board, or pick it here. keyloom's guess is marked.</p>
+                <ChoiceGroup legend="Home row" legendHidden variant="pills" value={homeRow === null ? null : String(homeRow)}
+                  choices={preview.rows.map((r) => ({ value: String(r.row), label: `${rowWord(r.row, rows)}${r.row === preview.guessedHomeRow ? " · guess" : ""}` }))}
+                  onChange={(row) => flow.setHomeRow(Number(row))} />
+              </div>
+            )}
             {needsController ? (
               <div className="nb-step">
                 <h3><span>{++number}</span>Which controller is in it?</h3>
@@ -223,10 +247,13 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
     const id = await flow.startBlank(`${step.boardName} daily`, { free: true });
     if (id !== null) onMade(id);
   };
+  const make = () => void flow.make().then((out) => {
+    if (out !== null) onMade(out.config.id);
+  });
   return (
     <section className="nb-panel" aria-label={`Put a config on the ${step.boardName}`}>
       <header className="nb-panel-head">
-        <p className="nb-eyebrow nb-eyebrow-ok">{step.origin === "new" ? `Added: ${step.boardName}` : "No config on it yet"}</p>
+        <p className="nb-eyebrow nb-eyebrow-ok">{step.origin === "new" ? `Added: ${step.boardName}` : step.origin === "matched" ? `keyloom already has the ${step.boardName}` : "No config on it yet"}</p>
         <h2>Put a config on the {step.boardName}</h2>
         <p className="nb-lead">keyloom maps it key by key onto the {step.boardName}, as a new config. Your original stays as it is.</p>
       </header>
@@ -252,7 +279,17 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             <button type="button" className="sheet-action" disabled={flow.busy} onClick={() => void start()}>Start a config</button>
           </p>
         )}
-        {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : preview === null ? (
+        {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : flow.putFailure !== null ? (
+          // A map that failed stops "Mapping it…" (R6-05): Try again where asking again can work, and another config. Start a config is
+          // the line above, which a put with configs to pick always shows (R5-16).
+          <div className="nb-problem" role="alert">
+            <p>{flow.putFailure.text}</p>
+            <p className="nb-actions">
+              {flow.putFailure.retry ? <button type="button" className="sheet-action" onClick={flow.retryPut}><RefreshCw size={13} aria-hidden="true" />Try again</button> : null}
+              <button type="button" className="sheet-action" onClick={flow.clearSource}><ArrowLeft size={13} aria-hidden="true" />Pick another config</button>
+            </p>
+          </div>
+        ) : preview === null ? (
           <p className="nb-note"><LoaderCircle size={13} className="spin" aria-hidden="true" /> Mapping it…</p>
         ) : (
           <>
@@ -312,6 +349,10 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             <p className="nb-note">Optional: after you apply the copied keys, test these US-ANSI samples and check suggestions against them. Needs Docker; may download firmware and take several minutes. Nothing is flashed by a test.</p>
           </div>
         )}
+        {flow.removed === null ? null : (
+          <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
+            onRestored={() => (flow.removed === "make" ? make() : start())} />
+        )}
         {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
       </div>
       <footer className="nb-panel-foot">
@@ -321,12 +362,10 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           type="button"
           className="bar-apply"
           disabled={preview === null || problems.length > 0 || flow.busy}
-          onClick={() => void flow.make().then((out) => {
-            if (out !== null) onMade(out.config.id);
-          })}
+          onClick={make}
         >
           {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
-          {preview === null ? "Pick a config" : problems.length > 0 ? "Can't make this config" : `Make “${preview.name}”`}
+          {preview !== null ? problems.length > 0 ? "Can't make this config" : `Make “${preview.name}”` : step.source === null ? "Pick a config" : flow.putFailure !== null ? "Can't map this config" : "Mapping it…"}
         </button>
       </footer>
     </section>

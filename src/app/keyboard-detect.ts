@@ -7,6 +7,7 @@ import { boardByUsbId, boardForCandidate } from "../boards/derive/known.ts";
 import { localBoardId } from "../boards/derive/build-board.ts";
 import { listBoards } from "../boards/registry.ts";
 import type { Board } from "../boards/load.ts";
+import type { BoardDefinition } from "../boards/schema.ts";
 import { realHandsFreeDeps } from "../firmware/qmk/handsfree-flash.ts";
 import { requirePlatformSupport } from "../firmware/toolchain/platform-support.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
@@ -43,11 +44,17 @@ const ZMK_DEFAULT = { vendorId: "0x1d50", productId: "0x615e" };
 
 /**
  * "Corne (new)" when a board keyloom has (shipped, contributed or derived) already has the name, so the card and the board switch can
- * tell the two apart (D-336). Every board in the registry counts, because the switch shows them all.
+ * tell the two apart (D-336). Every board in the registry counts, because the switch shows them all. A candidate that is one of those
+ * boards keeps its plain name: it isn't new, and picking it offers to put a config on that board (R6-07).
  */
-export function displayNameFor(c: Candidate): string {
+/** `matchable`: the boards that count as already known, as `keyboard add` is given them; every board keyloom has loaded by default. */
+export function displayNameFor(c: Candidate, matchable?: readonly BoardDefinition[]): string {
   const id = localBoardId(c);
-  return listBoards().some((b) => b.definition.id !== id && b.definition.name === c.name) ? `${c.name} (new)` : c.name;
+  const boards = listBoards().map((b) => b.definition);
+  const matched = boardForCandidate(matchable ?? boards, c);
+  // The candidate's own derived board is the one "(new)" names, so it keeps the mark.
+  if (matched !== undefined && matched.id !== id) return c.name;
+  return boards.some((b) => b.id !== id && b.name === c.name) ? `${c.name} (new)` : c.name;
 }
 
 export const candidateView = (c: Candidate): CandidateView => ({

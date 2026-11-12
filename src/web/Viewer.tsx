@@ -2111,7 +2111,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
-          <SetupCard flow={newBoard} hasConfigs={putSources.length > 0} onImport={() => {
+          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={() => {
             if (editing !== null) closeEditor(false);
             setSidebar(null);
             chrome.onImport();

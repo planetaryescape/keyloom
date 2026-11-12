@@ -51,6 +51,8 @@ export class EditorError extends Error {
     readonly code: string,
     message: string,
     readonly validation?: ValidationResult,
+    /** The board the refusal names (R6-18). */
+    readonly board?: string,
   ) {
     super(message);
     this.name = "EditorError";

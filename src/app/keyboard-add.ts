@@ -12,7 +12,7 @@ import { PINNED_SOURCES } from "../boards/derive/pins.ts";
 import { type Json, defaultLayout, infoChainPaths, layoutSource, toGeometryKeys } from "../boards/derive/qmk-info.ts";
 import { boardForCandidate } from "../boards/derive/known.ts";
 import { checkBoardDir } from "../boards/check.ts";
-import { type GeometryOptions, GeometryError, defaultFetcher, fetchPinned } from "../boards/geometry.ts";
+import { type GeometryOptions, GeometryError, type TextFetcher, defaultFetcher, fetchPinned } from "../boards/geometry.ts";
 import type { Board } from "../boards/load.ts";
 import { listBoards, setUserBoards } from "../boards/registry.ts";
 import type { GeometryKey } from "../boards/schema.ts";
@@ -24,13 +24,16 @@ import { UsageError } from "./errors.ts";
 import { displayNameFor, findCandidate } from "./keyboard-detect.ts";
 
 /**
- * A keyboard keyloom can't add yet, with a code a screen turns into its own words and the contribution guide (R5-06): the derive codes,
- * and `no_key_positions` when the firmware's tree gives no key positions keyloom can read. The message is the CLI's. Exit 2 like any usage error.
+ * A keyboard keyloom can't add, with a code a screen turns into its own words (R5-06): the derive codes; `no_key_positions` when the
+ * firmware's tree gives no key positions keyloom can read; `layout_unreadable` when its layout file can't be read as one (R6-14), both
+ * answered with the contribution guide; `firmware_unreachable` when GitHub didn't give the file, which a Try again can fix; and
+ * `board_known` when keyloom already has the board, named by `board`, which the page offers to put a config on (R6-07). The message is
+ * the CLI's. Exit 2 like any usage error.
  */
-export type KeyboardAddCode = DeriveErrorCode | "no_key_positions";
+export type KeyboardAddCode = DeriveErrorCode | "no_key_positions" | "layout_unreadable" | "firmware_unreachable" | "board_known";
 export class KeyboardAddError extends UsageError {
   override name = "KeyboardAddError";
-  constructor(readonly code: KeyboardAddCode, message: string) {
+  constructor(readonly code: KeyboardAddCode, message: string, readonly board?: string) {
     super(message);
   }
 }
@@ -109,6 +112,28 @@ function resolveCandidate(id: string): Candidate {
 
 const isMissing = (err: unknown): boolean => err instanceof GeometryError && /returned 404/.test(err.message);
 
+/**
+ * A file from the pinned tree. A 404 is passed on, because the QMK chain looks for files that may not exist. Any other failure is GitHub
+ * not answering, which a later try can fix (R6-14); the cache path is for the CLI, and the page names no path.
+ */
+async function pinnedFile(c: Candidate, source: { repo: string; sha: string }, path: string, fetchText: TextFetcher, dir: string | undefined): Promise<string> {
+  try {
+    return await fetchPinned({ source: { ...source, ref: "pinned" } }, path, fetchText, dir);
+  } catch (err) {
+    if (isMissing(err)) throw err;
+    throw new KeyboardAddError("firmware_unreachable", `couldn't read ${c.name}'s layout from the pinned firmware tree: ${err instanceof Error ? err.message : String(err)}. keyloom reads it from GitHub the first time and keeps it in ${cacheDir()}`);
+  }
+}
+
+/** Text from the firmware tree that isn't the layout keyloom expects: no Try again reads it differently (R6-14). */
+function parsed<T>(c: Candidate, path: string, read: () => T): T {
+  try {
+    return read();
+  } catch (err) {
+    throw new KeyboardAddError("layout_unreadable", `keyloom can't read ${c.name}'s layout file ${path} at the pinned firmware tree: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 type Source = { geometry: { keys: GeometryKey[]; path: string }; layout: string | null; layoutGuessed: boolean };
 
 /** The guess for a QMK keyboard with several layouts and no default (a third of QMK's): the one with most keys, which has every switch. */
@@ -132,7 +157,9 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
       const files: Array<{ path: string; info: Json }> = [];
       for (const path of infoChainPaths(e.target)) {
         try {
-          files.push({ path, info: JSON.parse(await fetchPinned({ source: { ...PINNED_SOURCES.qmk, ref: "pinned" } }, path, fetchText, opts.cacheDir)) as Json });
+          const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir);
+          // SAFETY: Json is QMK's info.json as read; layoutSource checks its layouts with a schema before any key is used.
+          files.push({ path, info: parsed(c, path, () => JSON.parse(text) as Json) });
         } catch (err) {
           if (!isMissing(err)) throw err;
         }
@@ -142,7 +169,9 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
         for (const communityDir of ["layouts/community", "layouts/default"]) {
           const path = `${communityDir}/${layout}/info.json`;
           try {
-            const communityInfo = JSON.parse(await fetchPinned({ source: { ...PINNED_SOURCES.qmk, ref: "pinned" } }, path, fetchText, opts.cacheDir)) as Json;
+            const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir);
+            // SAFETY: as above, layoutSource checks the layouts with a schema.
+            const communityInfo = parsed(c, path, () => JSON.parse(text) as Json);
             files.push({ path, info: communityInfo });
             found = layoutSource(files, layout);
             if (found) break;
@@ -152,23 +181,29 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
         }
       }
       if (!found) throw new KeyboardAddError("no_key_positions", `QMK's tree has no layout ${layout} for ${e.target} at ${PINNED_SOURCES.qmk.sha.slice(0, 9)}`);
-      return { geometry: { keys: toGeometryKeys(found.keys), path: found.path }, layout, layoutGuessed };
+      const qmkFound = found;
+      return { geometry: { keys: parsed(c, qmkFound.path, () => toGeometryKeys(qmkFound.keys)), path: qmkFound.path }, layout, layoutGuessed };
     }
     const z = c.entry.zmk;
     if (z.layout === undefined) {
       throw new KeyboardAddError("no_key_positions", `ZMK's tree gives ${z.name} no physical layout with key positions that keyloom can read (29 of its shields have one). Contribute the board by hand: docs/blueprint/04-boards-and-contributions.md`);
     }
-    const text = await fetchPinned({ source: { ...PINNED_SOURCES.zmk, ref: "pinned" } }, z.layout.file, fetchText, opts.cacheDir);
-    return { geometry: { keys: parsePhysicalLayout(text, z.layout.label), path: `${z.layout.file}#${z.layout.label}` }, layout: null, layoutGuessed: false };
+    const zLayout = z.layout;
+    const text = await pinnedFile(c, PINNED_SOURCES.zmk, zLayout.file, fetchText, opts.cacheDir);
+    return { geometry: { keys: parsed(c, zLayout.file, () => parsePhysicalLayout(text, zLayout.label)), path: `${zLayout.file}#${zLayout.label}` }, layout: null, layoutGuessed: false };
   } catch (err) {
-    if (err instanceof GeometryError) throw new UsageError(`couldn't read ${c.name}'s layout from the pinned firmware tree: ${err.message}. keyloom reads it from GitHub the first time and keeps it in ${cacheDir()}`);
+    // A file the index names that isn't at the pinned commit: the index is wrong, so a Try again gets the same 404 (R6-14).
+    if (err instanceof GeometryError) throw new KeyboardAddError("layout_unreadable", `couldn't read ${c.name}'s layout from the pinned firmware tree: ${err.message}`);
     throw err;
   }
 }
 
 /** What `keyboard add` needs from the person, and what it found; writes nothing. */
-export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddDeps = {}): Promise<KeyboardPreview> {
+/** `force` previews a board derived before for deriving it again, as `keyboard add --force` does. */
+export async function previewKeyboard(input: AddInput, opts: AddDeps = {}): Promise<KeyboardPreview> {
   const c = resolveCandidate(input.candidate);
+  // Said before anything is read, so a keyboard keyloom has is never drawn as new and then refused at Add (R6-07).
+  refuseKnown(c, input, opts);
   const { geometry, layout, layoutGuessed } = await readGeometry(c, input, { cacheDir: cacheDirFor(opts), ...opts }, true);
   const { rows, guessedHomeRow } = previewRows(geometry.keys);
   const needs: string[] = [];
@@ -204,8 +239,15 @@ export async function previewKeyboard(input: Omit<AddInput, "force">, opts: AddD
   return {
     candidate: { id: c.id, name: c.name, firmware: c.firmware }, keyCount: geometry.keys.length,
     rows: rows.map((r, i) => ({ row: i + 1, keys: r.length })), guessedHomeRow, layout, layouts: layouts.length > 1 ? layouts : [], guessedLayout, needs, controllers, board, boardProblem, boardProblemCode,
-    displayName: displayNameFor(c),
+    displayName: displayNameFor(c, (opts.boards ?? listBoards()).map((b) => b.definition)),
   };
+}
+
+/** A board keyloom already has is put a config on, not added again; only a board derived before can be derived again, with force. */
+function refuseKnown(c: Candidate, input: Pick<AddInput, "force">, opts: AddDeps): void {
+  const known = boardForCandidate((opts.boards ?? listBoards()).map((b) => b.definition), c);
+  if (known === undefined || (input.force === true && known.id === localBoardId(c))) return;
+  throw new KeyboardAddError("board_known", `${c.name} is already a board: ${known.id}${known.id.startsWith("local/") ? ` (derived earlier; pass --force to derive it again)` : ""}. Put a config on it with \`keyloom keyboard put <layout> --on ${known.id}\``, known.id);
 }
 
 const cacheDirFor = (opts: GeometryOptions): string => opts.cacheDir ?? join(cacheDir(), "geometry");
@@ -222,10 +264,7 @@ export type AddOutcome = {
 
 export async function addKeyboard(app: App, input: AddInput, opts: AddDeps = {}): Promise<AddOutcome> {
   const c = resolveCandidate(input.candidate);
-  const known = boardForCandidate((opts.boards ?? listBoards()).map((b) => b.definition), c);
-  if (known !== undefined && !(input.force === true && known.id === localBoardId(c))) {
-    throw new UsageError(`${c.name} is already a board: ${known.id}${known.id.startsWith("local/") ? ` (derived earlier; pass --force to derive it again)` : ""}. Put a config on it with \`keyloom keyboard put <layout> --on ${known.id}\``);
-  }
+  refuseKnown(c, input, opts);
   const providers = controllersFor(c);
   if (input.controller !== undefined && providers.length > 0 && !providers.some((p) => p.id === input.controller)) {
     throw new UsageError(`${input.controller} doesn't provide what ${c.name} needs, or keyloom doesn't know its boot drive. Controllers that do: ${providers.map((p) => p.id).join(", ")}`);
@@ -260,7 +299,7 @@ export async function addKeyboard(app: App, input: AddInput, opts: AddDeps = {})
     const stored = writeUserBoard(app.dataDir, derived);
     setUserBoards(readUserBoards(app.dataDir).boards);
     return {
-      boardId: derived.definition.id, name: derived.definition.name, displayName: displayNameFor(c), dir: stored, derived: derived.summary,
+      boardId: derived.definition.id, name: derived.definition.name, displayName: displayNameFor(c, (opts.boards ?? listBoards()).map((b) => b.definition)), dir: stored, derived: derived.summary,
       warnings: result.issues.filter((i) => i.level === "warning").map((i) => i.message),
     };
   } finally {

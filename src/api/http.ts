@@ -73,7 +73,8 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 //   POST /api/builds/:id/reveal         {}            -> {}                  (D-490; shows the file in Finder, macOS only)
 
 export const ApiErrorBodySchema = z.object({
-  error: z.object({ code: z.string().min(1), message: z.string().min(1) }),
+  // `board`: the keyboard a refusal names, for the button that fixes it (R6-07, R6-18), such as the board a dropped export is for.
+  error: z.object({ code: z.string().min(1), message: z.string().min(1), board: z.string().min(1).optional() }),
   // Present when ops failed validation, so the editor can point at the slots.
   validation: ValidationResultSchema.optional(),
 });

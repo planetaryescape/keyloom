@@ -58,6 +58,16 @@ export function guideFor(board: BoardChoice): ExportGuide {
   return FALLBACK;
 }
 
+/**
+ * The setup card's line under "Import a layout" (R6-11): where this board's layout comes from, from the same guide its import card uses.
+ * A board the page can't look up gets a line that fits every board.
+ */
+export function importLine(board: BoardChoice | undefined): string {
+  if (board === undefined) return "Drop the file your keyboard's own editor exports.";
+  const guide = guideFor(board);
+  return guide.readFromMac ? `Bring in what you set up in ${guide.tool}.` : `Drop the file from ${guide.tool}.`;
+}
+
 export const importCommand = (board: BoardChoice, activities: readonly ReviewActivity[] = []): string => `keyloom import --board ${board.id}${activities.length ? ` --activities ${activities.join(",")}` : ""} <file>`;
 
 export function acceptsFile(guide: ExportGuide, filename: string): boolean {

@@ -250,3 +250,14 @@
     font-size: var(--text-xs);
   }
 }
+
+/* A refusal with its way on (R6-08, R6-18): the words, then the button that does the fix. */
+.board-card-refusal > div {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.board-card-refusal p {
+  margin: 0;
+}

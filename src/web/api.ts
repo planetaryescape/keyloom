@@ -15,13 +15,16 @@ export class ApiError extends Error {
   readonly code: string | undefined;
   /** Present when a change was refused for validation errors, so the editor can point at the slots. */
   readonly validation: ValidationResult | undefined;
+  /** The keyboard the refusal names, for the button that fixes it (R6-07, R6-18). */
+  readonly board: string | undefined;
 
-  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult } = {}) {
+  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult; board?: string } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = detail.code;
     this.validation = detail.validation;
+    this.board = detail.board;
   }
 }
 
