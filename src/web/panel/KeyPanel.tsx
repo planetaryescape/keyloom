@@ -106,6 +106,8 @@ interface Props {
   onShowLayer: (layerId: string) => void;
   /** Icon actions in the card's header that act on this key outside its draft: swap, copy, paste, colour (16#moving-and-copying-keys). */
   actions?: ReactNode;
+  /** Why the header's actions are off, as a line under the header (R6-16), or null. */
+  actionsNote?: string | null;
   /** A notice that belongs to this key, such as the offer to read an old tap dance into keyloom. */
   notice?: ReactNode;
   /** The physical cap colour, LED and layer light, so the hero looks like the key on the board. */
@@ -124,7 +126,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 export function KeyPanel(props: Props) {
   const {
     token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, resume, placements, placing,
-    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, notice, keycap, led, reach, onPointAt, handle,
+    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, actionsNote = null, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
@@ -619,6 +621,7 @@ export function KeyPanel(props: Props) {
           </button>
         </div>
       </header>
+      {actionsNote === null ? null : <p className="card-tools-note">{actionsNote}</p>}
 
       <div className="card-scroll">
       <fieldset className="card-body" disabled={applying}>

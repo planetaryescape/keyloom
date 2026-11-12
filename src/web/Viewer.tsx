@@ -76,7 +76,7 @@ import { deleteLayerOps } from "./layers/conditional-ops.ts";
 import { SelectionBar } from "./keyboard/SelectionBar.tsx";
 import { layerLight, reachedLayer, reachKey } from "./light/layer-light.ts";
 import { extendSelection } from "./keyboard/selection.ts";
-import { KeyMoves } from "./panel/KeyMoves.tsx";
+import { KEY_MOVES_BLOCKED, KeyMoves, keyMovesNote } from "./panel/KeyMoves.tsx";
 import { LibraryPane } from "./panel/LibraryPane.tsx";
 import { UpgradeOffer } from "./settings/UpgradeOffer.tsx";
 import { KeyColour } from "./settings/KeyColour.tsx";
@@ -1045,7 +1045,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   async function paste() {
     const targets = pasteTargets();
-    if (clipboard === null || targets.length === 0 || draftBlocks()) return;
+    // Paste stays pressable with nothing copied, so pressing it says what to do instead of nothing happening (R6-16).
+    if (clipboard === null) {
+      toasts.show({ kind: "info", message: "Nothing to paste yet", detail: "Copy a key first: open it and press Copy (⌘C)." });
+      return;
+    }
+    if (targets.length === 0 || draftBlocks()) return;
     const ops = pasteOps(layout, clipboard.binding, targets);
     if (ops === null) {
       toasts.show({ kind: "info", message: "Already that", detail: "Every key already does this." });
@@ -1883,6 +1888,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 led={editing.layerId === layer.id ? ledColors?.get(editing.position) : undefined}
                 reach={editing.layerId === layer.id ? reach.get(editing.position) : undefined}
                 onPointAt={setPointAt}
+                actionsNote={keyMovesNote(draft.dirty ? KEY_MOVES_BLOCKED : null)}
                 notice={detail.upgrade?.tapDances !== true || !/^TD\(/.test(editedNativeSource(layout, editing)) ? null : offer}
                 actions={
                   <>
@@ -1893,7 +1899,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                     copied={clipboard === null ? null : bindingSummary(clipboard.binding, layout)}
                     pasteTargets={Math.max(1, chatSelection?.positions.length ?? 0)}
                     onPaste={() => void paste()}
-                    blockedReason={draft.dirty ? "Apply or discard this key's change first" : null}
+                    blockedReason={draft.dirty ? KEY_MOVES_BLOCKED : null}
                   />
                   {board.lighting === undefined ? null : (
                     <KeyColour
