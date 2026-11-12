@@ -17,6 +17,9 @@ export interface SystemBackend {
   karabinerConfig?: () => Promise<KarabinerConfig>;
   /** Stops a running install of the tool (R2-08); returns where it has got to. */
   cancelInstall: (tool: InstallableTool) => Promise<InstallState>;
-  /** Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07). Repeated calls share one attempt. */
-  restartDocker: () => Promise<DockerStartResponse>;
+  /**
+   * Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07). Repeated calls share one attempt.
+   * `force` restarts an engine that answers, for a build that failed on its state (R6-09); it is refused while a build or flash runs.
+   */
+  restartDocker: (opts?: { force?: boolean }) => Promise<DockerStartResponse>;
 }

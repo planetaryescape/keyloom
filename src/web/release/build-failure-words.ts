@@ -7,15 +7,20 @@ import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
 /**
  * `docker`: the Docker callout answers it (D-488). `same_every_time`: the layout doesn't compile or fit, so building again fails the same
  * way; the step offers the last revision that built, when there is one in this revision's history and this is the head, and a question to
- * keyloom. `may_pass`: anything else, such as a download that failed, keeps Build again beside the question.
+ * keyloom. `restart_engine`: the engine's own state stopped it (a stale shared folder, a container it can't remove), so the step offers to
+ * restart the engine and build again (R6-09, R6-17). `may_pass`: anything else, such as a download that failed, keeps Build again beside
+ * the question.
  */
 export type BuildFailureView =
   | { kind: "docker" }
+  | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
   | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
-export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt">, earlierRevision: boolean): BuildFailureView {
+/** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
+export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine">, earlierRevision: boolean, restartFailed = false): BuildFailureView {
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
+  if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed);
   if (build.errorCode !== "compile_error" && build.errorCode !== "too_large") return { kind: "may_pass" };
   // Going back moves the head; a build of an earlier revision chosen in History has no head to move.
   const goBack = earlierRevision ? null : (build.lastBuilt ?? null);
@@ -24,6 +29,19 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt">, 
     : `Building it again fails the same way. The last version that built is “${headline(goBack.summary)}”. Going back adds a new revision, so this one stays in History.`;
   return { kind: "same_every_time", next, goBack };
 }
+
+// The build's own sentence names a terminal command and XDG_CACHE_HOME; the page says what happened and offers the restart instead.
+function engineRestartView(code: "stale_mount" | "stuck_container", engine: string | null, restartFailed: boolean): BuildFailureView {
+  const text = code === "stale_mount"
+    ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
+    : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
+  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Restart ${engine} yourself, then build again.`, button: null, busy: null };
+  if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
+  return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
+}
+
+/** The log lines a restart_engine step shows: without keyloom's closing "build failed" line, which repeats the terminal advice. */
+export const engineRestartLog = (lines: readonly string[]): string[] => lines.filter((line) => !line.startsWith("keyloom: build failed:"));
 
 // The log keeps its newest lines within what a chat message may hold. The error and each line are capped first, so one huge line or
 // error (or board name) can never push the whole log out: with these caps, the heading and the newest line always fit.

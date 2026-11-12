@@ -5,8 +5,8 @@ import { DeleteLayerDialog, openReference, referenceAction } from "../../src/web
 
 const dialog = (references: Parameters<typeof DeleteLayerDialog>[0]["references"]) =>
   renderToStaticMarkup(
-    <DeleteLayerDialog layerName="Nav" references={references} goesWith={[]} onDelete={async () => ({ ok: true as const, warnings: [] })} nameFunction={(fn) => fn}
-      onOpenKey={() => {}} onOpenCombo={() => null} onRemoveTapDance={async () => ({ ok: true as const, warnings: [] })} onClose={() => {}} />,
+    <DeleteLayerDialog layerName="Nav" references={references} goesWith={[]} onDelete={async () => ({ ok: true as const, warnings: [], shown: true })} nameFunction={(fn) => fn}
+      onOpenKey={() => {}} onOpenCombo={() => null} onRemoveTapDance={async () => ({ ok: true as const, warnings: [], shown: true })} onClose={() => {}} />,
   );
 
 test("each reference gets the button for the place it is changed", () => {

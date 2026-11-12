@@ -72,7 +72,15 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     }
   };
 
+  // A read that failed says so with Check again, in either mode: the attention steps vanishing would hide an update kanata needs (R6-22).
+  const readFailed = load.kind !== "error" ? null : (
+    <div className="sync-setup">
+      <p className="sync-setup-problem" role="alert">{load.message}</p>
+      <button type="button" className="button" disabled={checking} onClick={() => void check()}><RefreshCw size={14} aria-hidden="true" /> Check again</button>
+    </div>
+  );
   if (mode === "attention") {
+    if (load.kind === "error") return readFailed;
     if (load.kind !== "ready") return null;
     const steps = attentionSteps(load.status);
     if (steps.length === 0) return null;
@@ -86,14 +94,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   if (load.kind === "loading") {
     return <p className="sync-setup-status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Checking what kanata needs…</p>;
   }
-  if (load.kind === "error") {
-    return (
-      <div className="sync-setup">
-        <p className="sync-setup-problem" role="alert">{load.message}</p>
-        <button type="button" className="button" disabled={checking} onClick={() => void check()}><RefreshCw size={14} aria-hidden="true" /> Check again</button>
-      </div>
-    );
-  }
+  if (load.kind === "error") return readFailed;
   return (
     <div className="sync-setup">
       <Steps steps={setupSteps(load.status)} busy={busy} installing={installing} onRun={run} />

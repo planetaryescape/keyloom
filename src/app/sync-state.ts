@@ -33,7 +33,8 @@ export type SyncState =
   | { kind: "syncing"; step: SyncStepName; syncId: string; startedAt: number; trigger: "auto" | "manual" }
   | { kind: "behind"; changes: number | null; why: BehindWhy; error: string | null }
   | { kind: "needs_hand"; instruction: string; reason: string }
-  | { kind: "not_connected"; changes?: number | null }
+  // `firstFlash`: the board has no USB IDs keyloom knows, so keyloom sees it only once its own firmware is on it, and it never has been (R6-10).
+  | { kind: "not_connected"; changes?: number | null; firstFlash?: true }
   | { kind: "not_keyloom"; detail: string };
 
 export type SyncFacts = {
@@ -61,6 +62,13 @@ export type SyncFacts = {
    * not on it yet. Absent when keyloom never synced it or the build came from another layout.
    */
   lastKnown?: { changes: number | null };
+  /**
+   * False for a firmware board whose definition has no USB IDs (a stock foostan Corne): keyloom can't see it plugged in until keyloom's
+   * firmware, which names it, is on it. Absent means it can be seen.
+   */
+  detectable?: boolean;
+  /** keyloom has written its firmware to this board before, from any config (a version, or a flash whose write finished). */
+  flashedBefore?: boolean;
 };
 
 const NEEDS_HAND_REASON = "keyloom couldn't restart it by itself";
@@ -95,6 +103,10 @@ export function deriveState(f: SyncFacts): SyncState {
     return { kind: "behind", changes: f.running.kind === "behind" ? f.running.changes : null, why: "failed", error: latest.error };
   }
   if (f.reading.state === "absent") {
+    // Never synced or flashed by keyloom, and not visible until it is: "not connected" would be false while it is plugged in (R6-10).
+    // The evidence is the whole board's, not this config's: a flash of another config, or one keyloom couldn't confirm, still put it on.
+    // A sync counts only once it reached the flash: one that failed at its build wrote nothing, so the board still can't be seen.
+    if (f.detectable === false && f.flashedBefore !== true && f.lastKnown === undefined && (f.latestSync?.flashId ?? null) === null) return { kind: "not_connected", firstFlash: true };
     const changes = f.lastKnown?.changes;
     return changes === undefined || changes === 0 ? { kind: "not_connected" } : { kind: "not_connected", changes };
   }

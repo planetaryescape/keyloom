@@ -12,7 +12,7 @@ import { processAlive } from "../firmware/toolchain/lock.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { sameBuild } from "../layout/conditional-backfill.ts";
 import { withoutLayerNumbers } from "../layout/layer-refs.ts";
-import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash, lastSuccessfulFlashAt } from "../persistence/builds.ts";
+import { type BuildRow, finishBuild, finishFlash, findBuild, findBuildByKey, findFlash, keyloomFirmwareWrittenTo, lastSuccessfulFlashAt } from "../persistence/builds.ts";
 import { boardConfigs, getBoardConfig, setBoardConfig } from "../persistence/configs.ts";
 import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import { transact } from "../persistence/transaction.ts";
@@ -443,6 +443,8 @@ export class SyncEngine {
       auto: { on: proven && (bs.autoSync ?? true), paused: bs.paused, proven },
       quiet: this.now() - layout.updatedAt >= this.quietMs,
       ...(lastKnown === undefined ? {} : { lastKnown }),
+      ...(definition.firmware !== "kanata" && definition.revisions.every((revision) => revision.detect === null)
+        ? { detectable: false, flashedBefore: keyloomFirmwareWrittenTo(db, boardId) } : {}),
     };
     return { boardId, boardName, layout, layouts, reading, facts };
   }

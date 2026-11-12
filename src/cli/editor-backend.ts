@@ -11,7 +11,7 @@ type Build = Awaited<ReturnType<EditorBackend["startBuild"]>>;
 type Flash = Awaited<ReturnType<EditorBackend["startFlash"]>>;
 
 const toBuild = (b: BuildView): Build => ({
-  id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, errorCode: b.errorCode, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
+  id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, errorCode: b.errorCode, lastBuilt: b.lastBuilt, restartEngine: b.restartEngine, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
 });
 
 const toFlash = (f: FlashView): Flash => ({

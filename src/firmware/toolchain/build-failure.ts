@@ -13,13 +13,19 @@ export class BuildFailure extends Error {
  * `too_large`: the firmware doesn't fit the keyboard's memory (R5-02).
  * The last two fail the same way every time for this revision, so the UI offers the last revision that built and a question to keyloom,
  * never Build again. A failure with no code may pass (a download, a full disk), so Build again stays for it.
+ * `stale_mount`: Docker still sees an old copy of what keyloom wrote (Colima's sshfs share) (R6-09). `stuck_container`: a build container
+ * an earlier keyloom left can't be removed (R6-17). Building again hits the same engine state, so the UI offers a forced restart of the
+ * engine and then the build (D-529).
  */
-export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large"] as const;
+export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container"] as const;
 export type BuildErrorCode = (typeof BUILD_ERROR_CODES)[number];
 export const isBuildErrorCode = (code: string | null): code is BuildErrorCode => (BUILD_ERROR_CODES as readonly string[]).includes(code ?? "");
 
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
 export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large"]);
+
+/** The codes a restart of the Docker engine clears, while Docker itself still answers (R6-09, R6-17). */
+export const ENGINE_RESTART_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["stale_mount", "stuck_container"]);
 
 // Colour codes around QMK's messages would split the words the patterns look for.
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;

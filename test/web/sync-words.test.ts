@@ -59,6 +59,12 @@ describe("syncLine", () => {
     expect(other.detail).toBe("Flash keyloom's build once to sync from then on.");
   });
 
+  test("a board keyloom sees only once its firmware is on it offers Build and flash, not \"not connected\" (R6-10)", () => {
+    const first = syncLine(board({ kind: "not_connected", firstFlash: true }, { boardName: "Corne" }), "lay_1");
+    expect(first).toMatchObject({ detail: "keyloom sees your Corne once keyloom's firmware is on it.", action: { id: "open_release", label: "Build and flash…" } });
+    expect(first.label).not.toContain("not connected");
+  });
+
   test("a keyboard that runs another layout of the board says so and offers to put this one on it", () => {
     // It opens the put-on confirm (D-300): a plain sync of another config is refused by the engine (R1-02).
     expect(syncLine(board({ kind: "in_sync" }), "lay_2")).toMatchObject({ label: "Your Glove80 runs “main”", action: { id: "put_on", label: "Put this layout on it" } });

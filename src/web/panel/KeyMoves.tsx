@@ -14,8 +14,16 @@ interface Props {
   blockedReason: string | null;
 }
 
+export const KEY_MOVES_BLOCKED = "Apply or discard this key's change first";
+
+/** The line under the key card's header while Swap, Copy and Paste are off, so the reason isn't only in a tooltip (R6-16). */
+export function keyMovesNote(blockedReason: string | null): string | null {
+  return blockedReason === null ? null : `Swap, Copy and Paste are off: ${blockedReason[0]?.toLowerCase()}${blockedReason.slice(1)}.`;
+}
+
 // Swap, Copy and Paste for the open key (16#moving-and-copying-keys), as icons in the key card's header. Each one is a change of its
-// own, applied at once, so they are off while the key has a draft; the reason is in the tooltip and the accessible name.
+// own, applied at once, so they are off while the key has a draft; the reason is also a line under the header (`keyMovesNote`). Paste
+// with nothing copied stays on, and pressing it says to copy a key first.
 export function KeyMoves({ swapping, onSwap, onCopy, copied, pasteTargets, onPaste, blockedReason }: Props) {
   const pasteWords = copied === null ? "Paste: copy a key first" : `Paste ${copied} on ${pasteTargets === 1 ? "this key" : `${pasteTargets} keys`} (⌘V)`;
   return (
@@ -26,7 +34,7 @@ export function KeyMoves({ swapping, onSwap, onCopy, copied, pasteTargets, onPas
       <button type="button" className="card-icon" aria-label={blockedReason ?? "Copy this key"} title={blockedReason ?? "Copy this key (⌘C)"} disabled={blockedReason !== null} onClick={onCopy}>
         <Copy size={15} aria-hidden="true" />
       </button>
-      <button type="button" className="card-icon" aria-label={blockedReason ?? pasteWords} title={blockedReason ?? pasteWords} disabled={blockedReason !== null || copied === null} onClick={onPaste}>
+      <button type="button" className="card-icon" aria-label={blockedReason ?? pasteWords} title={blockedReason ?? pasteWords} disabled={blockedReason !== null} onClick={onPaste}>
         <ClipboardPaste size={15} aria-hidden="true" />
       </button>
     </div>

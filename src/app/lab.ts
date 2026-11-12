@@ -74,7 +74,7 @@ export async function startRealCapture(
 const REPLAY_LEAD_MS = 100;
 
 const emulatorReplay: LabDeps["replay"] = (app, view, boardRevision, hooks) => async (doc: Layout, events) =>
-  emulateEvents(app, { ...view, document: doc }, events, { boardRevision, log: hooks.log, leadMs: REPLAY_LEAD_MS, cache: false, ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}), ...(hooks.signal ? { signal: hooks.signal } : {}) });
+  emulateEvents(app, { ...view, document: doc }, events, { boardRevision, log: hooks.log, leadMs: REPLAY_LEAD_MS, cache: false, work: "a lab analysis", ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}), ...(hooks.signal ? { signal: hooks.signal } : {}) });
 
 export const realLabDeps = (): LabDeps => ({ startCapture: startRealCapture, replay: emulatorReplay });
 

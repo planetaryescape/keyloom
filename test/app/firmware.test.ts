@@ -9,7 +9,9 @@ import {
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
-import { checkoutDirFor } from "../../src/app/firmware.ts";
+import { checkoutDirFor, engineRestartBlocker } from "../../src/app/firmware.ts";
+import { holdContainerWork } from "../../src/app/toolchain.ts";
+import { holdKeyboardWrite } from "../../src/firmware/toolchain/write-guard.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { FAKE_ZAPP_HANG, PIN, REVA, REVB, toolchainEnv } from "../helpers/toolchain-env.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
@@ -217,6 +219,35 @@ describe("startBuild / getBuild / buildAndWait", () => {
     const b = await getBuild(e.app, id);
     expect(b.status).toBe("failed");
     expect(b.error).toContain("stopped before this build finished");
+  });
+
+  test("a forced Docker restart waits for a build in another live keyloom, and not for one whose process died (R6-09)", async () => {
+    const e = await toolchainEnv();
+    expect(engineRestartBlocker(e.app)).toBeNull();
+    const dead = newBuildId();
+    createBuild(e.app.db, { id: dead, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${dead}.log`, pid: 2147483646 });
+    expect(engineRestartBlocker(e.app)).toBeNull();
+    const live = newBuildId();
+    createBuild(e.app.db, { id: live, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${live}.log`, pid: process.ppid });
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.");
+    e.closeApp();
+  });
+
+  test("a forced Docker restart also waits for a lab analysis, a review's tests and an emulator run, and names each (D-529)", async () => {
+    const e = await toolchainEnv();
+    const lab = holdContainerWork("a lab analysis");
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis, and restarting Docker now would stop it. Restart Docker once that has finished.");
+    const tests = holdContainerWork("a board review's tests");
+    const again = holdContainerWork("a lab analysis");
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests, and restarting Docker now would stop them. Restart Docker once they have finished.");
+    const write = holdKeyboardWrite();
+    // A keyboard write uses no Docker, so it isn't something a restart "would stop": it is named on its own (#297 re-review).
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests, and restarting Docker now would stop them. Restart Docker once they have finished. keyloom is also writing to a keyboard; wait for that too.");
+    for (const release of [lab, tests, again]) release();
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.");
+    write();
+    expect(engineRestartBlocker(e.app)).toBeNull();
+    e.closeApp();
   });
 
   test("an unknown build is not found", async () => {

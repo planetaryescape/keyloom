@@ -22,7 +22,10 @@ export function startDockerEngine(token: string, signal?: AbortSignal): Promise<
   return request("POST", `${DOCKER_PATH}/start`, token, DockerStartResponseSchema, signal, {});
 }
 
-/** Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07); answers like a start. */
-export function restartDockerApp(token: string, signal?: AbortSignal): Promise<DockerStartResponse> {
-  return request("POST", `${DOCKER_PATH}/restart`, token, DockerStartResponseSchema, signal, {});
+/**
+ * Quits and reopens the Mac app that runs Docker, for a socket it refuses this account (R2-07); answers like a start. `force` restarts an
+ * engine that answers, for a build that failed with `stale_mount` or `stuck_container` (R6-09).
+ */
+export function restartDockerApp(token: string, signal?: AbortSignal, force = false): Promise<DockerStartResponse> {
+  return request("POST", `${DOCKER_PATH}/restart`, token, DockerStartResponseSchema, signal, force ? { force: true } : {});
 }

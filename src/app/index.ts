@@ -40,6 +40,7 @@ export { type HandsFreeDeps, type HandsFreeOverrides, type RebootOutcome, reboot
 export {
   type BuildOptions, type BuildView, type FlashOptions, type FlashView, type GenerateOutcome, buildAndWait, flashAndWait, generateFirmware,
   drainManualFlashTasks, getBuild, getFlash, startBuild, startFlash, cancelBuild, cancelFlash, waitForBuild,
+  engineRestartBlocker,
 } from "./firmware.ts";
 export { type FlashCheck, type FlashCheckFound, checkFlashAgain } from "./flash-check.ts";
 export {

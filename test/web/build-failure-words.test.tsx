@@ -57,22 +57,23 @@ describe("buildQuestion", () => {
 });
 
 const noop = () => {};
-function release(build: Build): Release {
+function release(build: Build, over: Partial<Release> = {}): Release {
   return {
     build, flash: null, starting: null, error: null, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
     docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop },
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
     cancelFlash: noop, cancelling: false, cancelNote: null, checkKeyboard: noop, check: { running: false, found: null, problem: null }, openSettings: noop, settingsProblem: null,
+    restartAndBuild: noop, engineRestart: { running: false, problem: null, again: true }, ...over,
   } as Release;
 }
-function failedStep(errorCode: Build["errorCode"], over: Partial<Build> = {}) {
+function failedStep(errorCode: Build["errorCode"], over: Partial<Build> = {}, releaseOver: Partial<Release> = {}) {
   const build = {
     id: "bld", revisionId: "rev_B", status: "failed", error: "The generated firmware doesn't compile: 'KC_NOPE' undeclared", errorCode, lastBuilt,
     flashPlan: { manual: null, tool: null, canReveal: true }, startedAt: 0, finishedAt: 1, logTail: ["make: *** [keymap.o] Error 1"], artifactPath: null, logPath: "/tmp/x.log", ...over,
   } as Build;
   return renderToStaticMarkup(createElement(ReleaseDialog, {
-    open: true, onClose: noop, release: release(build), head: { id: "rev_B", summary: "Added a combo" }, boardName: "Moonlander", boardRevisions: [],
+    open: true, onClose: noop, release: release(build, releaseOver), head: { id: "rev_B", summary: "Added a combo" }, boardName: "Moonlander", boardRevisions: [],
     status: { label: "Build failed", tone: "error" } as never, now: 2, onGoBack: async () => {}, onShowLatest: async () => {}, onAskAboutBuild: noop,
   }));
 }
@@ -90,6 +91,42 @@ describe("the failed build step", () => {
     expect(html).toContain("Build again");
     expect(html).toContain("Ask keyloom about this build");
     expect(html).not.toContain("Go back to the last version that built");
+  });
+});
+
+// R6-09, R6-17: a stale shared folder or a stuck container fails every build until the engine restarts.
+describe("a build the engine's own state stopped", () => {
+  const stale = "Docker still sees an old or missing copy of keymap.c after 30 s. This is a stale shared folder (Colima's sshfs mount); restart it with `colima restart`, or move XDG_CACHE_HOME to a folder it shares reliably, then build again.";
+  test("a stale mount offers Restart Colima and build again, never the terminal advice or Build again", () => {
+    const html = failedStep("stale_mount", { error: stale, restartEngine: "Colima", logTail: ["keyloom: the container sees a different copy of keymap.c; checking again", `keyloom: build failed: ${stale}`] });
+    expect(html).toContain("Restart Colima and build again");
+    expect(html).toContain("Docker kept showing the build an old copy of the files keyloom wrote");
+    expect(html).not.toContain("XDG_CACHE_HOME");
+    expect(html).not.toContain("colima restart");
+    expect(html).not.toContain(">Build again<");
+    expect(html).toContain("checking again");
+  });
+  test("a stuck container names the Mac app keyloom restarts", () => {
+    const view = buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: "Docker Desktop" }, false);
+    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…" });
+  });
+  test("an engine keyloom can't restart says so and keeps Build again", () => {
+    const html = failedStep("stale_mount", { error: stale, restartEngine: null });
+    expect(html).toContain("Restarting your Docker engine clears this.");
+    expect(html).toContain("Build again");
+    expect(html).not.toContain("and build again</button>");
+  });
+  test("a restart refused while a build runs keeps the button with its reason; one that failed shows why and Build again", () => {
+    const busy = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.", again: true } });
+    expect(busy).toContain("Restart Colima and build again");
+    expect(busy).toContain("restarting Docker now would stop it");
+    const failed = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "Colima didn't start: exit 1", again: false } });
+    expect(failed).not.toContain("Restart Colima and build again");
+    expect(failed).toContain("Colima didn&#x27;t start");
+    expect(failed).toContain("Build again");
+    // The words match the button left: no "Restarting Colima clears this" beside a Build again that hits the same state (PR #297 review).
+    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Restart Colima yourself, then build again.");
+    expect(failed).not.toContain("Restarting Colima clears this");
   });
 });
 

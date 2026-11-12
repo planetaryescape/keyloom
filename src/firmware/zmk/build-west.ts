@@ -96,7 +96,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         say(`keyloom: removing ${ids.length === 1 ? "a build container" : `${ids.length} build containers`} an earlier keyloom left running in this checkout`);
         const removed = await run({ cmd: ["docker", "rm", "-f", ...ids], log: input.log, timeoutMs: checkMs });
         if (removed.exitCode !== 0 || removed.timedOut) {
-          throw new BuildFailure(`keyloom couldn't remove the build container an earlier keyloom left in ${input.checkoutDir} (${ids.join(", ")})${removed.timedOut ? ": docker rm timed out" : ""}. Nothing was built. Restarting Docker stops it; then build again.`);
+          throw new BuildFailure(`keyloom couldn't remove the build container an earlier keyloom left in ${input.checkoutDir} (${ids.join(", ")})${removed.timedOut ? ": docker rm timed out" : ""}. Nothing was built. Restarting Docker stops it; then build again.`, "stuck_container");
         }
       }
 

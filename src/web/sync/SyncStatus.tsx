@@ -119,7 +119,8 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
                   <span className="menu-item-label">Disable remapping</span>
                 </button>
               )
-            ) : (
+            ) : line.action?.id === "open_release" ? null : (
+              // The line's own button opens Build and flash when that is the way on, so it isn't listed twice.
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); onOpenRelease(); }}>
                 <Hammer size={14} aria-hidden="true" />
                 <span className="menu-item-label">Build and flash…</span>

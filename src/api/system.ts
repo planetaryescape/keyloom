@@ -7,6 +7,9 @@ import { z } from "zod";
 //                                       `cli-missing` it opens the app named in `engine`, whose setup puts its CLI in place)
 //   POST /api/system/docker/restart   -> DockerStartResponse   (quits and reopens the Mac app named in `access.restartApp`, or stops
 //                                       and starts the Colima named in `restartEngine`; refused while keyloom is starting Docker)
+//                                       Body `{}`, or `{ "force": true }` to restart an engine that answers, for a build that failed with
+//                                       `stale_mount` or `stuck_container` (R6-09); that is refused with `build_running` while a build,
+//                                       flash, lab analysis, review test or emulator run is under way, because the restart would stop it.
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
@@ -53,7 +56,13 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), version: z.string().min(1), engine: z.string().min(1), waitedMs: z.number().finite() }),
   // A start that fails is not a bad request; the sentence is what the person reads, so it comes back as data.
   // `engine_busy`: refused because keyloom is already starting or restarting the engine (R4-04); the page follows that one instead.
-  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.literal("engine_busy").optional() }),
+  // `build_running`: a forced restart refused because a build, flash or container run is under way, which it would stop (R6-09); the reason names it.
+  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.enum(["engine_busy", "build_running"]).optional() }),
+]);
+
+export const DockerRestartRequestSchema = z.union([
+  z.object({}).strict(),
+  z.object({ force: z.boolean() }).strict(),
 ]);
 export type DockerStartResponse = z.infer<typeof DockerStartResponseSchema>;
 

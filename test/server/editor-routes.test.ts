@@ -283,6 +283,20 @@ describe("build and flash", () => {
     expect(failed).toMatchObject({ status: "failed", errorCode: "docker_unavailable" });
   });
 
+  test("the dev fake's restart clears the stale mount for new builds only: a failed build stays failed (PR #297 CodeRabbit)", async () => {
+    const fake = new FakeEditor(fixture, { buildMs: 50, failBuildStale: true });
+    const { call } = start(fake);
+    const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    await Bun.sleep(80);
+    expect(BuildSchema.parse(await (await call("GET", `/api/builds/${build.id}`)).json())).toMatchObject({ status: "failed", errorCode: "stale_mount" });
+    fake.staleMount = false;
+    expect(BuildSchema.parse(await (await call("GET", `/api/builds/${build.id}`)).json())).toMatchObject({ status: "failed", errorCode: "stale_mount" });
+    expect((await call("POST", `/api/builds/${build.id}/flashes`, {})).status).toBe(409);
+    const again = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
+    await Bun.sleep(80);
+    expect(BuildSchema.parse(await (await call("GET", `/api/builds/${again.id}`)).json())).toMatchObject({ status: "succeeded" });
+  });
+
   test("a waiting flash can be cancelled, a writing one can't, and the cancel says so as a code (D-501)", async () => {
     const { call } = start(new FakeEditor(fixture, { buildMs: 50, flashStepMs: 400 }));
     const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());

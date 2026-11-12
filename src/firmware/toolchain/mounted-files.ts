@@ -41,6 +41,8 @@ export async function awaitMountedFiles(check: MountedFilesCheck): Promise<void>
   const started = Date.now();
   let differing: string[] = [];
   let detail = "";
+  // Whether the last probe itself failed (Docker didn't answer or couldn't run it), so no copy was seen at all.
+  let probeFailed = false;
   for (;;) {
     if (check.signal?.aborted) throw new BuildFailure("The build was cancelled.");
     const seen = new Map<string, string>();
@@ -56,18 +58,28 @@ export async function awaitMountedFiles(check: MountedFilesCheck): Promise<void>
       },
     });
     if (result.aborted) throw new BuildFailure("The build was cancelled.");
+    // sha256sum exits 1 for a file it can't read, which is a missing copy; any other exit is Docker's (125 to 127) or a timeout.
+    probeFailed = result.timedOut || (result.exitCode !== 0 && result.exitCode !== 1);
     differing = [...expected].filter(([path, hash]) => seen.get(path) !== hash).map(([path]) => path);
     detail = errors.slice(0, 3).join(" | ");
     if (differing.length === 0) {
       if (Date.now() - started > retryEveryMs) check.log.line(`keyloom: the container saw the written files after ${Date.now() - started} ms`);
       return;
     }
-    check.log.line(`keyloom: the container sees a different copy of ${differing.join(", ")}${detail ? ` (${detail})` : ""}; checking again`);
+    check.log.line(probeFailed
+      ? `keyloom: Docker couldn't check the written files (${result.timedOut ? "timed out" : `exit ${result.exitCode}`})${detail ? `: ${detail}` : ""}; checking again`
+      : `keyloom: the container sees a different copy of ${differing.join(", ")}${detail ? ` (${detail})` : ""}; checking again`);
     if (Date.now() - started >= settleMs) break;
     await Bun.sleep(retryEveryMs);
+  }
+  // No copy was seen, so this is not a stale share, and a restart of the engine isn't the fix: no code, so Build again stays (PR #297).
+  if (probeFailed) {
+    throw new BuildFailure(`Docker couldn't check the files keyloom wrote for ${Math.round(settleMs / 1000)} s, so keyloom didn't start the build.${detail ? ` Docker said: ${detail}` : ""}`);
   }
   throw new BuildFailure(
     `Docker still sees an old or missing copy of ${differing.map((p) => p.slice(check.containerRoot.length + 1)).join(", ")} after ${Math.round(settleMs / 1000)} s, so the build would not use what keyloom wrote. ` +
       `This is a stale shared folder (Colima's sshfs mount); restart it with \`colima restart\`, or move XDG_CACHE_HOME to a folder it shares reliably, then build again.${detail ? ` Docker said: ${detail}` : ""}`,
+    // The page reads the code and offers the restart; the terminal keeps this sentence (R6-09).
+    "stale_mount",
   );
 }

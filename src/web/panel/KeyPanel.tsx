@@ -97,15 +97,17 @@ interface Props {
   onPlace: (request: PlaceRequest | null) => void;
   onUnplace: (fn: string) => void;
   onClose: () => void;
-  /** Resolves once the new layout is on screen. `change` is what the key was and became, for "repeat on selection". */
+  /** Shows the new layout. Never rejects for a failed read: the change is written, so the Viewer says so with Show the new layout (R6-03). `change` is what the key was and became, for "repeat on selection". */
   onApplied: (summary: string, change: { before: Binding; after: Binding }) => Promise<void>;
-  /** A hold-tap's timing was tuned. */
+  /** A hold-tap's timing was tuned. Never rejects for a failed read, like `onApplied`. */
   onTuned: (summary: string) => Promise<void>;
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;
   onShowLayer: (layerId: string) => void;
   /** Icon actions in the card's header that act on this key outside its draft: swap, copy, paste, colour (16#moving-and-copying-keys). */
   actions?: ReactNode;
+  /** Why the header's actions are off, as a line under the header (R6-16), or null. */
+  actionsNote?: string | null;
   /** A notice that belongs to this key, such as the offer to read an old tap dance into keyloom. */
   notice?: ReactNode;
   /** The physical cap colour, LED and layer light, so the hero looks like the key on the board. */
@@ -124,7 +126,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 export function KeyPanel(props: Props) {
   const {
     token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, resume, placements, placing,
-    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, notice, keycap, led, reach, onPointAt, handle,
+    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, actionsNote = null, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
@@ -619,6 +621,7 @@ export function KeyPanel(props: Props) {
           </button>
         </div>
       </header>
+      {actionsNote === null ? null : <p className="card-tools-note">{actionsNote}</p>}
 
       <div className="card-scroll">
       <fieldset className="card-body" disabled={applying}>
