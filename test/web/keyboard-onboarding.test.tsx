@@ -12,7 +12,7 @@ import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 import { NewBoardPanel, type PutSource } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { setupFoot, setupWrites, welcomeLead } from "../../src/web/keyboards/onboarding-words.ts";
 import { SetupCard } from "../../src/web/keyboards/SetupCard.tsx";
-import { blockedAdd, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { blankBoardFor, blockedAdd, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
 const candidate = { id: "qmk:zsa/moonlander", name: "Moonlander Mark I", firmware: "qmk" } as ApiCandidate;
 // SAFETY: the panels read only these fields of the hook's result while rendering; the rest of its API is never called.
@@ -44,6 +44,17 @@ describe("R7-10: a keyboard keyloom has, on a first run", () => {
     expect(html).toContain("Put one of your configs on it, or start one of its own.");
     expect(html).toMatch(/Put a config on it<\/button>/);
     expect(html).not.toContain("Import one");
+  });
+
+  // PR #302 review: a preview read again on the Review step can be refused as board_known too, and its Start a config must work there.
+  test("Start a config makes the config on the board keyloom has, from Confirm and Review alike", () => {
+    const moonlander = { id: "zsa/moonlander", name: "Moonlander" };
+    const confirm = { kind: "confirm" as const, keyboard: null, candidate, homeRow: null, controller: null, layout: null };
+    expect(blankBoardFor(confirm, moonlander)).toBe("zsa/moonlander");
+    expect(blankBoardFor({ ...confirm, kind: "review", homeRow: 2 }, moonlander)).toBe("zsa/moonlander");
+    expect(blankBoardFor(confirm, null)).toBeNull();
+    expect(blankBoardFor({ kind: "put", boardId: "local/atomic", boardName: "Atomic", source: null, choices: {}, origin: "new" }, moonlander)).toBe("local/atomic");
+    expect(blankBoardFor({ kind: "idle" }, moonlander)).toBeNull();
   });
 
   test("the Put step with no config to pick is Start a config, with no disabled Pick a config", () => {

@@ -75,6 +75,13 @@ export const blockedAdd = (error: unknown, step: AddContext, preview: Pick<Previ
   return words?.blocked === true ? words : null;
 };
 
+/**
+ * The board Start a config makes a config on: the step's own board, or on the Confirm and Review steps the board keyloom already has for
+ * the keyboard picked as new (R7-10). Null when there is none.
+ */
+export const blankBoardFor = (step: NewBoardStep, knownBoard: KnownBoardRef | null): string | null =>
+  step.kind === "setup" || step.kind === "put" ? step.boardId : step.kind === "confirm" || step.kind === "review" ? (knownBoard?.id ?? null) : null;
+
 export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = []) {
   const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
@@ -324,10 +331,10 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     /**
      * "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. `free`:
      * `name` is keyloom's own default, so it becomes "name 2", "name 3"… when a config already has it (R4-16). A typed name is kept. On
-     * the Confirm step, the board is the one keyloom already has for the keyboard picked as new (R7-10).
+     * the Confirm and Review steps, the board is the one keyloom already has for the keyboard picked as new (R7-10).
      */
     startBlank: async (name: string, opts: { free?: boolean } = {}): Promise<string | null> => {
-      const board = step.kind === "setup" || step.kind === "put" ? step.boardId : step.kind === "confirm" ? (previewProblemBoard?.id ?? null) : null;
+      const board = blankBoardFor(step, previewProblemBoard);
       if (board === null) return null;
       setBusy(true);
       setProblem(null);

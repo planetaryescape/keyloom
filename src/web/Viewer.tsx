@@ -429,7 +429,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       // Archived and experiment configs are not a sensible thing to put on a new keyboard; the ones on a keyboard come first.
       .filter((l) => l.boardId !== target && (l.archivedAt ?? null) === null)
       .sort((a, b) => Number(onKeyboard.has(b.id)) - Number(onKeyboard.has(a.id)) || b.updatedAt - a.updatedAt)
-      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: onKeyboard.has(l.id) ? "on it now" : null }));
+      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, boardId: l.boardId, note: onKeyboard.has(l.id) ? "on it now" : null }));
   }, [chrome.layouts, chrome.boardChoices, sync.boards, newBoard.step]);
   // This config's proposals that no conversation shows, such as a put's (D-336); opened by itself when the put brought the page here.
   const proposalsOpen = sidebar === "proposals";
