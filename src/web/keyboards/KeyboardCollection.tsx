@@ -2,7 +2,7 @@ import { Download, Keyboard as KeyboardIcon, LoaderCircle, Plus, Search, X } fro
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CollectionResponseSchema, CollectionKeyboardSchema, type CollectionKeyboard } from "../../api/keyboards.ts";
 import { SyncStatusResponseSchema, type BoardChoice } from "../../api/http.ts";
-import { request, failure } from "../api-write.ts";
+import { isGone, request, failure } from "../api-write.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
 import "./collection.css";
 
@@ -64,7 +64,10 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       onChanged();
       try { await load(); }
       catch { setProblem("The keyboard was updated, but the collection couldn't refresh. Try again to reload the list."); }
-    } catch (error) { setProblem(error instanceof Error ? error.message : "That didn't work.", () => void change(keyboard, action)); }
+    } catch (error) {
+      // A keyboard keyloom no longer has (`not_found`) fails the same way on a repeat, so Try again reads the list as it is now (D-534).
+      setProblem(error instanceof Error ? error.message : "That didn't work.", isGone(error) ? reload : () => void change(keyboard, action));
+    }
     finally { setBusy(null); }
   };
   const download = async (keyboard: CollectionKeyboard) => {

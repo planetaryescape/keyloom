@@ -22,21 +22,34 @@ export function onSharedProviderStatus(on: (next: ChatProviderStatus) => void, t
   return () => target.removeEventListener(SHARED, listener);
 }
 
-/** Which provider the next conversation uses. The line it feeds is context, so a failed fetch just leaves it out. */
+/** Which provider the next conversation uses. Chat's line is context, so a failed read just leaves it out there; the review says so (R7-05). */
 export function useProviderStatus(token: string) {
   const [status, setStatus] = useState<ChatProviderStatus | null>(null);
-  // A status another reader saved (a switch, a key, a sign-in) is the page's status too.
-  useEffect(() => onSharedProviderStatus(setStatus), []);
-  const replace = useCallback((next: ChatProviderStatus) => {
+  // Whether the last read failed, so a screen that needs the status (the review's switch after a usage limit) says so with Check again
+  // instead of waiting for it in silence (R7-05). It stays set while Check again reads, so the words don't flicker; `reading` shows that.
+  const [failed, setFailed] = useState(false);
+  const [reading, setReading] = useState(true);
+  const settle = useCallback((next: ChatProviderStatus) => {
     setStatus(next);
-    shareProviderStatus(next);
+    setFailed(false);
   }, []);
+  // A status another reader saved (a switch, a key, a sign-in) is the page's status too.
+  useEffect(() => onSharedProviderStatus(settle), [settle]);
+  const replace = useCallback((next: ChatProviderStatus) => {
+    settle(next);
+    shareProviderStatus(next);
+  }, [settle]);
 
   const reload = useCallback(() => {
     const controller = new AbortController();
-    fetchProviderStatus(token, controller.signal).then(setStatus, () => {});
+    setReading(true);
+    fetchProviderStatus(token, controller.signal).then(settle, () => {
+      if (!controller.signal.aborted) setFailed(true);
+    }).finally(() => {
+      if (!controller.signal.aborted) setReading(false);
+    });
     return () => controller.abort();
-  }, [token]);
+  }, [token, settle]);
 
   useEffect(() => reload(), [reload]);
 
@@ -61,5 +74,5 @@ export function useProviderStatus(token: string) {
     };
   }, [waiting, token]);
 
-  return { status, reload, replace };
+  return { status, failed, reading, reload, replace };
 }

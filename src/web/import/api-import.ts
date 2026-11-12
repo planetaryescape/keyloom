@@ -1,4 +1,4 @@
-import { BoardListResponseSchema, ImportResponseSchema, type BoardChoice, type ImportResponse } from "../../api/http.ts";
+import { BoardListResponseSchema, IMPORT_TOO_LARGE, ImportResponseSchema, type BoardChoice, type ImportResponse } from "../../api/http.ts";
 import { KarabinerConfigResponseSchema } from "../../api/system.ts";
 import { ApiError, UNREACHABLE } from "../api.ts";
 import { failure, request } from "../api-write.ts";
@@ -22,7 +22,11 @@ export async function uploadLayout(token: string, boardId: string, file: File, a
   } catch {
     throw new ApiError(0, UNREACHABLE, { code: "unreachable" });
   }
-  if (!response.ok) throw await failure(response);
+  if (!response.ok) {
+    const refused = await failure(response);
+    // A file over the server's cap is refused by Bun with a bare 413 before the import route runs, so the page says the route's words.
+    throw refused.code === "too_large" ? new ApiError(refused.status, IMPORT_TOO_LARGE, { code: "too_large" }) : refused;
+  }
   const parsed = ImportResponseSchema.safeParse(await response.json());
   // The layout is saved: the card offers Reload by this code (R2-17), and takes no second drop, which would import it again.
   if (!parsed.success) throw new ApiError(response.status, "keyloom imported the file but sent an answer this page can't read. Reload the page to see it.", { code: IMPORTED_UNREADABLE });

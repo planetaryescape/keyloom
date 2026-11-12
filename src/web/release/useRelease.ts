@@ -8,7 +8,7 @@ import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
-import { buildCancelProblem } from "./flash-words.ts";
+import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf } from "./flash-words.ts";
 import { restartDockerApp } from "../system.ts";
 
 const POLL_MS = 1000;
@@ -43,8 +43,8 @@ export interface Release {
   reveal: () => void;
   /** Reads the build again, so its flash plan says whether the flash tool is here now. */
   checkBuild: () => void;
-  /** Why a download or reveal failed. */
-  fileProblem: string | null;
+  /** Why a download or reveal failed, and whether the file is gone, so Build again is the way on. */
+  fileProblem: FileProblem | null;
   /** Stops the running build (R3-10). A build never flashes, so nothing reaches the keyboard. */
   cancelBuild: () => void;
   stoppingBuild: boolean;
@@ -79,7 +79,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [error, setError] = useState<string | null>(null);
   const [resumes, setResumes] = useState(0);
   const [last, setLast] = useState<LastAction>({ kind: "poll" });
-  const [fileProblem, setFileProblem] = useState<string | null>(null);
+  const [fileProblem, setFileProblem] = useState<FileProblem | null>(null);
   const [needsBoardRevision, setNeeds] = useState(false);
   const [boardRevision, setBoardRevision] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -194,13 +194,13 @@ export function useRelease(token: string, layoutRef: string): Release {
   const download = useCallback(() => {
     if (buildId === undefined) return;
     setFileProblem(null);
-    downloadArtifact(token, buildId).catch((e: unknown) => setFileProblem(e instanceof Error ? e.message : "The file couldn't be downloaded."));
+    downloadArtifact(token, buildId).catch((e: unknown) => setFileProblem(fileProblemOf(e, "The file couldn't be downloaded.")));
   }, [token, buildId]);
 
   const reveal = useCallback(() => {
     if (buildId === undefined) return;
     setFileProblem(null);
-    revealArtifact(token, buildId).catch((e: unknown) => setFileProblem(e instanceof Error ? e.message : "Finder couldn't show the file."));
+    revealArtifact(token, buildId).catch((e: unknown) => setFileProblem(fileProblemOf(e, "Finder couldn't show the file.")));
   }, [token, buildId]);
 
   const stopBuild = useCallback(() => {

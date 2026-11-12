@@ -4,7 +4,17 @@
 export type LabFix = { id: "sync_now" | "open_release" | "reload" | "open_input_monitoring" | "retry" | "restart" | "read_again" | "stop_recording"; label: string };
 
 export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
+  // A list that couldn't be read because keyloom can't read its answers, or doesn't know the route, fails the same way: restart (R7-01).
+  if (loadFailed && (code === "unreadable" || code === "not_found")) return [{ id: "restart", label: "Restart keyloom" }];
   if (loadFailed) return [{ id: "reload", label: "Try again" }];
+  // No keyboard to listen to, or the computer refused it: plug it in or allow it, then the same passage starts again (R7-07).
+  if (code === "not_connected" || code === "permission_denied") return [{ id: "retry", label: "Try again" }];
+  // The recording ended before Stop reached it, in another tab or by a Cancel, so the passage is lost and is typed again (R7-07).
+  if (code === "not_recording") return [{ id: "retry", label: "Start listening again" }];
+  // A session another tab deleted: reading the list again drops it.
+  if (code === "not_found") return [{ id: "reload", label: "Read the sessions again" }];
+  // An exception may have left the keyboard's stream open; restarting keyloom closes it. Start listening stays on the card (R7-01).
+  if (code === "internal" || code === "unreadable") return [{ id: "restart", label: "Restart keyloom" }];
   if (code === "needs_sync") return [{ id: "sync_now", label: "Sync now" }, { id: "open_release", label: "Build and flash…" }];
   if (code === "foreign_firmware") return [{ id: "open_release", label: "Build and flash…" }];
   if (code === "permission_input_monitoring") return [{ id: "open_input_monitoring", label: "Open Input Monitoring settings" }, { id: "retry", label: "Try again" }];
@@ -22,7 +32,12 @@ export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
 }
 
 /** The problem line. Codes with a button get the page's own words; the server's name System Settings paths and CLI steps. */
-export function labProblemText(code: string | null, message: string): string {
+export function labProblemText(code: string | null, message: string, boardName = "keyboard"): string {
+  if (code === "not_connected") return `keyloom can't find your ${boardName}. Plug it into this computer with a USB cable, then try again.`;
+  // The server's sentence is the platform's own step, such as the Linux group to join; it names no command.
+  if (code === "permission_denied") return `Your computer didn't let keyloom read your ${boardName}. ${message}`;
+  if (code === "not_recording") return "keyloom had stopped listening before you pressed Stop, perhaps from another tab, so the passage you typed was lost. Start listening again to record it.";
+  if (code === "not_found") return "keyloom can't find that session any more. It may have been deleted in another tab.";
   if (code === "permission_input_monitoring") return "macOS didn't let keyloom read your keyboard. Allow keyloom in Input Monitoring, then try again.";
   if (code === "foreign_firmware") return "Your keyboard runs firmware keyloom didn't build, so it can't stream its keys. Build and flash puts keyloom's build on it.";
   if (code === "connection_lost") return "keyloom's connection to the keyboard stopped answering. Try again, and keyloom opens a new one.";

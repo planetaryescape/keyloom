@@ -67,13 +67,25 @@ describe("no suggestions says why and offers the fix (R4-10)", () => {
   test("a used-up Codex plan shows the reset time in place and offers another model, then Try again for after it (R6-01)", () => {
     const limited = { status: "unavailable" as const, reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" };
     const view = aiMissingWords(limited);
-    expect(view.actions).toEqual(["switch", "set_up_other", "retry"]);
+    expect(view.actions).toEqual(["switch", "retry"]);
     expect(view.words).toBe("Your Codex usage limit is reached, so there are no suggestions this time. Your ChatGPT plan has used up its Codex allowance until 3:45 PM. Switch to another model, or try again once the limit lifts.");
     expect(view.reasonShown).toBe(true);
+    // No other model is ready, so the button is Set up another model, and the words name that button (R7-05).
+    const none = aiMissingWords(limited, true, null, { readyOther: false });
+    expect(none.actions).toEqual(["set_up_other", "retry"]);
+    expect(none.words).toContain("Set up another model, or try again once the limit lifts.");
+    expect(none.words).not.toContain("Switch");
     // --provider or KEYLOOM_PROVIDER fixes the model, so no other can take the review: only Try again, and the words don't offer a switch.
     const fixed = aiMissingWords(limited, false);
     expect(fixed.actions).toEqual(["retry"]);
     expect(fixed.words).not.toContain("Switch");
+  });
+  test("a provider status keyloom couldn't read says so, with Check again beside Try again (R7-05)", () => {
+    const limited = { status: "unavailable" as const, reason: null, model: "gpt-5.5", code: "usage_limit" };
+    const view = aiMissingWords(limited, false, null, { unread: true });
+    expect(view.actions).toEqual(["check_status", "retry"]);
+    expect(view.words).toContain("keyloom couldn't read which models are set up");
+    expect(view.words).toContain("Check again");
   });
   test("a usage limit after keyloom moved off Codex says Try again runs on the new provider, and offers no switch (R6-01 review)", () => {
     const limited = { status: "unavailable" as const, reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" };

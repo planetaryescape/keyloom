@@ -6,6 +6,8 @@ import { bindingLegend } from "../../layout/legend.ts";
 import { deepEqual } from "../../layout/equal.ts";
 import type { Binding, HoldTapProfile, Layout, Macro, Mod, SlotAction } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { unexpectedWayOut } from "../shell/unexpected.ts";
 import { applyChange } from "../api-write.ts";
 import {
   bindingFromDraft, bindingSummary, changeSummary, draftFromBinding, incompleteReason, isDance, keyWords, type Draft,
@@ -157,6 +159,8 @@ export function KeyPanel(props: Props) {
   const [tuning, setTuning] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // The failed Apply's code, so a failure no screen planned for gets Restart keyloom beside it; Apply itself is the Try again (R7-01).
+  const [applyCode, setApplyCode] = useState<string | undefined>(undefined);
   const [reason, setReason] = useState("");
   const reasonId = useId();
   const root = useRef<HTMLElement>(null);
@@ -349,6 +353,7 @@ export function KeyPanel(props: Props) {
     }
     setApplying(true);
     setApplyError(null);
+    setApplyCode(undefined);
     try {
       await applyChange(token, layoutRef, {
         baseRevisionId: revisionId,
@@ -365,6 +370,7 @@ export function KeyPanel(props: Props) {
         if (error.validation !== undefined) check.show(error.validation);
         // The server's message quotes the validator's own text; the problems are listed in words above.
         setApplyError(error.validation === undefined ? error.message : "This change has problems, listed above. Nothing was saved.");
+        setApplyCode(error.code);
       } else {
         setApplyError("The change could not be applied.");
       }
@@ -790,6 +796,7 @@ export function KeyPanel(props: Props) {
                   : (applyError ?? whyNot)}
             </p>
           ) : null}
+          {applyError === null || unexpectedWayOut(applyCode, false) === null ? null : <div className="card-foot-way-out"><UnexpectedWayOut token={token} code={applyCode} primary={false} /></div>}
           <div className="card-foot-row">
             <button
               type="button"

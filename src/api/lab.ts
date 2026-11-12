@@ -4,7 +4,8 @@
 //   POST /api/lab/:layout/recording   StartRecordingRequest -> RecordingResponse (201; 400 usage when no keyboard is listening,
 //                                                   409 recording_running when a recording is already running, 409 busy when
 //                                                   another app holds the keyboard)
-//   POST /api/lab/recording/stop      StopRecordingRequest  -> LabSessionResponse (the session saved; 400 usage when no keys were heard)
+//   POST /api/lab/recording/stop      StopRecordingRequest  -> LabSessionResponse (the session saved; 400 usage when no keys were heard,
+//                                                   409 not_recording when no recording was running, such as one another tab ended)
 //   POST /api/lab/recording/cancel    {}                    -> {} (nothing is saved)
 //   GET  /api/lab/sessions/:id                    -> LabReadoutResponse (the session and its read-out, or null when not analysed)
 //   POST /api/lab/sessions/:id/analyse {}         -> LabReadoutResponse (replays the recording; proposes what it proves; 503

@@ -3,6 +3,7 @@
 import { CircleAlert, Download, ExternalLink, FolderOpen, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
+import type { FileProblem } from "./flash-words.ts";
 import { type FlashStepView, plain } from "./release-words.ts";
 import type { Install } from "./useInstall.ts";
 
@@ -77,7 +78,9 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
   );
 }
 
-export function ManualFlash({ view, boardName, onDownload, onReveal, problem }: { view: Manual; boardName: string; onDownload: () => void; onReveal: () => void; problem: string | null }) {
+export function ManualFlash({ view, boardName, onDownload, onReveal, onBuildAgain, problem }: {
+  view: Manual; boardName: string; onDownload: () => void; onReveal: () => void; onBuildAgain: () => void; problem: FileProblem | null;
+}) {
   return (
     <>
       <p>keyloom can't put firmware on the {boardName} by itself. Save the file, then follow the board's steps:</p>
@@ -97,7 +100,18 @@ export function ManualFlash({ view, boardName, onDownload, onReveal, problem }: 
       {problem === null ? null : (
         <div className="callout callout-error" role="alert">
           <CircleAlert size={18} aria-hidden="true" />
-          <p>{problem}</p>
+          <div className="callout-body">
+            <p>{problem.text}</p>
+            {/* The file was cleaned up: a new build of the same version makes it again, and a download can't (D-534). */}
+            {problem.gone ? (
+              <div className="callout-actions">
+                <button type="button" className="button" onClick={onBuildAgain}>
+                  <RefreshCw size={14} aria-hidden="true" />
+                  Build again
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </>

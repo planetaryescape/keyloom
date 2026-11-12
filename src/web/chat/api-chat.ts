@@ -12,7 +12,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
 } from "../../api/http.ts";
-import { ApiError, UNREACHABLE } from "../api.ts";
+import { ApiError, UNREACHABLE, unreadableError } from "../api.ts";
 import { failure, request } from "../api-write.ts";
 import { createObservedSseParser, createSseParser, SseError } from "./sse.ts";
 import { AgentRunSnapshotSchema, AgentRequestCancellationSchema, type AgentRequestCancellation, type AgentRunSnapshot } from "../../api/agent-runs.ts";
@@ -153,7 +153,8 @@ async function stream<Event extends { type: string }>(
   } catch (error) {
     await reader.cancel().catch(() => {});
     if (signal.aborted) throw error;
-    if (error instanceof SseError) throw new ApiError(response.status, error.message);
+    // The same frame would be unreadable again: a page and a keyloom of different versions, which a restart brings together (R7-09).
+    if (error instanceof SseError) throw unreadableError(response.status);
     throw new ApiError(0, "The connection to keyloom dropped before the reply finished.");
   } finally {
     reader.releaseLock();

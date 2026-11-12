@@ -1,6 +1,6 @@
 # 28: The agent works beside the keyboard
 
-Status update, 2026-11-12 (D-527): Apply on a proposal applied or set aside elsewhere (code `not_open`) says "This proposal is no longer open.", turns Apply off and offers **Read proposals again**. A repair request's words match its buttons, with **Open history** once it is sent.
+Status update, 2026-11-12 (D-534, D-535): an out-of-date revised-proposal request offers **Dismiss and show the proposal**; a reply stopped by a server exception offers **Try again** and **Restart keyloom**, and a chat frame the page can't read offers **Restart keyloom**. Status update, 2026-11-12 (D-527): Apply on a proposal applied or set aside elsewhere (code `not_open`) says "This proposal is no longer open.", turns Apply off and offers **Read proposals again**. A repair request's words match its buttons, with **Open history** once it is sent.
 
 Status update, 2026-11-11 (D-517): "Failed or blocked" now holds for a saved run too. Its presentation carries the failure code, and `failureView` maps each code to its way out: Add credits, the model setup, Switch to, Start a new conversation for a full conversation, or Try again where a second try can succeed. A reply that prepared proposals or priorities before it stopped names them and offers Ask again, because a second try starts over. A provider switch that fails says so with Try again.
 

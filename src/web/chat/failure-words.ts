@@ -1,3 +1,5 @@
+import { INTERNAL_WORDS, UNREADABLE_WORDS } from "../shell/unexpected.ts";
+
 // What a reply that stopped says, and which ways out it offers, by the server's code (D-517). The code is `model_<ModelErrorKind>`,
 // `missing_api_key` or `agent_error`, whether it came from a live stream's `error` frame or from the failed run's saved presentation, so a
 // page that watches a saved run shows the same box as one that streamed it. Never parse the message for this.
@@ -16,7 +18,9 @@ export type FailureAction =
   /** Starts a new conversation: the same request can never fit this one again. */
   | "new_conversation"
   /** Sends the same message again. Offered only where a second try can succeed. */
-  | "retry";
+  | "retry"
+  /** Restart keyloom: for a failure no screen planned for, and for an answer this page can't read (R7-01, R7-09). */
+  | "restart";
 
 export type FailureView = {
   title: string; message: string; actions: readonly FailureAction[]; setUpLabel: string;
@@ -45,6 +49,10 @@ const VIEWS: Readonly<Record<string, Omit<FailureView, "message"> & { message?: 
   model_context_full: { title: "This conversation is full", actions: ["new_conversation"], setUpLabel: "" },
   // The page lost the request before keyloom confirmed it, so keyloom may be answering it already (R5-07). The page's own code.
   unconfirmed: { title: "keyloom didn't confirm your message", actions: ["open_history", "retry"], setUpLabel: "", retryLabel: "Ask again" },
+  // A server exception: the stream's own frame says "internal error", so the page says it in its words. A second try may pass (R7-01).
+  internal: { title: "The reply stopped", message: INTERNAL_WORDS, actions: ["retry", "restart"], setUpLabel: "" },
+  // The same frame would be unreadable again, so only the restart that brings keyloom and the page together is offered (R7-09).
+  unreadable: { title: "keyloom and this page don't match", message: UNREADABLE_WORDS, actions: ["restart"], setUpLabel: "" },
 };
 
 export function failureView(failure: { code: string; message: string }): FailureView {

@@ -35,7 +35,8 @@ function parserFor<Event>(schema: ZodType<Event>, onEvent: (event: Event) => voi
     }
     const parsed = schema.safeParse(json);
     if (!parsed.success) {
-      throw new SseError("keyloom sent a chat frame this page can't read. Reload the page or update keyloom.");
+      // api-chat.ts turns this into the `unreadable` code, whose box offers Restart keyloom (R7-09).
+      throw new SseError("keyloom sent a chat frame this page can't read.");
     }
     onEvent(parsed.data);
   }
