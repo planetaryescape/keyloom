@@ -91,22 +91,26 @@ export function placeWords(positions: readonly number[], rows: Readonly<Record<s
  * the provider, so it offers the setup, Add credits when the code says the account ran out, and Try again for after it is fixed at the
  * provider, where keyloom can't see it (#288 review). Anything else that stopped the look can be tried again. By the code, never the text.
  */
-export type AiMissingAction = "credits" | "set_up" | "switch" | "set_up_other" | "retry";
+export type AiMissingAction = "credits" | "set_up" | "switch" | "set_up_other" | "check_status" | "retry";
 export type AiMissing = { words: string; actions: readonly AiMissingAction[]; refused: boolean; reasonShown?: true };
 /**
  * `canSwitch` is false when --provider or KEYLOOM_PROVIDER fixes the model, so no other one can take the review, and while the provider
  * status is unread, so a lock is not known yet. `nowOn` names the provider keyloom uses now when it is no longer the one the look failed
- * on (a switch in chat since): Try again runs on that one, so the words say so and offer no switch.
+ * on (a switch in chat since): Try again runs on that one, so the words say so and offer no switch. `status.unread` is a provider status
+ * that couldn't be read, which the words say beside Check again (R7-05); `status.readyOther` is whether another model is set up, so the
+ * words name the button the panel shows: Switch to {model}, or Set up another model.
  */
-export function aiMissingWords(ai: BoardReview["ai"], canSwitch = true, nowOn: string | null = null): AiMissing {
+export function aiMissingWords(ai: BoardReview["ai"], canSwitch = true, nowOn: string | null = null, status: { unread?: boolean; readyOther?: boolean } = {}): AiMissing {
   if (ai.status === "unavailable" && ai.model === null) return { words: "Suggestions need a model, and none is set up.", actions: ["set_up"], refused: false };
   // A used-up plan stays used up until it resets, so Try again alone is no way on: another model is, as in chat (R5-04, R6-01). The
   // reason is Codex's reset sentence in keyloom's words, so it shows in place, not behind Details.
   if (ai.status === "unavailable" && ai.code === "usage_limit") {
     const why = ai.reason === null ? "" : ` ${sentence(ai.reason)}`;
     if (nowOn !== null) return { words: `Your Codex usage limit was reached, so there are no suggestions this time.${why} keyloom now uses ${nowOn}, so Try again runs the review on ${nowOn}.`, actions: ["retry"], refused: false, reasonShown: true };
+    if (status.unread === true) return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} keyloom couldn't read which models are set up, so it can't offer another one yet. Check again, or try again once the limit lifts.`, actions: ["check_status", "retry"], refused: false, reasonShown: true };
     if (!canSwitch) return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Try again once the limit lifts.`, actions: ["retry"], refused: false, reasonShown: true };
-    return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Switch to another model, or try again once the limit lifts.`, actions: ["switch", "set_up_other", "retry"], refused: false, reasonShown: true };
+    if (status.readyOther === false) return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Set up another model, or try again once the limit lifts.`, actions: ["set_up_other", "retry"], refused: false, reasonShown: true };
+    return { words: `Your Codex usage limit is reached, so there are no suggestions this time.${why} Switch to another model, or try again once the limit lifts.`, actions: ["switch", "retry"], refused: false, reasonShown: true };
   }
   if (ai.status === "unavailable" && ai.code === "no_credits") {
     return { words: "The model account is out of credits, so there are no suggestions this time. Add credits, then try again.", actions: ["credits", "set_up", "retry"], refused: true };

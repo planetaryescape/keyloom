@@ -142,7 +142,10 @@ describe("GET /api/layouts/:ref", () => {
     );
     const response = await api(port, "/api/layouts/moonlander-daily", goodHeaders);
     expect(response.status).toBe(500);
-    expect(await response.text()).not.toContain("secret");
+    const text = await response.text();
+    expect(text).not.toContain("secret");
+    // Coded, so the page maps it to its own words and buttons (R7-01).
+    expect(JSON.parse(text)).toEqual({ error: { code: "internal", message: "internal error" } });
   });
 
   test("a source that returns a value outside the schema gets 500, not the bad value", async () => {
@@ -240,7 +243,7 @@ describe("Host check covers the page and its assets", () => {
     expect(foreign).not.toContain("<script>");
     const json = await api(port, "/api/nope", goodHeaders);
     expect(json.status).toBe(404);
-    expect(await json.json()).toEqual({ error: "not found" });
+    expect(await json.json()).toEqual({ error: { code: "not_found", message: "not found" } });
   });
 });
 

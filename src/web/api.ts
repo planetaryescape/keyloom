@@ -8,6 +8,7 @@ import {
   type LayoutDetail,
   type LayoutSummary,
 } from "../api/http.ts";
+import { UNREADABLE_WORDS, failureCode, failureWords } from "./shell/unexpected.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -59,13 +60,14 @@ async function getJson<T>(
   if (response.status === 404) throw new ApiError(404, "keyloom has no layout here. It was deleted, or the link is old.", { code: "not_found" });
   if (!response.ok) {
     const body = ApiErrorBodySchema.safeParse(await response.json().catch(() => null));
-    throw new ApiError(response.status, body.success ? body.data.error.message : `keyloom answered ${response.status}.`, body.success ? { code: body.data.error.code } : {});
+    const code = failureCode(response.status, body.success ? body.data.error.code : undefined);
+    throw new ApiError(response.status, failureWords(code, body.success ? body.data.error.message : ""), { code });
   }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {
     // The detail is for whoever is debugging; the page gets a sentence it can show.
     console.error(`keyloom: unreadable response from ${path}`, parsed.error);
-    throw new Error("keyloom sent a layout this page can't read. Restart keyloom and reload.");
+    throw new ApiError(response.status, UNREADABLE_WORDS, { code: "unreadable" });
   }
   return parsed.data;
 }

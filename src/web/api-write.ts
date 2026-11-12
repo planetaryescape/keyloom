@@ -24,6 +24,7 @@ import {
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
 import { ApiError, TOKEN_REJECTED, UNREACHABLE } from "./api.ts";
+import { UNREADABLE_WORDS, failureCode, failureWords } from "./shell/unexpected.ts";
 
 export async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -52,7 +53,7 @@ export async function request<T>(
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {
     console.error(`keyloom: unreadable response from ${path}`, parsed.error);
-    throw new ApiError(response.status, "keyloom sent an answer this page can't read. Restart keyloom and reload.");
+    throw new ApiError(response.status, UNREADABLE_WORDS, { code: "unreadable" });
   }
   return parsed.data;
 }
@@ -64,7 +65,8 @@ export async function failure(response: Response): Promise<ApiError> {
   try {
     const parsed = ApiErrorBodySchema.safeParse(await response.json());
     if (parsed.success) {
-      return new ApiError(response.status, parsed.data.error.message, {
+      // A server exception or an unknown address gets the page's own words (R7-01); every other code keeps the server's sentence.
+      return new ApiError(response.status, failureWords(parsed.data.error.code, parsed.data.error.message), {
         code: parsed.data.error.code,
         ...(parsed.data.validation === undefined ? {} : { validation: parsed.data.validation }),
         ...(parsed.data.error.board === undefined ? {} : { board: parsed.data.error.board }),
@@ -72,9 +74,11 @@ export async function failure(response: Response): Promise<ApiError> {
       });
     }
   } catch {
-    // Not JSON: fall through to the generic message.
+    // Not JSON: fall through to the code the status gives.
   }
-  return new ApiError(response.status, `keyloom answered ${response.status}.`);
+  // No code from the server: the page gives one, so no screen shows a status number (R7-01).
+  const code = failureCode(response.status, undefined);
+  return new ApiError(response.status, failureWords(code, ""), { code });
 }
 
 const layoutPath = (ref: string, action: string) => `/api/layouts/${encodeURIComponent(ref)}/${action}`;

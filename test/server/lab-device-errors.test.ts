@@ -151,3 +151,17 @@ test("macOS's refusal of raw HID is Input Monitoring's; serial and other systems
   expect(accessRefused("permission_denied", "qmk", "linux").message).toContain("udev rule");
   expect(accessRefused("busy", "qmk", "darwin").code).toBe("busy");
 });
+
+test("a Stop with no recording running answers its own code, so the page says the passage was lost (R7-07)", async () => {
+  const { app } = await commandShiftApp();
+  apps.push(app);
+  const deps: LabDeps = { startCapture: async () => { throw new Error("no capture in this test"); }, replay: () => { throw new Error("no replay in this test"); } };
+  const request = new Request("http://keyloom.test/api/lab/recording/stop", {
+    method: "POST",
+    headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" },
+    body: JSON.stringify({ typedText: "the passage" }),
+  });
+  const response = await handleLabRoute(request, new URL(request.url).pathname, appLabBackend(app, deps), TOKEN);
+  expect(response?.status).toBe(409);
+  expect(await response?.json()).toEqual({ error: { code: "not_recording", message: "No recording is running. Another tab may have stopped it." } });
+});

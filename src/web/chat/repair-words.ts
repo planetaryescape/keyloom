@@ -6,8 +6,11 @@ export type RepairView = {
   scope: string;
   /** The button that drops the request: Cancel while it can still be sent, Dismiss request once it can't or was sent. */
   dismissLabel: "Cancel" | "Dismiss request";
-  /** The one button beside it that moves on: the chat's history after a send, a fresh review for a finding that went out of date. */
-  offer: "open_history" | "fresh_review" | null;
+  /**
+   * The one button beside it that moves on: the chat's history after a send, a fresh review for a finding that went out of date, and the
+   * proposal for a revised-proposal request that went out of date, whose card holds the recovery action (R7-14).
+   */
+  offer: "open_history" | "fresh_review" | "show_proposal" | null;
 };
 
 /** `checking` is a finding whose review is busy or being read again: not known to be current yet, and not known to be out of date. */
@@ -18,7 +21,7 @@ export function repairWords(kind: RepairKind, state: { sent: boolean; current: b
   }
   // A moment's wait while the review settles. Send is off until it does; the request and its edits stay, and nothing offers to drop them.
   if (state.checking === true) return { scope: "Checking that this finding is still current. Send is ready again in a moment; your request and its edits are kept.", dismissLabel: "Cancel", offer: null };
-  if (kind === "proposal") return { scope: "The layout or source changed. Your original goal and edits are kept. Dismiss this request and select its recovery action again before sending.", dismissLabel: "Dismiss request", offer: null };
+  if (kind === "proposal") return { scope: "The layout or the proposal changed since you asked, so this request no longer fits it. Dismiss it and show the proposal, then plan the repair again from its card if it still needs one. Dismissing drops this request and any edits you made to it.", dismissLabel: "Dismiss request", offer: "show_proposal" };
   if (kind === "build") return { scope: "The layout changed since this build, so this question no longer fits it. Dismiss it, and ask about the newest build if that one fails too.", dismissLabel: "Dismiss request", offer: null };
   // A fresh review's finding gets a request of its own, and Plan a repair waits while this one is up: the button dismisses it and runs
   // the review in one press, and says so. Dismissing drops the request's text, so the words say that before the press.

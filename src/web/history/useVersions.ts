@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { VersionHistoryResponse } from "../../api/configs.ts";
+import { ApiError } from "../api.ts";
 import { fetchVersions } from "../configs/api-configs.ts";
 
-export type Versions = { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ready"; history: VersionHistoryResponse };
+export type Versions = { status: "idle" } | { status: "loading" } | { status: "error"; message: string; code?: string } | { status: "ready"; history: VersionHistoryResponse };
 
 // History as versions (D-315): loads when the panel is open, and again whenever the head moves or a sync finishes (a verified sync
 // records a version), so the milestones follow the keyboard.
@@ -18,7 +19,10 @@ export function useVersions(token: string, layoutRef: string, key: string, activ
     fetchVersions(token, layoutRef, controller.signal).then(
       (history) => setVersions({ status: "ready", history }),
       (error: unknown) => {
-        if (!controller.signal.aborted) setVersions({ status: "error", message: error instanceof Error ? error.message : "Couldn't load the history." });
+        if (controller.signal.aborted) return;
+        // The code picks the panel's buttons: a history keyloom can't find never gets a Try again (R7-01).
+        const code = error instanceof ApiError ? error.code : undefined;
+        setVersions({ status: "error", message: error instanceof Error ? error.message : "Couldn't load the history.", ...(code === undefined ? {} : { code }) });
       },
     );
     return () => controller.abort();

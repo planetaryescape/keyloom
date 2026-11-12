@@ -58,3 +58,12 @@ test("a finding that really went out of date is stale once the review settles", 
   expect(findingRepairState(draft, { ...settled, review: review([]) })).toBe("stale");
   expect(findingRepairState({ ...draft, reviewId: "rv0" }, settled)).toBe("stale");
 });
+
+test("an out-of-date proposal request offers Dismiss and show the proposal, whose card holds the recovery action (R7-14)", () => {
+  const view = repairWords("proposal", { sent: false, current: false });
+  expect(view).toMatchObject({ dismissLabel: "Dismiss request", offer: "show_proposal" });
+  expect(view.scope).toContain("Dismiss it and show the proposal");
+  expect(view.scope).not.toContain("select its recovery action");
+  // A build question has no card to go back to.
+  expect(repairWords("build", { sent: false, current: false }).offer).toBeNull();
+});

@@ -11,6 +11,8 @@ import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
+import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
+import { unexpectedWayOut } from "./shell/unexpected.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
@@ -436,13 +438,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
   // A read that failed is said, with Try again, never shown as "nothing is waiting" (R4-08); bumping `waitingRead` reads again.
   const [waitingFailed, setWaitingFailed] = useState(false);
+  // The failed read's code: a read keyloom can't answer the same way again gets Restart keyloom, not Try again (R7-01).
+  const [waitingCode, setWaitingCode] = useState<string | undefined>(undefined);
   const [waitingRead, setWaitingRead] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, () => {
+    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, (error: unknown) => {
       if (controller.signal.aborted) return;
       setWaiting([]);
       setWaitingFailed(true);
+      setWaitingCode(error instanceof ApiError ? error.code : undefined);
     });
     return () => controller.abort();
   }, [token, layoutRef, revision.id, waitingRead]);
@@ -2047,7 +2052,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer ?? (proposalsOpen ? null : waitingFailed ? (
+            notice={offer ?? (proposalsOpen ? null : waitingFailed && unexpectedWayOut(waitingCode, true)?.retry === false ? (
+              <span className="nb-waiting-failed" role="alert">Couldn&apos;t read proposals. <RestartKeyloom token={token} /></span>
+            ) : waitingFailed ? (
               // A read that failed is not "nothing waiting": the slot says so and reads again (R5-11).
               <button type="button" className="sheet-action nb-waiting" onClick={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}>
                 Couldn&apos;t read proposals · Try again
@@ -2310,6 +2317,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 />
               ) : (
                 <HistoryPanel
+                  token={token}
                   layout={layout}
                   versions={history.versions}
                   configName={summary.name}
