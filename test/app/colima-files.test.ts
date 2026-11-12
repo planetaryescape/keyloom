@@ -6,7 +6,7 @@ import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ColimaFilesPlan, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, runColimaRootSteps } from "../../src/app/colima-files.ts";
-import { dockerAccessFix, dockerReadiness, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessFix, dockerReadiness, ensureDocker, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
 
@@ -137,11 +137,21 @@ describe("Fix Colima's files, the use case", () => {
   const refused = async (): Promise<DockerStatus> => ({ ok: false, kind: "no-access", reason: "Docker is running, but keyloom isn't allowed to open its socket." });
   const found = async () => ({ kind: "engine" as const, engine: colima });
   const plan: ColimaFilesPlan = { colima: "/opt/homebrew/bin/colima", pathDirs: ["/opt/homebrew/bin"], home: "/Users/someone", colimaHome: "/Users/someone/.colima", uid: 501, profile: "work" };
+  const free = () => null;
+
+  test("running work or no way to check for it stops it inside the lock, before the password dialog (D-529)", async () => {
+    let asked = 0;
+    const overrides = { status: refused, detect: found, platform: "darwin" as const, colimaPlan: () => ({ ok: true as const, plan }), adminRun: async () => (asked++, { code: 0, out: "" }) };
+    expect(await fixColimaFiles({ blocker: () => "A build is running.", overrides })).toEqual({ ok: false, engine: null, reason: "A build is running.", code: "build_running" });
+    expect(await fixColimaFiles({ overrides })).toMatchObject({ ok: false, code: "build_running", reason: expect.stringContaining("can't tell") });
+    expect(asked).toBe(0);
+  });
 
   test("it asks for the password, then starts Colima as the person for the same profile and waits for Docker", async () => {
     const admin: string[][] = [];
     const starts: Array<{ relaunch?: boolean; command: string[] }> = [];
     const result = await fixColimaFiles({
+      blocker: free,
       overrides: {
         status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }),
         adminRun: async (cmd) => (admin.push([...cmd]), { code: 0, out: "" }),
@@ -159,7 +169,7 @@ describe("Fix Colima's files, the use case", () => {
 
   test("a linked file comes back with its own code, so the page can leave out the command that would change it", async () => {
     const out = "execution error: keyloom colima fix stopped (colima_linked_file): A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: /x (1)";
-    const result = await fixColimaFiles({ overrides: { status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }), adminRun: async () => ({ code: 1, out }) } });
+    const result = await fixColimaFiles({ blocker: free, overrides: { status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }), adminRun: async () => ({ code: 1, out }) } });
     expect(result).toMatchObject({ ok: false, code: "linked_file", reason: expect.stringContaining(": /x") });
   });
 
@@ -167,9 +177,9 @@ describe("Fix Colima's files, the use case", () => {
     let started = 0;
     const startEngine = async () => (started++, { ok: false as const, engine: "Colima", reason: "keyloom couldn't start Colima: exit status 1" });
     const base = { status: refused, detect: found, platform: "darwin" as const, colimaPlan: () => ({ ok: true as const, plan }), startEngine };
-    expect(await fixColimaFiles({ overrides: { ...base, adminRun: async () => ({ code: 1, out: "execution error: User canceled. (-128)" }) } })).toMatchObject({ ok: false, code: "cancelled" });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, adminRun: async () => ({ code: 1, out: "execution error: User canceled. (-128)" }) } })).toMatchObject({ ok: false, code: "cancelled" });
     expect(started).toBe(0);
-    const after = await fixColimaFiles({ overrides: { ...base, adminRun: async () => ({ code: 0, out: "" }) } });
+    const after = await fixColimaFiles({ blocker: free, overrides: { ...base, adminRun: async () => ({ code: 0, out: "" }) } });
     expect(after).toMatchObject({ ok: false, engine: "Colima", reason: "Colima's files are yours again, but Colima didn't come up. keyloom couldn't start Colima: exit status 1." });
     expect(started).toBe(1);
   });
@@ -178,25 +188,31 @@ describe("Fix Colima's files, the use case", () => {
     let asked = 0;
     const adminRun = async () => (asked++, { code: 0, out: "" });
     const base = { detect: found, platform: "darwin" as const, colimaPlan: () => ({ ok: true as const, plan }), adminRun };
-    expect(await fixColimaFiles({ overrides: { ...base, status: async () => ({ ok: true, version: "29" }) } })).toMatchObject({ ok: true });
-    expect(await fixColimaFiles({ overrides: { ...base, status: async () => ({ ok: false, kind: "daemon-down", reason: "down" }) } })).toMatchObject({ ok: false, reason: expect.stringContaining("doesn't refuse") });
-    expect(await fixColimaFiles({ overrides: { ...base, status: refused, platform: "linux" } })).toMatchObject({ ok: false });
-    expect(await fixColimaFiles({ overrides: { ...base, status: refused, detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }) } })).toMatchObject({ ok: false });
-    expect(await fixColimaFiles({ overrides: { ...base, status: refused, colimaPlan: () => ({ ok: false, reason: "~/.colima is a link" }) } })).toEqual({ ok: false, engine: "Colima", reason: "~/.colima is a link" });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, status: async () => ({ ok: true, version: "29" }) } })).toMatchObject({ ok: true });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, status: async () => ({ ok: false, kind: "daemon-down", reason: "down" }) } })).toMatchObject({ ok: false, reason: expect.stringContaining("doesn't refuse") });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, status: refused, platform: "linux" } })).toMatchObject({ ok: false });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, status: refused, detect: async () => ({ kind: "engine", engine: { name: "OrbStack", command: ["open", "-a", "OrbStack"] } }) } })).toMatchObject({ ok: false });
+    expect(await fixColimaFiles({ blocker: free, overrides: { ...base, status: refused, colimaPlan: () => ({ ok: false, reason: "~/.colima is a link" }) } })).toEqual({ ok: false, engine: "Colima", reason: "~/.colima is a link" });
     expect(asked).toBe(0);
   });
 
   test("it is refused while keyloom restarts Docker, and holds the engine while it runs", async () => {
     let open!: () => void;
     const opened = new Promise<void>((resolve) => (open = resolve));
-    const running = fixColimaFiles({ overrides: { status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }), adminRun: async () => (await opened, { code: 1, out: "(-128)" }) } });
+    const running = fixColimaFiles({ blocker: free, overrides: { status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }), adminRun: async () => (await opened, { code: 1, out: "(-128)" }) } });
     await Bun.sleep(1);
-    expect(await fixColimaFiles({ overrides: { status: refused } })).toMatchObject({ ok: false, code: "engine_busy", reason: expect.stringContaining("already fixing Colima's files") });
+    expect(await fixColimaFiles({ blocker: free, overrides: { status: refused } })).toMatchObject({ ok: false, code: "engine_busy", reason: expect.stringContaining("already fixing Colima's files") });
     // Another page follows the fix in its own words while the password dialog is open.
     expect(await dockerReadiness({ status: refused, detect: found, env: {}, platform: "darwin" })).toMatchObject({ engineAction: "fix-files" });
     expect(await restartDocker({ overrides: { status: refused } })).toMatchObject({ ok: false, code: "engine_busy" });
+    // A build waits for the fix, so it can't start a container between the fix's check for running work and its stop.
+    let buildAsked = false;
+    const build = ensureDocker({ overrides: { status: async () => ((buildAsked = true), { ok: true, version: "29" }), env: {} } });
+    await Bun.sleep(5);
+    expect(buildAsked).toBe(false);
     open();
     expect(await running).toMatchObject({ code: "cancelled" });
+    expect(await build).toMatchObject({ ok: true });
   });
 
   test("readiness offers the button for a Colima on a Mac only", async () => {

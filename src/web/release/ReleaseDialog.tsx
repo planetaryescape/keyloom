@@ -122,7 +122,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
-  const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision) : null;
+  const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision, !release.engineRestart.again) : null;
   // A failed read of the latest version keeps "Show the latest version" with its reason.
   const showLatest = (failed: string) =>
     onShowLatest().then(() => setGoBackRefused(null), () => setGoBackRefused({ text: failed, next: "reload", buildId: lastBuildId, retry: false }));
@@ -320,7 +320,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                         Go back to the last version that built
                       </button>
                     )
-                  ) : failure?.kind === "restart_engine" && failure.button !== null && release.engineRestart.again ? (
+                  ) : failure?.kind === "restart_engine" && failure.button !== null ? (
                     // Building again hits the same engine state, so the restart comes first and the build follows it.
                     <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id)}>
                       {release.engineRestart.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}

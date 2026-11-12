@@ -1,6 +1,6 @@
 // R6-03: a direct edit the server wrote is applied even when the page can't read the new layout back.
 import { expect, test } from "bun:test";
-import { readAfterApply } from "../../src/web/editor/read-after-apply.ts";
+import { readAfterApply, readIfChanged } from "../../src/web/editor/read-after-apply.ts";
 
 test("a read that works resolves true and says nothing", async () => {
   const said: unknown[] = [];
@@ -13,6 +13,17 @@ test("a read that fails resolves false and hands the error on, so no caller repo
   const failure = new Error("Couldn't reach keyloom");
   expect(await readAfterApply(async () => { throw failure; }, (error) => said.push(error))).toBe(false);
   expect(said).toEqual([failure]);
+});
+
+test("an Update layout that changed nothing reads nothing, so it can't say \"Applied\" for a failed read (PR #297 review)", async () => {
+  const said: unknown[] = [];
+  let reads = 0;
+  const failing = async () => { reads++; throw new Error("Couldn't reach keyloom"); };
+  expect(await readIfChanged(false, failing, (error) => said.push(error))).toBe(true);
+  expect(reads).toBe(0);
+  expect(said).toEqual([]);
+  expect(await readIfChanged(true, failing, (error) => said.push(error))).toBe(false);
+  expect(said).toHaveLength(1);
 });
 
 test("a direct edit that was written but couldn't be shown comes back applied, with the not-shown words said once (R6-03)", async () => {

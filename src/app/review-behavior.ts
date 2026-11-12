@@ -109,7 +109,7 @@ export async function assessAffectedBehavior(app: App, view: LayoutView, ops: re
   for (const c of cases) {
     if (opts.signal.aborted) { unsupported(c.name, "Testing was cancelled."); continue; }
     try {
-      const result = await replay(app, { ...view, document: after }, c.events, { boardRevision: view.board.definition.revisions[0]!.id, signal: opts.signal, cache: false });
+      const result = await replay(app, { ...view, document: after }, c.events, { boardRevision: view.board.definition.revisions[0]!.id, signal: opts.signal, cache: false, work: "a board review's tests" });
       const warnings = result.warnings.filter((w) => !SCOPE_WARNINGS.some((known) => known === w));
       const holdReleaseAt = c.events.find((event) => event.position === c.events[0]?.position && event.action === "release")?.at ?? Infinity;
       const correct = result.firmware === after.firmware && matches(c.expected, result.reports, holdReleaseAt);

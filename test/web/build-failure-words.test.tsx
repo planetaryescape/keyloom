@@ -117,13 +117,16 @@ describe("a build the engine's own state stopped", () => {
     expect(html).not.toContain("and build again</button>");
   });
   test("a restart refused while a build runs keeps the button with its reason; one that failed shows why and Build again", () => {
-    const busy = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "A build or flash is running, and restarting Docker now would stop it.", again: true } });
+    const busy = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.", again: true } });
     expect(busy).toContain("Restart Colima and build again");
     expect(busy).toContain("restarting Docker now would stop it");
     const failed = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "Colima didn't start: exit 1", again: false } });
     expect(failed).not.toContain("Restart Colima and build again");
     expect(failed).toContain("Colima didn&#x27;t start");
     expect(failed).toContain("Build again");
+    // The words match the button left: no "Restarting Colima clears this" beside a Build again that hits the same state (PR #297 review).
+    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Restart Colima yourself, then build again.");
+    expect(failed).not.toContain("Restarting Colima clears this");
   });
 });
 

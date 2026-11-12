@@ -10,6 +10,8 @@ import {
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
 import { checkoutDirFor, engineRestartBlocker } from "../../src/app/firmware.ts";
+import { holdContainerWork } from "../../src/app/toolchain.ts";
+import { holdKeyboardWrite } from "../../src/firmware/toolchain/write-guard.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { FAKE_ZAPP_HANG, PIN, REVA, REVB, toolchainEnv } from "../helpers/toolchain-env.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
@@ -227,7 +229,21 @@ describe("startBuild / getBuild / buildAndWait", () => {
     expect(engineRestartBlocker(e.app)).toBeNull();
     const live = newBuildId();
     createBuild(e.app.db, { id: live, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${live}.log`, pid: process.ppid });
-    expect(engineRestartBlocker(e.app)).toContain("would stop it");
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.");
+    e.closeApp();
+  });
+
+  test("a forced Docker restart also waits for a lab analysis, a review's tests and an emulator run, and names each (D-529)", async () => {
+    const e = await toolchainEnv();
+    const lab = holdContainerWork("a lab analysis");
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis, and restarting Docker now would stop it. Restart Docker once that has finished.");
+    const tests = holdContainerWork("a board review's tests");
+    const again = holdContainerWork("a lab analysis");
+    expect(engineRestartBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests, and restarting Docker now would stop them. Restart Docker once they have finished.");
+    const write = holdKeyboardWrite();
+    expect(engineRestartBlocker(e.app)).toContain("running a flash, a lab analysis and a board review's tests,");
+    for (const release of [lab, tests, again, write]) release();
+    expect(engineRestartBlocker(e.app)).toBeNull();
     e.closeApp();
   });
 

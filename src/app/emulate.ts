@@ -15,7 +15,7 @@ import { UsageError } from "./errors.ts";
 import { checkoutDirFor, sourceFor } from "./firmware.ts";
 import { EmulateFailedError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
-import { ensureDocker } from "./toolchain.ts";
+import { ensureDocker, holdContainerWork } from "./toolchain.ts";
 
 export type EmulateOptions = {
   /** The key script (10#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses), such as "hold 31 300 then tap 32". */
@@ -55,6 +55,8 @@ export type EmulateEventsOptions = {
   leadMs?: number;
   /** False keeps the run from being saved for next time; see EmulatorInput.cache. */
   cache?: boolean;
+  /** What this run is for, as a forced Docker restart's refusal names it ("a lab analysis"); "an emulator run" when omitted. */
+  work?: string;
 };
 
 /** Runs key events on the real firmware logic for `view`'s document (which a caller may have changed from the stored one). */
@@ -68,6 +70,8 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
   const logRel = `logs/emulate-${id}.log`;
   const logPath = opts.log?.path ?? join(app.dataDir, logRel);
   const log = opts.log ?? new LogSink(logPath);
+  // Held from before Docker is asked, so a forced restart either sees this run or makes it wait (D-529).
+  const releaseWork = holdContainerWork(opts.work ?? "an emulator run");
   try {
     // Before the checkout: a closed Docker Desktop should not cost a multi-gigabyte download (D-486).
     const docker = await ensureDocker({ ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }), ...(opts.signal === undefined ? {} : { signal: opts.signal }) });
@@ -95,6 +99,7 @@ export async function emulateEvents(app: App, view: LayoutView, events: readonly
     log.line(`keyloom: emulation failed: ${err.message}`);
     throw new EmulateFailedError(`${err.message} (log: ${logPath})`, logPath);
   } finally {
+    releaseWork();
     if (!opts.log) log.close();
   }
 }

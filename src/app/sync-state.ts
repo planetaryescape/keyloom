@@ -67,6 +67,8 @@ export type SyncFacts = {
    * firmware, which names it, is on it. Absent means it can be seen.
    */
   detectable?: boolean;
+  /** keyloom has written its firmware to this board before, from any config (a version, or a flash whose write finished). */
+  flashedBefore?: boolean;
 };
 
 const NEEDS_HAND_REASON = "keyloom couldn't restart it by itself";
@@ -102,7 +104,8 @@ export function deriveState(f: SyncFacts): SyncState {
   }
   if (f.reading.state === "absent") {
     // Never synced or flashed by keyloom, and not visible until it is: "not connected" would be false while it is plugged in (R6-10).
-    if (f.detectable === false && f.lastKnown === undefined && f.latestSync === undefined) return { kind: "not_connected", firstFlash: true };
+    // The evidence is the whole board's, not this config's: a flash of another config, or one keyloom couldn't confirm, still put it on.
+    if (f.detectable === false && f.flashedBefore !== true && f.lastKnown === undefined && f.latestSync === undefined) return { kind: "not_connected", firstFlash: true };
     const changes = f.lastKnown?.changes;
     return changes === undefined || changes === 0 ? { kind: "not_connected" } : { kind: "not_connected", changes };
   }

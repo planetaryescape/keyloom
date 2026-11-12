@@ -31,7 +31,7 @@ import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
 import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
-import { readAfterApply } from "./editor/read-after-apply.ts";
+import { readAfterApply, readIfChanged } from "./editor/read-after-apply.ts";
 import { LATEST_NOT_SHOWN, STALE_EDIT, STALE_UNDO } from "./editor/stale-edit-words.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
@@ -1681,7 +1681,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The one place a stored layout's Oryx code is read into the model, and only on the button (D-193).
   async function upgradeNow() {
     const out = await upgradeStoredLayout(token, layoutRef);
-    if (!(await readAfterApply(onChanged, showAppliedNotShown))) return;
+    if (!(await readIfChanged(out.changed, onChanged, showAppliedNotShown))) return;
     toasts.show({ kind: out.changed ? "success" : "info", message: out.changed ? "Updated" : "Nothing to update", detail: out.message });
   }
   const offer = detail.upgrade === null || detail.upgrade === undefined ? null : <UpgradeOffer offer={detail.upgrade} onUpgrade={upgradeNow} />;

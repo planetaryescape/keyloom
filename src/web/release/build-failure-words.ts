@@ -17,9 +17,10 @@ export type BuildFailureView =
   | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
-export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine">, earlierRevision: boolean): BuildFailureView {
+/** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
+export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine">, earlierRevision: boolean, restartFailed = false): BuildFailureView {
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
-  if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null);
+  if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed);
   if (build.errorCode !== "compile_error" && build.errorCode !== "too_large") return { kind: "may_pass" };
   // Going back moves the head; a build of an earlier revision chosen in History has no head to move.
   const goBack = earlierRevision ? null : (build.lastBuilt ?? null);
@@ -30,10 +31,11 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | 
 }
 
 // The build's own sentence names a terminal command and XDG_CACHE_HOME; the page says what happened and offers the restart instead.
-function engineRestartView(code: "stale_mount" | "stuck_container", engine: string | null): BuildFailureView {
+function engineRestartView(code: "stale_mount" | "stuck_container", engine: string | null, restartFailed: boolean): BuildFailureView {
   const text = code === "stale_mount"
     ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
     : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
+  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Restart ${engine} yourself, then build again.`, button: null, busy: null };
   if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
   return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
 }

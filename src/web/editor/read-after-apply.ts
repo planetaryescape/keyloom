@@ -12,3 +12,8 @@ export async function readAfterApply(read: () => Promise<void>, notShown: (error
     return false;
   }
 }
+
+/** Update layout: nothing was written when nothing changed, so there is nothing to read back and nothing to call applied. */
+export async function readIfChanged(changed: boolean, read: () => Promise<void>, notShown: (error: unknown) => void): Promise<boolean> {
+  return changed ? readAfterApply(read, notShown) : true;
+}

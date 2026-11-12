@@ -93,7 +93,7 @@ async function evaluateView(app: App, view: LayoutView, prepared: ReturnType<typ
     async (events) => {
       requireNotAborted(opts.signal);
       const result = await (deps.replay ?? emulateEvents)(app, view, events, {
-        boardRevision, cache: false, leadMs: 1000,
+        boardRevision, cache: false, leadMs: 1000, work: "an activity test run",
         ...(opts.onProgress ? { onProgress: opts.onProgress } : {}), ...(opts.signal ? { signal: opts.signal } : {}),
       });
       requireNotAborted(opts.signal);

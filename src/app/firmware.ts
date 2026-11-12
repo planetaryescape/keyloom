@@ -29,7 +29,7 @@ import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor }
 import { BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
-import { ensureDocker, forcedRestartEngine } from "./toolchain.ts";
+import { containerWorkRunning, ensureDocker, forcedRestartEngine } from "./toolchain.ts";
 import { syncSupported } from "./sync-keyboard.ts";
 
 // These are the shapes of Build and Flash in src/api/http.ts (a superset: the extra fields are for
@@ -364,19 +364,32 @@ export async function waitForBuild(app: App, id: string): Promise<BuildView> {
 
 /** Whether a build is running in this process or a flash is in progress anywhere: a sync waits for this, because only one board can be in its bootloader at a time and two builds in one checkout overwrite each other. */
 export function firmwareBusy(app: App): boolean {
-  if (buildTasks.size > 0) return true;
-  return activeFlashes(app.db).map((f) => reapFlash(app, f)).some((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
+  return buildTasks.size > 0 || flashing(app);
 }
 
-export const ENGINE_RESTART_BLOCKED = "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.";
+const flashing = (app: App): boolean => activeFlashes(app.db).map((f) => reapFlash(app, f)).some((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
+
+/** The refusal of a forced restart, naming what it would stop ("a build", "a lab analysis"). */
+export function engineRestartBlocked(running: readonly string[]): string {
+  const names = running.length === 1 ? running[0] : `${running.slice(0, -1).join(", ")} and ${running.at(-1)}`;
+  const one = running.length === 1;
+  return `keyloom is running ${names}, and restarting Docker now would stop ${one ? "it" : "them"}. Restart Docker once ${one ? "that has" : "they have"} finished.`;
+}
 
 /**
  * Why Docker can't be restarted for a build now, or null (R6-09). A forced restart stops every container, so it waits for any build
- * here or in another live keyloom, a flash and a keyboard write: the same things a sync waits for (`firmwareBusy`, D-506).
+ * here or in another live keyloom, a flash and a keyboard write (the same things a sync waits for, `firmwareBusy`, D-506), and for a lab
+ * analysis, a board review's tests or an emulator run in this keyloom. Another keyloom with its own data directory keeps its builds in
+ * its own database, so this can't see them (D-529).
  */
 export function engineRestartBlocker(app: App): string | null {
-  const building = runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
-  return firmwareBusy(app) || building || keyboardWriteInProgress() ? ENGINE_RESTART_BLOCKED : null;
+  const building = buildTasks.size > 0 || runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
+  const running = [
+    ...(building ? ["a build"] : []),
+    ...(flashing(app) || keyboardWriteInProgress() ? ["a flash"] : []),
+    ...containerWorkRunning(),
+  ];
+  return running.length === 0 ? null : engineRestartBlocked(running);
 }
 
 /** Builds and waits. Throws BuildFailedError (exit 7) when the build fails. */
