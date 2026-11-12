@@ -1,6 +1,6 @@
 import { Check, CircleCheck, FileText, Layers, LoaderCircle, Square, X } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
-import type { ProposalCard } from "../../api/http.ts";
+import type { ChatProviderStatus, ProposalCard } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { BoardDefinition, Geometry } from "../../boards/schema.ts";
@@ -18,13 +18,15 @@ import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
-import { CREDITS_PAGES } from "../chat/setup-words.ts";
-import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { CREDITS_PAGES, PROVIDER_NAMES } from "../chat/setup-words.ts";
+import { chooseProvider } from "../chat/api-chat.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, failedProvider, fixesFor, grouped, markerWords, placeOf, placeWords, segments, sentence, switchTargets } from "./review-words.ts";
 import { type Review, asFailure } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
 
 export type Rows = Readonly<Record<string, readonly number[]>>;
+type ProviderId = ChatProviderStatus["providers"][number]["id"];
 
 /**
  * A title or body with its keys drawn as caps and its layers as chips (D-340). A key with no legend would be a cap that says nothing,
@@ -191,7 +193,30 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     }).finally(() => setApplying(null));
   };
   const review = r.review;
-  const missing = review === null ? null : aiMissingWords(review.ai);
+  // After a usage limit (R6-01): the ready providers the review can move to, and the setup for the rest. The review's agent reads the
+  // same choice as chat, so switching here is what the next look runs on. Never the provider the look failed on: a switch in chat may
+  // have moved keyloom off it since, and then Try again already runs on the new one. Nothing is offered until the status is read, since
+  // a lock would forbid it.
+  const activeId = provider.status?.active?.provider;
+  const failedOn = review === null ? null : failedProvider(review.ai);
+  const canSwitch = provider.status !== null && provider.status.lockedBy === null;
+  const nowOn = failedOn !== null && activeId !== undefined && activeId !== failedOn ? PROVIDER_NAMES[activeId] : null;
+  const missing = review === null ? null : aiMissingWords(review.ai, canSwitch, nowOn);
+  const switchTo = switchTargets(provider.status, failedOn);
+  const others = (provider.status?.providers ?? []).map((p) => p.id).filter((id) => id !== activeId && id !== failedOn);
+  const [settingUpOther, setSettingUpOther] = useState(false);
+  const [switching, setSwitching] = useState<ProviderId | null>(null);
+  const [switchFailed, setSwitchFailed] = useState<{ id: ProviderId; words: string } | null>(null);
+  const switchProvider = (id: ProviderId) => {
+    setSwitching(id);
+    setSwitchFailed(null);
+    void chooseProvider(token, { provider: id }).then((next) => {
+      provider.replace(next);
+      setSettingUpOther(false);
+      void r.run(true);
+    }, (error: unknown) => setSwitchFailed({ id, words: `keyloom couldn't switch to ${PROVIDER_NAMES[id]}.${error instanceof Error && error.message.trim() !== "" ? ` ${sentence(error.message)}` : ""}` }))
+      .finally(() => setSwitching(null));
+  };
   // The billing page of the provider the review runs on; Codex sells no credits, so it has none.
   const activeProvider = provider.status?.active?.provider;
   const creditsUrl = activeProvider === "anthropic" || activeProvider === "openrouter" ? CREDITS_PAGES[activeProvider] : undefined;
@@ -208,8 +233,10 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       {r.problemAction === null ? null : <button type="button" className="sheet-action" onClick={r.problemAction.run}>{r.problemAction.label}</button>}
     </div>
   );
-  // Activity tests can take minutes; while they run, Stop ends them and the look they belong to, and their container (R5-17).
-  const testing = review?.ai.status === "running" && review.workload !== undefined;
+  // Every running look has a Stop (R6-12). While its activity tests run it ends them, the look they belong to and their container (R5-17);
+  // otherwise it ends the look, so the label says which.
+  const running = review?.ai.status === "running";
+  const testing = running && (review.workload?.status === "pending" || review.workload?.status === "running");
 
   const head = (
     <header className="br-head">
@@ -232,9 +259,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       <div className="br-body">
         {readFailed ? null : <p className="br-quiet br-ai-coming" role="status"><LoaderCircle size={13} className="spin" aria-hidden="true" />Looking over this config…</p>}
         <p className="br-quiet">Nothing is applied to your layout or sent to the keyboard.</p>
-        {testing && !readFailed ? (
+        {running && !readFailed ? (
           <div className="br-actions br-actions-start">
-            <button type="button" className="sheet-action" disabled={r.stopping} onClick={() => void r.stop()}>{r.stopping ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Square size={12} aria-hidden="true" />}{r.stopping ? "Stopping" : "Stop testing"}</button>
+            <button type="button" className="sheet-action" disabled={r.stopping} onClick={() => void r.stop()}>{r.stopping ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Square size={12} aria-hidden="true" />}{r.stopping ? "Stopping" : testing ? "Stop testing" : "Stop the review"}</button>
           </div>
         ) : null}
         {problem}
@@ -405,17 +432,44 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
               {missing.actions.includes("credits") && creditsUrl !== undefined ? (
                 <a className="sheet-action" href={creditsUrl} target="_blank" rel="noreferrer">Add credits</a>
               ) : null}
+              {missing.actions.includes("switch") ? switchTo.map((id) => (
+                <button key={id} type="button" className="sheet-action" disabled={switching !== null || r.busy} onClick={() => switchProvider(id)}>
+                  {switching === id ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : null}Switch to {PROVIDER_NAMES[id]}
+                </button>
+              )) : null}
+              {missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
+                <button type="button" className="sheet-action" aria-expanded={settingUpOther} onClick={() => setSettingUpOther((v) => !v)}>Set up another model</button>
+              ) : null}
               {missing.actions.includes("set_up") ? (
                 <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
               ) : null}
               {missing.actions.includes("retry") ? (
-                <button type="button" className="sheet-action" disabled={r.busy} onClick={() => void r.run(true)}>Try again</button>
+                // Not while a switch is on its way: a run started now would hold the old model, and the switch's run would join it.
+                <button type="button" className="sheet-action" disabled={r.busy || switching !== null} onClick={() => void r.run(true)}>Try again</button>
               ) : null}
-              {review.ai.reason === null ? null : (
+              {review.ai.reason === null || missing.reasonShown ? null : (
                 <button type="button" className="sheet-action" aria-expanded={details} onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "Details"}</button>
               )}
             </div>
-            {details && review.ai.reason !== null ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
+            {details && review.ai.reason !== null && !missing.reasonShown ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
+            {switchFailed === null ? null : (
+              <div className="br-apply-failure" role="alert">
+                <p>{switchFailed.words}</p>
+                <button type="button" className="sheet-action" disabled={switching !== null} onClick={() => switchProvider(switchFailed.id)}>Try again</button>
+              </div>
+            )}
+            {settingUpOther && missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
+              // Another provider, set up here; once it is ready, Switch to it appears above. Shown only while the words offer it, so a lock
+              // that loads after the press closes it.
+              <ModelSetup token={token} status={provider.status} only={others} onReload={() => void provider.reload()} onChanged={(next) => {
+                provider.replace(next);
+                // A provider set up here can become the chosen one by itself (no choice saved yet); then the review runs on it at once.
+                if (next.active?.provider !== activeId && activeProviderReady(next)) {
+                  setSettingUpOther(false);
+                  void r.run(true);
+                }
+              }} />
+            ) : null}
             {picking && (!pickReady || missing.refused) ? (
               // Nothing is set up, or the provider refused the account: the same setup the chat uses (D-496), with the refused provider's
               // key field open. A key saved here is used by the review at once.

@@ -4,7 +4,8 @@ import type { FingerReadout, LabReadout } from "../../api/lab.ts";
 import type { ProposalCard } from "../../api/http.ts";
 import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
-import { labApplyFailure, labFixClosed, labFixes, labProblemText } from "./lab-words.ts";
+import { LAB_NEEDS_DOCKER, labApplyFailure, labFixClosed, labFixes, labNeedsDocker, labProblemText } from "./lab-words.ts";
+import { NeedsDocker } from "../review/WorkloadTests.tsx";
 import { ApiError } from "../api.ts";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import "./lab.css";
@@ -77,17 +78,22 @@ function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardN
           <div className="lab-actions">
             <span className="lab-note">Don't type passwords here. Recording stops if you leave this screen.</span>
             <button type="button" className="sheet-action" onClick={onClose}>Not now</button>
-            <button type="button" className="bar-apply" disabled={choice === "own" && own.trim() === ""} onClick={() => void lab.start(choice === "own" ? { text: own } : { passageId: choice })}>
+            <button type="button" className="bar-apply" disabled={choice === "own" && own.trim() === ""} aria-describedby={choice === "own" && own.trim() === "" ? "lab-own-why" : undefined} onClick={() => void lab.start(choice === "own" ? { text: own } : { passageId: choice })}>
               Start listening
             </button>
           </div>
+          {/* Your own text needs the text before keyloom can listen; the line says so (R6-24). */}
+          {choice === "own" && own.trim() === "" ? <p id="lab-own-why" className="lab-note">Paste the text you want to type, then start listening.</p> : null}
         </>
       ) : null}
-      {lab.problem === null ? null : <p className="lab-problem" role="alert">{labProblemText(lab.problemCode, lab.problem)}</p>}
+      {lab.problem === null ? null : labNeedsDocker(lab.problemCode) ? (
+        // The same Install, Start or Open as Build and flash, then Read it again for the recording that stopped (R6-02).
+        <div role="alert"><NeedsDocker token={lab.token} busy={false} onRetry={() => lab.readAgain?.()} words={LAB_NEEDS_DOCKER} /></div>
+      ) : <p className="lab-problem" role="alert">{labProblemText(lab.problemCode, lab.problem)}</p>}
       {lab.problem === null ? null : (() => {
-        const shown = labFixes(lab.problemCode, lab.loadFailed);
+        const shown = labFixes(lab.problemCode, lab.loadFailed).filter((fix) => fix.id !== "read_again" || lab.readAgain !== null);
         if (shown.length === 0) return null;
-        const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload, open_input_monitoring: fixes.onOpenInputMonitoring, retry: () => void lab.retry() };
+        const run = { sync_now: fixes.onSync, open_release: fixes.onOpenRelease, reload: lab.reload, open_input_monitoring: fixes.onOpenInputMonitoring, retry: () => void lab.retry(), read_again: () => lab.readAgain?.(), stop_recording: () => void lab.cancel() };
         return (
           <div className="lab-fixes">
             {shown.map((fix, i) => fix.id === "restart"

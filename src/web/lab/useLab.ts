@@ -21,8 +21,11 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const [problemCode, setProblemCode] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loads, setLoads] = useState(0);
+  // The saved session whose read-out failed, so Read it again reads that one (R6-02).
+  const [failedRead, setFailedRead] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const listening = useRef(false);
+  const cancelling = useRef(false);
   // What was last asked for, so Try again after a refusal (an Input Monitoring prompt, a busy keyboard) starts the same passage.
   const lastChoice = useRef<{ passageId?: string; text?: string }>({});
 
@@ -55,6 +58,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   }, [open, token]);
 
   const say = (error: unknown) => {
+    setFailedRead(null);
     setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
     setProblemCode(error instanceof ApiError ? (error.code ?? null) : null);
   };
@@ -63,6 +67,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     lastChoice.current = choice;
     setProblem(null);
     setProblemCode(null);
+    setFailedRead(null);
     try {
       const r = await api.startRecording(token, layoutRef, choice);
       listening.current = true;
@@ -75,6 +80,9 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
 
   const showSession = useCallback(async (id: string, run: boolean) => {
     setPhase({ kind: "reading" });
+    setProblem(null);
+    setProblemCode(null);
+    setFailedRead(null);
     try {
       const r = run ? await api.analyse(token, id) : await api.fetchReadout(token, id);
       const readout = r.readout ?? (await api.analyse(token, id)).readout;
@@ -82,6 +90,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
       setPhase({ kind: "readout", session: r.session, readout, open: null, trying: null });
     } catch (error) {
       say(error);
+      setFailedRead(id);
       setPhase({ kind: "start" });
     } finally {
       // An incomplete capture is saved even when analysis is refused.
@@ -102,9 +111,24 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     }
   }, [phase, token, typed, showSession]);
 
+  // Also Stop and discard that recording, after a Cancel that failed or a start refused because one is running. A failed stop says so
+  // with that button, instead of a start screen that would only be refused (R6-20).
   const cancel = useCallback(async () => {
+    // Held Escape repeats; a second cancel landing after a new start would hide that recording.
+    if (cancelling.current) return;
+    cancelling.current = true;
     listening.current = false;
-    await api.cancelRecording(token).catch(() => {});
+    try {
+      await api.cancelRecording(token);
+      setProblem(null);
+      setProblemCode(null);
+    } catch (error) {
+      setFailedRead(null);
+      setProblem(error instanceof Error ? error.message : "The server didn't answer.");
+      setProblemCode("cancel_failed");
+    } finally {
+      cancelling.current = false;
+    }
     setPhase({ kind: "start" });
   }, [token]);
 
@@ -126,6 +150,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   return {
     token, phase, passages, canRecord, sessions, problem, problemCode, loadFailed, reload: () => setLoads((n) => n + 1), typed, setTyped, start, retry: () => start(lastChoice.current),
     stop, cancel, showSession, remove, openFinding, tryFix, again: () => setPhase({ kind: "start" }),
+    readAgain: failedRead === null ? null : () => void showSession(failedRead, true),
   };
 }
 

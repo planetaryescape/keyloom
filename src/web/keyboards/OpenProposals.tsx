@@ -68,6 +68,7 @@ export function OpenProposals({ proposals, readFailed = false, onReadAgain, layo
               onApply={onApply}
               onAskAgain={onPlanRecovery}
               onOpenRelease={onOpenRelease}
+              onReadAgain={onReadAgain}
               compact
             />
           </div>

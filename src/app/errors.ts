@@ -6,6 +6,14 @@ export class UsageError extends Error {
 }
 
 /**
+ * A change set that is no longer proposed (applied, rejected or superseded elsewhere). Its own code, `not_open`, so the page says the
+ * proposal is closed without reading every usage refusal that way (R6-06). Still a usage error to the CLI (exit 2).
+ */
+export class NotOpenError extends UsageError {
+  override name = "NotOpenError";
+}
+
+/**
  * Two keyloom binaries that cannot work together: a desktop app and a `serve` that speak different protocols, or a running server this
  * one must not attach to or replace (D-454). Exit 10; `kind` says which.
  */

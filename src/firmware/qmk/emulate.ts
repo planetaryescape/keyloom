@@ -149,7 +149,7 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
       const begin = output.indexOf(OUTPUT_BEGIN);
       const end = output.indexOf(OUTPUT_END);
       if (result.exitCode !== 0 || begin < 0 || end < begin) {
-        if (output.some((l) => /Cannot connect to the Docker daemon/i.test(l))) throw new BuildFailure("Docker isn't running. Start Docker Desktop and try again.");
+        if (output.some((l) => /Cannot connect to the Docker daemon/i.test(l))) throw new BuildFailure("Docker isn't running. Start Docker Desktop and try again.", "docker_unavailable");
         // gtest says why the script itself failed (a position that is not on the matrix).
         const assertion = output.findIndex((l) => /Failure$/.test(l));
         if (assertion >= 0 && output[assertion + 1] !== undefined) throw new BuildFailure(`The emulator stopped: ${output.slice(assertion + 1, assertion + 4).join(" ").trim()}`);
