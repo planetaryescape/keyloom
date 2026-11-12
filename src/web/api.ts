@@ -17,14 +17,17 @@ export class ApiError extends Error {
   readonly validation: ValidationResult | undefined;
   /** The keyboard the refusal names, for the button that fixes it (R6-07, R6-18). */
   readonly board: string | undefined;
+  /** keyloom's own name for `board`, when the server sends it. */
+  readonly boardName: string | undefined;
 
-  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult; board?: string } = {}) {
+  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult; board?: string; boardName?: string } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = detail.code;
     this.validation = detail.validation;
     this.board = detail.board;
+    this.boardName = detail.boardName;
   }
 }
 

@@ -6,7 +6,7 @@ import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { RestoreKeyboard, keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
 import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
 import { CONTRIBUTION_GUIDE } from "../keyboards/search-words.ts";
-import { activitiesFor, importRefusal, otherBoardWords, type ImportRefusal } from "./import-words.ts";
+import { activitiesFor, importRefusal, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type Refused } from "./import-words.ts";
 import { createConfig } from "../configs/api-configs.ts";
 import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
@@ -83,7 +83,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
         <ul className="board-cards" aria-label="Supported keyboards">
           {inOrder(boards.boards).map((board) => (
             <li key={board.id}>
-              <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activitiesFor(board, activities)} />
+              <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} />
             </li>
           ))}
         </ul>
@@ -99,7 +99,8 @@ function inOrder(boards: readonly BoardChoice[]): BoardChoice[] {
   return [...boards].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
-function BoardCard({ board, boards, token, onImported, onStartedBlank, activities }: { board: BoardChoice; boards: readonly BoardChoice[]; token: string; onImported: (result: ImportResponse) => void; onStartedBlank: (layoutId: string) => void; activities: ReviewActivity[] }) {
+/** One board's card. `activities`: what is ticked above the cards, unfiltered, because Import it as … can send the file to a board that takes tests (#299 review). */
+export function BoardCard({ board, boards, token, onImported, onStartedBlank, activities }: { board: BoardChoice; boards: readonly BoardChoice[]; token: string; onImported: (result: ImportResponse) => void; onStartedBlank: (layoutId: string) => void; activities: ReviewActivity[] }) {
   const guide = guideFor(board);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -108,11 +109,11 @@ function BoardCard({ board, boards, token, onImported, onStartedBlank, activitie
   const [saved, setSaved] = useState(false);
   // This Mac has no Karabiner settings: nothing to import, so the card offers a blank config instead (R3-12).
   const [nothingToRead, setNothingToRead] = useState(false);
-  // A refusal keyloom can act on (R6-08, R6-18), with what was refused, so Restore or Import it as … does it again.
-  const [refused, setRefused] = useState<{ refusal: ImportRefusal; file: File | null } | null>(null);
+  // A refusal keyloom can act on (R6-08, R6-18), with what was refused and where it went, so Restore or Import it as … does it again.
+  const [refused, setRefused] = useState<Refused | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
-  const command = importCommand(board, activities);
+  const command = importCommand(board, activitiesFor(board, activities));
 
   /** `as`: the board a keyloom export was made for, when it was dropped on another board's card (R6-18). */
   async function take(files: FileList | readonly File[] | null, as: BoardChoice = board) {
@@ -130,8 +131,8 @@ function BoardCard({ board, boards, token, onImported, onStartedBlank, activitie
       onImported(await uploadLayout(token, as.id, file, activitiesFor(as, activities)));
     } catch (error) {
       if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
-      const refusal = importRefusal(error, boards);
-      if (refusal !== null) setRefused({ refusal, file });
+      const refusal = importRefusal(error, boards, as);
+      if (refusal !== null) setRefused({ refusal, file, as });
       else setProblem(error instanceof Error ? error.message : "The import didn't go through.");
     } finally {
       setBusy(false);
@@ -161,21 +162,28 @@ function BoardCard({ board, boards, token, onImported, onStartedBlank, activitie
   async function startBlank() {
     setBusy(true);
     setProblem(null);
+    // A refusal from before Restore must not stay up beside this try's own outcome (#299 review).
+    setRefused(null);
     try {
       // Config names are unique, so a second Start blank takes the next free "… daily N" rather than failing the same way each time.
       const taken = (await fetchLayouts(token, new AbortController().signal)).map((layout) => layout.name);
       const config = await createConfig(token, { from: "blank", name: firstFreeName(`${boardDisplayName(board.name)} daily`, taken), board: board.id });
       onStartedBlank(config.id);
     } catch (error) {
-      if (keyboardRemoved(error)) setRefused({ refusal: { kind: "removed" }, file: null });
+      if (keyboardRemoved(error)) setRefused({ refusal: { kind: "removed", boardId: board.id, board }, file: null, as: board });
       else setProblem(error instanceof Error ? error.message : "keyloom couldn't start a blank config.");
     } finally {
       setBusy(false);
     }
   }
 
-  // After Restore, the refused import or blank config again: the file kept from the drop, or Start blank when there was none.
-  const again = () => (refused === null || refused.file === null ? startBlank() : take([refused.file]));
+  // After Restore, the refused import or blank config again: the file kept from the drop, to the board it went to, or Start blank.
+  const again = () => {
+    if (refused === null) return;
+    const retry = retryFor(refused);
+    return retry.kind === "blank" ? startBlank() : take([retry.file], retry.as);
+  };
+  const restore = refused?.refusal.kind === "removed" ? restoreFor({ ...refused, refusal: refused.refusal }) : null;
 
   return (
     // The whole card takes the drop (P4): the board is drawn as itself at the top, so the right card is found by its shape.
@@ -242,9 +250,9 @@ function BoardCard({ board, boards, token, onImported, onStartedBlank, activitie
         />
       </div>
       {problem === null ? null : <p className="board-card-problem" role="alert"><TriangleAlert size={14} aria-hidden="true" />{problem}</p>}
-      {refused?.refusal.kind === "removed" ? (
-        <RestoreKeyboard restore={() => restoreKeyboard(token, board.id)} boardName={board.name} doing={refused.file === null ? "start a config" : "import this layout"} onRestored={again} />
-      ) : null}
+      {restore === null ? null : (
+        <RestoreKeyboard restore={() => restoreKeyboard(token, restore.boardId)} boardName={restore.boardName} doing={restore.doing} onRestored={again} />
+      )}
       {refused?.refusal.kind === "other_board" ? (
         <OtherBoard filename={refused.file?.name ?? "This file"} refusal={refused.refusal} here={board} busy={busy}
           onImportAs={(other) => void take(refused.file === null ? null : [refused.file], other)} />

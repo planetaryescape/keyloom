@@ -129,7 +129,7 @@ describe("a Corne keyloom has never seen", () => {
     const { post } = await serve();
     const known = await post("/api/keyboards/preview", { candidate: "zmk:glove80" });
     expect(known.status).toBe(400);
-    expect(ApiErrorBodySchema.parse(await known.json()).error).toMatchObject({ code: "board_known", board: "moergo/glove80" });
+    expect(ApiErrorBodySchema.parse(await known.json()).error).toMatchObject({ code: "board_known", board: "moergo/glove80", boardName: "Glove80" });
     const p = PreviewResponseSchema.parse(await (await post("/api/keyboards/preview", { candidate: "zmk:corne" })).json());
     expect(p.layouts).toEqual([]);
     expect(p.boardProblemCode).toBeNull();

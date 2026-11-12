@@ -33,7 +33,8 @@ import { displayNameFor, findCandidate } from "./keyboard-detect.ts";
 export type KeyboardAddCode = DeriveErrorCode | "no_key_positions" | "layout_unreadable" | "firmware_unreachable" | "board_known";
 export class KeyboardAddError extends UsageError {
   override name = "KeyboardAddError";
-  constructor(readonly code: KeyboardAddCode, message: string, readonly board?: string) {
+  /** `boardName`: keyloom's own name for `board`, which the page names it by, not the search result's (#299 review). */
+  constructor(readonly code: KeyboardAddCode, message: string, readonly board?: string, readonly boardName?: string) {
     super(message);
   }
 }
@@ -114,11 +115,21 @@ const isMissing = (err: unknown): boolean => err instanceof GeometryError && /re
 
 /**
  * A file from the pinned tree. A 404 is passed on, because the QMK chain looks for files that may not exist. Any other failure is GitHub
- * not answering, which a later try can fix (R6-14); the cache path is for the CLI, and the page names no path.
+ * not answering, which a later try can fix (R6-14); the cache path is for the CLI, and the page names no path. `read` is how the caller
+ * parses the file: a cached copy it can't parse is downloaded again, and a download it can't parse isn't cached, so the caller's parse
+ * says `layout_unreadable` for this answer only.
  */
-async function pinnedFile(c: Candidate, source: { repo: string; sha: string }, path: string, fetchText: TextFetcher, dir: string | undefined): Promise<string> {
+async function pinnedFile(c: Candidate, source: { repo: string; sha: string }, path: string, fetchText: TextFetcher, dir: string | undefined, read: (text: string) => unknown): Promise<string> {
+  const readable = (text: string): boolean => {
+    try {
+      read(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   try {
-    return await fetchPinned({ source: { ...source, ref: "pinned" } }, path, fetchText, dir);
+    return await fetchPinned({ source: { ...source, ref: "pinned" } }, path, fetchText, dir, readable);
   } catch (err) {
     if (isMissing(err)) throw err;
     throw new KeyboardAddError("firmware_unreachable", `couldn't read ${c.name}'s layout from the pinned firmware tree: ${err instanceof Error ? err.message : String(err)}. keyloom reads it from GitHub the first time and keeps it in ${cacheDir()}`);
@@ -157,7 +168,7 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
       const files: Array<{ path: string; info: Json }> = [];
       for (const path of infoChainPaths(e.target)) {
         try {
-          const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir);
+          const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, JSON.parse);
           // SAFETY: Json is QMK's info.json as read; layoutSource checks its layouts with a schema before any key is used.
           files.push({ path, info: parsed(c, path, () => JSON.parse(text) as Json) });
         } catch (err) {
@@ -169,7 +180,7 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
         for (const communityDir of ["layouts/community", "layouts/default"]) {
           const path = `${communityDir}/${layout}/info.json`;
           try {
-            const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir);
+            const text = await pinnedFile(c, PINNED_SOURCES.qmk, path, fetchText, opts.cacheDir, JSON.parse);
             // SAFETY: as above, layoutSource checks the layouts with a schema.
             const communityInfo = parsed(c, path, () => JSON.parse(text) as Json);
             files.push({ path, info: communityInfo });
@@ -189,7 +200,7 @@ async function readGeometry(c: Candidate, input: Pick<AddInput, "layout">, opts:
       throw new KeyboardAddError("no_key_positions", `ZMK's tree gives ${z.name} no physical layout with key positions that keyloom can read (29 of its shields have one). Contribute the board by hand: docs/blueprint/04-boards-and-contributions.md`);
     }
     const zLayout = z.layout;
-    const text = await pinnedFile(c, PINNED_SOURCES.zmk, zLayout.file, fetchText, opts.cacheDir);
+    const text = await pinnedFile(c, PINNED_SOURCES.zmk, zLayout.file, fetchText, opts.cacheDir, (t) => parsePhysicalLayout(t, zLayout.label));
     return { geometry: { keys: parsed(c, zLayout.file, () => parsePhysicalLayout(text, zLayout.label)), path: `${zLayout.file}#${zLayout.label}` }, layout: null, layoutGuessed: false };
   } catch (err) {
     // A file the index names that isn't at the pinned commit: the index is wrong, so a Try again gets the same 404 (R6-14).
@@ -247,7 +258,7 @@ export async function previewKeyboard(input: AddInput, opts: AddDeps = {}): Prom
 function refuseKnown(c: Candidate, input: Pick<AddInput, "force">, opts: AddDeps): void {
   const known = boardForCandidate((opts.boards ?? listBoards()).map((b) => b.definition), c);
   if (known === undefined || (input.force === true && known.id === localBoardId(c))) return;
-  throw new KeyboardAddError("board_known", `${c.name} is already a board: ${known.id}${known.id.startsWith("local/") ? ` (derived earlier; pass --force to derive it again)` : ""}. Put a config on it with \`keyloom keyboard put <layout> --on ${known.id}\``, known.id);
+  throw new KeyboardAddError("board_known", `${c.name} is already a board: ${known.id}${known.id.startsWith("local/") ? ` (derived earlier; pass --force to derive it again)` : ""}. Put a config on it with \`keyloom keyboard put <layout> --on ${known.id}\``, known.id, known.name);
 }
 
 const cacheDirFor = (opts: GeometryOptions): string => opts.cacheDir ?? join(cacheDir(), "geometry");

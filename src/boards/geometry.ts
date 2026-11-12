@@ -1,6 +1,6 @@
 // Generates geometry.json from the pinned firmware tree (D-045). Never from memory or a copy:
 // the file is derived, and `boards check` regenerates it to catch drift.
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { GeometryError } from "./geometry-error.ts";
 import { parsePhysicalLayout } from "./zmk-geometry.ts";
@@ -39,22 +39,37 @@ export function geometryPath(rev: BoardRevision): string {
   return `keyboards/${rev.qmkTarget}/keyboard.json`;
 }
 
-/** Fetches a file at an immutable SHA. SHAs never change, so a cached copy is always valid. */
+/**
+ * Fetches a file at an immutable SHA. SHAs never change, so a cached copy of the right file is always valid. `accept` says whether a
+ * text is the file the caller expects: a download it refuses (a captive portal's page answered with 200) is returned but never cached,
+ * and a cached copy it refuses is dropped and downloaded once more, so one bad answer doesn't block the file for good (#299 review).
+ */
 export async function fetchPinned(
   rev: Pick<BoardRevision, "source">,
   path: string,
   fetchText: TextFetcher,
   cacheDir: string | undefined,
+  accept: (text: string) => boolean = () => true,
 ): Promise<string> {
   const cacheFile = cacheDir ? join(cacheDir, rev.source.sha, path) : undefined;
   if (cacheFile) {
     const cached = Bun.file(cacheFile);
-    if (await cached.exists()) return cached.text();
+    if (await cached.exists()) {
+      const text = await cached.text();
+      if (accept(text)) return text;
+      // A copy that can't be removed is written over below, or the write's failure is only warned about.
+      await rm(cacheFile, { force: true }).catch(() => undefined);
+    }
   }
   const text = await fetchText(`https://raw.githubusercontent.com/${githubSlug(rev.source.repo)}/${rev.source.sha}/${path}`);
-  if (cacheFile) {
-    await mkdir(dirname(cacheFile), { recursive: true });
-    await Bun.write(cacheFile, text);
+  if (cacheFile && accept(text)) {
+    // The cache only saves a download next time: the file was read, so a full disk or a locked folder doesn't fail the read.
+    try {
+      await mkdir(dirname(cacheFile), { recursive: true });
+      await Bun.write(cacheFile, text);
+    } catch (err) {
+      console.warn(`keyloom: couldn't cache ${path} in ${cacheDir}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   return text;
 }

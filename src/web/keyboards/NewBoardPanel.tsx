@@ -137,7 +137,7 @@ function Confirm({ flow, preview }: { flow: NewKeyboard; preview: PreviewRespons
     <section className="nb-panel" aria-label="Confirm the keyboard">
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Candidates</button>
-        <h2>{known ? `keyloom already has the ${name}` : `Your ${name}, as ${step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it`}</h2>
+        <h2>{known ? `keyloom already has the ${flow.previewProblemBoard?.name ?? name}` : `Your ${name}, as ${step.candidate.firmware === "zmk" ? "ZMK" : "QMK"} draws it`}</h2>
         {known ? null : <p className="nb-lead">{preview === null ? (flow.previewProblem === null ? "Reading its layout from the firmware's own tree…" : "keyloom reads its layout from the firmware's own tree.") : cantAdd ? `${preview.keyCount} keys from the firmware's own layout.` : `${preview.keyCount} keys from the firmware's own layout. ${["One thing", "Two things", "Three things"][asked - 1]} can't be read over USB; tell keyloom once.`}</p>}
       </header>
       <div className="nb-panel-body">

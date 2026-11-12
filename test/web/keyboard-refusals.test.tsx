@@ -7,14 +7,15 @@ import type { BoardChoice } from "../../src/api/http.ts";
 import { ApiError } from "../../src/web/api.ts";
 import { newConfigWaits, renameWaits } from "../../src/web/configs/dialog-words.ts";
 import { importLine } from "../../src/web/import/export-steps.ts";
-import { activitiesFor, importRefusal, otherBoardWords } from "../../src/web/import/import-words.ts";
+import { activitiesFor, importRefusal, otherBoardWords, restoreFor, retryFor, type Refused } from "../../src/web/import/import-words.ts";
+import { BoardCard } from "../../src/web/import/ImportScreen.tsx";
 import { catalogueNote } from "../../src/web/keyboards/catalogue-words.ts";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { putProblem } from "../../src/web/keyboards/put-words.ts";
 import { RestoreKeyboard, keyboardRemoved, removedWords } from "../../src/web/keyboards/RestoreKeyboard.tsx";
 import { SearchFailed } from "../../src/web/keyboards/SearchFailed.tsx";
-import type { NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { knownBoardOf, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
 const board = (id: string, name: string, importers: string[], firmware: BoardChoice["firmware"] = "zmk"): BoardChoice => ({ id, name, vendor: "v", firmware, keyCount: 42, importers });
 const glove = board("moergo/glove80", "Glove80", ["zmk-layout-editor-keymap"]);
@@ -77,7 +78,7 @@ describe("R6-05: a Put step map that failed", () => {
 
 describe("R6-07: a keyboard keyloom already has", () => {
   test("offers Put a config on it and Pick another keyboard, and no Show me the board", () => {
-    const html = render(flow({ previewProblem: "Corne is already a board", previewProblemCode: "board_known", previewProblemBoard: "foostan/corne" }));
+    const html = render(flow({ previewProblem: "Corne is already a board", previewProblemCode: "board_known", previewProblemBoard: { id: "foostan/corne", name: "Corne" } }));
     expect(html).toContain("<h2>keyloom already has the Corne</h2>");
     expect(html).toContain("keyloom knows this keyboard, so there is nothing to add.");
     expect(html).not.toContain("as ZMK draws it");
@@ -85,6 +86,18 @@ describe("R6-07: a keyboard keyloom already has", () => {
     expect(html).toMatch(/Pick another keyboard<\/button>/);
     expect(html).not.toContain("Show me the board");
     expect(html).not.toContain("keyboard put");
+  });
+
+  // #299 review: a search result named "Moonlander Mark I" that is keyloom's "Moonlander" is named as keyloom names the board.
+  test("names the board by keyloom's own name, not the search result's", () => {
+    const refusal = new ApiError(400, "Moonlander Mark I is already a board: zsa/moonlander", { code: "board_known", board: "zsa/moonlander", boardName: "Moonlander" });
+    expect(knownBoardOf(refusal, "Moonlander Mark I")).toEqual({ id: "zsa/moonlander", name: "Moonlander" });
+    expect(knownBoardOf(new ApiError(400, "x", { code: "board_known", board: "zsa/moonlander" }), "Moonlander Mark I")).toEqual({ id: "zsa/moonlander", name: "Moonlander Mark I" });
+    expect(knownBoardOf(new ApiError(500, "x", { code: "internal" }), "Moonlander Mark I")).toBeNull();
+    const step = { kind: "confirm" as const, keyboard: null, candidate: { id: "qmk:zsa/moonlander", name: "Moonlander Mark I", firmware: "qmk" } as ApiCandidate, homeRow: null, controller: null, layout: null };
+    const html = render(flow({ step, previewProblem: "x", previewProblemCode: "board_known", previewProblemBoard: { id: "zsa/moonlander", name: "Moonlander" } }));
+    expect(html).toContain("<h2>keyloom already has the Moonlander</h2>");
+    expect(html).not.toContain("Mark I");
   });
 });
 
@@ -132,19 +145,49 @@ describe("R6-14: layout codes", () => {
 
 describe("R6-18 and R6-25: the import cards", () => {
   test("a keyloom export for another board names it, and a board keyloom doesn't have says so", () => {
-    const refusal = importRefusal(new ApiError(400, "pass --board moergo/glove80", { code: "layout_for_other_board", board: "moergo/glove80" }), [glove, moonlander]);
+    const refusal = importRefusal(new ApiError(400, "pass --board moergo/glove80", { code: "layout_for_other_board", board: "moergo/glove80" }), [glove, moonlander], moonlander);
     expect(refusal).toEqual({ kind: "other_board", boardId: "moergo/glove80", board: glove });
     if (refusal?.kind !== "other_board") throw new Error("expected an other-board refusal");
     expect(otherBoardWords("glove.json", refusal, moonlander)).toBe("glove.json is a layout for the Glove80, not the Moonlander.");
-    const unknown = importRefusal(new ApiError(400, "x", { code: "layout_for_other_board", board: "local/odd" }), [moonlander]);
+    const unknown = importRefusal(new ApiError(400, "x", { code: "layout_for_other_board", board: "local/odd" }), [moonlander], moonlander);
     expect(unknown).toEqual({ kind: "other_board", boardId: "local/odd", board: null });
-    expect(importRefusal(new ApiError(400, "x", { code: "keyboard_removed" }), [])).toEqual({ kind: "removed" });
-    expect(importRefusal(new ApiError(400, "x", { code: "usage" }), [])).toBeNull();
+    expect(importRefusal(new ApiError(400, "x", { code: "usage" }), [], moonlander)).toBeNull();
+  });
+
+  // #299 review: the person removed the Glove80, then chose "Import it as a Glove80 config" on the Moonlander card.
+  test("a removed keyboard is the one the server refused, so Restore restores it and the retry imports to it", () => {
+    const refusal = importRefusal(new ApiError(400, "restore moergo/glove80", { code: "keyboard_removed", board: "moergo/glove80" }), [glove, moonlander], glove);
+    expect(refusal).toEqual({ kind: "removed", boardId: "moergo/glove80", board: glove });
+    if (refusal?.kind !== "removed") throw new Error("expected a removed refusal");
+    const file = new File(["{}"], "glove.json");
+    const refused: Refused = { refusal, file, as: glove };
+    expect(restoreFor({ ...refused, refusal })).toEqual({ boardId: "moergo/glove80", boardName: "Glove80", doing: "import this layout" });
+    expect(retryFor(refused)).toEqual({ kind: "import", file, as: glove });
+    const html = renderToStaticMarkup(<RestoreKeyboard restore={() => new Promise(() => {})} boardName={restoreFor({ ...refused, refusal }).boardName} doing="import this layout" onRestored={() => {}} />);
+    expect(html).toContain("You removed the Glove80");
+    expect(html).toMatch(/Restore Glove80<\/button>/);
+    expect(html).not.toContain("Moonlander");
+  });
+
+  test("a removed refusal that names no board is the board the request went to, and a blank start is started again", () => {
+    const refusal = importRefusal(new ApiError(400, "x", { code: "keyboard_removed" }), [moonlander], moonlander);
+    expect(refusal).toEqual({ kind: "removed", boardId: "zsa/moonlander", board: moonlander });
+    if (refusal?.kind !== "removed") throw new Error("expected a removed refusal");
+    const blank: Refused = { refusal, file: null, as: moonlander };
+    expect(restoreFor({ ...blank, refusal })).toEqual({ boardId: "zsa/moonlander", boardName: "Moonlander", doing: "start a config" });
+    expect(retryFor(blank)).toEqual({ kind: "blank" });
   });
 
   test("the MacBook takes no activity tests, whatever is ticked", () => {
     expect(activitiesFor(macbook, ["prose"])).toEqual([]);
     expect(activitiesFor(glove, ["prose"])).toEqual(["prose"]);
+  });
+
+  // #299 review: each card gets what is ticked, unfiltered, so Import it as a Glove80 config from the MacBook card keeps the tests.
+  test("each card filters the ticked tests for its own board, so another board's import keeps them", () => {
+    const card = (b: BoardChoice) => renderToStaticMarkup(<BoardCard board={b} boards={[macbook, glove]} token="t" onImported={() => {}} onStartedBlank={() => {}} activities={["prose"]} />);
+    expect(card(macbook)).toContain("keyloom import --board apple/macbook &lt;file&gt;");
+    expect(card(glove)).toContain("keyloom import --board moergo/glove80 --activities prose &lt;file&gt;");
   });
 });
 

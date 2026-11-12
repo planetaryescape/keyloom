@@ -1,7 +1,10 @@
 // `keyboard add` for QMK keyboards and the refusals (22#building-the-board-definition). The pinned QMK tree is replaced by fixtures
 // copied from it, so nothing here reads the network.
 import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { type AddDeps, addKeyboard, openApp, previewKeyboard, showBoard } from "../../src/app/index.ts";
+import { PINNED_SOURCES } from "../../src/boards/derive/pins.ts";
 import { GeometryError } from "../../src/boards/geometry-error.ts";
 import { loadBoardDir } from "../../src/boards/load.ts";
 import { listBoards, setUserBoards } from "../../src/boards/registry.ts";
@@ -103,6 +106,13 @@ describe("a QMK keyboard", () => {
     expect(reads).toBe(0);
   });
 
+  // #299 review: the search result is "Moonlander Mark I"; the page names the board as keyloom does.
+  test("board_known carries keyloom's own name for the board, not the search result's", async () => {
+    const refused = previewKeyboard({ candidate: "qmk:zsa/moonlander" }, deps());
+    await expect(refused).rejects.toMatchObject({ code: "board_known", board: "zsa/moonlander", boardName: "Moonlander" });
+    await expect(refused).rejects.toThrow(/Moonlander Mark I is already a board/);
+  });
+
   test("a board derived before can be previewed again with force, as `keyboard add --force` does", async () => {
     const { app, deps: d } = world();
     await addKeyboard(app, { candidate: "qmk:crkbd/rev1", homeRow: 2 }, { ...d, boards: [] });
@@ -117,6 +127,32 @@ describe("a QMK keyboard", () => {
     const refused = previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: garbled, cacheDir: tempDir(), boards: [] });
     await expect(refused).rejects.toMatchObject({ name: "KeyboardAddError", code: "layout_unreadable" });
     await expect(refused).rejects.not.toThrow(/cache/);
+  });
+
+  // #299 review: a captive portal's page answered with 200 must not block the keyboard for good, and a cache write isn't the network.
+  test("a cached copy keyloom can't parse is downloaded again, and the good copy replaces it", async () => {
+    const cacheDir = tempDir();
+    const cached = join(cacheDir, PINNED_SOURCES.qmk.sha, "keyboards/crkbd/rev1/keyboard.json");
+    mkdirSync(dirname(cached), { recursive: true });
+    writeFileSync(cached, "<html>Sign in to the Wi-Fi</html>");
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: tree, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+    expect(JSON.parse(readFileSync(cached, "utf8"))).toBeDefined();
+  });
+
+  test("a download keyloom can't parse is refused once and never cached, so the next try reads GitHub again", async () => {
+    let portal = true;
+    const once = async (url: string) => (portal && url.endsWith("keyboards/crkbd/rev1/keyboard.json") ? "<html>Sign in</html>" : tree(url));
+    const cacheDir = tempDir();
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).rejects.toMatchObject({ code: "layout_unreadable" });
+    portal = false;
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+  });
+
+  test("a cache that can't be written doesn't fail the read or blame the network", async () => {
+    // A file where the cache folder should be: every write under it fails, as a full disk or a locked folder would.
+    const cacheDir = join(tempDir(), "not-a-folder");
+    writeFileSync(cacheDir, "");
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: tree, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
   });
 
   test("a network failure is reported as one, not as a bug", async () => {

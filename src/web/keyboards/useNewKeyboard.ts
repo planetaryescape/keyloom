@@ -49,6 +49,13 @@ export function reviewStep(step: NewBoardStep, preview: PreviewResponse | null):
   return { kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller, layout: step.layout ?? preview.layout };
 }
 
+/** The board keyloom already has for a candidate (R6-07), as the `board_known` refusal names it. */
+export type KnownBoardRef = { id: string; name: string };
+
+/** The board a `board_known` preview refusal names, by keyloom's own name; the candidate's only if the server sent none. */
+export const knownBoardOf = (error: unknown, candidateName: string): KnownBoardRef | null =>
+  error instanceof ApiError && error.board !== undefined ? { id: error.board, name: error.boardName ?? candidateName } : null;
+
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
 
 /** Add refused: a keyboard keyloom can't add yet in words, named as the page names it ("Corne (new)"); the server's sentence names CLI flags (R5-06). */
@@ -70,8 +77,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [previewProblem, setPreviewProblem] = useState<string | null>(null);
   // The server's code for a preview that can't work for this keyboard (R5-06), so the page offers the guide instead of Try again.
   const [previewProblemCode, setPreviewProblemCode] = useState<string | null>(null);
-  // The board keyloom already has for a keyboard picked as new (R6-07): the page offers to put a config on it instead.
-  const [previewProblemBoard, setPreviewProblemBoard] = useState<string | null>(null);
+  // The board keyloom already has for a keyboard picked as new (R6-07): the page offers to put a config on it instead. Its name is
+  // keyloom's, not the search result's ("Moonlander", not "Moonlander Mark I"), so the steps after it name the board as keyloom does.
+  const [previewProblemBoard, setPreviewProblemBoard] = useState<KnownBoardRef | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
   // The Put step's map that failed replaces "Mapping it…"; Try again reads it again (R6-05).
   const [putFailure, setPutFailure] = useState<PutProblem | null>(null);
@@ -136,7 +144,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       if (controller.signal.aborted) return;
       setPreviewProblem(message(e));
       setPreviewProblemCode(e instanceof ApiError ? (e.code ?? null) : null);
-      setPreviewProblemBoard(e instanceof ApiError ? (e.board ?? null) : null);
+      setPreviewProblemBoard(knownBoardOf(e, step.candidate.name));
     });
     return () => controller.abort();
     // The key stands for the step's inputs; the attempt is Try again.
@@ -207,16 +215,13 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     retrySearch: () => void search(searchText),
     /** "Pick another config": the Put step without a config picked, so the list is the next thing to do (R6-05). */
     clearSource: () => setStep((s) => (s.kind === "put" ? { ...s, source: null, choices: {} } : s)),
-    /**
-     * "Put a config on it": the keyboard picked as new is a board keyloom has (R6-07), so the put step for that board. The board's name is
-     * the candidate's, which is the board's own once keyloom matched it.
-     */
+    /** "Put a config on it": the keyboard picked as new is a board keyloom has (R6-07), so the put step for that board, by its own name. */
     putOnKnown: () => {
       if ((step.kind !== "confirm" && step.kind !== "review") || previewProblemBoard === null) return;
       setPreview(null);
       setPutPreview(null);
       setProblem(null);
-      setStep({ kind: "put", boardId: previewProblemBoard, boardName: step.candidate.name, source: null, choices: {}, origin: "matched" });
+      setStep({ kind: "put", boardId: previewProblemBoard.id, boardName: previewProblemBoard.name, source: null, choices: {}, origin: "matched" });
     },
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
@@ -293,6 +298,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setPreview(null);
       setPutPreview(null);
       setProblem(null);
+      // A Start blank refused on the setup card must not follow to the Put step, where its Restore would start a blank config (#299 review).
+      setRemoved(null);
       setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
     },
     /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */

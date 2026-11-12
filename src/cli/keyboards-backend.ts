@@ -13,7 +13,7 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
   } catch (err) {
     if (err instanceof NotFoundError) throw new KeyboardsError(404, "not_found", err.message);
     // A keyboard keyloom can't add yet keeps its code, so the page says why in words and offers the contribution guide (R5-06).
-    if (err instanceof KeyboardAddError) throw new KeyboardsError(400, err.code, err.message, err.board);
+    if (err instanceof KeyboardAddError) throw new KeyboardsError(400, err.code, err.message, err.board, err.boardName);
     // A put on a removed keyboard: the page offers Restore {board}, then makes the config again (R6-08).
     if (err instanceof BoardRefusal) throw new KeyboardsError(400, err.code, err.message, err.board);
     if (err instanceof UsageError) throw new KeyboardsError(400, "usage", err.message);

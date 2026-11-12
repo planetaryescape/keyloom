@@ -12,8 +12,8 @@ import { KeyboardsError, type KeyboardsBackend } from "./keyboards-backend.ts";
 
 const MAX_BODY_BYTES = 10_000;
 
-const errorResponse = (status: number, code: string, message: string, board?: string): Response =>
-  Response.json({ error: { code, message, ...(board === undefined ? {} : { board }) } } satisfies ApiErrorBody, { status });
+const errorResponse = (status: number, code: string, message: string, board?: string, boardName?: string): Response =>
+  Response.json({ error: { code, message, ...(board === undefined ? {} : { board }), ...(boardName === undefined ? {} : { boardName }) } } satisfies ApiErrorBody, { status });
 
 type Action = "detect" | "preview" | "add" | "putPreview" | "put" | "collection" | "remove" | "restore" | "contribute";
 type Route = { method: "GET" | "POST"; action: Action };
@@ -93,7 +93,7 @@ export async function handleKeyboardRoute(request: Request, pathname: string, ba
     if (route.action === "putPreview") return Response.json(PutPreviewResponseSchema.parse(await backend.previewPut(body)));
     return Response.json(PutResponseSchema.parse(await backend.put(body)), { status: 201 });
   } catch (err) {
-    if (err instanceof KeyboardsError) return errorResponse(err.status, err.code, err.message, err.board);
+    if (err instanceof KeyboardsError) return errorResponse(err.status, err.code, err.message, err.board, err.boardName);
     console.error("keyloom: keyboards request failed", err);
     return errorResponse(500, "internal", "internal error");
   }
