@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
-import { findingRepairState, repairWords } from "../../src/web/chat/repair-words.ts";
+import { SHOW_PROPOSAL_WAITS, findingRepairState, repairWords } from "../../src/web/chat/repair-words.ts";
 
 test("a sent request names the history and offers Open history beside Dismiss request (R6-23)", () => {
   for (const kind of ["proposal", "build", "finding"] as const) {
@@ -57,4 +57,20 @@ test("a finding that really went out of date is stale once the review settles", 
   expect(findingRepairState(draft, { ...settled, review: review([{ ...finding, dismissedAt: 1 }]) })).toBe("stale");
   expect(findingRepairState(draft, { ...settled, review: review([]) })).toBe("stale");
   expect(findingRepairState({ ...draft, reviewId: "rv0" }, settled)).toBe("stale");
+});
+
+test("an out-of-date proposal request offers Dismiss and show the proposal, whose card holds the recovery action (R7-14)", () => {
+  const view = repairWords("proposal", { sent: false, current: false });
+  expect(view).toMatchObject({ dismissLabel: "Dismiss request", offer: "show_proposal" });
+  expect(view.scope).toContain("Dismiss it and show the proposal");
+  expect(view.scope).not.toContain("select its recovery action");
+  // A build question has no card to go back to.
+  expect(repairWords("build", { sent: false, current: false }).offer).toBeNull();
+});
+
+test("Dismiss and show the proposal waits while keyloom replies, with the reason beside it, like Send and New (#301 review)", () => {
+  const replying = repairWords("proposal", { sent: false, current: false, replying: true });
+  expect(replying.offer).toBe("show_proposal");
+  expect(replying.offerWaits).toBe(SHOW_PROPOSAL_WAITS);
+  expect(repairWords("proposal", { sent: false, current: false, replying: false }).offerWaits).toBeUndefined();
 });

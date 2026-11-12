@@ -75,7 +75,11 @@ export type { LayoutExportDocument } from "../layout/export-document.ts";
 export const ApiErrorBodySchema = z.object({
   // `board`: the keyboard a refusal names, for the button that fixes it (R6-07, R6-18), such as the board a dropped export is for;
   // `boardName`: keyloom's own name for it, when the page has no other way to know it (R6-07's Put step).
-  error: z.object({ code: z.string().min(1), message: z.string().min(1), board: z.string().min(1).optional(), boardName: z.string().min(1).optional() }),
+  // `generic`: the server's catch-all answer, whose message is no sentence for a person, so the page uses its own words (R7-01, D-534).
+  error: z.object({
+    code: z.string().min(1), message: z.string().min(1), board: z.string().min(1).optional(), boardName: z.string().min(1).optional(),
+    generic: z.literal(true).optional(),
+  }),
   // Present when ops failed validation, so the editor can point at the slots.
   validation: ValidationResultSchema.optional(),
 });
@@ -157,6 +161,9 @@ export const BoardChoiceSchema = z.object({
 }).and(BoardDefinitionSchema.pick({ hands: true, fingers: true, rows: true }).partial());
 export type BoardChoice = z.infer<typeof BoardChoiceSchema>;
 export const BoardListResponseSchema = z.object({ boards: z.array(BoardChoiceSchema) });
+
+/** The import's refusal of a file over the cap. The route sends it, and the page says it too when Bun refuses the body first (D-534). */
+export const IMPORT_TOO_LARGE = "That file is too large to be a layout export.";
 
 export const ImportResponseSchema = z.object({
   layoutId: z.string().min(1),

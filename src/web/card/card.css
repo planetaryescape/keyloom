@@ -526,6 +526,13 @@
   color: var(--pending-ink);
 }
 
+/* Restart keyloom under a failed Apply no screen planned for (R7-01); Apply below is the Try again. */
+.card-foot-way-out {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .card-foot-row {
   display: flex;
   align-items: center;

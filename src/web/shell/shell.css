@@ -1352,6 +1352,16 @@ a.menu-item {
   box-shadow: none;
 }
 
+/* Proposals keyloom can't read the same way again: the words, then Restart keyloom (R7-01). */
+.caption-notice .nb-waiting-failed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
 .caption-notice .upgrade-offer {
   display: flex;
   flex-wrap: wrap;

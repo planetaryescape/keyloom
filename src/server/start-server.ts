@@ -25,7 +25,7 @@ import { type RemapperSetupBackend, handleRemapperSetupRoute } from "./system-re
 import { notFoundPage } from "./not-found-page.ts";
 import { type RestartBackend, handleRestartRoute } from "./restart-routes.ts";
 import { loadWebAssets } from "./web-assets.ts";
-import { LayoutDetailSchema, LayoutListResponseSchema } from "../api/http.ts";
+import { LayoutDetailSchema, LayoutListResponseSchema, type ApiErrorBody } from "../api/http.ts";
 
 export interface ServerOptions {
   port: number;
@@ -150,14 +150,14 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
     const denied = checkToken(request, sessionToken);
     if (denied) return denied;
     if (isEditorPath(pathname)) {
-      if (editor === undefined) return Response.json({ error: "not found" }, { status: 404 });
+      if (editor === undefined) return notFound();
       return respond(async () => (await handleEditorRoute(request, pathname, editor)) ?? notFound());
     }
     if (request.method !== "GET") {
       return new Response("method not allowed", { status: 405, headers: { allow: "GET" } });
     }
     if (pathname === BOARD_DEV_PATH) {
-      if (boardDev === undefined) return Response.json({ error: "not found" }, { status: 404 });
+      if (boardDev === undefined) return notFound();
       return respond(async () => Response.json(BoardDevViewSchema.parse(await boardDev())));
     }
     if (pathname === LIST_PATH) {
@@ -166,10 +166,10 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       );
     }
     const ref = parseRef(pathname);
-    if (ref === null) return Response.json({ error: "not found" }, { status: 404 });
+    if (ref === null) return notFound();
     return respond(async () => {
       const detail = await source.get(ref);
-      if (detail === null) return Response.json({ error: "not found" }, { status: 404 });
+      if (detail === null) return notFound();
       return Response.json(LayoutDetailSchema.parse(detail));
     });
   }
@@ -194,8 +194,15 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
   return { url, token: sessionToken, stop: () => server.stop(true) };
 }
 
+// Coded like every route's refusals, so the page maps the code to its words and buttons (R7-01) instead of showing a status number.
+function coded(status: number, code: "internal" | "not_found", message: string): Response {
+  return Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
+}
+
+// `generic` marks the catch-all, whose "not found" is no sentence for a person: the page says it in its own words, and keeps a route's own
+// `not_found` sentence, such as "This build has no firmware file. Build it again." (D-534).
 function notFound(): Response {
-  return Response.json({ error: "not found" }, { status: 404 });
+  return Response.json({ error: { code: "not_found", message: "not found", generic: true } } satisfies ApiErrorBody, { status: 404 });
 }
 
 // The ref is the single path segment after /api/layouts/. A malformed escape is a 404,
@@ -217,6 +224,6 @@ async function respond(build: () => Promise<Response>): Promise<Response> {
     return await build();
   } catch (error) {
     console.error("keyloom: request failed", error);
-    return Response.json({ error: "internal error" }, { status: 500 });
+    return coded(500, "internal", "internal error");
   }
 }

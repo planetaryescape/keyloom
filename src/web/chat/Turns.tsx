@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, History, Keyboard, KeyRound, MapPin, MessageSquarePlus, RefreshCw, ShieldCheck } from "lucide-react";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -284,11 +285,13 @@ interface Props {
   onSetUpOther?: () => void;
   /** Opens the conversation history, for a message keyloom may have accepted without confirming it (R5-07). */
   onOpenHistory?: () => void;
+  /** The session token, for the failure box's Restart keyloom (R7-01, R7-09). */
+  token?: string;
   /** Reads this conversation's proposals again, after Apply found one no longer open (R6-06). Rejects when the read failed. */
   onReadProposals?: () => Promise<void>;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation, onSetUpOther, onOpenHistory, onReadProposals }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation, onSetUpOther, onOpenHistory, onReadProposals, token }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -378,7 +381,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
       ))}
       {/* After the proposal it refines: the proposal is on the board first, and the question asks about it (D-452). */}
       {turn.question === null ? null : <QuestionCard question={turn.question} disabled={busy} onAnswer={onAnswer} />}
-      {turn.failure === null ? null : <FailureBox view={failureView(turn.failure)} prepared={{ proposals: turn.proposals.length, priorities: turn.priorities.length, mayHave: turn.presentation?.effectsMayHaveOccurred ?? null }} busy={busy} onRetry={onRetry} switchTo={switchTo} onSwitch={onSwitch} onSetUpModel={onSetUpModel} creditsUrl={creditsUrl} onNewConversation={onNewConversation} onSetUpOther={onSetUpOther} onOpenHistory={onOpenHistory} />}
+      {turn.failure === null ? null : <FailureBox view={failureView(turn.failure)} prepared={{ proposals: turn.proposals.length, priorities: turn.priorities.length, mayHave: turn.presentation?.effectsMayHaveOccurred ?? null }} busy={busy} onRetry={onRetry} switchTo={switchTo} onSwitch={onSwitch} onSetUpModel={onSetUpModel} creditsUrl={creditsUrl} onNewConversation={onNewConversation} onSetUpOther={onSetUpOther} onOpenHistory={onOpenHistory} token={token} />}
       {streaming ? null : <AgentWorking view={work} motionPaused={motionPaused} />}
       {streaming ? null : <TurnUsage accounting={turn.accounting} />}
     </div>
@@ -386,10 +389,10 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
 }
 
 // Every button here starts or changes a request, so none works while a reply is running; Add credits and the setup leave the request alone.
-function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUpModel, creditsUrl, onNewConversation, onSetUpOther, onOpenHistory }: {
+function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUpModel, creditsUrl, onNewConversation, onSetUpOther, onOpenHistory, token }: {
   view: FailureView; prepared: Prepared; busy: boolean; onRetry: () => void; switchTo: readonly { id: string; name: string }[];
   onSwitch: ((id: string) => void) | undefined; onSetUpModel: (() => void) | undefined; creditsUrl: string | undefined; onNewConversation: (() => void) | undefined;
-  onSetUpOther: (() => void) | undefined; onOpenHistory: (() => void) | undefined;
+  onSetUpOther: (() => void) | undefined; onOpenHistory: (() => void) | undefined; token: string | undefined;
 }) {
   const offers = (action: FailureAction) => view.actions.includes(action);
   const credits = offers("credits") && creditsUrl !== undefined;
@@ -451,6 +454,7 @@ function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUp
               {retryLabel}
             </button>
           ) : null}
+          {offers("restart") && token !== undefined ? <RestartKeyloom token={token} primary={!offers("retry")} /> : null}
         </div>
       </div>
     </div>

@@ -4,6 +4,17 @@ import type { BoardSync, FlashCheckResponse, FlashErrorCode } from "../../api/ht
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
 
 /**
+ * Why the firmware file couldn't be saved or shown in Finder, in the server's words. `gone`: keyloom has no file for this build any more
+ * (`not_found`, "This build has no firmware file. Build it again."), so the step offers Build again (D-534).
+ */
+export type FileProblem = { text: string; gone: boolean };
+
+export function fileProblem(error: unknown, fallback: string): FileProblem {
+  if (!(error instanceof Error)) return { text: fallback, gone: false };
+  return { text: error.message, gone: "code" in error && error.code === "not_found" };
+}
+
+/**
  * The System Settings pane a permission code opens, the button that opens it, and what to say beside it. `failed` leads a failed
  * flash's message in plain words; the server's sentence follows it, because on a split board it also says how recovery went.
  */

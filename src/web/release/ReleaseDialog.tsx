@@ -356,7 +356,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               !canFlash ? (
                 <p className="muted">Available once the build succeeds.</p>
               ) : flashPlan?.kind === "manual" ? (
-                <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} problem={release.fileProblem} />
+                <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} onBuildAgain={() => release.buildNow(head.id)} problem={release.fileProblem} />
               ) : flashPlan?.kind === "needs-tool" ? (
                 <ToolCallout view={flashPlan} boardName={boardName} install={release.toolInstall} onCheck={release.checkBuild} />
               ) : confirming ? (

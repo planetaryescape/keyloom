@@ -27,6 +27,18 @@ describe("a reply that stopped offers what fixes it", () => {
     expect(actions("model_request")).toEqual(["retry", "new_conversation"]);
   });
 
+  test("a reply stopped by a server exception says so in keyloom's words, with Try again and Restart keyloom (R7-01)", () => {
+    const view = failureView({ code: "internal", message: "internal error" });
+    expect(view.actions).toEqual(["retry", "restart"]);
+    expect(view.message).toBe("keyloom hit a problem it didn't expect. The details are in keyloom's log.");
+  });
+
+  test("a chat frame the page can't read offers only Restart keyloom, since the next frame would be the same (R7-09)", () => {
+    const view = failureView({ code: "unreadable", message: "keyloom sent a chat frame this page can't read." });
+    expect(view.actions).toEqual(["restart"]);
+    expect(view.message).not.toMatch(/Reload the page|update keyloom/);
+  });
+
   test("a full conversation starts a new one, and never retries the same request (R4-11)", () => {
     expect(actions("model_context_full")).toEqual(["new_conversation"]);
     expect(failureView({ code: "model_context_full", message: "m" }).title).toBe("This conversation is full");

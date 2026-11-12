@@ -21,6 +21,7 @@ import {
   UndoRequestSchema,
   UndoResponseSchema,
   UpgradeResponseSchema,
+  IMPORT_TOO_LARGE,
   type ApiErrorBody,
 } from "../api/http.ts";
 import { EditorError, type EditorBackend } from "./editor-backend.ts";
@@ -208,7 +209,7 @@ async function importUpload(backend: EditorBackend, request: Request): Promise<R
   const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (type !== "application/octet-stream") return fail(415, "content_type", "Send the file as application/octet-stream.");
   const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");
+  if (declared > MAX_IMPORT_BYTES) return fail(413, "too_large", IMPORT_TOO_LARGE);
   const query = new URL(request.url).searchParams;
   const board = query.get("board");
   const filename = query.get("filename");
@@ -218,7 +219,7 @@ async function importUpload(backend: EditorBackend, request: Request): Promise<R
   const activities = selection === null ? undefined : ReviewActivitiesSchema.safeParse(selection.split(",").map((id) => id.trim()));
   if (activities && !activities.success) return fail(400, "schema", "Choose activities from prose, typescript, python, json, shell or shortcuts, without duplicates.");
   const bytes = new Uint8Array(await request.arrayBuffer());
-  if (bytes.length > MAX_IMPORT_BYTES) return fail(413, "too_large", "That file is too large to be a layout export.");
+  if (bytes.length > MAX_IMPORT_BYTES) return fail(413, "too_large", IMPORT_TOO_LARGE);
   return Response.json(ImportResponseSchema.parse(await backend.importUpload({ board, filename, bytes, ...(name ? { name } : {}), ...(activities?.data === undefined ? {} : { reviewActivities: activities.data }) })), { status: 201 });
 }
 

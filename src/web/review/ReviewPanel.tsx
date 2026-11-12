@@ -201,8 +201,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const failedOn = review === null ? null : failedProvider(review.ai);
   const canSwitch = provider.status !== null && provider.status.lockedBy === null;
   const nowOn = failedOn !== null && activeId !== undefined && activeId !== failedOn ? PROVIDER_NAMES[activeId] : null;
-  const missing = review === null ? null : aiMissingWords(review.ai, canSwitch, nowOn);
   const switchTo = switchTargets(provider.status, failedOn);
+  const missing = review === null ? null : aiMissingWords(review.ai, canSwitch, nowOn, { unread: provider.status === null && provider.failed, readyOther: switchTo.length > 0 });
   const others = (provider.status?.providers ?? []).map((p) => p.id).filter((id) => id !== activeId && id !== failedOn);
   const [settingUpOther, setSettingUpOther] = useState(false);
   const [switching, setSwitching] = useState<ProviderId | null>(null);
@@ -437,7 +437,12 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                   {switching === id ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : null}Switch to {PROVIDER_NAMES[id]}
                 </button>
               )) : null}
-              {missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
+              {missing.actions.includes("check_status") ? (
+                <button type="button" className="sheet-action" disabled={provider.reading} onClick={() => void provider.reload()}>
+                  {provider.reading ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : null}Check again
+                </button>
+              ) : null}
+              {missing.actions.includes("set_up_other") ? (
                 <button type="button" className="sheet-action" aria-expanded={settingUpOther} onClick={() => setSettingUpOther((v) => !v)}>Set up another model</button>
               ) : null}
               {missing.actions.includes("set_up") ? (

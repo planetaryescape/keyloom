@@ -138,7 +138,6 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   }, [initialConversation, continueCopy, chat.open, chat.send]);
   const repairSending = useRef(false);
   const repairSent = repairDraft?.sent === true;
-  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent, checking: repairChecking });
   const repairRunId = useRef<string | null>(null);
   const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);
@@ -194,6 +193,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const [draft, setDraft] = useState("");
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [invalidRecovery, setInvalidRecovery] = useState<string | null>(null);
+  // A request the send found out of date (`invalidRecovery`) gets the out-of-date words and buttons too, not "check before sending" (R7-14).
+  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent && invalidRecovery !== repairDraft.id, checking: repairChecking, replying: streaming });
   const repairGate = useRef<(id: string, request: string) => boolean>(() => false);
   useLayoutEffect(() => {
     repairGate.current = (id, request) => repairDraft?.id === id && repairDraft.request === request && repairDraft.request.length <= 8000 && repairCurrent && !streaming && !repairDraft.sent && !draft.trim() && drafts.length === 0;
@@ -436,13 +437,13 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         const detail = await fetchConversation(token, source.conversationId!, new AbortController().signal);
         const head = await fetchLayout(token, layoutRef, new AbortController().signal);
         const current = detail.conversation.layoutId === layoutRef && head.revision.id === repairDraft.headRevisionId && (source.kind === "proposal" ? detail.proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed") : declinedProposalCodes(detail.presentations?.find((p) => p.userMessageId === source.userMessageId)).length > 0);
-        if (!current) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or source changed. Your request is kept; select its recovery action again."); unlock(); return; }
+        if (!current) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or the proposal changed, so this request wasn't sent. It is kept below."); unlock(); return; }
       } catch { setRecoveryNotice("Could not recheck the recovery source. Nothing was sent; your request is kept."); unlock(); return; }
     } else if ("source" in repairDraft && repairDraft.source.kind === "proposal") {
       try {
         const source = repairDraft.source;
         const [head, proposals] = await Promise.all([fetchLayout(token, layoutRef, new AbortController().signal), fetchOpenProposals(token, layoutRef)]);
-        if (head.revision.id !== repairDraft.headRevisionId || !proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed")) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or source changed. Your request is kept; select its recovery action again."); unlock(); return; }
+        if (head.revision.id !== repairDraft.headRevisionId || !proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed")) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or the proposal changed, so this request wasn't sent. It is kept below."); unlock(); return; }
       } catch { setRecoveryNotice("Could not recheck the recovery source. Nothing was sent; your request is kept."); unlock(); return; }
     }
     if (!repairGate.current(repairDraft.id, repairDraft.request)) { unlock(); return; }
@@ -506,6 +507,20 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     const failed = await chat.open(id);
     // null: shown; undefined: replaced by another open, which says its own outcome.
     if (failed !== null && failed !== undefined) throw new Error(failed);
+  };
+
+  // A revised-proposal request that went out of date (R7-14): the proposal's card holds the recovery action, so this drops the request and
+  // shows the card, in its conversation or in the open proposals. A conversation that can't be opened keeps the request and says why.
+  const showProposal = async (id: string, source: RecoverySource) => {
+    if (source.conversationId !== undefined && source.conversationId !== transcript.conversationId) {
+      const failed = await chat.open(source.conversationId);
+      if (failed === undefined) return;
+      if (failed !== null) { setRecoveryNotice(`keyloom couldn't open that proposal's conversation. ${failed} Your request is kept.`); return; }
+    }
+    setRecoveryNotice(null);
+    onRepairSent?.(id);
+    if (source.conversationId === undefined) onReviewProposals?.();
+    else setView("chat");
   };
 
   const newConversation = () => {
@@ -715,6 +730,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                 ) : (
                   <AssistantMessage
                     key={turn.id}
+                    token={token}
                     turn={turn}
                     layout={layout}
                     board={board}
@@ -827,6 +843,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         <div className="repair-request-actions">
           <button type="button" className="bar-apply" disabled={!repairCurrent || invalidRecovery === repairDraft.id || streaming || draft.trim() !== "" || drafts.length > 0 || repairSent || repairDraft.request.trim() === "" || repairDraft.request.length > 8000} onClick={sendRepair}>Send request</button>
           {repairView?.offer === "open_history" ? <button type="button" className="sheet-action" onClick={showHistory}>Open history</button> : null}
+          {repairView?.offer === "show_proposal" && "source" in repairDraft ? <button type="button" className="sheet-action" disabled={repairView.offerWaits !== undefined} onClick={() => void showProposal(repairDraft.id, repairDraft.source)}>Dismiss and show the proposal</button> : null}
+          {repairView?.offerWaits === undefined ? null : <p className="blocked-reason">{repairView.offerWaits}</p>}
           {repairView?.offer === "fresh_review" && onFreshReview !== undefined ? <button type="button" className="sheet-action" onClick={() => { onRepairSent?.(repairDraft.id); onFreshReview(); }}>Dismiss and run a fresh review</button> : null}
           <button type="button" className="sheet-action" onClick={() => onRepairSent?.(repairDraft.id)}>{repairView?.dismissLabel}</button>
         </div>

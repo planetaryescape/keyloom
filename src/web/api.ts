@@ -8,6 +8,7 @@ import {
   type LayoutDetail,
   type LayoutSummary,
 } from "../api/http.ts";
+import { UNREADABLE_WORDS, failureCode, failureWords } from "./shell/unexpected.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -19,8 +20,14 @@ export class ApiError extends Error {
   readonly board: string | undefined;
   /** keyloom's own name for `board`, when the server sends it. */
   readonly boardName: string | undefined;
+  /** The server named nothing it no longer has: its catch-all `not_found`, or a refusal with no code at all (D-534). */
+  readonly generic: boolean;
 
-  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult; board?: string; boardName?: string } = {}) {
+  constructor(
+    status: number,
+    message: string,
+    detail: { code?: string; validation?: ValidationResult; board?: string; boardName?: string; generic?: boolean } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -28,8 +35,12 @@ export class ApiError extends Error {
     this.validation = detail.validation;
     this.board = detail.board;
     this.boardName = detail.boardName;
+    this.generic = detail.generic === true;
   }
 }
+
+/** An answer this page can't read: keyloom and the page are different versions, so the answer is the same until a restart (R7-09). */
+export const unreadableError = (status: number): ApiError => new ApiError(status, UNREADABLE_WORDS, { code: "unreadable" });
 
 /** A request that never reached keyloom (D-494). The page reconnects by itself, so the sentence names no terminal. */
 export const UNREACHABLE = "keyloom stopped answering. This page reconnects by itself when it is back.";
@@ -59,13 +70,14 @@ async function getJson<T>(
   if (response.status === 404) throw new ApiError(404, "keyloom has no layout here. It was deleted, or the link is old.", { code: "not_found" });
   if (!response.ok) {
     const body = ApiErrorBodySchema.safeParse(await response.json().catch(() => null));
-    throw new ApiError(response.status, body.success ? body.data.error.message : `keyloom answered ${response.status}.`, body.success ? { code: body.data.error.code } : {});
+    const code = failureCode(response.status, body.success ? body.data.error.code : undefined);
+    throw new ApiError(response.status, failureWords(code, body.success && body.data.error.generic !== true ? body.data.error.message : null), { code });
   }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {
     // The detail is for whoever is debugging; the page gets a sentence it can show.
     console.error(`keyloom: unreadable response from ${path}`, parsed.error);
-    throw new Error("keyloom sent a layout this page can't read. Restart keyloom and reload.");
+    throw unreadableError(response.status);
   }
   return parsed.data;
 }
