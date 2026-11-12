@@ -6,7 +6,7 @@ import { ApiError } from "../api.ts";
 import { firstFreeName } from "../import/export-steps.ts";
 import { createConfig, fetchAllConfigs } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
-import { deriveProblem } from "./derive-words.ts";
+import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
 import { putProblem, type PutProblem } from "./put-words.ts";
 import { keyboardRemoved } from "./RestoreKeyboard.tsx";
 
@@ -58,9 +58,29 @@ export const knownBoardOf = (error: unknown, candidateName: string): KnownBoardR
 
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
 
+type AddContext = { candidate: ApiCandidate };
+const addWords = (error: unknown, step: AddContext, preview: Pick<PreviewResponse, "displayName"> | null): DeriveProblem | null =>
+  deriveProblem(error instanceof ApiError ? error.code : null, preview?.displayName ?? step.candidate.name);
+
 /** Add refused: a keyboard keyloom can't add yet in words, named as the page names it ("Corne (new)"); the server's sentence names CLI flags (R5-06). */
-export const addProblem = (error: unknown, step: { candidate: ApiCandidate }, preview: Pick<PreviewResponse, "displayName"> | null): string =>
-  deriveProblem(error instanceof ApiError ? error.code : null, preview?.displayName ?? step.candidate.name)?.text ?? message(error);
+export const addProblem = (error: unknown, step: AddContext, preview: Pick<PreviewResponse, "displayName"> | null): string =>
+  addWords(error, step, preview)?.text ?? message(error);
+
+/**
+ * Add refused for a reason the same answers hit again (R7-11), such as a derived board that fails the boards check: the Review step shows
+ * why with the contribution guide in place of Add. Null for a refusal that Add again can get past, which shows as a plain problem.
+ */
+export const blockedAdd = (error: unknown, step: AddContext, preview: Pick<PreviewResponse, "displayName"> | null): DeriveProblem | null => {
+  const words = addWords(error, step, preview);
+  return words?.blocked === true ? words : null;
+};
+
+/**
+ * The board Start a config makes a config on: the step's own board, or on the Confirm and Review steps the board keyloom already has for
+ * the keyboard picked as new (R7-10). Null when there is none.
+ */
+export const blankBoardFor = (step: NewBoardStep, knownBoard: KnownBoardRef | null): string | null =>
+  step.kind === "setup" || step.kind === "put" ? step.boardId : step.kind === "confirm" || step.kind === "review" ? (knownBoard?.id ?? null) : null;
 
 export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = []) {
   const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
@@ -89,6 +109,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   // A config refused because its keyboard was removed (R6-08): the page offers Restore, then does this again.
   const [removed, setRemoved] = useState<"blank" | "make" | null>(null);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
+  // An Add refused for good (R7-11), with the answers it was refused for: other answers may pass, so they offer Add again.
+  const [addRefusal, setAddRefusal] = useState<{ key: string; problem: DeriveProblem } | null>(null);
   const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
@@ -126,6 +148,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
 
   // The board as it would be added, drawn from the pinned firmware tree; again whenever the home row or the controller changes.
   const confirmKey = step.kind === "confirm" || step.kind === "review" ? `${step.candidate.id}|${step.homeRow ?? ""}|${step.controller ?? ""}|${step.layout ?? ""}` : null;
+  const addBlocked = addRefusal !== null && addRefusal.key === confirmKey ? addRefusal.problem : null;
   useEffect(() => {
     if (step.kind !== "confirm" && step.kind !== "review") return;
     const controller = new AbortController();
@@ -204,7 +227,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setProblem(null); setPreview(null);
       setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null });
     },
-    step, preview, previewProblem, previewProblemCode, previewProblemBoard, putPreview, putFailure, busy, problem, searchProblem, removed, waiting,
+    step, preview, addBlocked, previewProblem, previewProblemCode, previewProblemBoard, putPreview, putFailure, busy, problem, searchProblem, removed, waiting,
     /** Reads the board preview again after it failed. */
     retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
     /** Restores a removed keyboard, for a config refused because of it (R6-08). */
@@ -257,8 +280,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setPreview(null);
       setStep({ kind: "confirm", keyboard: step.keyboard, candidate, homeRow: null, controller: null, layout: null });
     },
+    /** Back to the candidates, from the Confirm step or from an Add refused for good on the Review step (R7-11). */
     backToCard: () => {
-      if (step.kind !== "confirm") return;
+      if (step.kind !== "confirm" && step.kind !== "review") return;
       if (step.keyboard === null) { setStep({ kind: "idle" }); return; }
       setStep({ kind: "card", keyboard: step.keyboard, choice: step.candidate.id });
     },
@@ -287,7 +311,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         });
         setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
       } catch (e) {
-        setProblem(addProblem(e, step, preview));
+        const blocked = blockedAdd(e, step, preview);
+        if (blocked !== null && confirmKey !== null) setAddRefusal({ key: confirmKey, problem: blocked });
+        else setProblem(addProblem(e, step, preview));
       } finally {
         setBusy(false);
       }
@@ -302,17 +328,21 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setRemoved(null);
       setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
     },
-    /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
-    /** `free`: `name` is keyloom's own default, so it becomes "name 2", "name 3"… when a config already has it (R4-16). A typed name is kept. */
+    /**
+     * "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. `free`:
+     * `name` is keyloom's own default, so it becomes "name 2", "name 3"… when a config already has it (R4-16). A typed name is kept. On
+     * the Confirm and Review steps, the board is the one keyloom already has for the keyboard picked as new (R7-10).
+     */
     startBlank: async (name: string, opts: { free?: boolean } = {}): Promise<string | null> => {
-      if (step.kind !== "setup" && step.kind !== "put") return null;
+      const board = blankBoardFor(step, previewProblemBoard);
+      if (board === null) return null;
       setBusy(true);
       setProblem(null);
       setRemoved(null);
       try {
         // Every config's name, archived ones and removed keyboards' included: they still hold their names (#290 review).
         const taken = opts.free === true ? (await fetchAllConfigs(token)).map((config) => config.name) : [];
-        const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board: step.boardId });
+        const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board });
         return config.id;
       } catch (e) {
         if (keyboardRemoved(e)) setRemoved("blank");

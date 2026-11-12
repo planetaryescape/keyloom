@@ -72,6 +72,12 @@ export function App({ token }: { token: string }) {
   const requestSequence = useRef(0);
   // The import screen from the layout menu; with no layouts it is the page itself.
   const [importing, setImporting] = useState(false);
+  // The one board's card the import screen shows, when a board's setup card opened it (R7-13); null shows every card.
+  const [importOnly, setImportOnly] = useState<string | null>(null);
+  const openImport = (boardId?: string | null) => {
+    setImportOnly(boardId ?? null);
+    setImporting(true);
+  };
   const [managing, setManaging] = useState(false);
   const [manageRemoved, setManageRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -191,7 +197,7 @@ export function App({ token }: { token: string }) {
   }
   if (layouts.length === 0 || adding) {
     return wrap(
-      <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: () => setImporting(true) }}>
+      <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: openImport }}>
         <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} onRetryBoards={() => setBoardsAttempt((n) => n + 1)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
@@ -213,7 +219,7 @@ export function App({ token }: { token: string }) {
       setSelectedId(id);
       setOnWall(false);
     },
-    onImport: () => setImporting(true),
+    onImport: openImport,
     onReload: (selectId?: string) => {
       if (selectId !== undefined) {
         setSelectedId(selectId);
@@ -275,7 +281,7 @@ export function App({ token }: { token: string }) {
   if (importing) {
     return wrap(
       <Shell menu={menu}>
-        <ImportScreen token={token} onImported={imported} onStartedBlank={(layoutId) => opened(layoutId, false)} onBack={() => setImporting(false)} />
+        <ImportScreen token={token} onImported={imported} onStartedBlank={(layoutId) => opened(layoutId, false)} onBack={() => setImporting(false)} only={importOnly} />
       </Shell>
     );
   }
@@ -596,7 +602,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
 
 type FittingRevision = FittingRevisionResponse["revision"];
 
-export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: () => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[]; onManageKeyboards?: () => void; onAddKeyboard?: () => void };
+export type HeaderMenu = { layouts: readonly LayoutSummary[]; selectedId: string; onSelect: (id: string) => void; onImport: (boardId?: string | null) => void; onReload?: (selectId?: string) => void; boardChoices?: readonly BoardChoice[]; onManageKeyboards?: () => void; onAddKeyboard?: () => void };
 
 // `fill` is the layout page, which is exactly the window tall so the board and its panel never scroll the page. A `bare` page draws its
 // own top bar (the layout page's has the sync line, undo and the menu).
