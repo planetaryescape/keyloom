@@ -350,6 +350,23 @@ describe("one engine action at a time (#285 review)", () => {
     expect(asked).toEqual(["blocker"]);
   });
 
+  test("a forced restart asks what is running before it stops an engine that reads down or refused (PR #297 CodeRabbit)", async () => {
+    const running = "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.";
+    const refused = async (): Promise<DockerStatus> => ({ ok: false, kind: "no-access", reason: "Docker is running, but your account isn't allowed to use it." });
+    for (const [status, detect] of [[async () => down, async () => colima], [refused, async () => desktop]] as const) {
+      let stopped = 0;
+      const stop = async () => (stopped++, { ok: true as const, version: "29", engine: "Colima", waitedMs: 1 });
+      const overrides = { platform: "darwin" as const, status, detect, restartColima: stop, restartApp: stop };
+      expect(await restartDocker({ force: true, blocker: () => running, overrides })).toMatchObject({ ok: false, code: "build_running", reason: running });
+      expect(await restartDocker({ force: true, overrides })).toMatchObject({ ok: false, code: "build_running" });
+      expect(stopped).toBe(0);
+      // A plain restart of a dead or refusing engine is unchanged, and a forced one that nothing blocks goes on.
+      expect(await restartDocker({ overrides })).toMatchObject({ ok: true });
+      expect(await restartDocker({ force: true, blocker: () => null, overrides })).toMatchObject({ ok: true });
+      expect(stopped).toBe(2);
+    }
+  });
+
   test("a forced restart with no way to ask what is running is refused (D-529)", async () => {
     let stopped = 0;
     const result = await restartDocker({ force: true, overrides: { status: async () => ({ ok: true, version: "29" }), detect: async () => colima, restartColima: async () => (stopped++, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });

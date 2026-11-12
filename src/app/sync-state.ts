@@ -105,7 +105,8 @@ export function deriveState(f: SyncFacts): SyncState {
   if (f.reading.state === "absent") {
     // Never synced or flashed by keyloom, and not visible until it is: "not connected" would be false while it is plugged in (R6-10).
     // The evidence is the whole board's, not this config's: a flash of another config, or one keyloom couldn't confirm, still put it on.
-    if (f.detectable === false && f.flashedBefore !== true && f.lastKnown === undefined && f.latestSync === undefined) return { kind: "not_connected", firstFlash: true };
+    // A sync counts only once it reached the flash: one that failed at its build wrote nothing, so the board still can't be seen.
+    if (f.detectable === false && f.flashedBefore !== true && f.lastKnown === undefined && (f.latestSync?.flashId ?? null) === null) return { kind: "not_connected", firstFlash: true };
     const changes = f.lastKnown?.changes;
     return changes === undefined || changes === 0 ? { kind: "not_connected" } : { kind: "not_connected", changes };
   }

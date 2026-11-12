@@ -9,8 +9,10 @@ import { tempDir } from "../../helpers/tmp.ts";
 const FAKE_DOCKER = `
 echo "$@" >> "$FAKE_DOCKER_LOG"
 sleep "\${FAKE_PROBE_SECONDS:-0}"
+[ -n "$FAKE_PROBE_FAILS" ] && { echo "docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock." >&2; exit 125; }
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/mnt}"; prev="$a"; done
+[ -n "$FAKE_HIDE" ] && vol=/nonexistent
 ${fakeSha256Probe("/mnt")}
 exit 9`;
 
@@ -62,6 +64,22 @@ describe("awaitMountedFiles", () => {
     await expect(result).rejects.toBeInstanceOf(BuildFailure);
     await expect(result).rejects.toThrow(/still sees an old or missing copy of a\/default\.nix, b\.conf after 0 s.*colima restart/);
     // The page reads the code and offers a restart; the sentence stays for the terminal (R6-09).
+    await expect(result).rejects.toMatchObject({ code: "stale_mount" });
+  });
+
+  test("a probe Docker couldn't run is not a stale share: no code, so the page offers Build again, not an engine restart (PR #297)", async () => {
+    const s = await setup();
+    const result = s.check({ FAKE_PROBE_FAILS: "1" }, { settleMs: 50 });
+    await expect(result).rejects.toThrow(/Docker couldn't check the files keyloom wrote.*Cannot connect to the Docker daemon/);
+    await expect(result).rejects.toMatchObject({ code: null });
+    expect(await Bun.file(join(s.dir, "check.log")).text()).toContain("Docker couldn't check the written files (exit 125)");
+  });
+
+  test("a missing copy is still a stale share", async () => {
+    const s = await setup();
+    const missing = join(s.root, "c.conf");
+    await Bun.write(missing, "y\n");
+    const result = s.check({ FAKE_HIDE: "1" }, { settleMs: 50, files: [missing] });
     await expect(result).rejects.toMatchObject({ code: "stale_mount" });
   });
 

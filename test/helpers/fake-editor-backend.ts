@@ -77,7 +77,8 @@ export class FakeEditor implements EditorBackend {
   staleMount = true;
   private history: Revision[];
   private counter = 0;
-  private readonly builds = new Map<string, { build: Build; revisionId: string; cancelledAt?: number }>();
+  // `stale` is read once, when the build starts: a restart clears the mount for later builds, never a finished build's result.
+  private readonly builds = new Map<string, { build: Build; revisionId: string; stale: boolean; cancelledAt?: number }>();
   private readonly flashes = new Map<string, { flash: Flash; startedAt: number; cancelledAt?: number; checkedAt?: number }>();
   private readonly options: Required<FakeOptions>;
   private readonly proposals = new Map<string, StoredProposal>();
@@ -231,8 +232,9 @@ export class FakeEditor implements EditorBackend {
       throw new EditorError(404, "not_found", "No such revision.");
     }
     const id = `build_${++this.counter}`;
-    const build = this.progressBuild(id, request.revisionId, Date.now());
-    this.builds.set(id, { build, revisionId: request.revisionId });
+    const stale = this.options.failBuildStale === true && this.staleMount;
+    const build = this.progressBuild(id, request.revisionId, Date.now(), stale);
+    this.builds.set(id, { build, revisionId: request.revisionId, stale });
     return build;
   }
 
@@ -240,9 +242,9 @@ export class FakeEditor implements EditorBackend {
     const entry = this.builds.get(id);
     if (entry === undefined) return null;
     if (entry.cancelledAt !== undefined) {
-      return { ...this.progressBuild(id, entry.revisionId, entry.build.startedAt), status: "failed", error: "Build stopped.", errorCode: "cancelled", finishedAt: entry.cancelledAt };
+      return { ...this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale), status: "failed", error: "Build stopped.", errorCode: "cancelled", finishedAt: entry.cancelledAt };
     }
-    return this.progressBuild(id, entry.revisionId, entry.build.startedAt);
+    return this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale);
   }
 
   /** Stops a running build (R3-10); a finished one is refused like the real backend refuses it. */
@@ -404,9 +406,8 @@ export class FakeEditor implements EditorBackend {
     return parent === undefined ? null : { revisionId: parent.id, summary: parent.summary };
   }
 
-  private progressBuild(id: string, revisionId: string, startedAt: number): Build {
+  private progressBuild(id: string, revisionId: string, startedAt: number, stale: boolean): Build {
     const { buildMs, failBuildDocker, failBuildCompile } = this.options;
-    const stale = this.options.failBuildStale === true && this.staleMount;
     const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;

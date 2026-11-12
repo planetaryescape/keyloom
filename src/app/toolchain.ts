@@ -259,6 +259,8 @@ async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartRes
   if (now.kind === "daemon-down") {
     const finding = await (over.detect ?? findDockerEngine)();
     if (finding.kind === "engine" && finding.engine.command[0] === "colima") {
+      const blocked = forcedBlock(opts);
+      if (blocked !== null) return blocked;
       return (over.restartColima ?? restartColima)(finding.engine, {
         ...(over.status === undefined ? {} : { status: over.status }),
         ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
@@ -275,6 +277,8 @@ async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartRes
   if (engine === null || (over.platform ?? process.platform) !== "darwin") {
     return { ok: false, engine: engine?.name ?? null, reason: "keyloom can only restart a Docker app on a Mac, and it didn't find one here. Restart your Docker engine yourself, then check again." };
   }
+  const blocked = forcedBlock(opts);
+  if (blocked !== null) return blocked;
   return (over.restartApp ?? restartDockerApp)(engine, {
     ...(over.status === undefined ? {} : { status: over.status }),
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
@@ -282,12 +286,23 @@ async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartRes
   });
 }
 
+/**
+ * A forced request's refusal, asked inside the engine lock right before a stop, or null to go on. A forced request asks it whatever
+ * Docker's status read, because the status is read once, before the engine is found, and every stop ends the work the blocker
+ * protects. A plain restart of a dead or refusing engine goes on without it, as before (PR #297 CodeRabbit).
+ */
+function forcedBlock(opts: RestartOptions): (DockerStartResult & { code: "build_running" }) | null {
+  if (opts.force !== true) return null;
+  const blocked = opts.blocker === undefined ? FORCED_RESTART_UNGUARDED : opts.blocker();
+  return blocked === null ? null : { ok: false, engine: null, reason: blocked, code: "build_running" };
+}
+
 async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult & { code?: "build_running" }> {
   const over = opts.overrides ?? {};
   const engine = await forcedRestartEngine(over);
   if (engine === null) return { ok: false, engine: null, reason: "keyloom restarts Colima or a Docker app, and your Docker engine is neither. Restart it yourself, then build again." };
-  const blocked = opts.blocker === undefined ? FORCED_RESTART_UNGUARDED : opts.blocker();
-  if (blocked !== null) return { ok: false, engine: null, reason: blocked, code: "build_running" };
+  const blocked = forcedBlock(opts);
+  if (blocked !== null) return blocked;
   const wait = {
     ...(over.status === undefined ? {} : { status: over.status }),
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),

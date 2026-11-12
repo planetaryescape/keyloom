@@ -89,6 +89,8 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [stoppingBuild, setStoppingBuild] = useState(false);
   const [buildCancelProblemText, setBuildCancelProblem] = useState<string | null>(null);
   const [engineRestart, setEngineRestart] = useState<Release["engineRestart"]>({ running: false, problem: null, again: true });
+  // Counts build requests, so a restart that ends after a newer one doesn't start its own build over it.
+  const buildRequests = useRef(0);
   const docker = useDocker(token);
   const dockerInstall = useInstall(token, "docker", docker.refresh);
 
@@ -131,6 +133,7 @@ export function useRelease(token: string, layoutRef: string): Release {
 
   const buildNow = useCallback(
     (revisionId: string) => {
+      buildRequests.current += 1;
       setStarting("build");
       setError(null);
       setLast({ kind: "build", revisionId });
@@ -177,18 +180,13 @@ export function useRelease(token: string, layoutRef: string): Release {
     else setResumes((n) => n + 1);
   }, [last, buildNow, flashNow, refreshBuild]);
 
-  // A restart that went through builds again at once. One refused because a build or flash runs may pass once it ends, so it stays
-  // offered; one that failed says why and isn't offered again (D-511), and Build again stays.
   const restartAndBuild = useCallback((revisionId: string) => {
-    setEngineRestart({ running: true, problem: null, again: true });
-    restartDockerApp(token, undefined, true)
-      .then((result) => {
-        if (result.ok) {
-          setEngineRestart({ running: false, problem: null, again: true });
-          buildNow(revisionId);
-        } else setEngineRestart({ running: false, problem: result.reason, again: result.code === "build_running" || result.code === "engine_busy" });
-      })
-      .catch((e: unknown) => setEngineRestart({ running: false, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted.", again: true }));
+    void restartThenBuild({
+      restart: () => restartDockerApp(token, undefined, true),
+      requests: () => buildRequests.current,
+      build: () => buildNow(revisionId),
+      show: setEngineRestart,
+    });
   }, [token, buildNow]);
   // A new build starts the step afresh.
   useEffect(() => setEngineRestart({ running: false, problem: null, again: true }), [buildId]);
@@ -283,6 +281,34 @@ export function useRelease(token: string, layoutRef: string): Release {
 
 // Calls `fetchNext` every POLL_MS until `isDone`. After MAX_MISSES misses in a row it calls `lost` once and keeps asking, and `found`
 // when an answer comes back, so the page's line clears by itself once keyloom answers again (R2-13). Returns the cleanup that stops it.
+/**
+ * A forced restart of the engine, then the build it was for. A restart that went through builds again at once. One refused because a
+ * build or flash runs may pass once it ends, so it stays offered; one that failed says why and isn't offered again (D-511), and Build
+ * again stays. A build asked for while the restart ran is newer: the restart starts nothing over it and says nothing about itself under
+ * it, since that build has its own result (PR #297 CodeRabbit).
+ */
+export async function restartThenBuild(deps: {
+  restart: () => Promise<{ ok: true } | { ok: false; reason: string; code?: string | undefined }>;
+  /** How many builds were asked for so far; `build` adds one. */
+  requests: () => number;
+  build: () => void;
+  show: (state: Release["engineRestart"]) => void;
+}): Promise<void> {
+  deps.show({ running: true, problem: null, again: true });
+  const asked = deps.requests();
+  const idle = { running: false, problem: null, again: true };
+  try {
+    const result = await deps.restart();
+    if (deps.requests() !== asked) deps.show(idle);
+    else if (result.ok) {
+      deps.show(idle);
+      deps.build();
+    } else deps.show({ running: false, problem: result.reason, again: result.code === "build_running" || result.code === "engine_busy" });
+  } catch (e) {
+    deps.show(deps.requests() !== asked ? idle : { running: false, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted.", again: true });
+  }
+}
+
 export function poll<T>(
   fetchNext: (signal: AbortSignal) => Promise<T>,
   publish: (value: T) => void,
