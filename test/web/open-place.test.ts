@@ -1,13 +1,18 @@
 // R1-23: copy that names a place opens it. A link dispatches; the Viewer's subscription opens the place, and nothing else does.
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { onOpenPlace, openPlace, type Place } from "../../src/web/shell/open-place.ts";
 
-const hadWindow = "window" in globalThis;
-// bun's test runtime has no DOM; an EventTarget is all this module uses of window.
-if (!hadWindow) (globalThis as { window?: EventTarget }).window = new EventTarget();
-// Other test files share this process; leave no window behind for code that checks for one.
-afterAll(() => {
-  if (!hadWindow) delete (globalThis as { window?: EventTarget }).window;
+// bun's test runtime has no DOM; an EventTarget is all this module uses of window. Each test sets its own, whatever earlier files in
+// this process left: a "window" property set to undefined once made a check at import skip the setup (release PR #294, run
+// 43134459051). Whatever was there before is put back.
+let before: PropertyDescriptor | undefined;
+beforeEach(() => {
+  before = Object.getOwnPropertyDescriptor(globalThis, "window");
+  (globalThis as { window?: EventTarget }).window = new EventTarget();
+});
+afterEach(() => {
+  if (before === undefined) delete (globalThis as { window?: EventTarget }).window;
+  else Object.defineProperty(globalThis, "window", before);
 });
 
 describe("opening a place from copy", () => {
