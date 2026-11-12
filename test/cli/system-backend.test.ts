@@ -1,5 +1,6 @@
 // The server's system backend over the app: a second click joins the restart already running, and Cancel reaches the install job.
 import { describe, expect, test } from "bun:test";
+import { restartDocker } from "../../src/app/toolchain.ts";
 import type { InstallRunner } from "../../src/app/tool-install.ts";
 import { appSystemBackend } from "../../src/cli/system-backend.ts";
 
@@ -37,16 +38,20 @@ describe("appSystemBackend", () => {
 
   test("a forced restart is refused while a build or flash runs, and refused when nothing can say whether one does (R6-09)", async () => {
     const asked: unknown[] = [];
-    const restart = async (opts?: { force?: boolean }) => (asked.push(opts), { ok: true as const, version: "28", engine: "Colima", waitedMs: 1 });
-    let blocker: string | null = "A build or flash is running, and restarting Docker now would stop it.";
+    let stopped = 0;
+    const overrides = { status: async () => ({ ok: true as const, version: "28" }), detect: async () => ({ kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } }), restartColima: async () => (stopped++, { ok: true as const, version: "28", engine: "Colima", waitedMs: 1 }) };
+    // The real restart with fake engine parts, so the blocker is asked where the restart asks it: inside the lock, before the stop.
+    const restart: typeof restartDocker = (opts = {}) => (asked.push(Object.keys(opts).sort()), restartDocker({ ...opts, overrides }));
+    let blocker: string | null = "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.";
     const guarded = appSystemBackend({}, { restart, restartBlocker: () => blocker });
     expect(await guarded.restartDocker({ force: true })).toMatchObject({ ok: false, code: "build_running", reason: blocker });
-    expect(asked).toEqual([]);
+    expect(stopped).toBe(0);
     blocker = null;
     expect(await guarded.restartDocker({ force: true })).toMatchObject({ ok: true, engine: "Colima" });
-    expect(asked).toEqual([{ force: true }]);
+    expect(stopped).toBe(1);
+    expect(asked).toEqual([["blocker", "force"], ["blocker", "force"]]);
     expect(await appSystemBackend({}, { restart }).restartDocker({ force: true })).toMatchObject({ ok: false, code: "build_running" });
-    expect(asked).toHaveLength(1);
+    expect(asked).toHaveLength(2);
   });
 
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {

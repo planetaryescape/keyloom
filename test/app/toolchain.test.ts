@@ -106,10 +106,10 @@ describe("a daemon that refuses this account (D-497)", () => {
     const restartColima = async (engine: { name: string }) => (restarted.push(`colima:${engine.name}`), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
     const restartApp = async (engine: { name: string }) => (restarted.push(`app:${engine.name}`), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
     const up = async () => ({ ok: true as const, version: "29" });
-    expect(await restartDocker({ force: true, overrides: { status: up, detect: async () => colima, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Colima" });
-    expect(await restartDocker({ force: true, overrides: { platform: "darwin", status: up, detect: async () => desktop, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Docker Desktop" });
+    expect(await restartDocker({ force: true, blocker: () => null, overrides: { status: up, detect: async () => colima, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Colima" });
+    expect(await restartDocker({ force: true, blocker: () => null, overrides: { platform: "darwin", status: up, detect: async () => desktop, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Docker Desktop" });
     const service = { kind: "engine" as const, engine: { name: "the Docker service", command: ["systemctl", "start", "docker"] } };
-    const refused = await restartDocker({ force: true, overrides: { platform: "linux", status: up, detect: async () => service, restartColima, restartApp } });
+    const refused = await restartDocker({ force: true, blocker: () => null, overrides: { platform: "linux", status: up, detect: async () => service, restartColima, restartApp } });
     expect(refused).toMatchObject({ ok: false, engine: null });
     expect(restarted).toEqual(["colima:Colima", "app:Docker Desktop"]);
     expect(await forcedRestartEngine({ platform: "linux", detect: async () => desktop })).toBeNull();
@@ -309,8 +309,51 @@ describe("one engine action at a time (#285 review)", () => {
     expect(order).toEqual([]);
     held.open();
     expect(await restarting).toMatchObject({ ok: true });
-    expect(await building).toMatchObject({ ok: true });
-    expect(order).toEqual(["start"]);
+    // It waits before it asks Docker, so it finds the restarted engine up and starts nothing (D-529).
+    expect(await building).toMatchObject({ ok: true, started: false });
+    expect(order).toEqual([]);
+  });
+
+  test("a build that asks for Docker during a forced restart waits for the restart, even though Docker answers (D-529, PR #297 review)", async () => {
+    const held = gate();
+    const order: string[] = [];
+    const up = async () => ({ ok: true as const, version: "29" });
+    const restarting = restartDocker({ force: true, blocker: () => null, overrides: { status: async () => (await held.opened, { ok: true, version: "29" }), detect: async () => colima, restartColima: async () => (order.push("colima stop --force"), { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    await Bun.sleep(10);
+    const building = ensureDocker({ overrides: { env: {}, status: up } }).then((r) => (order.push(`build proceeds ok=${r.ok}`), r));
+    await Bun.sleep(20);
+    expect(order).toEqual([]);
+    held.open();
+    expect(await restarting).toMatchObject({ ok: true });
+    expect(await building).toMatchObject({ ok: true, started: false });
+    expect(order).toEqual(["colima stop --force", "build proceeds ok=true"]);
+  });
+
+  test("a forced restart asks what is running inside the lock, right before the stop, so work that began after the click is not stopped (D-529)", async () => {
+    const held = gate();
+    let stopped = 0;
+    let running: string | null = null;
+    const asked: string[] = [];
+    const restarting = restartDocker({
+      force: true,
+      blocker: () => (asked.push("blocker"), running),
+      overrides: { status: async () => ({ ok: true, version: "29" }), detect: async () => (await held.opened, colima), restartColima: async () => (stopped++, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) },
+    });
+    await Bun.sleep(10);
+    // A build registers itself while the restart is still looking for the engine.
+    running = "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.";
+    expect(asked).toEqual([]);
+    held.open();
+    expect(await restarting).toMatchObject({ ok: false, engine: null, code: "build_running", reason: running });
+    expect(stopped).toBe(0);
+    expect(asked).toEqual(["blocker"]);
+  });
+
+  test("a forced restart with no way to ask what is running is refused (D-529)", async () => {
+    let stopped = 0;
+    const result = await restartDocker({ force: true, overrides: { status: async () => ({ ok: true, version: "29" }), detect: async () => colima, restartColima: async () => (stopped++, { ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    expect(result).toMatchObject({ ok: false, code: "build_running" });
+    expect(stopped).toBe(0);
   });
 
   test("a cancelled build stops waiting for the engine", async () => {

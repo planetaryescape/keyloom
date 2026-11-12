@@ -1,7 +1,7 @@
 // The server's system interface over the app (rung 25). Starting Docker takes up to about two minutes, and a
 // second click should join the attempt already running rather than launch a second engine.
 import { readKarabinerConfig } from "../app/karabiner-config.ts";
-import { dockerReadiness, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
+import { FORCED_RESTART_UNGUARDED, dockerReadiness, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
 import { type InstallDeps, installJobs } from "../app/tool-install.ts";
 import type { DockerStartResponse } from "../api/system.ts";
 import type { SystemBackend } from "../server/system-backend.ts";
@@ -12,8 +12,9 @@ const response = (r: Awaited<ReturnType<typeof startDocker>>): DockerStartRespon
 const restartResponse = (r: Awaited<ReturnType<typeof restartDocker>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }) });
 
 /**
- * `restartBlocker` says why a forced restart can't run now (a build or flash would stop), or null; serve passes `engineRestartBlocker`.
- * Without one, a forced restart is refused, so no caller can stop a build by leaving it out.
+ * `restartBlocker` says why a forced restart can't run now (a build, flash or container run would stop), or null; serve passes
+ * `engineRestartBlocker`. The restart asks it inside the engine lock, right before the stop. Without one, a forced restart is refused, so
+ * no caller can stop a build by leaving it out.
  */
 export function appSystemBackend(
   installDeps: InstallDeps = {},
@@ -40,9 +41,9 @@ export function appSystemBackend(
         return restarting;
       }
       if (forcing !== null) return forcing;
-      const blocked = docker.restartBlocker === undefined ? "keyloom can't tell whether a build is running here, so it didn't restart Docker." : docker.restartBlocker();
-      if (blocked !== null) return { ok: false, reason: blocked, engine: null, code: "build_running" };
-      forcing = (docker.restart ?? restartDocker)({ force: true }).then(restartResponse).finally(() => { forcing = null; });
+      const blocker = docker.restartBlocker;
+      if (blocker === undefined) return { ok: false, reason: FORCED_RESTART_UNGUARDED, engine: null, code: "build_running" };
+      forcing = (docker.restart ?? restartDocker)({ force: true, blocker }).then(restartResponse).finally(() => { forcing = null; });
       return forcing;
     },
   };

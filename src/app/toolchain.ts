@@ -129,9 +129,9 @@ let engineHolder: { kind: "start" | "restart"; done: Promise<void> } | null = nu
 
 class EngineWaitAborted extends Error {}
 
-async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  // Each waiter checks again when it wakes: the first to run takes it before the others resume.
-  while (engineHolder !== null) {
+// Waits until nothing (or, with `only`, no action of that kind) holds the engine. Each waiter checks again when it wakes.
+async function waitForEngine(signal: AbortSignal | undefined, only?: "restart"): Promise<void> {
+  while (engineHolder !== null && (only === undefined || engineHolder.kind === only)) {
     if (signal?.aborted) throw new EngineWaitAborted();
     const held = engineHolder.done;
     await new Promise<void>((resolve) => {
@@ -143,6 +143,13 @@ async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, si
       });
     });
   }
+  if (signal?.aborted) throw new EngineWaitAborted();
+}
+
+async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  // Checked again after every wait, in the same synchronous run as the take below, so the first waiter to wake takes it and a free lock
+  // is taken without yielding.
+  while (engineHolder !== null) await waitForEngine(signal);
   if (signal?.aborted) throw new EngineWaitAborted();
   let release!: () => void;
   engineHolder = { kind, done: new Promise<void>((resolve) => (release = resolve)) };
@@ -180,7 +187,7 @@ function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?:
  * R2-07), and a Colima whose daemon is down (R3-04), which is stopped hard and started again. Anything else keeps its own fix, so this
  * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
-export async function restartDocker(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" }> {
+export async function restartDocker(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | "build_running" }> {
   // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing. The code lets the
   // page follow the action that is running instead of offering the restart again (R4-04).
   if (engineHolder !== null) {
@@ -196,9 +203,15 @@ type RestartOptions = {
   overrides?: ToolchainOverrides;
   /**
    * Restart an engine that answers, for a build that failed on the engine's own state: a stale shared folder or a container it can't
-   * remove (R6-09, R6-17). The caller checks first that no build or flash is running (`engineRestartBlocker`), because this stops them.
+   * remove (R6-09, R6-17). It stops every container, so it needs `blocker`.
    */
   force?: boolean;
+  /**
+   * Why a forced restart can't stop the engine now (a build, flash or container run would stop), or null; serve passes
+   * `engineRestartBlocker`. It is asked inside the engine lock, right before the stop, and `ensureDocker` waits while a restart holds
+   * that lock, so no build can start between the check and the stop. A forced restart without one is refused.
+   */
+  blocker?: () => string | null;
 };
 
 /** The engine a forced restart would restart: Colima, or a Mac engine app. Null for any other, such as Linux's system service (R6-09). */
@@ -210,7 +223,9 @@ export async function forcedRestartEngine(over: ToolchainOverrides = {}): Promis
   return engine.command[0] === "open" && (over.platform ?? process.platform) === "darwin" ? engine : null;
 }
 
-async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartResult> {
+export const FORCED_RESTART_UNGUARDED = "keyloom can't tell whether a build is running here, so it didn't restart Docker.";
+
+async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartResult & { code?: "build_running" }> {
   const over = opts.overrides ?? {};
   // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is
   // restarted, unless the caller forces it for a build that failed on the engine itself.
@@ -245,10 +260,12 @@ async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartRes
   });
 }
 
-async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult> {
+async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult & { code?: "build_running" }> {
   const over = opts.overrides ?? {};
   const engine = await forcedRestartEngine(over);
   if (engine === null) return { ok: false, engine: null, reason: "keyloom restarts Colima or a Docker app, and your Docker engine is neither. Restart it yourself, then build again." };
+  const blocked = opts.blocker === undefined ? FORCED_RESTART_UNGUARDED : opts.blocker();
+  if (blocked !== null) return { ok: false, engine: null, reason: blocked, code: "build_running" };
   const wait = {
     ...(over.status === undefined ? {} : { status: over.status }),
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
@@ -256,6 +273,20 @@ async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult> {
   };
   return engine.command[0] === "colima" ? (over.restartColima ?? restartColima)(engine, wait) : (over.restartApp ?? restartDockerApp)(engine, wait);
 }
+
+// Container runs other than builds that a forced restart would stop: a lab analysis, a board review's tests, `keyloom emulate`. Builds
+// are found from their own rows; these have none, so each run says what it is for as long as it may run a container (D-529).
+const containerWork = new Map<symbol, string>();
+
+/** Marks a container run as under way, named for the person ("a lab analysis"), until the returned function is called. */
+export function holdContainerWork(what: string): () => void {
+  const key = Symbol(what);
+  containerWork.set(key, what);
+  return () => void containerWork.delete(key);
+}
+
+/** What holds a container run in this process now, each name once. */
+export const containerWorkRunning = (): string[] => [...new Set(containerWork.values())];
 
 export type EnsureDockerResult =
   | { ok: true; started: boolean; engine: string }
@@ -268,6 +299,14 @@ export type EnsureDockerResult =
 export async function ensureDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<EnsureDockerResult> {
   const over = opts.overrides ?? {};
   const status = over.status ?? (() => dockerStatus());
+  // A forced restart stops every container, even on a Docker that answers. A build or replay that gets here while one runs waits for it,
+  // so it never starts a container between the restart's last check for running work and its stop (D-529).
+  try {
+    await waitForEngine(opts.signal, "restart");
+  } catch (err) {
+    if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
+    throw err;
+  }
   const now = await status();
   if (now.ok) return { ok: true, started: false, engine: "Docker" };
   // Nothing to start when there is no engine, its CLI never reached the PATH, or it refuses this account: an install, a link or a permission.
