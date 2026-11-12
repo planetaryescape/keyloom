@@ -1,7 +1,7 @@
 // "Restart Colima and build again" (R6-09, D-529): the build it starts after the restart must never replace a newer build the person
 // started while the restart ran (PR #297 CodeRabbit). A refusal because work runs waits for that work and asks again (R7-04).
 import { describe, expect, test } from "bun:test";
-import { type EngineRestartRun, RESTART_WAIT_LIMIT_MS, restartThenBuild } from "../../src/web/release/useRelease.ts";
+import { type EngineRestartRun, RESTART_WAIT_LIMIT_MS, restartLogStep, restartThenBuild } from "../../src/web/release/useRelease.ts";
 
 type Result = { ok: true } | { ok: false; reason: string; code?: string };
 
@@ -165,5 +165,13 @@ describe("restartThenBuild", () => {
     expect(lost.shown.at(-1)).toEqual({ ...IDLE, problem: "keyloom stopped answering" });
     // The request may have stopped the engine before it failed, so Docker is read again (PR #303 CodeRabbit).
     expect(lost.failed()).toBe(1);
+  });
+});
+
+describe("restartLogStep (R7-04)", () => {
+  test("polls while a request is out, and reads once more when it ends, even one that failed before the first poll (PR #303 CodeRabbit)", () => {
+    expect(restartLogStep(false, true)).toBe("poll");
+    expect(restartLogStep(true, false)).toBe("final");
+    expect(restartLogStep(false, false)).toBe("none");
   });
 });

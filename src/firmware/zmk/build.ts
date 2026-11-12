@@ -3,7 +3,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, NOT_SHARED_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
@@ -85,7 +85,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       // the container can see the checkout at all; Docker mounts an empty directory for a path it isn't
       // allowed to share, and the build then fails with a message that points the wrong way.
       const visible = await run({
-        cmd: ["docker", "run", "--rm", ...mount, "--entrypoint", "sh", image, "-c", `test -f config/default.nix || exit ${NOT_SHARED_EXIT}; rm -f glove80.uf2`],
+        cmd: ["docker", "run", "--rm", ...mount, "--entrypoint", "sh", image, "-c", `test -f config/default.nix || exit ${NOT_SHARED_EXIT}; rm -f glove80.uf2 || exit ${PROBE_CLEANUP_EXIT}`],
         log: input.log,
         timeoutMs: 5 * 60_000,
       });

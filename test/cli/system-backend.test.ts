@@ -73,6 +73,21 @@ describe("appSystemBackend", () => {
     expect(await backend.restartLog?.()).toEqual({ running: false, lines: ["keyloom: stopping Colima so it starts from scratch"], waitingFor: [] });
   });
 
+  test("a refused restart has no lines of its own, so a page never shows an earlier restart's log as its own (PR #303 CodeRabbit)", async () => {
+    let blocked: string | null = null;
+    const restart: typeof restartDocker = async (opts = {}) => {
+      if (opts.blocker?.() != null) return { ok: false, engine: null, code: "build_running" as const, reason: "busy" };
+      opts.onProgress?.("keyloom: stopping Colima so it starts from scratch");
+      return { ok: false, engine: "Colima", reason: "Colima didn't start" };
+    };
+    const backend = appSystemBackend({}, { restart, restartBlocker: () => blocked });
+    await backend.restartDocker({ force: true });
+    expect((await backend.restartLog?.())?.lines).toEqual(["keyloom: stopping Colima so it starts from scratch"]);
+    blocked = "keyloom is running a build";
+    await backend.restartDocker({ force: true });
+    expect((await backend.restartLog?.())?.lines).toEqual([]);
+  });
+
   test("a server that can't name the work waits for nothing, so the page shows the refusal with its button (R7-04)", async () => {
     expect(await appSystemBackend().restartLog?.()).toEqual({ running: false, lines: [], waitingFor: [] });
   });

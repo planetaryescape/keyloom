@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, NOT_SHARED_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -77,7 +77,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       // Docker Desktop mounts an empty directory for a path it isn't allowed to share, and make then says only
       // "No rule to make target", which sends people hunting in the wrong place.
       const visible = await run({
-        cmd: [...base, rev.build.image, "sh", "-c", `test -f Makefile || exit ${NOT_SHARED_EXIT}; rm -rf .build/obj_${id}`],
+        cmd: [...base, rev.build.image, "sh", "-c", `test -f Makefile || exit ${NOT_SHARED_EXIT}; rm -rf .build/obj_${id} || exit ${PROBE_CLEANUP_EXIT}`],
         log: input.log,
         timeoutMs: 5 * 60_000,
       });

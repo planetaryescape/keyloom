@@ -107,8 +107,8 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [restartLog, setRestartLog] = useState<readonly string[]>([]);
   // Ends the wait a restart is in, if any (R7-04).
   const restartWait = useRef<AbortController | null>(null);
-  // Whether the log poll saw this restart running, so its last lines are read once it ends.
-  const restartSeen = useRef(false);
+  // Whether a restart request was out, so its last lines are read once it ends.
+  const restartWasRunning = useRef(false);
   // Counts build requests, so a restart that ends after a newer one doesn't start its own build over it.
   const buildRequests = useRef(0);
   const docker = useDocker(token);
@@ -205,7 +205,6 @@ export function useRelease(token: string, layoutRef: string): Release {
     const wait = new AbortController();
     restartWait.current = wait;
     setRestartLog([]);
-    restartSeen.current = false;
     void restartThenBuild({
       restart: () => restartDockerApp(token, undefined, true),
       waitingFor: (signal) => fetchRestartLog(token, signal).then((log) => log.waitingFor, () => null),
@@ -223,23 +222,22 @@ export function useRelease(token: string, layoutRef: string): Release {
     setEngineRestart(RESTART_IDLE);
     return () => restartWait.current?.abort();
   }, [buildId]);
-  // While the restart runs, its progress shows in the build log tail (R7-04). A server without the route gives no lines. Once a restart
-  // the poll saw running ends, its log is read once more, so lines written after the last poll still show (PR #303 CodeRabbit). A refused
-  // request never ran, so it reads nothing: the server keeps an earlier restart's lines, which aren't this one's.
+  // While the restart runs, its progress shows in the build log tail (R7-04). A server without the route gives no lines. Once a request
+  // ends, its log is read once more, so lines written after the last poll, or by a restart that failed within a second, still show (PR
+  // #303 CodeRabbit). The server keeps only the latest request's lines, so a refused request reads none.
   useEffect(() => {
     const publish = (lines: readonly string[]) => setRestartLog((now) => (now.length === lines.length && now.at(-1) === lines.at(-1) ? now : lines));
-    if (!engineRestart.running) {
-      if (!restartSeen.current) return;
-      restartSeen.current = false;
+    const step = restartLogStep(restartWasRunning.current, engineRestart.running);
+    restartWasRunning.current = engineRestart.running;
+    if (step === "none") return;
+    if (step === "final") {
       const controller = new AbortController();
       fetchRestartLog(token, controller.signal).then((log) => publish(log.lines), () => {});
       return () => controller.abort();
     }
     const noop = () => {};
     return poll((signal) => fetchRestartLog(token, signal), (log) => {
-      if (!log.running) return;
-      restartSeen.current = true;
-      publish(log.lines);
+      if (log.running) publish(log.lines);
     }, (log) => !log.running, noop, noop, RESTART_LOG_MS);
   }, [token, engineRestart.running]);
 
@@ -406,6 +404,15 @@ export async function restartThenBuild(deps: {
       if (ended()) return deps.show(RESTART_IDLE);
     }
   }
+}
+
+/**
+ * How the restart's log is read: `poll` while a request is out, `final` once when one ends, however fast it failed, and `none` before
+ * any request. The server keeps only the latest request's lines, so a final read after a refusal finds none.
+ */
+export function restartLogStep(wasRunning: boolean, running: boolean): "poll" | "final" | "none" {
+  if (running) return "poll";
+  return wasRunning ? "final" : "none";
 }
 
 /** Resolves after `ms`, or at once when `signal` aborts. */

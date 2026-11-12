@@ -30,7 +30,7 @@ export function appSystemBackend(
   let starting: Promise<DockerStartResponse> | null = null;
   let restarting: Promise<DockerStartResponse> | null = null;
   let forcing: Promise<DockerStartResponse> | null = null;
-  // The forced restart's progress, for the page's build log tail (R7-04): this restart's lines, kept after it ends until the next one.
+  // The forced restart's progress, for the page's build log tail (R7-04): the latest request's lines, kept after it ends until the next one.
   let forcedLines: string[] = [];
   // A start or restart holding the engine refuses a forced restart as engine_busy, so it is waited for like the work the blocker names.
   const waitingFor = (): string[] => {
@@ -57,11 +57,10 @@ export function appSystemBackend(
       if (forcing !== null) return forcing;
       const blocker = docker.restartBlocker;
       if (blocker === undefined) return { ok: false, reason: FORCED_RESTART_UNGUARDED, engine: null, code: "build_running" };
-      let started = false;
+      // Each request's lines are its own: a refused one has none, and a page keeps the lines of a restart it already showed.
+      forcedLines = [];
       const onProgress = (line: string) => {
-        // A refused restart prints nothing, so the last restart's lines stay until this one says something.
-        forcedLines = [...(started ? forcedLines : []), line].slice(-RESTART_LOG_LINES);
-        started = true;
+        forcedLines = [...forcedLines, line].slice(-RESTART_LOG_LINES);
       };
       forcing = (docker.restart ?? restartDocker)({ force: true, blocker, onProgress }).then(restartResponse).finally(() => { forcing = null; });
       return forcing;

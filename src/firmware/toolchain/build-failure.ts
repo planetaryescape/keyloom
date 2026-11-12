@@ -30,11 +30,17 @@ export const isBuildErrorCode = (code: string | null): code is BuildErrorCode =>
  * so only this one is `folder_not_shared` (PR #303 CodeRabbit).
  */
 export const NOT_SHARED_EXIT = 86;
+/** The exit a probe uses when it found its sentinel but couldn't clear the last build's output after it. */
+export const PROBE_CLEANUP_EXIT = 87;
 
-/** A probe that didn't pass: the folder isn't shared only when its sentinel test said so; anything else may pass on a second try. */
+/**
+ * A probe that didn't pass: the folder isn't shared only when its sentinel test said so. A cleanup that failed, or Docker's own failure,
+ * says what it was, with its words in the build log, and may pass on a second try.
+ */
 export function probeFailure(exitCode: number | null, checkoutDir: string, notShared: string): BuildFailure {
   if (exitCode === NOT_SHARED_EXIT) return new BuildFailure(notShared, "folder_not_shared");
-  return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again once Docker runs containers.`);
+  if (exitCode === PROBE_CLEANUP_EXIT) return new BuildFailure(`keyloom couldn't clear the last build's output in ${checkoutDir}. The error is in the build log; build again.`);
+  return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again.`);
 }
 
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
