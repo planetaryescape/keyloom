@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.76.0](https://github.com/planetaryescape/keyloom/compare/v0.75.1...v0.76.0) (2026-11-12)
+
+
+### Features
+
+* a build that fails the same way every time offers the last version that built and a question to keyloom ([192a772](https://github.com/planetaryescape/keyloom/commit/192a77251ee41db61af3ef4bd07afc2bd01dedc2))
+* restart keyloom from the typing lab and the menu bar ([eadee6a](https://github.com/planetaryescape/keyloom/commit/eadee6ad755bf5ac48e98b140f7ccdbc956dd9c2))
+* restart the Docker engine and build again for a stale mount or a stuck build container ([70260e8](https://github.com/planetaryescape/keyloom/commit/70260e82bd9f494ce2d08b7cc6750e489dc78f7d))
+
+
+### Bug Fixes
+
+* an applied proposal whose layout can't be shown says applied, and a failed proposals read says so on the board ([6b4a4b5](https://github.com/planetaryescape/keyloom/commit/6b4a4b553df5e41f917acf641f182d02b97760dd))
+* answer PR 298 review: no switch back to a used-up provider, a checking state for repair requests, not_open, and replay words without paths ([a2459c6](https://github.com/planetaryescape/keyloom/commit/a2459c61b43bd9c206ca1fe6d9770f944f7f2cb0))
+* answer review: Docker code on a QMK replay, one cancel at a time, and a fresh review that dismisses the stale request ([b5cc59a](https://github.com/planetaryescape/keyloom/commit/b5cc59a5e2487b6250ae0b0f6a8c4714f00c6c64))
+* cap the board name in a build question too ([55ad1ff](https://github.com/planetaryescape/keyloom/commit/55ad1ff12133941a519894433f3b5325c6d5ad73))
+* check for running work inside the engine lock before a forced Docker restart ([2cefe90](https://github.com/planetaryescape/keyloom/commit/2cefe90e986ad199e86459204a690ffbf6e9f61e))
+* close the gaps CodeRabbit found in the forced restart, first flash and key card ([775dcce](https://github.com/planetaryescape/keyloom/commit/775dcce176168dd21aa593bb9569d4b7f71f9f56))
+* dead ends in adding a keyboard, the editor and the mismatch page (round 5) ([76433d7](https://github.com/planetaryescape/keyloom/commit/76433d733cf01be0f84c3a3bd185ae6274197898))
+* dead ends in builds, board review and proposals (round 5) ([c0eac9b](https://github.com/planetaryescape/keyloom/commit/c0eac9b5d8964871902532574ab1a9f0abe14d13))
+* desktop drag and drop, Restart keyloom, and chat ways out for a used-up plan and unconfirmed messages ([8f1aa37](https://github.com/planetaryescape/keyloom/commit/8f1aa37f4728e1146ac4f3e9a48039e3fe7e50b9))
+* give a used-up Codex plan its own words, its reset time and another model ([551138c](https://github.com/planetaryescape/keyloom/commit/551138c90ea010c7973b31ddbef47864085a0f02))
+* give every failed review request its button, and let activity tests be stopped ([76d2b38](https://github.com/planetaryescape/keyloom/commit/76d2b3894a409081e7d1b0cdbb3a06e3eecd6b68))
+* give every keyboard and import refusal a button that resolves it ([c72b257](https://github.com/planetaryescape/keyloom/commit/c72b257bcba629ffa28dc4d03a5303542982d98a))
+* give every keyboard and import refusal a button that resolves it ([d0ad3ed](https://github.com/planetaryescape/keyloom/commit/d0ad3ed59c9c85ad86c62d614db67777c7d5b524))
+* give review, chat and lab dead ends a way on ([9b2baa1](https://github.com/planetaryescape/keyloom/commit/9b2baa1a40751e2d18fa2c5d90aa25c39e936925))
+* give review, chat and lab dead ends a way on (round 6) ([e0072a1](https://github.com/planetaryescape/keyloom/commit/e0072a158a5d5e468bb189fa9082de031ad71788))
+* hold the questions back for a keyboard keyloom can't add, and stack the combo refusal ([d8328af](https://github.com/planetaryescape/keyloom/commit/d8328af12d647f62ea13d5727bba5f915b4b0e7d))
+* keep a refused retry's code and offer Open history for an unconfirmed message ([9a7716c](https://github.com/planetaryescape/keyloom/commit/9a7716cb78e03aa3cd5e89fbffdfcd44e0272b88))
+* keep a restart's exit code when cleanup fails, and say what to do when keyloom doesn't come back ([d212130](https://github.com/planetaryescape/keyloom/commit/d21213019543c110f2d6edea0f4191c9e47ebaf1))
+* keep Delete layer open while a combo waits, and say why Make a combo is off ([2555788](https://github.com/planetaryescape/keyloom/commit/25557886a9c10ecfeb9ddedcc86b90b9c324163f))
+* keep Go back after a request that never landed, and tie its refusal and its line to one build ([895c5c9](https://github.com/planetaryescape/keyloom/commit/895c5c904827c01cd364bb95a66ec42ed472e6e8))
+* keep the newest build-log line in a build question, and say what to do when a build question goes out of date ([0a6812b](https://github.com/planetaryescape/keyloom/commit/0a6812b0d8ddd4252754dd94b47267f6b812fdd6))
+* let a dropped file and a dragged layer tab reach the desktop page ([1735f54](https://github.com/planetaryescape/keyloom/commit/1735f549389687d6a79e5fb4bee1724bd941a48b))
+* never add a guessed QMK layout from the web, and keep refusal details beside kanata's setup ([b437042](https://github.com/planetaryescape/keyloom/commit/b4370421e14f98df94c80dc701138bfc521bba11))
+* offer Build and flash for a board keyloom sees only once its firmware is on it ([7223725](https://github.com/planetaryescape/keyloom/commit/7223725a5313a166810204846eb484863a2c9594))
+* refuse a QMK info.json that isn't an object, and drop a stale Restore retry ([56d8cd8](https://github.com/planetaryescape/keyloom/commit/56d8cd850574b3321ec81fe7735a2957945f5001))
+* restore the board an import was refused for, and keep cached layouts from blocking a keyboard ([78db913](https://github.com/planetaryescape/keyloom/commit/78db9139e845d1a0bad5f0d68be167304f6bfd1b))
+* round-6 dead ends in the editor, builds, Docker and sync ([92b38ba](https://github.com/planetaryescape/keyloom/commit/92b38ba0734b410864b6d54b337e3aafa284e52e))
+* say a direct edit is applied when only the read after it fails ([bb223de](https://github.com/planetaryescape/keyloom/commit/bb223de7ce7f20b7fbd2100c93f04b8ebca89dd4))
+* say a forced restart waits for a keyboard write, log the wait, and record what the restart guard can't see ([bb34301](https://github.com/planetaryescape/keyloom/commit/bb343012fbfcc363c1c7da0cfc7a806d68c4795e))
+* say a review server fault in plain words, and let the fake editor fail a build the same way every time ([d1f0075](https://github.com/planetaryescape/keyloom/commit/d1f0075e50ec911f668520c830bdb7b99499d408))
+* say Restarting Colima while the forced restart runs, and add a stale-mount switch to the dev editor ([3cd6ac1](https://github.com/planetaryescape/keyloom/commit/3cd6ac126c25da6ba085fb8163efeeeab0dfb477))
+* say when Copy is refused and leave the command selected ([892cace](https://github.com/planetaryescape/keyloom/commit/892caced220698753072dfe9b2d19044eb9d152e))
+* say why keyloom can't add a keyboard, and ask which layout is yours ([f5ec4af](https://github.com/planetaryescape/keyloom/commit/f5ec4af9e4c386c9e5c23dc235870494773b5a32))
+* show kanata's failed read with Check again, and say in a line why key moves are off ([0d108e8](https://github.com/planetaryescape/keyloom/commit/0d108e8149e889614487d297b8b11216a8eea835))
+* start a lab replay reason with a capital letter ([674cd7a](https://github.com/planetaryescape/keyloom/commit/674cd7a4d190e66717708eb1c0aa457e9a29172d))
+* treat a typed server refusal as refused, and word a workspace spend cap apart from a used-up plan ([be9be0a](https://github.com/planetaryescape/keyloom/commit/be9be0a3bf44912500c7a5c908bc22cab74787aa))
+* use board-wide evidence for the first-flash line, and make sync and restart words match their buttons ([d336d28](https://github.com/planetaryescape/keyloom/commit/d336d280a71952b30dc71b251bde16b8da6f51cf))
+
 ## [0.75.1](https://github.com/planetaryescape/keyloom/compare/v0.75.0...v0.75.1) (2026-11-11)
 
 
