@@ -115,14 +115,14 @@ describe("R7-13: the MacBook's onboarding words", () => {
   });
 
   test("the setup card's lead and footer are true for kanata", () => {
-    expect(setupFoot("kanata", false)).toBe("Nothing changes on your MacBook until you apply a change. Then keyloom loads it into kanata.");
+    expect(setupFoot("kanata", false)).toBe("Nothing changes on your MacBook from here. Your changes reach it through kanata, which keyloom helps you set up.");
     expect(setupWrites("kanata")).not.toContain("written to the keyboard");
     expect(setupFoot("qmk", true)).toBe("keyloom only reads the keyboard. Nothing is written to it.");
     // Chosen from the list, keyloom never read it over USB.
     expect(setupFoot("zmk", false)).not.toContain("reads");
     const setup = flow({ step: { kind: "setup", keyboard: null, boardId: macbook.id, boardName: "MacBook" } });
     const html = renderToStaticMarkup(<SetupCard flow={setup} boards={[macbook]} hasConfigs={false} onImport={() => {}} onMade={() => {}} />);
-    expect(html).toContain("Then keyloom loads it into kanata.");
+    expect(html).toContain("Your changes reach it through kanata");
     expect(html).not.toContain("Nothing is written to the keyboard");
     expect(html).not.toContain("only reads the keyboard");
   });

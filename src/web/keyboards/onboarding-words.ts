@@ -18,6 +18,6 @@ export const setupWrites = (firmware: Firmware | undefined): string =>
 
 /** The setup card's footer. `plugged`: the card opened because the keyboard was plugged in, so keyloom read it over USB. */
 export function setupFoot(firmware: Firmware | undefined, plugged: boolean): string {
-  if (firmware === "kanata") return `${setupWrites("kanata")} Then keyloom loads it into kanata.`;
+  if (firmware === "kanata") return "Nothing changes on your MacBook from here. Your changes reach it through kanata, which keyloom helps you set up.";
   return plugged ? "keyloom only reads the keyboard. Nothing is written to it." : "Nothing is written to the keyboard from here.";
 }
