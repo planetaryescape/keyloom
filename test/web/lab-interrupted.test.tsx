@@ -99,7 +99,7 @@ test("a read-out Docker stopped shows the Docker callout, never \"internal error
 
 test("any other replay failure says so in words, keeps the recording, and offers Read it again (R6-02)", () => {
   expect(labFixes("replay_failed", false)).toEqual([{ id: "read_again", label: "Read it again" }]);
-  expect(labProblemText("replay_failed", "the emulator image didn't download")).toBe("keyloom couldn't play your recording back through the board's firmware. the emulator image didn't download. Your recording is saved.");
+  expect(labProblemText("replay_failed", "the emulator image didn't download")).toBe("keyloom couldn't play your recording back through the board's firmware. The emulator image didn't download. Your recording is saved.");
   const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "the emulator image didn't download", problemCode: "replay_failed", readAgain: () => undefined })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
   expect(html).toContain("Read it again");
   // With no session to read again, the button would do nothing, so it isn't offered.

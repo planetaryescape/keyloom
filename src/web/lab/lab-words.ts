@@ -28,7 +28,10 @@ export function labProblemText(code: string | null, message: string): string {
   if (code === "restart_required") return "keyloom's connection to the keyboard is stuck, and only restarting keyloom clears it. Then start listening again.";
   if (code === "recording_running") return "A recording is already running in keyloom. Stop that recording, then start listening again.";
   if (code === "cancel_failed") return `keyloom couldn't stop listening, so it may still be recording your keyboard. ${message}`;
-  if (code === "replay_failed") return `keyloom couldn't play your recording back through the board's firmware. ${message.trim().replace(/([^.!?])$/, "$1.")} Your recording is saved.`;
+  if (code === "replay_failed") {
+    const why = message.trim().replace(/([^.!?])$/, "$1.");
+    return `keyloom couldn't play your recording back through the board's firmware. ${why.charAt(0).toUpperCase()}${why.slice(1)} Your recording is saved.`;
+  }
   return message;
 }
 
