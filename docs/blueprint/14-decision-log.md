@@ -11,6 +11,23 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-12 round 6: review, chat, proposals and lab
+
+### D-528: A typing-lab read-out that fails has a code and a way on, and a recording keyloom can't stop is stopped from the lab. Refines D-314, D-495 and D-519. (Claude, from the round-6 dead-ends review, R6-02, R6-20, R6-24)
+
+- **Docker stopped the read-out** (R6-02). `emulateEvents` gives its Docker check's `BuildFailure` the `docker_unavailable` code, and `EmulateFailedError` carries it. The lab backend answers 503 `docker_unavailable` for it, and 500 `replay_failed` for any other replay failure, in place of 500 "internal error". Neither sends the log path to the page; the server's log keeps it. The lab shows the same Docker callout as Build and flash, through `NeedsDocker` (the activity tests' Docker view, now shared), and **Read it again** for that session once Docker answers. `replay_failed` says keyloom couldn't play the recording back, with the reason, and offers **Read it again**. Both say the recording is saved.
+- **A recording still running** (R6-20). A start refused because a recording runs is now `recording_running`, apart from `busy`, which stays for a keyboard another app holds. A Cancel that fails no longer resets to Start in silence: it says keyloom may still be recording, with the page's own code `cancel_failed`. Both offer **Stop that recording**, which is the cancel route again. Neither offers Try again, since a start is refused until the recording stops.
+- **Start listening with your own text** (R6-24) says "Paste the text you want to type, then start listening." beside the disabled button.
+
+### D-527: A Codex usage limit in the review offers another model, a proposal handled elsewhere says it is no longer open, and the review's words match its buttons. Refines D-518, D-522 and D-524. (Claude, from the round-6 dead-ends review, R6-01, R6-06, R6-12, R6-15, R6-23, R6-24)
+
+- **Usage limit in the review** (R6-01). `runReviewAi` counts `usage_limit` as an account failure, so the review ends `unavailable` with that code and Codex's reset sentence (D-522). The panel says "Your Codex usage limit is reached…" with the reset time in place, not behind Details. It offers **Switch to {provider}** for each other ready provider, which sets the choice chat and the review share and runs the review again. With none ready it offers **Set up another model**, the D-496 setup for the other providers; once one is ready its Switch to appears. **Try again** is for after the reset. A model fixed by `--provider` or `KEYLOOM_PROVIDER` gets only Try again, and the words don't offer a switch. A failed switch says so with Try again.
+- **A proposal no longer open** (R6-06). The card maps the apply route's `usage` and `not_found` by code (`proposalApplyFailure`): "This proposal is no longer open.", Apply off, no Plan a revised proposal, and **Read proposals again**. In chat that reopens the conversation, which brings each card's status up to date; it is not offered while a reply streams. In OpenProposals it is the panel's existing read. A failed read says so and keeps the button.
+- **Stop** (R6-12). Every running look has a Stop. It reads **Stop testing** only while the activity tests are pending or running, and **Stop the review** otherwise. The engine's stop aborts the whole run either way. A failed stop says "keyloom couldn't stop the review."
+- **Copy in the model setup** (R6-15). `chat/ModelSetup.tsx` uses `shell/CopyCommand`, so a refused copy selects the command and says which keys copy it.
+- **Repair requests** (R6-23). `repairWords` makes the words and buttons one decision. A request that can still be sent has **Cancel**, and its words don't say Dismiss. Any other has **Dismiss request**. A sent one says to open the chat history and offers **Open history**. A finding that went out of date says to run a fresh review and offers **Run a fresh review**, which opens the review panel and runs it.
+- **What a disabled Save waits for** (R6-24). The decision editor names its empty fields ("Fill in Goal and Why to save."), the outcome question asks for the note, and the activity tests ask for one activity, each as a visible line that also describes the button.
+
 ## 2026-11-11 round 5: builds, review and proposals
 
 ### D-524: Every failed review request has its button, activity tests can be stopped, and an Apply that landed is never called failed. Refines D-340, D-473 and D-518. (Claude, from the round-5 dead-ends review, R5-03, R5-08, R5-09, R5-10, R5-11, R5-17)

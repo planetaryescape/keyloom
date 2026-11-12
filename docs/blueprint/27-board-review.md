@@ -1,5 +1,7 @@
 # 27: Board review
 
+Status update, 2026-11-12 (D-527): a Codex usage limit ends the review `unavailable` with code `usage_limit` and its reset time, and offers **Switch to** another ready model or **Set up another model**, then **Try again**. Every running look has a Stop: **Stop testing** while its tests run, **Stop the review** otherwise. A finding's repair request that went out of date offers **Run a fresh review**.
+
 Status update, 2026-11-11 (D-524): every failed review request shows its words and a button: **Try again** repeats it, and a refused one offers **Read the review again**. That holds before the first review too. **Stop testing** ends a look with activity tests, through `POST /review/stop`. Their container goes with the run's signal.
 
 Status update, 2026-11-11 (D-518): an account the provider refuses ends the review `unavailable` with its code (`ai.code`), **Set up a model** and **Try again**, and **Add credits** when it ran out. An Apply that changed nothing says why beside it, with **Run a fresh review** for a suggestion that no longer fits.
