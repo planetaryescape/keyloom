@@ -57,9 +57,10 @@ test("a failed Apply of a lab fix says why and how to go on (R3-02)", () => {
   expect(labApplyFailure({ code: "validation_failed", message: "x" }).next).toBe("again");
   expect(labApplyFailure({ message: "Failed to fetch" })).toEqual({ text: "keyloom couldn't apply this fix. Failed to fetch", next: "retry" });
   // The server's sentence names a change-set ID; a fix that is no longer proposed fails the same way every time, so the way on is Type again.
-  const closed = labApplyFailure({ code: "usage", message: "change set cs_1 is applied, not proposed" });
+  const closed = labApplyFailure({ code: "not_open", message: "change set cs_1 is applied, not proposed" });
   expect(closed.next).toBe("again");
   expect(closed.text).not.toContain("cs_1");
+  expect(labApplyFailure({ code: "usage", message: "x" }).next).toBe("again");
 });
 
 test("a past session's fix that is no longer proposed says why instead of offering Apply", () => {
@@ -99,7 +100,7 @@ test("a read-out Docker stopped shows the Docker callout, never \"internal error
 
 test("any other replay failure says so in words, keeps the recording, and offers Read it again (R6-02)", () => {
   expect(labFixes("replay_failed", false)).toEqual([{ id: "read_again", label: "Read it again" }]);
-  expect(labProblemText("replay_failed", "the emulator image didn't download")).toBe("keyloom couldn't play your recording back through the board's firmware. The emulator image didn't download. Your recording is saved.");
+  expect(labProblemText("replay_failed", "The firmware replay stopped with an error. The details are in keyloom's log.")).toBe("keyloom couldn't play your recording back through the board's firmware. The details are in keyloom's log. Your recording is saved.");
   const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "the emulator image didn't download", problemCode: "replay_failed", readAgain: () => undefined })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
   expect(html).toContain("Read it again");
   // With no session to read again, the button would do nothing, so it isn't offered.
@@ -107,12 +108,14 @@ test("any other replay failure says so in words, keeps the recording, and offers
   expect(none).not.toContain("Read it again");
 });
 
-test("a Cancel that failed, or a start refused because a recording runs, offers Stop that recording, never Try again (R6-20)", () => {
-  for (const code of ["cancel_failed", "recording_running"]) expect(labFixes(code, false)).toEqual([{ id: "stop_recording", label: "Stop that recording" }]);
+test("a Cancel that failed, or a start refused because a recording runs, offers to stop and discard that recording, never Try again (R6-20)", () => {
+  for (const code of ["cancel_failed", "recording_running"]) expect(labFixes(code, false)).toEqual([{ id: "stop_recording", label: "Stop and discard that recording" }]);
   // Another app holding the keyboard is not a recording keyloom can stop: it keeps Try again.
   expect(labFixes("busy", false)).toEqual([{ id: "retry", label: "Try again" }]);
-  expect(labProblemText("cancel_failed", "The server didn't answer.")).toBe("keyloom couldn't stop listening, so it may still be recording your keyboard. The server didn't answer.");
+  expect(labProblemText("cancel_failed", "The server didn't answer.")).toBe("keyloom couldn't stop listening, so it may still be recording your keyboard. The server didn't answer. Stopping it discards what it heard.");
+  // The stop is the cancel route, which keeps nothing; the words say so before the press (D-528).
+  expect(labProblemText("recording_running", "A recording is already running. Stop it first.")).toContain("nothing from it is saved");
   const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "A recording is already running. Stop it first.", problemCode: "recording_running" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
-  expect(html).toContain("Stop that recording");
+  expect(html).toContain("Stop and discard that recording");
   expect(html).not.toContain("Try again");
 });

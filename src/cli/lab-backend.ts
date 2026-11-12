@@ -15,12 +15,13 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     // Before UsageError, which it extends: the code puts Sync now beside the problem (R1-19).
     if (err instanceof LabStartError) throw new LabError(400, err.code, err.message);
     if (err instanceof UsageError) throw new LabError(400, "usage", err.message);
-    // A replay that stopped at Docker gets the Docker callout; any other gets its own words, never "internal error" (R6-02). The log
-    // path is for the terminal and the server's log, not the page.
+    // A replay that stopped at Docker gets the Docker callout; any other gets its own code, never "internal error" (R6-02). The
+    // emulator's message can name checkout and lock directories, and its last output lines are the firmware's key log, which is the
+    // recording; the lab API never carries the raw trace (src/api/lab.ts). So the page gets keyloom's words and the server's log the rest.
     if (err instanceof EmulateFailedError) {
-      const words = err.logPath === null ? err.message : err.message.replace(` (log: ${err.logPath})`, "");
-      if (err.logPath !== null) console.error(`keyloom: typing lab replay failed; log: ${err.logPath}`);
-      throw err.code === "docker_unavailable" ? new LabError(503, "docker_unavailable", words) : new LabError(500, "replay_failed", words);
+      console.error(`keyloom: typing lab replay failed: ${err.message}`);
+      if (err.code === "docker_unavailable") throw new LabError(503, "docker_unavailable", "Docker isn't ready, so the recording couldn't be played back.");
+      throw new LabError(500, "replay_failed", "The firmware replay stopped with an error. The details are in keyloom's log.");
     }
     throw err;
   }
@@ -51,7 +52,7 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
     sessions: (ref) => translate(() => labSessions(app, ref).map(sessionView)),
     start: (ref, request) => {
       const operation = translate(async () => {
-        // Its own code, apart from a keyboard another app holds (`busy`): the lab offers Stop that recording for this one (R6-20).
+        // Its own code, apart from a keyboard another app holds (`busy`): the lab offers Stop and discard that recording for this one (R6-20).
         if (cancellation !== undefined || recording !== null || starting.size > 0) throw new LabError(409, "recording_running", "A recording is already running. Stop it first.");
         const why = cannotRecord(getLayout(app, ref).board.definition);
         if (why !== null) throw new UsageError(why);

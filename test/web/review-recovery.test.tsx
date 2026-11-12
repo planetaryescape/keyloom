@@ -91,11 +91,13 @@ test("a failed Stop is said beside the running look, not as an unreadable review
   expect(html).not.toContain("review unavailable");
 });
 
-test("a used-up Codex plan shows its reset time and offers another model with Try again, not just Try again (R6-01)", () => {
+test("a used-up Codex plan shows its reset time in place, and offers no switch or setup before the provider status is read (R6-01)", () => {
   const html = panel({ status: "unavailable", reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" });
   expect(html).toContain("until 3:45 PM.");
-  // The provider status isn't read yet when the page first draws, so no ready provider is known: the setup for another is offered.
-  expect(html).toContain("Set up another model");
+  // The provider status isn't read yet when the page first draws, so a lock may still forbid another model: only Try again until it is.
+  expect(html).not.toContain("Set up another model");
+  expect(html).not.toContain("Switch to");
+  expect(html).toContain("Try again once the limit lifts.");
   expect(html).toContain("Try again");
   expect(html).not.toContain("keyloom&#x27;s own look didn&#x27;t finish");
   // The reason shows in place, so there is no Details to open.

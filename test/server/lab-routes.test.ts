@@ -246,16 +246,23 @@ describe("a read-out that can't replay (R6-02)", () => {
     try {
       const response = await failingReplay(new EmulateFailedError("Docker is not on this computer. (log: /tmp/x.log)", "/tmp/x.log", "docker_unavailable"));
       expect(response.status).toBe(503);
-      expect(await response.json()).toEqual({ error: { code: "docker_unavailable", message: "Docker is not on this computer." } });
+      expect(await response.json()).toEqual({ error: { code: "docker_unavailable", message: "Docker isn't ready, so the recording couldn't be played back." } });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("/tmp/x.log"));
     } finally { log.mockRestore(); }
   });
 
-  test("any other replay failure is replay_failed, never internal error", async () => {
+  test("any other replay failure is replay_failed in keyloom's words: no directory and no key-log line reach the page", async () => {
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
-      const response = await failingReplay(new EmulateFailedError("the emulator image didn't download (log: /tmp/y.log)", "/tmp/y.log"));
+      // The ZMK emulator's message ends with the firmware's last output lines, which after the run marker are the recording's keycodes.
+      const raw = "the emulator stopped in /Users/x/.keyloom/checkouts/zmk: keycode 0x04 pressed\nkeycode 0x04 released (log: /tmp/y.log)";
+      const response = await failingReplay(new EmulateFailedError(raw, "/tmp/y.log"));
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: { code: "replay_failed", message: "the emulator image didn't download" } });
+      const body = await response.json() as { error: { code: string; message: string } };
+      expect(body).toEqual({ error: { code: "replay_failed", message: "The firmware replay stopped with an error. The details are in keyloom's log." } });
+      expect(JSON.stringify(body)).not.toMatch(/keycode|\/Users|\/tmp/);
+      // The server's log keeps the whole message, for whoever looks into it.
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("keycode 0x04 pressed"));
     } finally { log.mockRestore(); }
   });
 });

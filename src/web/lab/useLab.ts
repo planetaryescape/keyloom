@@ -111,8 +111,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     }
   }, [phase, token, typed, showSession]);
 
-  // Also Stop that recording, after a Cancel that failed or a start refused because one is running. A failed stop says so with that
-  // button, instead of a start screen that would only be refused (R6-20).
+  // Also Stop and discard that recording, after a Cancel that failed or a start refused because one is running. A failed stop says so
+  // with that button, instead of a start screen that would only be refused (R6-20).
   const cancel = useCallback(async () => {
     // Held Escape repeats; a second cancel landing after a new start would hide that recording.
     if (cancelling.current) return;

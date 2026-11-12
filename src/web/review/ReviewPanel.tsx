@@ -20,7 +20,7 @@ import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { CREDITS_PAGES, PROVIDER_NAMES } from "../chat/setup-words.ts";
 import { chooseProvider } from "../chat/api-chat.ts";
-import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments, sentence } from "./review-words.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, failedProvider, fixesFor, grouped, markerWords, placeOf, placeWords, segments, sentence, switchTargets } from "./review-words.ts";
 import { type Review, asFailure } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -193,12 +193,17 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
     }).finally(() => setApplying(null));
   };
   const review = r.review;
-  const missing = review === null ? null : aiMissingWords(review.ai, provider.status?.lockedBy == null);
   // After a usage limit (R6-01): the ready providers the review can move to, and the setup for the rest. The review's agent reads the
-  // same choice as chat, so switching here is what the next look runs on.
+  // same choice as chat, so switching here is what the next look runs on. Never the provider the look failed on: a switch in chat may
+  // have moved keyloom off it since, and then Try again already runs on the new one. Nothing is offered until the status is read, since
+  // a lock would forbid it.
   const activeId = provider.status?.active?.provider;
-  const switchTo = provider.status === null || provider.status.lockedBy !== null ? [] : provider.status.providers.filter((p) => p.ready && p.id !== activeId).map((p) => p.id);
-  const others = (provider.status?.providers ?? []).map((p) => p.id).filter((id) => id !== activeId);
+  const failedOn = review === null ? null : failedProvider(review.ai);
+  const canSwitch = provider.status !== null && provider.status.lockedBy === null;
+  const nowOn = failedOn !== null && activeId !== undefined && activeId !== failedOn ? PROVIDER_NAMES[activeId] : null;
+  const missing = review === null ? null : aiMissingWords(review.ai, canSwitch, nowOn);
+  const switchTo = switchTargets(provider.status, failedOn);
+  const others = (provider.status?.providers ?? []).map((p) => p.id).filter((id) => id !== activeId && id !== failedOn);
   const [settingUpOther, setSettingUpOther] = useState(false);
   const [switching, setSwitching] = useState<ProviderId | null>(null);
   const [switchFailed, setSwitchFailed] = useState<{ id: ProviderId; words: string } | null>(null);
@@ -433,7 +438,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                 </button>
               )) : null}
               {missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
-                <button type="button" className="sheet-action" aria-expanded={settingUpOther} onClick={() => { if (provider.status === null) provider.reload(); setSettingUpOther((v) => !v); }}>Set up another model</button>
+                <button type="button" className="sheet-action" aria-expanded={settingUpOther} onClick={() => setSettingUpOther((v) => !v)}>Set up another model</button>
               ) : null}
               {missing.actions.includes("set_up") ? (
                 <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
@@ -453,8 +458,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                 <button type="button" className="sheet-action" disabled={switching !== null} onClick={() => switchProvider(switchFailed.id)}>Try again</button>
               </div>
             )}
-            {settingUpOther && switchTo.length === 0 ? (
-              // Another provider, set up here; once it is ready, Switch to it appears above.
+            {settingUpOther && missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
+              // Another provider, set up here; once it is ready, Switch to it appears above. Shown only while the words offer it, so a lock
+              // that loads after the press closes it.
               <ModelSetup token={token} status={provider.status} only={others} onReload={() => void provider.reload()} onChanged={(next) => {
                 provider.replace(next);
                 // A provider set up here can become the chosen one by itself (no choice saved yet); then the review runs on it at once.

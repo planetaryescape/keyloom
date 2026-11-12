@@ -88,6 +88,8 @@ interface Props {
   continueCopy?: boolean | undefined;
   repairDraft?: FindingRepairDraft | null;
   repairCurrent?: boolean;
+  /** The review is busy or being read again, so whether the finding is still current is not known yet: Send waits, nothing is dismissed. */
+  repairChecking?: boolean;
   /** Runs a fresh board review and shows it, for a finding's repair request that went out of date (R6-23). */
   onFreshReview?: () => void;
   onRepairDraftChange?: (id: string, request: string) => void;
@@ -123,7 +125,7 @@ const NO_NAMES: ReadonlyMap<string, string> = new Map();
 // Within this distance of the end, new text keeps the log pinned to the bottom; scrolled further up, it stays put.
 const STICK_PX = 48;
 
-export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onPlanRecovery, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames, onFreshReview }: Props) {
+export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collapsed = false, onPresentation, sheet = false, token, layoutRef, configName, onActivity, layout, board, revisionId, onHighlightDecision, selection, onRemoveKey, onOpenKey, onClearSelection, onRestoreSelection, pinnedId, onPreview, onPin, onApplied, onOpenRelease, commands, drafts = [], initialConversation, continueCopy, repairDraft = null, repairCurrent = false, repairChecking = false, onRepairDraftChange, onRepairSentStateChange, onRepairSent, onPlanRecovery, onContinueCopy, carried: carriedIn = null, onClearCarried, onTurns, onReplyCompleted, onOpenConfig, onReviewProposals, onShowLayer, onFoundKey, configNames, onFreshReview }: Props) {
   const beginView = useRef<() => OpenRequestedView>(() => async () => ({ version: 1, status: "unavailable", reason: "unsupported" }));
   const chat = useChat(token, layoutRef, onContinueCopy, initialConversation, beginViewRequest === undefined ? undefined : () => beginView.current());
   const arrived = useRef(false);
@@ -136,7 +138,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   }, [initialConversation, continueCopy, chat.open, chat.send]);
   const repairSending = useRef(false);
   const repairSent = repairDraft?.sent === true;
-  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent });
+  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent, checking: repairChecking });
   const repairRunId = useRef<string | null>(null);
   const repairSubmitLock = useRef<string | null>(null);
   const provider = useProviderStatus(token);

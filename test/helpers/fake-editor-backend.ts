@@ -156,7 +156,7 @@ export class FakeEditor implements EditorBackend {
   async applyChangeSet(changeSetId: string): Promise<ApplyResponse> {
     const proposal = this.proposals.get(changeSetId);
     if (proposal === undefined) throw new EditorError(404, "not_found", `No change set "${changeSetId}".`);
-    if (proposal.status !== "proposed") throw new EditorError(400, "usage", `Change set ${proposal.id} is ${proposal.status}, not proposed.`);
+    if (proposal.status !== "proposed") throw new EditorError(400, "not_open", `Change set ${proposal.id} is ${proposal.status}, not proposed.`);
     if (proposal.baseRevisionId !== this.head.id) {
       throw new EditorError(409, "stale_base", "The layout changed since this was proposed. Ask for it again.");
     }
