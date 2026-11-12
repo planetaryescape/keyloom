@@ -33,6 +33,12 @@ export function deriveProblem(code: string | null | undefined, name: string): De
         text: `keyloom can't read the ${name}'s layout file from its firmware, so it can't draw it. Until keyloom learns to read it, keyloom can't add this keyboard.`,
         blocked: true,
       };
+    case "board_check_failed":
+      // The check reads the same pinned files, so Add with the same answers fails it again (R7-11).
+      return {
+        text: `keyloom drew the ${name}, but the board it made fails the checks every keyboard in keyloom must pass, so keyloom can't add it yet.`,
+        blocked: true,
+      };
     case "firmware_unreachable":
       return { text: `keyloom couldn't get the ${name}'s layout from GitHub. Check that this computer is online, then try again.`, blocked: false };
     case "home_row_out_of_range":

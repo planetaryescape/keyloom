@@ -17,6 +17,7 @@ import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { isOnePiece } from "../../boards/one-piece.ts";
 import { applyDisplayRotation } from "../keyboard/geometry.ts";
 import { catalogueNote, type BoardsRead } from "./catalogue-words.ts";
+import { welcomeLead } from "./onboarding-words.ts";
 import "./collection.css";
 
 export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryBoards, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
@@ -28,7 +29,8 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
 }) {
   const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards);
   const [query, setQuery] = useState("");
-  const [importing, setImporting] = useState(false);
+  // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
+  const [importing, setImporting] = useState<{ board: string | null } | null>(null);
   const [half, setHalf] = useState<"left" | "right">("left");
   const [firmwareSearch, setFirmwareSearch] = useState(false);
   const [collection, setCollection] = useState<CollectionKeyboard[] | null>(null);
@@ -51,8 +53,10 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     return () => window.clearTimeout(timer);
   }, [query, firmwareSearch, search, collection]);
   // The import screen's way back names this screen, and its title is a first layout's on a first run (R6-25).
-  if (importing) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onStartedBlank={onMade} onBack={() => setImporting(false)} backLabel="Back to choosing a keyboard" first={sources.length === 0} />;
+  if (importing !== null) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onStartedBlank={onMade} onBack={() => setImporting(null)} backLabel="Back to choosing a keyboard" first={sources.length === 0} only={importing.board} />;
   const targetId = flow.step.kind === "put" ? flow.step.boardId : null;
+  const chosenId = flow.step.kind === "put" || flow.step.kind === "setup" ? flow.step.boardId : null;
+  const chosen = choices.find((board) => board.id === chosenId)?.firmware ?? null;
   const known = choices.find((board) => board.id === targetId);
   const drawn = flow.preview?.board ?? (known?.keys && known.hands && known.fingers && known.rows ? {
     keys: applyDisplayRotation(known.keys, known.display), hands: known.hands, fingers: known.fingers,
@@ -68,12 +72,12 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
   const rows = choices.filter((board) => `${board.name} ${board.vendor} ${board.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const note = catalogueNote(boardsRead, collection !== null ? "ready" : collectionProblem ? "failed" : "loading", rows.length, firmwareSearch);
   return <div className="keyboard-welcome">
-    <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>Connect a keyboard or choose it below. Setup never flashes it.</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
+    <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen)}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
       <section className="onboarding-stage" aria-label="Keyboard setup">
         {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={phone && split ? half : null} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
         <NewKeyboardCard flow={flow} />
-        <SetupCard flow={flow} boards={choices} hasConfigs={sources.length > 0} onImport={() => setImporting(true)} onMade={onMade} />
+        <SetupCard flow={flow} boards={choices} hasConfigs={sources.length > 0} onImport={(board) => setImporting({ board })} onMade={onMade} />
         {flow.step.kind === "idle" ? <div className="onboarding-choices">
           <label className="keyboard-picker-search"><Search size={16} /><input type="search" aria-label="Find a keyboard to add" placeholder="Keyboard or maker" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
           <div className="onboarding-catalogue">
@@ -91,10 +95,10 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
           {firmwareSearch && collection !== null ? <FirmwareResults query={query} flow={flow} /> : null}
           {flow.problem ? <p role="alert" className="nb-problem">{flow.problem}</p> : null}
           {firmwareSearch && flow.searchProblem !== null ? <SearchFailed flow={flow} /> : null}
-          <p className="nb-note">Already have a keymap? <button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import a layout</button></p>
+          <p className="nb-note">Already have a keymap? <button type="button" className="sheet-action" onClick={() => setImporting({ board: null })}>Import a layout</button></p>
         </div> : null}
       </section>
-      {panel ? <aside className="onboarding-panel"><NewBoardPanel flow={flow} sources={sources} onMade={(id) => onMade(id, flow.step.kind === "put" && flow.step.source !== null)} /><button type="button" className="sheet-action" onClick={() => setImporting(true)}>Import an existing keymap instead</button></aside> : null}
+      {panel ? <aside className="onboarding-panel"><NewBoardPanel flow={flow} sources={sources} onMade={(id) => onMade(id, flow.step.kind === "put" && flow.step.source !== null)} onImport={(board) => setImporting({ board })} /><button type="button" className="sheet-action" onClick={() => setImporting({ board: targetId })}>Import an existing keymap instead</button></aside> : null}
     </div>
     {/* Words for someone who isn't a developer (R1-30): the app prepares the folder; the guide is for whoever takes it further. */}
     <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>

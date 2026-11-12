@@ -10,8 +10,8 @@ export type ExportGuide = {
 };
 
 // Which file each importer reads and where it comes from. The importers' ids are the boards' own (boards/*/board.json),
-// so a new board with a known importer needs no change here.
-const GUIDES: Record<string, ExportGuide> = {
+// so a new board with a known importer needs no change here. Steps that name a board's own file are a function of the board.
+const GUIDES: Record<string, Omit<ExportGuide, "steps"> & { steps: string | ((board: BoardChoice) => string) }> = {
   "oryx-source": {
     tool: "Oryx",
     steps: "Open your layout in Oryx, choose Download source, and drop the .zip it gives you.",
@@ -28,7 +28,8 @@ const GUIDES: Record<string, ExportGuide> = {
   },
   "zmk-keymap": {
     tool: "your ZMK config",
-    steps: "Drop the .keymap file from your zmk-config repository, such as config/corne.keymap.",
+    // The board's own file when the board list sends it (R7-13): the Keebart Corne's is not corne.keymap.
+    steps: (board) => board.keymapFile === undefined ? "Drop the .keymap file from the config folder of your zmk-config repository." : `Drop ${board.keymapFile} from your zmk-config repository.`,
     accepts: ".keymap",
     extensions: [".keymap"],
   },
@@ -53,7 +54,7 @@ const FALLBACK: ExportGuide = { tool: "your editor", steps: "Drop the file the i
 export function guideFor(board: BoardChoice): ExportGuide {
   for (const id of board.importers) {
     const guide = GUIDES[id];
-    if (guide !== undefined) return guide;
+    if (guide !== undefined) return { ...guide, steps: typeof guide.steps === "string" ? guide.steps : guide.steps(board) };
   }
   return FALLBACK;
 }

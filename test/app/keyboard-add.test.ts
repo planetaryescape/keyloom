@@ -162,6 +162,23 @@ describe("a QMK keyboard", () => {
     await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: tree, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
   });
 
+  test("a derived board that fails the boards check is refused with board_check_failed, and nothing is stored", async () => {
+    const { app } = world();
+    // No cache, and a layout file that reads differently the second time: the check's own read disagrees with the derived geometry.
+    const cacheDir = join(tempDir(), "not-a-folder");
+    writeFileSync(cacheDir, "");
+    let infoReads = 0;
+    const drifting = async (url: string): Promise<string> => {
+      const text = await tree(url);
+      if (!url.endsWith("keyboards/crkbd/info.json") || ++infoReads === 1) return text;
+      return text.replace('{"matrix": [0, 1], "x": 1, "y": 0.3}', '{"matrix": [0, 1], "x": 1, "y": 0.9}');
+    };
+    const refused = addKeyboard(app, { candidate: "qmk:crkbd/rev1", homeRow: 2 }, { fetchText: drifting, cacheDir, boards: [] });
+    await expect(refused).rejects.toMatchObject({ name: "KeyboardAddError", code: "board_check_failed" });
+    await expect(refused).rejects.toThrow(/fails `keyloom boards check`: geometry.json differs/);
+    expect(readUserBoards(app.dataDir).boards).toEqual([]);
+  });
+
   test("a network failure is reported as one, not as a bug", async () => {
     const { app } = world();
     const offline = async () => {
