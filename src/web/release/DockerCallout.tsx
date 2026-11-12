@@ -1,6 +1,6 @@
 // What keyloom says about the Docker a build needs, with the button that fixes it (D-486 to D-488). Shared by the
 // release dialog and the board review's activity tests, so both offer the same Install or Start.
-import { AppWindow, CircleAlert, CircleCheck, Download, ExternalLink, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert } from "lucide-react";
+import { AppWindow, CircleAlert, CircleCheck, Download, ExternalLink, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert, Wrench } from "lucide-react";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
@@ -34,6 +34,43 @@ function RestartEngine({ engine, docker }: { engine: string; docker: Docker }) {
 }
 
 /**
+ * A Colima on a Mac whose files belong to another account (D-533): Fix Colima's files runs Colima's command through macOS's password
+ * dialog. The command stays below as the way to do it by hand, and becomes the way on once the button has failed.
+ */
+function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null }; fix: { offered: boolean; note: string | null }; docker: Docker }) {
+  return (
+    <div className="callout callout-warning" role="alert">
+      <TriangleAlert size={18} aria-hidden="true" />
+      <div className="callout-body">
+        <p>Docker is running, but it refuses keyloom, so firmware can't build yet.</p>
+        {fix.offered ? (
+          <p className="callout-note">
+            Colima's files belong to another account, usually because Colima was started with sudo. Fix Colima's files stops that copy, gives
+            the files back to you and starts Colima as you. macOS asks for your password first.
+          </p>
+        ) : null}
+        {fix.note === null ? null : <p className="callout-note">{fix.note}</p>}
+        <div className="callout-actions">
+          {fix.offered ? (
+            <button type="button" className="button button-primary" onClick={docker.fixFiles}>
+              <Wrench size={14} aria-hidden="true" />
+              Fix Colima's files
+            </button>
+          ) : null}
+          <button type="button" className="button" onClick={docker.refresh}>Check again</button>
+        </div>
+        {view.command === null ? null : (
+          <>
+            <p className="callout-note">{fix.offered ? "Or run Colima's command in Terminal yourself, then check again:" : "Run this in Terminal to fix Colima's files yourself, then check again:"}</p>
+            <CopyCommand command={view.command} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * `buildFailed`: a build just stopped at Docker, after it had tried to start the engine itself when it may (D-486). `readyNext` is what
  * the person can do once Docker installed from here is running, said where they are.
  */
@@ -48,6 +85,15 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
           <LoaderCircle size={14} className="spin" aria-hidden="true" />
           <span>{view.verb} {view.engine}. {view.verb === "Opening" ? "Finish its setup if it asks you to." : "A cold start can take half a minute."}</span>
         </p>
+      );
+    case "fixing-files":
+      return (
+        <div className="callout callout-info" role="status">
+          <LoaderCircle size={18} className="spin" aria-hidden="true" />
+          <div className="callout-body">
+            <p>Fixing Colima's files. macOS asks for your password first, then keyloom starts Colima as you, which can take half a minute.</p>
+          </div>
+        </div>
       );
     case "start-failed":
       return (
@@ -195,6 +241,7 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
         </div>
       );
     case "no-access":
+      if (view.fix !== null) return <ColimaNoAccess view={view} fix={view.fix} docker={docker} />;
       return (
         <div className="callout callout-warning" role="alert">
           <TriangleAlert size={18} aria-hidden="true" />

@@ -310,6 +310,6 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   return { ok: false, code: "failed", reason: `macOS couldn't start kanata: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
 }
 
-function lastLine(out: string): string {
+export function lastLine(out: string): string {
   return out.trim().split("\n").filter((l) => l.trim() !== "").at(-1)?.trim() ?? "";
 }

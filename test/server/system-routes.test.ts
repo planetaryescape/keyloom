@@ -17,7 +17,9 @@ const backend: SystemBackend = {
   installState: async (tool) => ({ tool, status: "succeeded", phase: null, logTail: ["==> Pouring zapp"], error: null, errorCode: null }),
   cancelInstall: async (tool) => { cancelled.push(tool); return { tool, status: "running", phase: "stopping", logTail: ["keyloom: stopping the install"], error: null, errorCode: null }; },
   restartDocker: async (opts) => { restarts += 1; forced.push(opts?.force === true); return { ok: true, version: "28.0.1", engine: "OrbStack", waitedMs: 4_000 }; },
+  fixColimaFiles: async () => { fixes += 1; return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so Colima's files didn't change.", engine: "Colima" }; },
 };
+let fixes = 0;
 const forced: boolean[] = [];
 const cancelled: string[] = [];
 let restarts = 0;
@@ -94,6 +96,18 @@ describe("the Docker routes", () => {
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true}", headers: { "content-type": "application/json" } })).status).toBe(200);
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true,\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
     expect(forced).toEqual([false, true]);
+  });
+
+  test("Fix Colima's files is a POST of {} that answers like a start, with its code, behind the same guard (D-533)", async () => {
+    const { call, post } = await serve();
+    const response = await post("/api/system/docker/fix-colima-files");
+    expect(response.status).toBe(200);
+    expect(DockerStartResponseSchema.parse(await response.json())).toEqual({ ok: false, code: "cancelled", reason: "You cancelled the password dialog, so Colima's files didn't change.", engine: "Colima" });
+    expect((await call("/api/system/docker/fix-colima-files", { method: "POST", body: "{}", headers: { "content-type": "application/json" } }, null)).status).toBe(401);
+    expect((await call("/api/system/docker/fix-colima-files", { method: "POST", body: "{\"force\":true}", headers: { "content-type": "application/json" } })).status).toBe(400);
+    expect((await call("/api/system/docker/fix-colima-files", { method: "POST", body: "{}", headers: { "content-type": "text/plain" } })).status).toBe(415);
+    expect((await call("/api/system/docker/fix-colima-files")).status).toBe(405);
+    expect(fixes).toBe(1);
   });
 
   test("the guard: a token on every route, JSON on the write, and the method named when it is wrong", async () => {

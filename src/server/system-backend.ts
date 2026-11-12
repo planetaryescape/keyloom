@@ -22,4 +22,9 @@ export interface SystemBackend {
    * `force` restarts an engine that answers, for a build that failed on its state (R6-09); it is refused while a build or flash runs.
    */
   restartDocker: (opts?: { force?: boolean }) => Promise<DockerStartResponse>;
+  /**
+   * Fix Colima's files (D-533): the administrator password dialog, then root stops the other copy of Colima and gives ~/.colima back,
+   * and Colima starts as this account. Refused while a build or flash runs; repeated calls share one attempt.
+   */
+  fixColimaFiles: () => Promise<DockerStartResponse>;
 }

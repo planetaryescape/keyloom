@@ -49,6 +49,26 @@ describe("appSystemBackend", () => {
     expect(asked).toHaveLength(1);
   });
 
+  test("Fix Colima's files waits for builds and flashes like a forced restart, and two clicks share one password dialog (D-533)", async () => {
+    let fixes = 0;
+    const done = Promise.withResolvers<void>();
+    const fixFiles = async () => { fixes += 1; await done.promise; return { ok: false as const, engine: "Colima", code: "cancelled" as const, reason: "You cancelled the password dialog, so Colima's files didn't change." }; };
+    let blocker: string | null = "A build or flash is running, and restarting Docker now would stop it.";
+    const backend = appSystemBackend({}, { fixFiles, restartBlocker: () => blocker });
+    expect(await backend.fixColimaFiles()).toMatchObject({ ok: false, code: "build_running", reason: blocker });
+    expect(fixes).toBe(0);
+    blocker = null;
+    const first = backend.fixColimaFiles();
+    const second = backend.fixColimaFiles();
+    done.resolve();
+    expect(await first).toEqual({ ok: false, engine: "Colima", code: "cancelled", reason: "You cancelled the password dialog, so Colima's files didn't change." });
+    expect(await second).toEqual(await first);
+    expect(fixes).toBe(1);
+    // A server built without the build check refuses it, so no caller can stop a build by leaving the check out.
+    expect(await appSystemBackend({}, { fixFiles }).fixColimaFiles()).toMatchObject({ ok: false, code: "build_running" });
+    expect(fixes).toBe(1);
+  });
+
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

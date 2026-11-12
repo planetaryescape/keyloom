@@ -11,7 +11,7 @@ const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "karabinerConfig";
+type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "fixColimaFiles" | "karabinerConfig";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/docker", action: "docker" },
   { method: "POST", path: "/api/system/docker/start", action: "startDocker" },
@@ -20,6 +20,7 @@ const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; a
   { method: "GET", path: "/api/system/karabiner-config", action: "karabinerConfig" },
   { method: "DELETE", path: "/api/system/install", action: "cancelInstall" },
   { method: "POST", path: "/api/system/docker/restart", action: "restartDocker" },
+  { method: "POST", path: "/api/system/docker/fix-colima-files", action: "fixColimaFiles" },
 ];
 
 /** Null when the request is not a system route, so startServer carries on with its own. */
@@ -64,6 +65,7 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     }
     const parsed = EmptyBody.safeParse(body);
     if (!parsed.success) return errorResponse(400, "schema", "The request body must be an empty object.");
+    if (route.action === "fixColimaFiles") return Response.json(DockerStartResponseSchema.parse(await backend.fixColimaFiles()));
     return Response.json(DockerStartResponseSchema.parse(await backend.startDocker()));
   } catch (err) {
     console.error("keyloom: system request failed", err);

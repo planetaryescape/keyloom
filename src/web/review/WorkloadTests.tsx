@@ -20,7 +20,7 @@ function TestsNeedDocker({ token, busy, onRetry }: { token: string; busy: boolea
 
 /** Split from its hooks so a test can render each state. A readiness request that failed keeps asking and offers Check again. */
 export function TestsNeedDockerView({ docker, install, busy, onRetry }: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) {
-  const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state, docker.lastAction);
+  const view = dockerView(docker.readiness, docker.starting, docker.problem, install.state, docker.lastAction, docker.problemCode);
   useDockerRecheck(docker, recheckDocker(view) || docker.unanswered);
   const ready = docker.readiness?.ok === true;
   return <div className="br-test-results">
