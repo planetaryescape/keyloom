@@ -284,9 +284,11 @@ interface Props {
   onSetUpOther?: () => void;
   /** Opens the conversation history, for a message keyloom may have accepted without confirming it (R5-07). */
   onOpenHistory?: () => void;
+  /** Reads this conversation's proposals again, after Apply found one no longer open (R6-06). Rejects when the read failed. */
+  onReadProposals?: () => Promise<void>;
 }
 
-export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation, onSetUpOther, onOpenHistory }: Props) {
+export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onPin, onApply, onRemovePriority, onAskAgain, refusalRecovery, onOpenRelease, onRetry, onAnswer, busy = false, switchTo = [], onSwitch, onSetUpModel, creditsUrl, compact = false, working, motionPaused = false, configCards, revised, reference, onNewConversation, onSetUpOther, onOpenHistory, onReadProposals }: Props) {
   const streaming = turn.phase === "streaming";
   const ending = turn.ending === null ? undefined : ENDINGS[turn.ending];
   const offers = turn.proposals.length;
@@ -343,6 +345,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onApply={onApply}
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
+                  onReadAgain={busy ? undefined : onReadProposals}
                   revised={revised?.has(shown.changeSetId) ?? false}
                   compact
                 />
@@ -366,6 +369,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onApply={onApply}
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
+                  onReadAgain={busy ? undefined : onReadProposals}
                 />
               </li>
             ))}

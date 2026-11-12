@@ -68,7 +68,9 @@ for (const phase of ["pending", "running", "request", "initial"] as const) test(
   expect(html).not.toContain("Previous finding");
   expect(html).not.toContain("Previous suggestion");
   expect(html).not.toContain("No findings");
-  expect(html.match(/<button\b/g)).toHaveLength(1); // Close stays available; no Show/Hide/Fix/Apply/test controls.
+  // Close stays available; no Show/Hide/Fix/Apply/test controls. A running look also has its Stop (R6-12).
+  expect(html.match(/<button\b/g)).toHaveLength(phase === "running" ? 2 : 1);
+  if (phase === "running") expect(html).toContain("Stop the review");
   const marker = renderToStaticMarkup(createElement(ReviewMarker, { review: r, open: true, onToggle() {} }));
   expect(marker).toContain("Looking over");
 });

@@ -148,7 +148,7 @@ describe("conversations and applying a proposal", () => {
     });
 
     const again = await applyChangeSet(TOKEN, nav!.changeSetId).catch((e: unknown) => e);
-    expect((again as ApiError).code).toBe("usage");
+    expect((again as ApiError).code).toBe("not_open");
 
     // Proposals from an earlier turn are made against the head they saw; once another turn's proposal
     // is applied they no longer fit, and the server says so instead of overwriting.

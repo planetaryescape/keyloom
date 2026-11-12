@@ -19,10 +19,13 @@ export class FlashFailedError extends Error {
   }
 }
 
-/** The emulator couldn't build or run the keymap, or the key script isn't one it can run. Exits 7 like a build. */
+/**
+ * The emulator couldn't build or run the keymap, or the key script isn't one it can run. Exits 7 like a build. `code` is
+ * "docker_unavailable" when Docker stopped it, so the typing lab shows its Install or Start button without reading `message` (R6-02).
+ */
 export class EmulateFailedError extends Error {
   override name = "EmulateFailedError";
-  constructor(message: string, readonly logPath: string | null = null) {
+  constructor(message: string, readonly logPath: string | null = null, readonly code: "docker_unavailable" | null = null) {
     super(message);
   }
 }
