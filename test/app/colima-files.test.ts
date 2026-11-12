@@ -2,7 +2,7 @@
 // No test asks for a password or touches a real Colima: the osascript runner and the engine start are fakes, and the root script runs
 // only as this account, against a temporary folder, with a stand-in colima that records its arguments.
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ColimaFilesPlan, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, runColimaRootSteps } from "../../src/app/colima-files.ts";
@@ -71,7 +71,8 @@ describe("how the dialog's answer is read", () => {
 
 // The script uses macOS's own find and chown, so it runs only there. It runs as this account, so nothing it does can need root.
 describe.skipIf(process.platform !== "darwin")("the root script, run as this account against a temporary folder", () => {
-  const root = mkdtempSync(join(tmpdir(), "kl-colima-"));
+  // The real path: the script checks that it is in ~/.colima's real folder, and macOS's temporary folder sits behind a link.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "kl-colima-")));
   afterAll(() => rmSync(root, { recursive: true, force: true }));
   const uid = process.getuid?.() ?? 0;
 
@@ -87,13 +88,13 @@ describe.skipIf(process.platform !== "darwin")("the root script, run as this acc
     writeFileSync(join(bin, "colima"), `#!/bin/sh\nprintf '%s|%s\\n' "$HOME" "$*" >> '${log}'\n`);
     chmodSync(join(bin, "colima"), 0o755);
     const plan: ColimaFilesPlan = { colima: join(bin, "colima"), pathDirs: [bin], home, colimaHome: dir, uid, profile: "work" };
-    const run = async (p: ColimaFilesPlan = plan) => {
-      const proc = Bun.spawn(["/bin/sh", "-c", colimaFilesScript(p)], { cwd: join(root, name), stdout: "pipe", stderr: "pipe" });
+    const run = async (p: ColimaFilesPlan = plan, tools?: { chown: string }) => {
+      const proc = Bun.spawn(["/bin/sh", "-c", colimaFilesScript(p, tools)], { cwd: join(root, name), stdout: "pipe", stderr: "pipe" });
       const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
       return { code: await proc.exited, out: `${out}${err}` };
     };
     const calls = () => (existsSync(log) ? readFileSync(log, "utf8") : "");
-    return { home, dir, plan, run, calls };
+    return { home, dir, bin, plan, run, calls };
   }
 
   test("it stops Colima with the person's HOME and profile, and files already theirs need nothing", async () => {
@@ -123,6 +124,31 @@ describe.skipIf(process.platform !== "darwin")("the root script, run as this acc
     const r = await s.run({ ...s.plan, uid: uid + 1 });
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out)).toMatchObject({ code: "colima_linked_file", reason: expect.stringContaining("colima.yaml") });
+  });
+
+  test("~/.colima itself is changed from inside it, never a .colima wherever the script started (#300 review)", async () => {
+    const s = setup("start");
+    // A decoy where osascript might start: BSD find runs -execdir for its starting point from find's own folder.
+    mkdirSync(join(root, "start", ".colima"));
+    const log = join(root, "start", "chown.log");
+    const chown = join(s.bin, "chown");
+    writeFileSync(chown, `#!/bin/sh\nfor f in "$@"; do printf '%s %s\\n' "$(/bin/pwd -P)" "$f"; done >> '${log}'\n`);
+    chmodSync(chown, 0o755);
+    // Another account's uid makes every file one to give back; the stand-in chown only records where it ran.
+    expect(await s.run({ ...s.plan, uid: uid + 1 }, { chown })).toMatchObject({ code: 0 });
+    const lines = readFileSync(log, "utf8").trim().split("\n");
+    expect(lines).toContain(`${s.dir} .`);
+    expect(lines).toContain(`${join(s.dir, "work")} colima.yaml`);
+    expect(lines).toContain(`${s.dir} work`);
+    expect(lines.some((line) => line.startsWith(`${join(root, "start")} `))).toBe(false);
+  });
+
+  test("a ~/.colima reached through a link is refused before anything changes owner", async () => {
+    const s = setup("via-link");
+    symlinkSync(s.home, join(root, "via-link", "home-link"));
+    const r = await s.run({ ...s.plan, colimaHome: join(root, "via-link", "home-link", ".colima"), uid: uid + 1 });
+    expect(r.code).toBe(1);
+    expect(colimaFixFailure(r.out)?.code).toBe("colima_dir_missing");
   });
 
   test("a change macOS refuses is reported with its code", async () => {

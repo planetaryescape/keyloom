@@ -45,8 +45,8 @@ function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null 
         <p>Docker is running, but it refuses keyloom, so firmware can't build yet.</p>
         {fix.offered ? (
           <p className="callout-note">
-            Colima's files belong to another account, usually because Colima was started with sudo. Fix Colima's files stops that copy, gives
-            the files back to you and starts Colima as you. macOS asks for your password first.
+            Colima's files belong to another account, usually because Colima was started with sudo. Fix Colima's files stops any copy started
+            that way, gives the files back to you and starts Colima as you. macOS asks for your password first.
           </p>
         ) : null}
         {fix.note === null ? null : <p className="callout-note">{fix.note}</p>}

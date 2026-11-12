@@ -2,14 +2,14 @@
 // The fix stops root's copy, gives the files back to the person as root through macOS's password dialog (D-493), and then keyloom starts
 // Colima as the person. Only the stop and the ownership change run as root. Every outside command goes through an injected runner, so
 // no test stops Colima or asks for a password.
-import { lstatSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import type { DockerEngine } from "../firmware/toolchain/docker.ts";
 import { capture } from "../firmware/toolchain/run.ts";
 import { type Runner, adminCommand, lastLine, shellQuote } from "./remapper-setup.ts";
 
-export const COLIMA_FILES_PROMPT = "keyloom wants to stop the copy of Colima that runs as another account and give Colima's files in your home folder back to you, so Docker lets keyloom build firmware.";
+export const COLIMA_FILES_PROMPT = "keyloom wants to give Colima's files in your home folder back to you, after stopping any copy of Colima started as another account, so Docker lets keyloom build firmware.";
 
 /** What the root script works on. Every value is checked before it reaches the script, and each one is quoted there. */
 export type ColimaFilesPlan = {
@@ -17,7 +17,7 @@ export type ColimaFilesPlan = {
   colima: string;
   /** The folders root's `colima stop` needs on PATH: colima's own and limactl's. */
   pathDirs: string[];
-  /** The person's home folder: root's `colima stop` must read the same ~/.colima the person's Colima uses. */
+  /** The person's home folder, with no link in its path: root's `colima stop` must read the same ~/.colima the person's Colima uses. */
   home: string;
   /** ~/.colima, the folder whose files go back to the person. */
   colimaHome: string;
@@ -54,7 +54,8 @@ export type PlanDeps = {
 
 export const realPlanDeps = (): PlanDeps => ({
   which: (command) => Bun.which(command),
-  home: homedir(),
+  // The real path, because the script checks that it is in this exact folder before it changes anything.
+  home: realHome(),
   uid: process.getuid?.() ?? -1,
   kind: (path) => {
     try {
@@ -65,6 +66,14 @@ export const realPlanDeps = (): PlanDeps => ({
     }
   },
 });
+
+function realHome(): string {
+  try {
+    return realpathSync(homedir());
+  } catch {
+    return homedir();
+  }
+}
 
 /** The plan for this Colima, or the sentence that says why keyloom can't fix it from here. Checked again inside the root script. */
 export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string } {
@@ -87,19 +96,25 @@ export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: tru
 }
 
 /**
- * The root half. It stops the Colima that runs from the person's ~/.colima as root (with HOME set, so root's colima reads that folder,
+ * `tools` only lets a test record where `chown` runs; the app always uses macOS's own.
+ *
+ * The root half. It stops any Colima started from the person's ~/.colima as root (with HOME set, so root's colima reads that folder,
  * as `sudo env HOME="$HOME" colima stop` did), then gives every file in ~/.colima that isn't the person's back to them. A stop that fails
- * is logged and the rest still runs, as with the command it replaces: a VM that is already down has nothing to stop.
+ * is logged and the rest still runs, as with the command it replaces. It usually has nothing to stop: Lima refuses to run as root
+ * ("limactl: must not run as the root user"), so a `sudo colima start` mostly leaves root's files behind and no VM.
  *
  * Handing files to the person as root is where a mistake gives away more than Colima's files, so:
- * - ~/.colima must be a real folder, not a link, and `find -P` never follows a link inside it; `-xdev` stays on its disk.
+ * - ~/.colima must be a real folder, not a link. The script moves into it and checks it is there before it looks at anything, so a
+ *   folder swapped for a link after the check is caught, and `find` walks `.` from inside it: BSD find runs `-execdir` for its starting
+ *   point from find's own folder, so a starting path would name a `.colima` wherever osascript happened to start.
+ * - `find -P` never follows a link inside it; `-xdev` stays on its disk.
  * - `chown -h` changes a link itself, never what it points at, and `-execdir` runs it from the file's own folder, so a folder renamed
  *   during the walk can't send it elsewhere. `-depth` changes a folder only after everything in it.
  * - A file with more than one name can be a root-owned file elsewhere linked in, so the script refuses if one is there and isn't the
  *   person's, and the change skips any that appears later.
  * Every value is quoted, the uid is a number, and nothing in the script comes from the page.
  */
-export function colimaFilesScript(plan: ColimaFilesPlan): string {
+export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string } = { chown: "/usr/sbin/chown" }): string {
   if (!Number.isInteger(plan.uid) || plan.uid <= 0) throw new Error("the uid must be a positive integer");
   if (plan.profile !== null && !PROFILE.test(plan.profile)) throw new Error("the Colima profile has characters keyloom doesn't allow");
   const uid = String(plan.uid);
@@ -113,9 +128,10 @@ export function colimaFilesScript(plan: ColimaFilesPlan): string {
     `dir=${dir}`,
     `if [ -L "$dir" ] || [ ! -d "$dir" ]; then fail colima_dir_missing "Colima's folder isn't a folder keyloom can change, so nothing changed."; fi`,
     `${shellQuote(plan.colima)} stop${profile} || echo "keyloom: the other copy of Colima didn't stop cleanly; giving its files back anyway" >&2`,
-    `linked=$(/usr/bin/find -P "$dir" -xdev ! -type d -links +1 ! -user ${uid} -print | /usr/bin/head -n 1)`,
+    `cd -P "$dir" && [ "$(/bin/pwd -P)" = "$dir" ] || fail colima_dir_missing "Colima's folder changed while keyloom worked, so nothing changed owner."`,
+    `linked=$(/usr/bin/find -P . -xdev ! -type d -links +1 ! -user ${uid} -print | /usr/bin/head -n 1)`,
     `if [ -n "$linked" ]; then fail colima_linked_file "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: $linked"; fi`,
-    `/usr/bin/find -P "$dir" -xdev -depth ! -user ${uid} \\( -type d -o -links 1 \\) -execdir /usr/sbin/chown -h ${uid} {} + || fail colima_chown_failed "macOS didn't let keyloom give all of Colima's files back to you."`,
+    `/usr/bin/find -P . -xdev -depth ! -user ${uid} \\( -type d -o -links 1 \\) -execdir ${shellQuote(tools.chown)} -h ${uid} {} + || fail colima_chown_failed "macOS didn't let keyloom give all of Colima's files back to you."`,
   ].join("\n");
 }
 
@@ -129,7 +145,7 @@ const ADMIN_TIMEOUT_MS = 10 * 60_000;
 export const adminRunner: Runner = async (cmd) => {
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error(`refusing to run ${cmd[0]} in a test`);
   const r = await capture([...cmd], { timeoutMs: ADMIN_TIMEOUT_MS });
-  if (r.timedOut) return { code: 124, out: "macOS's password dialog stayed open for ten minutes, so keyloom closed it." };
+  if (r.timedOut) return { code: 124, out: "keyloom stopped waiting after ten minutes. Check again in a minute to see whether Colima's files changed." };
   return { code: r.exitCode ?? 1, out: `${r.stdout}\n${r.stderr}` };
 };
 
