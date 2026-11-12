@@ -363,7 +363,7 @@ describe("applying a stored proposal", () => {
 
     const again = await call("POST", `/api/change-sets/${first.id}/apply`, {});
     expect(again.status).toBe(400);
-    expect(ApiErrorBodySchema.parse(await again.json()).error.code).toBe("usage");
+    expect(ApiErrorBodySchema.parse(await again.json()).error.code).toBe("not_open");
   });
 
   test("an unknown id is 404, a proposal made against an older head is 409 stale_base", async () => {

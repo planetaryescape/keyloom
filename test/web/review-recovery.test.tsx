@@ -70,16 +70,36 @@ test("a refused action after a review has loaded offers to read the review again
   expect(html).toContain(">Read the review again</button>");
 });
 
-test("running activity tests offer Stop testing, and a look without tests does not (R5-17)", () => {
+test("running activity tests offer Stop testing, and every other running look offers Stop the review (R5-17, R6-12)", () => {
   const workload = { status: "running" as const, activities: ["prose" as const], reason: null, identity: null, baseline: [], comparisons: [] };
-  expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload) })).toContain("Stop testing");
-  expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }) })).not.toContain("Stop testing");
+  const running = { status: "running" as const, reason: null, model: null, code: null };
+  expect(shown({ review: reviewed(running, workload) })).toContain("Stop testing");
+  expect(shown({ review: reviewed(running, { ...workload, status: "pending" }) })).toContain("Stop testing");
+  // A look with no tests, or tests that finished or couldn't run, is the model's part: Stop ends that.
+  for (const tests of [undefined, { ...workload, status: "done" as const }, { ...workload, status: "unavailable" as const }]) {
+    const html = shown({ review: reviewed(running, tests) });
+    expect(html).toContain("Stop the review");
+    expect(html).not.toContain("Stop testing");
+  }
   expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload), stopping: true })).toContain("Stopping");
 });
 
 test("a failed Stop is said beside the running look, not as an unreadable review", () => {
   const workload = { status: "running" as const, activities: ["prose" as const], reason: null, identity: null, baseline: [], comparisons: [] };
-  const html = shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload), problem: "keyloom couldn't stop the tests. The server didn't answer.", problemAction: { label: "Try again", run() {} } });
-  expect(html).toContain("couldn&#x27;t stop the tests");
+  const html = shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload), problem: "keyloom couldn't stop the review. The server didn't answer.", problemAction: { label: "Try again", run() {} } });
+  expect(html).toContain("couldn&#x27;t stop the review");
   expect(html).not.toContain("review unavailable");
+});
+
+test("a used-up Codex plan shows its reset time in place, and offers no switch or setup before the provider status is read (R6-01)", () => {
+  const html = panel({ status: "unavailable", reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" });
+  expect(html).toContain("until 3:45 PM.");
+  // The provider status isn't read yet when the page first draws, so a lock may still forbid another model: only Try again until it is.
+  expect(html).not.toContain("Set up another model");
+  expect(html).not.toContain("Switch to");
+  expect(html).toContain("Try again once the limit lifts.");
+  expect(html).toContain("Try again");
+  expect(html).not.toContain("keyloom&#x27;s own look didn&#x27;t finish");
+  // The reason shows in place, so there is no Details to open.
+  expect(html).not.toContain(">Details<");
 });

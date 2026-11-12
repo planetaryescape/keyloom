@@ -115,7 +115,9 @@ function unavailableReason(err: ModelError): string {
   return err.message;
 }
 
-const ACCOUNT_FAILURES: ReadonlySet<string> = new Set(["auth", "no_credits", "permission", "missing_key"]);
+// A used-up Codex plan (usage_limit) is the account too: the review can't run on it until the limit lifts, so the page offers another
+// model by this code, with Try again for after the reset (R6-01).
+const ACCOUNT_FAILURES: ReadonlySet<string> = new Set(["auth", "no_credits", "permission", "missing_key", "usage_limit"]);
 
 /** Codex's signed-out sentence asks for a terminal command and to "send the message again"; a review is neither a chat nor a terminal. */
 function accountReason(provider: AgentModel["provider"], known: { kind: string; message: string }): string {

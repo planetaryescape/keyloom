@@ -1,8 +1,9 @@
 // The board review's words (D-340): markers become caps and chips, and the marker by the config name counts what shows.
 import { describe, expect, test } from "bun:test";
+import type { ChatProviderStatus } from "../../src/api/http.ts";
 import type { BoardReview } from "../../src/api/review.ts";
 import type { ReviewItem } from "../../src/validation/review-item.ts";
-import { aiMissingWords, appliedNotShown, applyFailureWords, grouped, markerWords, placeOf, placeWords, reviewProblemWords, segments } from "../../src/web/review/review-words.ts";
+import { aiMissingWords, appliedNotShown, applyFailureWords, failedProvider, grouped, markerWords, placeOf, placeWords, reviewProblemWords, segments, switchTargets } from "../../src/web/review/review-words.ts";
 
 const item = (over: Partial<ReviewItem>): ReviewItem => ({
   id: "x", source: "check", kind: "problem", severity: "warning", code: "c", title: "t", body: "b", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: null, ...over,
@@ -63,6 +64,39 @@ describe("no suggestions says why and offers the fix (R4-10)", () => {
     expect(view).toMatchObject({ actions: ["credits", "set_up", "retry"], refused: true });
     expect(view.words).toContain("out of credits");
   });
+  test("a used-up Codex plan shows the reset time in place and offers another model, then Try again for after it (R6-01)", () => {
+    const limited = { status: "unavailable" as const, reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" };
+    const view = aiMissingWords(limited);
+    expect(view.actions).toEqual(["switch", "set_up_other", "retry"]);
+    expect(view.words).toBe("Your Codex usage limit is reached, so there are no suggestions this time. Your ChatGPT plan has used up its Codex allowance until 3:45 PM. Switch to another model, or try again once the limit lifts.");
+    expect(view.reasonShown).toBe(true);
+    // --provider or KEYLOOM_PROVIDER fixes the model, so no other can take the review: only Try again, and the words don't offer a switch.
+    const fixed = aiMissingWords(limited, false);
+    expect(fixed.actions).toEqual(["retry"]);
+    expect(fixed.words).not.toContain("Switch");
+  });
+  test("a usage limit after keyloom moved off Codex says Try again runs on the new provider, and offers no switch (R6-01 review)", () => {
+    const limited = { status: "unavailable" as const, reason: "Your ChatGPT plan has used up its Codex allowance until 3:45 PM.", model: "gpt-5.5", code: "usage_limit" };
+    const view = aiMissingWords(limited, true, "Anthropic");
+    expect(view.actions).toEqual(["retry"]);
+    expect(view.words).toBe("Your Codex usage limit was reached, so there are no suggestions this time. Your ChatGPT plan has used up its Codex allowance until 3:45 PM. keyloom now uses Anthropic, so Try again runs the review on Anthropic.");
+    expect(view.words).not.toContain("once the limit lifts");
+  });
+  test("a switch never leads back to the provider the look failed on, and none is offered before the status is read or under a lock", () => {
+    const entry = (id: "anthropic" | "openrouter" | "codex", ready: boolean) => ({ id, label: id, credential: null, installed: true, canInstall: false, defaultModel: "m", ready, setup: "s", command: "c" });
+    const status = (active: "anthropic" | "codex", lockedBy: "--provider" | null = null): ChatProviderStatus => ({
+      active: { provider: active, model: "m", effort: "medium" }, lockedBy, keyStore: null, codexSignIn: { state: "idle" },
+      providers: [entry("anthropic", true), entry("openrouter", true), entry("codex", true)],
+    });
+    const limited = { status: "unavailable" as const, reason: null, model: "gpt-5.5", code: "usage_limit" };
+    expect(failedProvider(limited)).toBe("codex");
+    expect(failedProvider({ ...limited, code: "auth" })).toBeNull();
+    expect(switchTargets(status("codex"), "codex")).toEqual(["anthropic", "openrouter"]);
+    // Chat switched to Anthropic after the review failed on Codex: Codex is not offered back.
+    expect(switchTargets(status("anthropic"), "codex")).toEqual(["openrouter"]);
+    expect(switchTargets(null, "codex")).toEqual([]);
+    expect(switchTargets(status("codex", "--provider"), "codex")).toEqual([]);
+  });
   test("a look that stopped for another reason tries again", () => {
     expect(aiMissingWords(ai("failed", "claude-opus-5-5")).actions).toEqual(["retry"]);
   });
@@ -70,7 +104,11 @@ describe("no suggestions says why and offers the fix (R4-10)", () => {
 
 describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
   test("a stale or refused suggestion offers a fresh review, never the same Apply", () => {
-    for (const code of ["stale_base", "validation_failed", "not_found", "usage"]) expect(applyFailureWords({ code, status: 409, message: "x" }).action).toBe("fresh_review");
+    for (const code of ["stale_base", "validation_failed", "not_found", "not_open", "usage"]) expect(applyFailureWords({ code, status: 409, message: "x" }).action).toBe("fresh_review");
+  });
+  test("only a suggestion that is not open says so; another usage refusal says it no longer fits (R6-06)", () => {
+    expect(applyFailureWords({ code: "not_open", status: 400, message: "change set cs_1 is applied, not proposed" }).words).toBe("This suggestion is no longer open, so nothing was applied.");
+    expect(applyFailureWords({ code: "usage", status: 400, message: "This automatic recommendation no longer preserves the config. Run a fresh review." }).words).toBe("This suggestion no longer fits your config, so nothing was applied.");
   });
   test("another refusal tries again", () => {
     expect(applyFailureWords({ code: "busy", status: 409, message: "A build is running." })).toEqual({ words: "Nothing was applied: A build is running.", action: "retry" });

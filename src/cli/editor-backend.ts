@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRevisionNeededError, BuildNotCancellableError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, cancelBuild, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
+  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRevisionNeededError, BuildNotCancellableError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, NotOpenError, cancelBuild, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
@@ -37,6 +37,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     if (err instanceof BoardRevisionNeededError) throw new EditorError(400, "board_revision_needed", err.message);
     if (err instanceof FlashNotCancellableError) throw new EditorError(409, err.why === "writing" ? "flash_writing" : "flash_finished", err.message);
     if (err instanceof BuildNotCancellableError) throw new EditorError(409, "build_finished", err.message);
+    // Before UsageError, which it extends: a proposal applied or set aside elsewhere, apart from any other refusal (R6-06).
+    if (err instanceof NotOpenError) throw new EditorError(400, "not_open", err.message);
     if (err instanceof UsageError) throw new EditorError(400, "usage", err.message);
     throw err;
   }

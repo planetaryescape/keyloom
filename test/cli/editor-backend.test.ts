@@ -120,7 +120,8 @@ describe("applyChangeSet", () => {
     const other = proposeChange(app, "synchronized", { ops: setKey(8, "F18"), explanation: "F18", source: "agent" });
     await backend.applyChangeSet(a.id);
     const again = await editorError(backend.applyChangeSet(a.id));
-    expect([again.status, again.code]).toEqual([400, "usage"]);
+    // Its own code, so the page reads only this refusal as "no longer open" (R6-06).
+    expect([again.status, again.code]).toEqual([400, "not_open"]);
 
     // `other` shares no slot with `a`, so it still applies; a proposal on a's slot does not.
     await backend.applyChangeSet(other.id);

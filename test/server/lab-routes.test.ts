@@ -1,7 +1,7 @@
 // The typing lab routes (src/api/lab.ts, D-314), over a real app with a scripted fake keyboard and the replay model: the guard, a whole
 // session from start to read-out to delete, per-finger typos, the board that can't be recorded, and a second start refused.
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { applyOps, getLayout, type LabDeps } from "../../src/app/index.ts";
+import { afterAll, describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
+import { EmulateFailedError, applyOps, getLayout, type LabDeps } from "../../src/app/index.ts";
 import { LabPassagesResponseSchema, LabReadoutResponseSchema, LabSessionResponseSchema, LabSessionsResponseSchema, RecordingResponseSchema } from "../../src/api/lab.ts";
 import { appLabBackend } from "../../src/cli/lab-backend.ts";
 import { handleLabRoute } from "../../src/server/lab-routes.ts";
@@ -204,7 +204,7 @@ test("shutdown waits for a pending start and finishes the capture it acquires", 
   try {
     const backend = appLabBackend(app, deps);
     starting = backend.start(layoutId, {});
-    await expect(backend.start(layoutId, {})).rejects.toMatchObject({ status: 409, code: "busy" });
+    await expect(backend.start(layoutId, {})).rejects.toMatchObject({ status: 409, code: "recording_running" });
     let cancelSettled = false;
     cancelling = backend.cancel().then(() => { cancelSettled = true; });
     await Bun.sleep(10);
@@ -222,4 +222,47 @@ test("shutdown waits for a pending start and finishes the capture it acquires", 
     await Promise.allSettled([starting, cancelling]);
     app.db.close();
   }
+});
+
+describe("a read-out that can't replay (R6-02)", () => {
+  async function failingReplay(error: Error) {
+    const { app, layoutId } = await commandShiftApp();
+    const view = getLayout(app, layoutId);
+    const scripted = scriptedLabDeps(view.board.definition, () => getLayout(app, layoutId).document, { delayMs: 5 });
+    const backend = appLabBackend(app, { ...scripted, replay: () => async () => { throw error; } });
+    const server = Bun.serve({ port: 0, fetch: async (r) => (await handleLabRoute(r, new URL(r.url).pathname, backend, TOKEN)) ?? new Response("no", { status: 404 }) });
+    servers.push(server);
+    const post = (path: string, body: unknown = {}) => fetch(`http://127.0.0.1:${server.port}${path}`, {
+      method: "POST", headers: { "x-keyloom-token": TOKEN, "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    expect((await post(`/api/lab/${layoutId}/recording`, { text: SCRIPT })).status).toBe(201);
+    await new Promise((r) => setTimeout(r, 120));
+    const stopped = LabSessionResponseSchema.parse(await (await post("/api/lab/recording/stop", { typedText: SCRIPT })).json());
+    return post(`/api/lab/sessions/${stopped.session.id}/analyse`);
+  }
+
+  test("Docker that stopped the replay is its own code, in words, with no log path", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await failingReplay(new EmulateFailedError("Docker is not on this computer. (log: /tmp/x.log)", "/tmp/x.log", "docker_unavailable"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: { code: "docker_unavailable", message: "Docker isn't ready, so the recording couldn't be played back." } });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("/tmp/x.log"));
+    } finally { log.mockRestore(); }
+  });
+
+  test("any other replay failure is replay_failed in keyloom's words: no directory and no key-log line reach the page", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      // The ZMK emulator's message ends with the firmware's last output lines, which after the run marker are the recording's keycodes.
+      const raw = "the emulator stopped in /Users/x/.keyloom/checkouts/zmk: keycode 0x04 pressed\nkeycode 0x04 released (log: /tmp/y.log)";
+      const response = await failingReplay(new EmulateFailedError(raw, "/tmp/y.log"));
+      expect(response.status).toBe(500);
+      const body = await response.json() as { error: { code: string; message: string } };
+      expect(body).toEqual({ error: { code: "replay_failed", message: "The firmware replay stopped with an error. The details are in keyloom's log." } });
+      expect(JSON.stringify(body)).not.toMatch(/keycode|\/Users|\/tmp/);
+      // The server's log keeps the whole message, for whoever looks into it.
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("keycode 0x04 pressed"));
+    } finally { log.mockRestore(); }
+  });
 });

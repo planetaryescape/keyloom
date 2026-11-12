@@ -119,7 +119,7 @@ try {
   wait(".repair-request");
   check(JSON.parse(evalPage("document.querySelector('.repair-request button').disabled")) === true, "Send remained enabled while finding dismissal was pending");
   evalPage("window.__releaseDismiss()");
-  browser("wait", "--text", "This finding is no longer current");
+  browser("wait", "--text", "This finding is out of date");
   check(JSON.parse(evalPage("document.querySelector('.repair-request button').disabled")) === true, "hidden finding remained sendable after dismissal completed");
   browser("screenshot", `${evidence}/390-light-hidden-finding-disabled.png`);
   const receipt = { result: "PASS", checks: ["Plan makes no agent POST", "composer occupancy disables scoped Send", "short and long request scrolls reach Send at 390x844", "edited request survives Home and same-config return", "explicit refusal restores an editable unsent request", "same-turn double activation yields one POST", "ambiguous accepted POST is never replayed after Home", "sent-request dismissal does not cancel the run", "pending and completed finding dismissal keep Send disabled"] };

@@ -1,39 +1,17 @@
-import { Check, CircleCheck, Copy, ExternalLink, KeyRound, LoaderCircle, LogIn, RefreshCw, Trash2 } from "lucide-react";
+import { CircleCheck, ExternalLink, KeyRound, LoaderCircle, LogIn, RefreshCw, Trash2 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ApiError } from "../api.ts";
 import { cancelCodexSignIn, forgetProviderKey, saveProviderKey, startCodexSignIn } from "./api-setup.ts";
 import { inDesktopApp } from "../shell/server-gone.ts";
 import { CodexInstall } from "./CodexInstall.tsx";
+import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, lockWords, setupProviders, setupView, storeFallback } from "./setup-words.ts";
 import "./setup.css";
 
 type Provider = ChatProviderStatus["providers"][number];
 
 const KEY_PLACEHOLDERS: Record<KeyProvider, string> = { anthropic: "Paste your key (sk-ant-…)", openrouter: "Paste your key (sk-or-…)" };
-
-function CopyCommand({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    // Clipboard access can be refused; the command stays selectable either way.
-    navigator.clipboard
-      .writeText(command)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
-      })
-      .catch(() => {});
-  }
-  return (
-    <div className="command">
-      <code>{command}</code>
-      <button type="button" className="button" onClick={copy} aria-label={`Copy ${command}`}>
-        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
-}
 
 function KeyPageLink({ href, name }: { href: string; name: string }) {
   return (
