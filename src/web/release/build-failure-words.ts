@@ -1,6 +1,8 @@
 // What a failed build's step says and offers (R5-02), by the build's code, never its text. Pure, so each case is tested without a browser.
 import { type Build, CHAT_MESSAGE_MAX } from "../../api/http.ts";
 import { headline } from "../../layout/history-summary.ts";
+import { ApiError } from "../api.ts";
+import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
 
 /**
  * `docker`: the Docker callout answers it (D-488). `same_every_time`: the layout doesn't compile or fit, so building again fails the same
@@ -41,4 +43,27 @@ export function buildQuestion(input: { boardName: string; error: string | null; 
   while (start < lines.length && fenced(start).length > MAX_REQUEST) start++;
   const text = fenced(start);
   return text.length <= MAX_REQUEST ? text : text.slice(0, MAX_REQUEST);
+}
+
+/** A refused Go back, for the build it was refused on. `retry`: the request may pass if asked again, so the button stays. */
+export type GoBackProblem = GoBackRefusal & { buildId: string | null; retry: boolean };
+
+export function goBackProblem(problem: unknown, buildId: string | null): GoBackProblem {
+  if (!(problem instanceof ApiError)) return { text: problem instanceof Error ? problem.message : "keyloom couldn't go back.", next: null, buildId, retry: true };
+  // A request that never reached keyloom, or a server fault, may pass on a second try. Asking again is safe: the undo names the head it
+  // read, so a repeat of one that did land is refused as stale and offers the latest version instead.
+  return { ...goBackRefusal(problem.code, problem.message), buildId, retry: problem.code === "unreachable" || problem.status >= 500 };
+}
+
+/** A refusal belongs to one build, so a later build never shows an older build's refusal. */
+export function shownGoBackProblem(problem: GoBackProblem | null, lastBuildId: string | null): GoBackProblem | null {
+  return problem !== null && problem.buildId === lastBuildId ? problem : null;
+}
+
+/** A Go back that worked: the build it answered, the head it left, and the head it made, once the page has read it. */
+export type WentBack = { summary: string; buildId: string | null; fromHead: string; toHead: string | null };
+
+/** The first head after a Go back is the revision it made; a later edit moves the head on, and the "back to" line no longer fits. */
+export function wentBackSummary(wentBack: WentBack | null, lastBuildId: string | null, headId: string): string | null {
+  return wentBack !== null && wentBack.buildId === lastBuildId && wentBack.toHead === headId ? wentBack.summary : null;
 }

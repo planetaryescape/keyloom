@@ -4,7 +4,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Build } from "../../src/api/http.ts";
 import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
-import { buildFailureView, buildQuestion } from "../../src/web/release/build-failure-words.ts";
+import { ApiError } from "../../src/web/api.ts";
+import { buildFailureView, buildQuestion, goBackProblem, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import type { Release } from "../../src/web/release/useRelease.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
@@ -78,5 +79,33 @@ describe("the failed build step", () => {
     expect(html).toContain("Build again");
     expect(html).toContain("Ask keyloom about this build");
     expect(html).not.toContain("Go back to the last version that built");
+  });
+});
+
+describe("a refused Go back", () => {
+  test("a request that never reached keyloom, or a server fault, keeps the button so it can be asked again", () => {
+    expect(goBackProblem(new ApiError(0, "keyloom isn't answering.", { code: "unreachable" }), "bld")).toMatchObject({ retry: true, next: null, buildId: "bld" });
+    expect(goBackProblem(new ApiError(500, "Internal error"), "bld")).toMatchObject({ retry: true });
+  });
+  test("a refusal about the revision itself hides the button, and a stale head offers the latest version", () => {
+    expect(goBackProblem(new ApiError(409, "The rules refuse it.", { code: "invalid_change" }), "bld")).toMatchObject({ retry: false, next: null, text: "The rules refuse it." });
+    expect(goBackProblem(new ApiError(409, "stale", { code: "stale_base" }), "bld")).toMatchObject({ retry: false, next: "reload" });
+  });
+  test("a refusal shows only on the build it was refused on", () => {
+    const problem = goBackProblem(new ApiError(409, "The rules refuse it.", { code: "invalid_change" }), "bld_1");
+    expect(shownGoBackProblem(problem, "bld_1")).toBe(problem);
+    expect(shownGoBackProblem(problem, "bld_2")).toBeNull();
+  });
+});
+
+describe("the line after a Go back", () => {
+  const wentBack = { summary: "Moved Escape to the thumb", buildId: "bld_1", fromHead: "rev_B", toHead: "rev_C" };
+  test("shows on the revision the Go back made, before a new build", () => {
+    expect(wentBackSummary(wentBack, "bld_1", "rev_C")).toBe("Moved Escape to the thumb");
+  });
+  test("goes once the layout is edited again, or a new build runs, or the new head isn't read yet", () => {
+    expect(wentBackSummary(wentBack, "bld_1", "rev_D")).toBeNull();
+    expect(wentBackSummary(wentBack, "bld_2", "rev_C")).toBeNull();
+    expect(wentBackSummary({ ...wentBack, toHead: null }, "bld_1", "rev_B")).toBeNull();
   });
 });
