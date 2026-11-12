@@ -2,9 +2,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { leaveToast, takeToast } from "../../src/web/shell/toast-flash.ts";
 
-const original = (globalThis as { window?: unknown }).window;
+// Put window back as it was. Assigning undefined would leave a "window" property behind, and a later file that checks
+// `"window" in globalThis` would then skip setting its own (release PR #294's CI failure).
+const original = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
-  (globalThis as { window?: unknown }).window = original;
+  if (original === undefined) delete (globalThis as { window?: unknown }).window;
+  else Object.defineProperty(globalThis, "window", original);
 });
 function withStorage() {
   const store = new Map<string, string>();
