@@ -54,7 +54,7 @@ import { EditingStatus } from "./configs/EditingStatus.tsx";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { autoOpenTarget } from "./configs/agent-made-configs.ts";
 import { useMadeConfigRefresh } from "./configs/useMadeConfigRefresh.ts";
-import { ComboEditor, ComboList, draftFromCombo, openComboFromElsewhere, type ComboDraft } from "./combos/ComboPane.tsx";
+import { ComboEditor, ComboList, comboDraftWaits, draftFromCombo, openComboFromElsewhere, type ComboDraft } from "./combos/ComboPane.tsx";
 import { combosOn, newComboId } from "./combos/combo-ops.ts";
 import { bindingSummary, withBinding, type Draft } from "./editor/draft.ts";
 import { draftsForChat, draftsOn, park, slotKey, stillApplying, unpark, type ParkedDrafts } from "./editor/parked-drafts.ts";
@@ -869,17 +869,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           },
           openCombo: (id) => {
             // A combo being made or changed would be replaced without asking (#290 review): it is finished or closed first, and the
-            // same combo shows the card with its edits.
+            // same combo shows the card with its edits. The dialog says why and shows that card, before it closes (R5-13). A key's
+            // unapplied draft can't block here: it turns the layer menu off, so this dialog can't open while one is held.
             const action = openComboFromElsewhere(comboDraft, layout.combos, id);
-            if (action === "blocked") {
-              toasts.show({ kind: "info", message: "Apply or close the combo you are editing first" });
-              return;
-            }
-            if (action === "open") return openCombo(id);
-            if (draftBlocks()) return;
-            if (editing !== null) closeEditor(false);
-            setChatOpen(false);
-            setCombosOpen(true);
+            const showDraft = () => {
+              if (editing !== null) closeEditor(false);
+              setChatOpen(false);
+              setCombosOpen(true);
+            };
+            if (action === "blocked" && comboDraft !== null) return { text: comboDraftWaits(comboDraft), action: { label: "Show the combo you're editing", run: showDraft } };
+            if (action === "open") openCombo(id);
+            else showDraft();
+            return null;
           },
           removeTapDance: (id) => {
             const name = layout.tapDances.find((dance) => dance.id === id)?.name ?? id;

@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LabStage } from "../../src/web/lab/LabScreens.tsx";
 import type { Lab } from "../../src/web/lab/useLab.ts";
-import { labApplyFailure, labFixClosed, labFixes } from "../../src/web/lab/lab-words.ts";
+import { labApplyFailure, labFixClosed, labFixes, labProblemText } from "../../src/web/lab/lab-words.ts";
 
 const fixes = { onSync: () => {}, onOpenRelease: () => {}, onOpenInputMonitoring: () => {} };
 const baseLab = (over: Partial<Lab>): Lab => ({
-  phase: { kind: "start" }, passages: [], canRecord: { ok: true, why: null }, sessions: [], typed: "", problem: null, problemCode: null, loadFailed: false, reload: () => {},
+  token: "t", phase: { kind: "start" }, passages: [], canRecord: { ok: true, why: null }, sessions: [], typed: "", problem: null, problemCode: null, loadFailed: false, reload: () => {},
   setTyped: () => {}, start: async () => {}, retry: async () => {}, stop: async () => {}, cancel: async () => {},
   showSession: async () => {}, remove: async () => {}, openFinding: () => {}, tryFix: () => {}, again: () => {}, ...over,
 });
@@ -68,9 +68,17 @@ test("a past session's fix that is no longer proposed says why instead of offeri
   expect(labFixClosed("applied")).toContain("applied already");
 });
 
-test("a keyboard connection that stopped answering offers Try again, which gets a new one; one keyloom can't close offers none (R4-03)", () => {
+test("a keyboard connection that stopped answering offers Try again, which gets a new one (R4-03)", () => {
   expect(labFixes("connection_lost", false)).toEqual([{ id: "retry", label: "Try again" }]);
-  expect(labFixes("restart_required", false)).toEqual([]);
+});
+
+test("a connection only a restart clears offers Restart keyloom, never Try again (R5-15)", () => {
+  expect(labFixes("restart_required", false)).toEqual([{ id: "restart", label: "Restart keyloom" }]);
+  expect(labProblemText("restart_required", "Quit keyloom and open it again, then try again.")).toContain("only restarting keyloom clears it");
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "stuck", problemCode: "restart_required" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  // Rendered before the server says how keyloom was started: the button waits for that answer.
+  expect(html).toContain("Restart keyloom");
+  expect(html).not.toContain("Try again");
 });
 
 test("an incomplete recording in Earlier sessions says why it can't be read and is no button; a whole one opens (R4-14)", () => {

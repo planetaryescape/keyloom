@@ -9,7 +9,10 @@ export type OpenRequestedView = (view: AgentView, signal: AbortSignal) => Promis
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
 import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
-import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action } from "./transcript.ts";
+import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn } from "./transcript.ts";
+
+/** Why a reply stopped, as the failure box reads it (failure-words.ts). */
+type TurnFailure = NonNullable<AssistantTurn["failure"]>;
 
 /** A refusal before the reply started, or a history/provider request problem. */
 export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other"; message: string };
@@ -29,6 +32,32 @@ function classify(error: unknown): Problem {
     return { kind: "other", message: error.message };
   }
   return { kind: "other", message: error instanceof Error ? error.message : "Something went wrong sending that." };
+}
+
+/** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */
+export function refusedRetryFailure(error: ApiError): TurnFailure {
+  return { code: error.code ?? "retry", message: classify(error).message };
+}
+
+/**
+ * A request that failed without a refusal. Once the reply started it keeps the server's code. Before that, keyloom may have the message
+ * already, so it is `unconfirmed`, which offers Open history and Ask again (R5-07).
+ */
+export function lostFailure(error: unknown, started: boolean): TurnFailure {
+  const message = error instanceof Error ? error.message : "The reply stopped.";
+  if (started) return { code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message };
+  return { code: "unconfirmed", message: `${message} keyloom may already be answering it. Open history to see whether it did before you ask again.` };
+}
+
+/**
+ * True when the server turned the message down before keeping it. Any 4xx, and a 5xx with the server's own code: the server sends `start`
+ * as soon as it has stored the message, so a typed failure before that (`key_store_unavailable`, `model_overloaded`) stored nothing.
+ * An `internal` 500 or a lost connection may come after the message was kept, so those stay unconfirmed.
+ */
+export function refusedBeforeStart(error: unknown, started: boolean): error is ApiError {
+  if (started || !(error instanceof ApiError)) return false;
+  if (error.status >= 400 && error.status < 500) return true;
+  return error.status >= 500 && error.code !== undefined && error.code !== "internal";
 }
 
 const isAbort = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
@@ -174,11 +203,11 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         if (controller.current !== mine) return; // replaced by a new conversation; nothing to report
         // Only an explicit HTTP refusal proves execution never started. Lost observation is not
         // permission to restore/resend a request that the server may already have accepted.
-        const refused = !started && error instanceof ApiError && ((error.status >= 400 && error.status < 500) || error.code === "missing_api_key");
+        const refused = refusedBeforeStart(error, started);
         if (refused) localStorage.removeItem(storageKey);
         if (refused && begin.type === "retry") {
           // The user turn before it is already on screen and stored, so a refused retry fails in place.
-          dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", code: "retry", message: classify(error).message });
+          dispatch(isAbort(error) ? { type: "stopped" } : { type: "failed", ...refusedRetryFailure(error) });
         } else if (refused && answer !== undefined) {
           // The question is still open on the server, so it opens again here for another try.
           dispatch({ type: "answerRejected", toolUseId: answer.toolUseId });
@@ -193,8 +222,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         } else if (isAbort(error)) {
           dispatch({ type: "stopped" });
         } else {
-          const message = error instanceof Error ? error.message : "The reply stopped.";
-          dispatch({ type: "failed", code: error instanceof ApiError ? (error.code ?? "stream") : "stream", message: started ? message : `${message} The request may have been accepted. Read conversation history before sending it again.` });
+          dispatch({ type: "failed", ...lostFailure(error, started) });
         }
       } finally {
         window.removeEventListener("blur", loseForeground);

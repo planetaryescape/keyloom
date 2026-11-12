@@ -6,6 +6,7 @@ import { ApiError } from "../api.ts";
 import { firstFreeName } from "../import/export-steps.ts";
 import { createConfig, fetchAllConfigs } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
+import { deriveProblem } from "./derive-words.ts";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
 // is (and, for a ZMK shield, the controller), sees the board keyloom would add, adds it, and puts one of his configs on it. Nothing here
@@ -20,17 +21,34 @@ export type NewBoardStep =
   | { kind: "card"; keyboard: DetectedKeyboard; choice: string | null }
   /** A known board chosen from USB or the catalogue: put a config on it, import one, or start blank. */
   | { kind: "setup"; keyboard: DetectedKeyboard | null; boardId: string; boardName: string }
-  /** The home row and the controller, with the board drawn. */
-  | { kind: "confirm"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number | null; controller: string | null }
+  /** The home row, the controller and the QMK layout, with the board drawn. A null layout is the keyboard's default, or keyloom's guess. */
+  | { kind: "confirm"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number | null; controller: string | null; layout: string | null }
   /** The board as keyloom would add it: hands, fingers, the flash. */
-  | { kind: "review"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number; controller: string | null }
+  | { kind: "review"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number; controller: string | null; layout: string | null }
   /** Added, or already known: pick a config to put on it, see it mapped, choose where the keys with no place go. */
   | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number>; origin: "new" | "known" };
 
 /** A keyboard is the same one across frames by what it says over USB. */
 export const keyboardKey = (k: DetectedKeyboard): string => `${k.device.vendorId}:${k.device.productId}:${k.device.product}:${k.device.serial ?? ""}`;
 
+/** A QMK keyboard with several layouts and no default is drawn on keyloom's guess until the person picks theirs. */
+export const layoutUnpicked = (step: { layout: string | null }, preview: Pick<PreviewResponse, "needs">): boolean =>
+  preview.needs.includes("--layout") && step.layout === null;
+
+/**
+ * "Show me the board": the home row is the one given, or keyloom's guess, which BK has seen marked. A layout keyloom only guessed is never
+ * carried on, so Add can't store it (D-525): `keyboard add` asks for --layout, and the page asks which layout is yours.
+ */
+export function reviewStep(step: NewBoardStep, preview: PreviewResponse | null): Extract<NewBoardStep, { kind: "review" }> | null {
+  if (step.kind !== "confirm" || preview === null || layoutUnpicked(step, preview)) return null;
+  return { kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller, layout: step.layout ?? preview.layout };
+}
+
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
+
+/** Add refused: a keyboard keyloom can't add yet in words, named as the page names it ("Corne (new)"); the server's sentence names CLI flags (R5-06). */
+export const addProblem = (error: unknown, step: { candidate: ApiCandidate }, preview: Pick<PreviewResponse, "displayName"> | null): string =>
+  deriveProblem(error instanceof ApiError ? error.code : null, preview?.displayName ?? step.candidate.name)?.text ?? message(error);
 
 export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = []) {
   const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
@@ -45,6 +63,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [problem, setProblem] = useState<string | null>(null);
   // A board preview that failed stops the "Reading…" and offers Try again, which reads it again (R3-08).
   const [previewProblem, setPreviewProblem] = useState<string | null>(null);
+  // The server's code for a preview that can't work for this keyboard (R5-06), so the page offers the guide instead of Try again.
+  const [previewProblemCode, setPreviewProblemCode] = useState<string | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
   const searchSequence = useRef(0);
@@ -83,20 +103,24 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   }, [knownWithNoConfig, step]);
 
   // The board as it would be added, drawn from the pinned firmware tree; again whenever the home row or the controller changes.
-  const confirmKey = step.kind === "confirm" || step.kind === "review" ? `${step.candidate.id}|${step.homeRow ?? ""}|${step.controller ?? ""}` : null;
+  const confirmKey = step.kind === "confirm" || step.kind === "review" ? `${step.candidate.id}|${step.homeRow ?? ""}|${step.controller ?? ""}|${step.layout ?? ""}` : null;
   useEffect(() => {
     if (step.kind !== "confirm" && step.kind !== "review") return;
     const controller = new AbortController();
     setProblem(null);
     setPreviewProblem(null);
+    setPreviewProblemCode(null);
     // The drawing of the old home row or controller must not stay up while the new one is read, or a failed read would hide behind it.
     setPreview(null);
     api.previewKeyboard(token, {
       candidate: step.candidate.id,
       ...(step.homeRow === null ? {} : { homeRow: step.homeRow }),
       ...(step.controller === null ? {} : { controller: step.controller }),
+      ...(step.layout === null ? {} : { layout: step.layout }),
     }, controller.signal).then((p) => { if (!controller.signal.aborted) setPreview(p); }, (e) => {
-      if (!controller.signal.aborted) setPreviewProblem(message(e));
+      if (controller.signal.aborted) return;
+      setPreviewProblem(message(e));
+      setPreviewProblemCode(e instanceof ApiError ? (e.code ?? null) : null);
     });
     return () => controller.abort();
     // The key stands for the step's inputs; the attempt is Try again.
@@ -148,9 +172,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     chooseCandidate: (candidate: ApiCandidate) => {
       setProblem(null); setPreview(null);
-      setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null });
+      setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null });
     },
-    step, preview, previewProblem, putPreview, busy, problem, waiting,
+    step, preview, previewProblem, previewProblemCode, putPreview, busy, problem, waiting,
     /** Reads the board preview again after it failed. */
     retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
     /** Opens the card again for a keyboard put off with "Not now". */
@@ -184,7 +208,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       const candidate = candidateOf(step.keyboard, step.choice);
       if (candidate === undefined) return;
       setPreview(null);
-      setStep({ kind: "confirm", keyboard: step.keyboard, candidate, homeRow: null, controller: null });
+      setStep({ kind: "confirm", keyboard: step.keyboard, candidate, homeRow: null, controller: null, layout: null });
     },
     backToCard: () => {
       if (step.kind !== "confirm") return;
@@ -193,14 +217,15 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     setHomeRow: (row: number) => setStep((s) => (s.kind === "confirm" || s.kind === "review" ? { ...s, homeRow: row } : s)),
     setController: (id: string) => setStep((s) => (s.kind === "confirm" ? { ...s, controller: id } : s)),
-    /** "Show me the board": the home row is the one given, or keyloom's guess, which BK has seen marked. */
+    /** Another QMK layout has other rows, so the home row goes back to keyloom's guess for it. */
+    setLayout: (name: string) => setStep((s) => (s.kind === "confirm" ? { ...s, layout: name, homeRow: null } : s)),
     review: () => {
-      if (step.kind !== "confirm" || preview === null) return;
-      setStep({ kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller });
+      const next = reviewStep(step, preview);
+      if (next !== null) setStep(next);
     },
     backToConfirm: () => {
       if (step.kind !== "review") return;
-      setStep({ kind: "confirm", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow, controller: step.controller });
+      setStep({ kind: "confirm", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow, controller: step.controller, layout: step.layout });
     },
     /** Stores the board. Resolves to its id, for the put step. */
     add: async () => {
@@ -208,10 +233,14 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setBusy(true);
       setProblem(null);
       try {
-        const out = await api.addKeyboard(token, { candidate: step.candidate.id, homeRow: step.homeRow, ...(step.controller === null ? {} : { controller: step.controller }) });
+        const out = await api.addKeyboard(token, {
+          candidate: step.candidate.id, homeRow: step.homeRow,
+          ...(step.controller === null ? {} : { controller: step.controller }),
+          ...(step.layout === null ? {} : { layout: step.layout }),
+        });
         setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
       } catch (e) {
-        setProblem(message(e));
+        setProblem(addProblem(e, step, preview));
       } finally {
         setBusy(false);
       }

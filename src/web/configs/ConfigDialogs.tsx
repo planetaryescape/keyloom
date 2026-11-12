@@ -43,8 +43,18 @@ function ConfigDialog({ title, label, onClose, children, foot, onSubmit }: {
   );
 }
 
-/** A failure the dialog can say in words with the button that fixes it, such as a refused put-on (R3-01). */
-export type ConfirmProblem = { message: string; detail?: string; action?: { label: string; run: () => void } };
+/**
+ * A failure the dialog can say in words with the button that fixes it, such as a refused put-on (R3-01). `extraFixes`: the dialog's
+ * `extra`, such as kanata's setup checklist, is the way past this refusal.
+ */
+export type ConfirmProblem = { message: string; detail?: string; action?: { label: string; run: () => void }; extraFixes?: boolean };
+
+/**
+ * A refusal's detail, unless `extra` is up and is the way past this refusal (R5-14): a detail like "The keyboard's status lists what is
+ * missing" would point at a page the dialog doesn't open. Any other refusal keeps its words while `extra` shows, such as busy (#293 review).
+ */
+export const shownDetail = (problem: ConfirmProblem, extraShown: boolean): string | undefined =>
+  extraShown && problem.extraFixes === true ? undefined : problem.detail;
 
 /**
  * A yes-or-no with consequences in words: putting a config on the keyboard, and putting a version on it (D-315). The work happens in
@@ -107,7 +117,7 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
       {problem === null ? null : (
         <div className="config-problem" role="alert">
           <p>{problem.message}</p>
-          {problem.detail === undefined ? null : <p className="config-problem-detail">{problem.detail}</p>}
+          {shownDetail(problem, extra != null) === undefined ? null : <p className="config-problem-detail">{problem.detail}</p>}
         </div>
       )}
     </ConfigDialog>

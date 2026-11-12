@@ -289,6 +289,13 @@
   margin-top: 2px;
 }
 
+/* Why Open combo waits, with the button that shows the combo in the way under it (R5-13). */
+.layer-combo-wait {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
 .layer-refs {
   display: flex;
   max-height: 220px;

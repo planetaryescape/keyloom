@@ -47,6 +47,13 @@ export function openComboFromElsewhere(draft: ComboDraft | null, combos: readonl
   return draft.id === id ? "show_draft" : "blocked";
 }
 
+/** Why Open combo waits while another combo's card holds edits (R5-13), said in the dialog the person is in. */
+export function comboDraftWaits(draft: ComboDraft): string {
+  return draft.isNew
+    ? "The combo you're making isn't applied yet. Apply or close it before you open another combo."
+    : `Your changes to the combo ${draft.name.trim() === "" ? "you're editing" : `“${draft.name.trim()}”`} aren't applied yet. Apply or close them before you open another combo.`;
+}
+
 interface ListProps {
   layout: Layout;
   onOpen: (combo: Combo) => void;

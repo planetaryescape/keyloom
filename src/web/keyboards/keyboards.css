@@ -83,6 +83,24 @@
   font-size: var(--text-sm);
 }
 
+/* A keyboard keyloom can't add yet (R5-06) is not the person's mistake: it reads in the page's ink, with its ways on below it. */
+.nb-cant {
+  color: var(--ink-2);
+}
+
+
+.nb-problem .nb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.nb-problem .nb-actions .sheet-action {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
 .nb-cands {
   display: grid;
   gap: var(--space-2);

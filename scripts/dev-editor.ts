@@ -20,7 +20,8 @@
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
 // KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way (codex_missing: locked to a Codex that isn't installed);
 // KEYLOOM_FAKE_CHAT=fail_after_accept:<kind> accepts each message as a saved run and fails it after a moment with that provider failure
-// (auth, no_credits, permission, rate_limit, overloaded, server, connection or context_full), stored with the run (R4-02). And
+// (auth, no_credits, permission, rate_limit, overloaded, server, connection or context_full, or Codex's usage_limit), stored with
+// the run (R4-02). And
 // KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35). With missing_key, a pasted key containing "bad"
 // is refused and any other is "saved"; KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the pretend Codex sign-in that long (default 1500).
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
@@ -32,7 +33,7 @@ import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
 import { dockerAccessFix } from "../src/app/toolchain.ts";
-import { type FailureKind, isFailureKind } from "../test/helpers/model-failures.ts";
+import { type ShownFailureKind, isShownFailureKind } from "../test/helpers/model-failures.ts";
 
 const port = Number(process.argv[2] ?? 4490);
 const fixture = await devSample();
@@ -61,10 +62,10 @@ if (process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile") {
 }
 
 const chatMode = process.env.KEYLOOM_FAKE_CHAT;
-function failAfterAcceptance(mode: string | undefined): FailureKind | null {
+function failAfterAcceptance(mode: string | undefined): ShownFailureKind | null {
   if (!mode?.startsWith("fail_after_accept:")) return null;
   const kind = mode.slice("fail_after_accept:".length);
-  if (!isFailureKind(kind)) throw new Error(`KEYLOOM_FAKE_CHAT=${mode}: unknown failure "${kind}"`);
+  if (!isShownFailureKind(kind)) throw new Error(`KEYLOOM_FAKE_CHAT=${mode}: unknown failure "${kind}"`);
   return kind;
 }
 const chat = new FakeChat(fake, "moonlander-daily", {

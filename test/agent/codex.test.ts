@@ -9,6 +9,7 @@ import { z } from "zod";
 import { codexModel } from "../../src/agent/codex-model.ts";
 import { prepareScratch, writeInstructions } from "../../src/agent/codex/lockdown.ts";
 import { startToolServer } from "../../src/agent/codex/tool-server.ts";
+import { codexErrorFor, codexResetTime } from "../../src/agent/codex/errors.ts";
 import type { ModelTool } from "../../src/agent/model.ts";
 import { ModelError, sendMessage, showConversation } from "../../src/app/index.ts";
 import { listMessages } from "../../src/persistence/conversations.ts";
@@ -264,10 +265,28 @@ describe("a conversation on Codex", () => {
 describe("Codex failures", () => {
   const failure = (steps: FakeStep[]) => run(steps).then(() => null, (e) => e as ModelError);
 
-  test("a usage limit is rate_limit", async () => {
-    const err = await failure([{ fail: "You've hit your usage limit. Upgrade to Pro, visit https://chatgpt.com/settings/usage or try again later." }]);
+  test("a used-up plan is usage_limit, in keyloom's words, with no reset time when Codex gives none (R5-04)", async () => {
+    const err = await failure([{ fail: "You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again later." }]);
     expect(err).toBeInstanceOf(ModelError);
-    expect(err?.kind).toBe("rate_limit");
+    expect(err?.kind).toBe("usage_limit");
+    expect(err?.message).toBe("Your ChatGPT plan has used up its Codex allowance, and Codex didn't say when it resets.");
+  });
+
+  test("a usage limit carries the reset time Codex gives, today or on a later day (codex-rs error_tests.rs)", () => {
+    // The sentences codex-rs/protocol/src/error.rs @ f096185f writes for a Plus plan and for an unknown plan.
+    const today = codexErrorFor("You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 3:45 PM.");
+    expect(today.kind).toBe("usage_limit");
+    expect(today.message).toBe("Your ChatGPT plan has used up its Codex allowance until 3:45 PM.");
+    expect(codexErrorFor("You’ve hit your usage limit. Try again at Nov 12th, 2026 9:05 AM.").message).toBe("Your ChatGPT plan has used up its Codex allowance until Nov 12th, 2026 9:05 AM.");
+    const cap = codexErrorFor("You hit your spend cap set in your workspace. Increase your spend cap to continue.");
+    expect(cap.kind).toBe("usage_limit");
+    // An admin's cap is not the plan's allowance and may not reset by itself.
+    expect(cap.message).toBe("Your ChatGPT workspace has reached the Codex spend cap its admin set. It stays reached until an admin raises it.");
+    expect(codexResetTime("You’ve hit your usage limit. Try again later.")).toBeNull();
+  });
+
+  test("too many requests at once stays rate_limit", () => {
+    expect(codexErrorFor("exceeded retry limit, last status: 429 Too Many Requests").kind).toBe("rate_limit");
   });
 
   test("a signed-out Codex is missing_key and says to run codex login", async () => {

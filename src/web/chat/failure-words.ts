@@ -9,12 +9,20 @@ export type FailureAction =
   | "set_up_model"
   /** One button per other provider that is ready; a new conversation takes the message. */
   | "switch"
+  /** Opens the model setup on another provider, offered only while no other provider is ready to switch to. */
+  | "set_up_other"
+  /** Opens the conversation history, to see whether a message keyloom may have accepted was answered. */
+  | "open_history"
   /** Starts a new conversation: the same request can never fit this one again. */
   | "new_conversation"
   /** Sends the same message again. Offered only where a second try can succeed. */
   | "retry";
 
-export type FailureView = { title: string; message: string; actions: readonly FailureAction[]; setUpLabel: string };
+export type FailureView = {
+  title: string; message: string; actions: readonly FailureAction[]; setUpLabel: string;
+  /** Set when sending again may repeat a request keyloom already has, whatever was prepared. */
+  retryLabel?: "Ask again";
+};
 
 // The account, not the request, failed: another provider would not have, so only these offer a switch and the setup.
 const ACCOUNT: readonly FailureAction[] = ["set_up_model", "switch", "retry"];
@@ -26,6 +34,8 @@ const VIEWS: Readonly<Record<string, Omit<FailureView, "message"> & { message?: 
   // The server's sentence for this one can name a terminal command (`codex login`); the button does that job here.
   missing_api_key: { title: "The model isn't set up", message: "keyloom can't use this conversation's model account any more. Set it up again, then try again.", actions: ACCOUNT, setUpLabel: "Set up the model" },
   model_rate_limit: { title: "The model is busy", actions: ["retry"], setUpLabel: "" },
+  // A plan's allowance or a workspace's spend cap stays reached for now, so another provider is the way on; Try again is for after (R5-04).
+  model_usage_limit: { title: "Your Codex usage limit is reached", actions: ["switch", "set_up_other", "retry"], setUpLabel: "Set up another model" },
   model_overloaded: { title: "The model is busy", actions: ["retry"], setUpLabel: "" },
   model_connection: { title: "Can't reach the model", actions: ["retry"], setUpLabel: "" },
   model_server: { title: "The model's service had a problem", actions: ["retry"], setUpLabel: "" },
@@ -33,6 +43,8 @@ const VIEWS: Readonly<Record<string, Omit<FailureView, "message"> & { message?: 
   model_request: { title: "The model refused the request", actions: ["retry", "new_conversation"], setUpLabel: "" },
   // Sending it again would be refused the same way (R4-11).
   model_context_full: { title: "This conversation is full", actions: ["new_conversation"], setUpLabel: "" },
+  // The page lost the request before keyloom confirmed it, so keyloom may be answering it already (R5-07). The page's own code.
+  unconfirmed: { title: "keyloom didn't confirm your message", actions: ["open_history", "retry"], setUpLabel: "", retryLabel: "Ask again" },
 };
 
 export function failureView(failure: { code: string; message: string }): FailureView {

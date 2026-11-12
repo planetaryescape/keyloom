@@ -1,6 +1,6 @@
 // Open combo from the delete-layer dialog never throws away a combo card's edits (#290 review).
 import { expect, test } from "bun:test";
-import { draftFromCombo, openComboFromElsewhere } from "../../src/web/combos/ComboPane.tsx";
+import { comboDraftWaits, draftFromCombo, openComboFromElsewhere } from "../../src/web/combos/ComboPane.tsx";
 import type { Combo } from "../../src/layout/schema.ts";
 import { key } from "../helpers/tiny.ts";
 
@@ -24,4 +24,11 @@ test("a changed card shows itself for the same combo and blocks another one", ()
 test("a combo still being made counts as changed", () => {
   const made = { id: "c9", isNew: true, name: "", positions: [0, 2], layerIds: "all" as const, output: null, timeoutMs: undefined };
   expect(openComboFromElsewhere(made, combos, "c1")).toBe("blocked");
+});
+
+test("the delete-layer dialog says which combo waits, in words, for one being made and one being changed (R5-13)", () => {
+  const made = { id: "c9", isNew: true, name: "", positions: [0, 2], layerIds: "all" as const, output: null, timeoutMs: undefined };
+  expect(comboDraftWaits(made)).toBe("The combo you're making isn't applied yet. Apply or close it before you open another combo.");
+  expect(comboDraftWaits({ ...draftFromCombo(combos[0]!), name: "Go now" })).toBe("Your changes to the combo “Go now” aren't applied yet. Apply or close them before you open another combo.");
+  expect(comboDraftWaits({ ...draftFromCombo(combos[0]!), name: " " })).toContain("the combo you're editing");
 });

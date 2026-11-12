@@ -1,6 +1,6 @@
 # 26: keyloom as a desktop app
 
-Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, D-514's update failures, last lines and Sync now notice, D-515's links and downloads, and D-516's too-new database, Stop download and busy Sync now); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
+Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, D-514's update failures, last lines and Sync now notice, D-515's links and downloads, D-516's too-new database, Stop download and busy Sync now, and D-521's Restart keyloom and drag and drop); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
@@ -42,7 +42,7 @@ The release matrix signs the visible Rust executable before embedding, without B
 
 ## Decisions
 
-D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them; D-507, D-514, D-515 and D-516 for the problem window, links, downloads and updates.
+D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D-454 (the client protocol and `--replace`) and D-455 (the schema guard) after them; D-507, D-514, D-515 and D-516 for the problem window, links, downloads and updates; D-521 for Restart keyloom and drag and drop.
 
 ## As built
 
@@ -57,5 +57,7 @@ D-320 to D-322 and D-323 to D-329 are in [14](14-decision-log.md), with D-481; D
 - **Links and downloads (D-515).** A link to another site opens in the default browser, and the window keeps keyloom; other schemes, and keyloom's own page in a new window, are refused. Only keyloom's own page can save a download. A download is saved to Downloads under its own name, never over an existing file, and Finder shows it; a failed one sends a notification. Checked in a debug build on a scratch home and data directory (`external.rs`).
 - **A database a newer keyloom upgraded (D-516).** `serve` exits 10 with `schema_too_new`; the problem window says the app is older than the data and offers the update and the download page, with no Try again. Checked by `cargo test`, not in a running app.
 - **Stop download (D-516).** An update download shows **Stop download** in the problem window and the menu bar, and stops by itself after 60 s with nothing received. Either way it ends as a failed install with the reason, offered again. Checked by `cargo test` only: no signed update feed exists to download from.
+- **Restart keyloom (D-521).** The page (the typing lab's `restart_required`) and the menu bar post `/api/restart`. A server the shell started answers 202, finishes any keyboard write, and exits 11, even when the helper cleanup fails; the shell starts it again at once, without counting a stop, and the window follows it. The server sets no time limit on that write. After 45 s the page looks again: a server still answering never restarted, so the button comes back; otherwise the page says to choose Open keyloom, or to quit and open keyloom again. A menu-bar restart that got no answer says it may already be restarting. A server started in a terminal refuses, and the page shows the line to run there with Copy. Checked in a debug build on scratch data: four restarts in a row, no problem window.
+- **Drag and drop (D-521).** The window is built without Tauri's drag-and-drop handler, so a file dropped on the import card and a dragged layer tab reach the page. A web link dropped anywhere else opens in the browser, and a file dropped there is blocked. Checked in a debug build by driving WKWebView's native drag methods with a fake drag (a control build without the fix fired no page event).
 - **Menu-bar Sync now while busy (D-516).** It says keyloom syncs when the build or flash finishes, and asks again every 3 s for up to 15 minutes, as the page does. Checked by `cargo test` only.
 - **Measured on BK's Mac (Apple Silicon):** 70 MB `.app` (72,088 KB on disk), server listening 0.6 s after launch.

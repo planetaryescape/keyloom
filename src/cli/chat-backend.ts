@@ -10,7 +10,7 @@ const CREDENTIAL_STATUS: Record<CredentialError["code"], 400 | 409 | 502 | 503> 
   key_malformed: 400, key_rejected: 400, key_from_environment: 409, key_store_unavailable: 503, key_store_failed: 502, codex_missing: 409,
 };
 
-const MODEL_STATUS: Record<string, 402 | 429 | 502 | 503> = { missing_key: 503, rate_limit: 429, connection: 502, overloaded: 503, no_credits: 402 };
+const MODEL_STATUS: Record<string, 402 | 429 | 502 | 503> = { missing_key: 503, rate_limit: 429, usage_limit: 429, connection: 502, overloaded: 503, no_credits: 402 };
 
 /** Turns the app's typed errors into the status and code the browser acts on; anything else stays a 500. */
 export function toChatError(err: unknown): unknown {

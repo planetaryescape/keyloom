@@ -10,6 +10,7 @@ import type { UsbDevice } from "../../src/firmware/toolchain/usb.ts";
 import { CORNE_LAYOUT_FIXTURE } from "../helpers/derive-sources.ts";
 import { STYLE_FIXTURE } from "../helpers/zmk.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { GeometryError } from "../../src/boards/geometry-error.ts";
 import { join } from "node:path";
 
 afterAll(() => setUserBoards([]));
@@ -17,6 +18,10 @@ afterAll(() => setUserBoards([]));
 const corne: UsbDevice = { vendorId: "0x1d50", productId: "0x615e", name: "Corne", maker: "ZMK Project", serial: "ABCDEF" };
 const glove: UsbDevice = { vendorId: "0x16c0", productId: "0x27db", name: "Glove80 Left", maker: "MoErgo", bcdDevice: "0x0305" };
 const mouse: UsbDevice = { vendorId: "0x046d", productId: "0xc077", name: "USB Optical Mouse", maker: "Logitech" };
+
+// Atomic: two layouts in QMK's index and neither is LAYOUT, so there is no default. Synthetic keys, the index's counts.
+const grid = (rows: number[]) => rows.flatMap((n, y) => Array.from({ length: n }, (_, x) => ({ x, y, matrix: [y, x] })));
+const ATOMIC = JSON.stringify({ layouts: { LAYOUT_semi_standard: { layout: grid([14, 14, 13, 13, 12]) }, LAYOUT_ortho_5x15: { layout: grid([15, 15, 15, 15, 15]) } } });
 
 type Result = { code: number; out: string; err: string };
 const json = (r: Result) => JSON.parse(r.out);
@@ -26,6 +31,9 @@ function harness(devices: UsbDevice[], hideCorne = true) {
   const keyboards = {
     fetchText: async (url: string) => {
       if (url.endsWith("/app/dts/layouts/foostan/corne/6column.dtsi")) return Bun.file(CORNE_LAYOUT_FIXTURE).text();
+      if (url.endsWith("/keyboards/atomic/keyboard.json")) return ATOMIC;
+      // QMK's reader steps past a file that isn't there only on a GeometryError 404.
+      if (url.includes("/keyboards/atomic/")) throw new GeometryError(`GET ${url} returned 404`);
       throw new Error(`GET ${url} returned 404`);
     },
     cacheDir: tempDir(),
@@ -128,6 +136,17 @@ describe("keyloom keyboard add and put", () => {
     expect(json(r)).toMatchObject({ added: false, needs: ["--home-row", "--controller"], preview: { keyCount: 42, guessedHomeRow: 2 } });
     expect(r.err).toContain("--home-row");
     expect(await Bun.file(`${dataDir}/boards/local/corne/board.json`).exists()).toBe(false);
+  });
+
+  // #293 review: the table named keyloom's guess as if it were the keyboard's layout.
+  test("add without --layout marks the drawn layout as keyloom's guess and lists the layouts", async () => {
+    const { cli } = harness([]);
+    const r = await cli("keyboard", "add", "--candidate", "qmk:atomic", "--format", "table");
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("Atomic: 75 keys (layout LAYOUT_ortho_5x15, keyloom's guess)");
+    expect(r.out).toContain("layouts to choose from with --layout: LAYOUT_semi_standard (66 keys), LAYOUT_ortho_5x15 (75 keys)");
+    const picked = await cli("keyboard", "add", "--candidate", "qmk:atomic", "--layout", "LAYOUT_semi_standard", "--format", "table");
+    expect(picked.out).toContain("Atomic: 66 keys (layout LAYOUT_semi_standard)");
   });
 
   test("add with them stores the board, boards show finds it in a later command, and put proposes the Glove80 layout on it", async () => {

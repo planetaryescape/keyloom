@@ -1,8 +1,10 @@
 // A new keyboard (22, rung 21 part 2): the routes the new-keyboard card calls, in the /api/configs style (D-336). Nothing here writes to a
 // device: detect reads USB, preview reads the pinned firmware tree, add stores a board definition, put makes a config with proposals.
 //   GET  /api/keyboards/detect[?search=<name>] -> DetectResponse (the keyboards on USB keyloom has no board for, or index entries by name)
-//   POST /api/keyboards/preview    PreviewRequest -> PreviewResponse (the board as it would be added, drawn, not stored)
-//   POST /api/keyboards/add        AddRequest -> AddResponse (201; 400 usage when the home row or controller is missing or wrong)
+//   POST /api/keyboards/preview    PreviewRequest -> PreviewResponse (the board as it would be added, drawn, not stored; 400 no_key_positions
+//                                  when the firmware's tree gives no key positions keyloom can read)
+//   POST /api/keyboards/add        AddRequest -> AddResponse (201; 400 usage when the home row or controller is missing or wrong, or a
+//                                  KeyboardAddCode such as controller_unknown or no_key_positions when keyloom can't add this keyboard yet)
 //   POST /api/keyboards/put/preview PutRequest -> PutPreviewResponse (what a put would make, and the layout it gives the board; nothing stored)
 //   POST /api/keyboards/put        PutRequest -> PutResponse (201: a new config on the board, with the mapping as proposals, none applied)
 //   GET  /api/keyboards/collection -> CollectionResponse (including removed keyboards)
@@ -55,10 +57,16 @@ export const PreviewResponseSchema = z.object({
   rows: z.array(z.object({ row: z.number().int(), keys: z.number().int() })),
   guessedHomeRow: z.number().int(),
   layout: z.string().nullable(),
+  // QMK: every layout macro, when the keyboard has more than one; the page lets the person pick theirs.
+  layouts: z.array(z.object({ name: z.string(), keys: z.number().int() })),
+  // QMK with several layouts and no default: keyloom's guess, still named after the person picks another, so the page keeps it marked.
+  guessedLayout: z.string().nullable(),
   needs: z.array(z.string()),
   controllers: z.array(z.object({ id: z.string(), name: z.string() })),
   board: PreviewBoardSchema.nullable(),
   boardProblem: z.string().nullable(),
+  // Why the board can't be drawn, as a code the page says in its own words (R5-06; DeriveErrorCode). The message is the CLI's.
+  boardProblemCode: z.string().nullable(),
   // The name to show: "Corne (new)" when a board keyloom already has is called the same (D-336).
   displayName: z.string(),
 });
