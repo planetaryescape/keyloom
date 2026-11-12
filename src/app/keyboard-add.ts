@@ -27,10 +27,11 @@ import { displayNameFor, findCandidate } from "./keyboard-detect.ts";
  * A keyboard keyloom can't add, with a code a screen turns into its own words (R5-06): the derive codes; `no_key_positions` when the
  * firmware's tree gives no key positions keyloom can read; `layout_unreadable` when its layout file can't be read as one (R6-14), both
  * answered with the contribution guide; `firmware_unreachable` when GitHub didn't give the file, which a Try again can fix; and
- * `board_known` when keyloom already has the board, named by `board`, which the page offers to put a config on (R6-07). The message is
- * the CLI's. Exit 2 like any usage error.
+ * `board_known` when keyloom already has the board, named by `board`, which the page offers to put a config on (R6-07); and
+ * `board_check_failed` when the derived board fails the check every contributed board passes, which the same input fails again (R7-11).
+ * The message is the CLI's. Exit 2 like any usage error.
  */
-export type KeyboardAddCode = DeriveErrorCode | "no_key_positions" | "layout_unreadable" | "firmware_unreachable" | "board_known";
+export type KeyboardAddCode = DeriveErrorCode | "no_key_positions" | "layout_unreadable" | "firmware_unreachable" | "board_known" | "board_check_failed";
 export class KeyboardAddError extends UsageError {
   override name = "KeyboardAddError";
   /** `boardName`: keyloom's own name for `board`, which the page names it by, not the search result's (#299 review). */
@@ -306,8 +307,10 @@ export async function addKeyboard(app: App, input: AddInput, opts: AddDeps = {})
   try {
     const dir = writeUserBoard(staging, derived);
     const result = await checkBoardDir(dir, geometryOpts);
+    // The check reads the same pinned files from the cache readGeometry just filled, so the same input fails it again: a code the page
+    // answers with the contribution guide, not Add again (R7-11).
     if (!result.ok) {
-      throw new UsageError(`the derived ${c.name} board fails \`keyloom boards check\`: ${result.issues.filter((i) => i.level === "error").map((i) => i.message).join("; ")}`);
+      throw new KeyboardAddError("board_check_failed", `the derived ${c.name} board fails \`keyloom boards check\`: ${result.issues.filter((i) => i.level === "error").map((i) => i.message).join("; ")}`);
     }
     const existing = userBoardDir(app.dataDir, derived.definition.id);
     if (input.force !== true && (await Bun.file(join(existing, "board.json")).exists())) {

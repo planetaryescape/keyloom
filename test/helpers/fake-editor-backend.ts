@@ -196,7 +196,7 @@ export class FakeEditor implements EditorBackend {
     return [
       { id: "zsa/moonlander", name: "Moonlander", vendor: "ZSA", firmware: "qmk", keyCount: 72, importers: ["oryx-source"] },
       { id: "moergo/glove80", name: "Glove80", vendor: "MoErgo", firmware: "zmk", keyCount: 80, importers: ["zmk-layout-editor-keymap"] },
-      { id: "foostan/corne", name: "Corne", vendor: "foostan", firmware: "zmk", keyCount: 42, importers: ["zmk-keymap"] },
+      { id: "foostan/corne", name: "Corne", vendor: "foostan", firmware: "zmk", keyCount: 42, importers: ["zmk-keymap"], keymapFile: "config/corne.keymap" },
     ];
   }
 

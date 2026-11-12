@@ -149,6 +149,8 @@ export const BoardChoiceSchema = z.object({
   firmware: z.enum(["qmk", "zmk", "kanata"]),
   keyCount: z.number().int().positive(),
   importers: z.array(z.string().min(1)).min(1),
+  // A zmk-config board's keymap file in that repository, such as config/corne_choc_pro.keymap, which its import card names (R7-13).
+  keymapFile: z.string().min(1).optional(),
   // The board's keys and display hints, so the top bar can draw each board's silhouette before its layout is open (D-269).
   keys: GeometrySchema.shape.keys.optional(),
   display: BoardDefinitionSchema.shape.display,
