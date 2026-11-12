@@ -11,9 +11,17 @@ const response = (r: Awaited<ReturnType<typeof startDocker>>): DockerStartRespon
 // A restart that failed has already done what the hint says; the page offers the engine's guide and Check again instead.
 const restartResponse = (r: Awaited<ReturnType<typeof restartDocker>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }) });
 
-export function appSystemBackend(installDeps: InstallDeps = {}, docker: { restart?: typeof restartDocker; start?: typeof startDocker } = {}): SystemBackend & { stopInstalls: () => Promise<void> } {
+/**
+ * `restartBlocker` says why a forced restart can't run now (a build or flash would stop), or null; serve passes `engineRestartBlocker`.
+ * Without one, a forced restart is refused, so no caller can stop a build by leaving it out.
+ */
+export function appSystemBackend(
+  installDeps: InstallDeps = {},
+  docker: { restart?: typeof restartDocker; start?: typeof startDocker; restartBlocker?: () => string | null } = {},
+): SystemBackend & { stopInstalls: () => Promise<void> } {
   let starting: Promise<DockerStartResponse> | null = null;
   let restarting: Promise<DockerStartResponse> | null = null;
+  let forcing: Promise<DockerStartResponse> | null = null;
   const installs = installJobs(installDeps);
   return {
     docker: () => dockerReadiness(),
@@ -26,9 +34,16 @@ export function appSystemBackend(installDeps: InstallDeps = {}, docker: { restar
     installState: async (tool) => installs.get(tool),
     karabinerConfig: () => readKarabinerConfig(),
     cancelInstall: async (tool) => installs.cancel(tool),
-    restartDocker: () => {
-      restarting ??= (docker.restart ?? restartDocker)().then(restartResponse).finally(() => { restarting = null; });
-      return restarting;
+    restartDocker: async (opts = {}) => {
+      if (opts.force !== true) {
+        restarting ??= (docker.restart ?? restartDocker)().then(restartResponse).finally(() => { restarting = null; });
+        return restarting;
+      }
+      if (forcing !== null) return forcing;
+      const blocked = docker.restartBlocker === undefined ? "keyloom can't tell whether a build is running here, so it didn't restart Docker." : docker.restartBlocker();
+      if (blocked !== null) return { ok: false, reason: blocked, engine: null, code: "build_running" };
+      forcing = (docker.restart ?? restartDocker)({ force: true }).then(restartResponse).finally(() => { forcing = null; });
+      return forcing;
     },
   };
 }

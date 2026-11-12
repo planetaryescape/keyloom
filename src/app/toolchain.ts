@@ -180,7 +180,7 @@ function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?:
  * R2-07), and a Colima whose daemon is down (R3-04), which is stopped hard and started again. Anything else keeps its own fix, so this
  * says so instead of guessing. A Docker that answers, even slowly, is left running.
  */
-export async function restartDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<DockerStartResult & { code?: "engine_busy" }> {
+export async function restartDocker(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" }> {
   // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing. The code lets the
   // page follow the action that is running instead of offering the restart again (R4-04).
   if (engineHolder !== null) {
@@ -190,10 +190,32 @@ export async function restartDocker(opts: { onProgress?: (line: string) => void;
   return holdEngine("restart", () => restartDockerUnheld(opts));
 }
 
-async function restartDockerUnheld(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides }): Promise<DockerStartResult> {
+type RestartOptions = {
+  onProgress?: (line: string) => void;
+  signal?: AbortSignal;
+  overrides?: ToolchainOverrides;
+  /**
+   * Restart an engine that answers, for a build that failed on the engine's own state: a stale shared folder or a container it can't
+   * remove (R6-09, R6-17). The caller checks first that no build or flash is running (`engineRestartBlocker`), because this stops them.
+   */
+  force?: boolean;
+};
+
+/** The engine a forced restart would restart: Colima, or a Mac engine app. Null for any other, such as Linux's system service (R6-09). */
+export async function forcedRestartEngine(over: ToolchainOverrides = {}): Promise<DockerEngine | null> {
+  const finding = await (over.detect ?? findDockerEngine)();
+  if (finding.kind !== "engine") return null;
+  const { engine } = finding;
+  if (engine.command[0] === "colima") return engine;
+  return engine.command[0] === "open" && (over.platform ?? process.platform) === "darwin" ? engine : null;
+}
+
+async function restartDockerUnheld(opts: RestartOptions): Promise<DockerStartResult> {
   const over = opts.overrides ?? {};
-  // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is restarted.
+  // Quitting a Docker that works would stop whatever it runs, such as a build for an auto-sync, so only a refusal or a dead engine is
+  // restarted, unless the caller forces it for a build that failed on the engine itself.
   const now = await (over.status ?? (() => dockerStatus()))();
+  if (opts.force === true && (now.ok || now.kind === "slow")) return forcedRestart(opts);
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
   // A slow daemon is up and may be busy: `colima stop --force` would kill the build it runs, such as an auto-sync's (D-497).
   if (now.kind === "slow") return { ok: false, engine: null, reason: "Docker is answering slowly, so it may be running a build. keyloom didn't restart it, because that would stop the build. Check again in a minute." };
@@ -221,6 +243,18 @@ async function restartDockerUnheld(opts: { onProgress?: (line: string) => void; 
     ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
   });
+}
+
+async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult> {
+  const over = opts.overrides ?? {};
+  const engine = await forcedRestartEngine(over);
+  if (engine === null) return { ok: false, engine: null, reason: "keyloom restarts Colima or a Docker app, and your Docker engine is neither. Restart it yourself, then build again." };
+  const wait = {
+    ...(over.status === undefined ? {} : { status: over.status }),
+    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  };
+  return engine.command[0] === "colima" ? (over.restartColima ?? restartColima)(engine, wait) : (over.restartApp ?? restartDockerApp)(engine, wait);
 }
 
 export type EnsureDockerResult =

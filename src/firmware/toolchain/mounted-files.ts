@@ -69,5 +69,7 @@ export async function awaitMountedFiles(check: MountedFilesCheck): Promise<void>
   throw new BuildFailure(
     `Docker still sees an old or missing copy of ${differing.map((p) => p.slice(check.containerRoot.length + 1)).join(", ")} after ${Math.round(settleMs / 1000)} s, so the build would not use what keyloom wrote. ` +
       `This is a stale shared folder (Colima's sshfs mount); restart it with \`colima restart\`, or move XDG_CACHE_HOME to a folder it shares reliably, then build again.${detail ? ` Docker said: ${detail}` : ""}`,
+    // The page reads the code and offers the restart; the terminal keeps this sentence (R6-09).
+    "stale_mount",
   );
 }

@@ -16,8 +16,9 @@ const backend: SystemBackend = {
   install: async (tool) => ({ tool, status: "running", phase: "installing", logTail: [], error: null, errorCode: null }),
   installState: async (tool) => ({ tool, status: "succeeded", phase: null, logTail: ["==> Pouring zapp"], error: null, errorCode: null }),
   cancelInstall: async (tool) => { cancelled.push(tool); return { tool, status: "running", phase: "stopping", logTail: ["keyloom: stopping the install"], error: null, errorCode: null }; },
-  restartDocker: async () => { restarts += 1; return { ok: true, version: "28.0.1", engine: "OrbStack", waitedMs: 4_000 }; },
+  restartDocker: async (opts) => { restarts += 1; forced.push(opts?.force === true); return { ok: true, version: "28.0.1", engine: "OrbStack", waitedMs: 4_000 }; },
 };
+const forced: boolean[] = [];
 const cancelled: string[] = [];
 let restarts = 0;
 
@@ -89,6 +90,10 @@ describe("the Docker routes", () => {
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
     expect((await call("/api/system/docker/restart")).status).toBe(405);
     expect(restarts).toBe(1);
+    // A build that failed on the engine's state asks for a forced restart (R6-09); only `force` is accepted beside the empty body.
+    expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true}", headers: { "content-type": "application/json" } })).status).toBe(200);
+    expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true,\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
+    expect(forced).toEqual([false, true]);
   });
 
   test("the guard: a token on every route, JSON on the write, and the method named when it is wrong", async () => {

@@ -124,6 +124,11 @@ export function findFlash(db: Database, id: string): FlashRow | undefined {
   return row ? toFlash(row) : undefined;
 }
 
+/** Builds still marked running, in this keyloom or another; a row whose process died is reaped by the caller. */
+export function runningBuilds(db: Database): BuildRow[] {
+  return (db.query("SELECT * FROM builds WHERE status = 'running'").all() as BuildDb[]).map(toBuild);
+}
+
 /** A flash that has not finished, if any: only one board can be in its bootloader at a time. */
 export function activeFlashes(db: Database): FlashRow[] {
   return (db.query("SELECT * FROM flashes WHERE status IN ('waiting_for_bootloader','writing') ORDER BY started_at").all() as FlashDb[]).map(toFlash);

@@ -12,7 +12,7 @@ import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
-import { buildFailureView, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { buildFailureView, engineRestartLog, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
 import "./release.css";
 
 interface Props {
@@ -291,6 +291,16 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                 {failure?.kind === "docker" ? (
                   // The build stopped at Docker: the same callout and button as before a build, never the raw sentence.
                   dockerNow.kind === "none" ? <p className="ok">Docker is ready now. Build again to continue.</p> : <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} buildFailed />
+                ) : failure?.kind === "restart_engine" ? (
+                  // The engine's own state stopped it: words and a restart, never the terminal advice in the build's sentence (R6-09).
+                  <>
+                    <div className="callout callout-error" role="alert">
+                      <CircleAlert size={18} aria-hidden="true" />
+                      <p>{failure.text}</p>
+                    </div>
+                    <p>{failure.next}</p>
+                    <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
+                  </>
                 ) : (
                   <>
                     <div className="callout callout-error" role="alert">
@@ -310,11 +320,18 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                         Go back to the last version that built
                       </button>
                     )
+                  ) : failure?.kind === "restart_engine" && failure.button !== null && release.engineRestart.again ? (
+                    // Building again hits the same engine state, so the restart comes first and the build follows it.
+                    <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id)}>
+                      {release.engineRestart.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+                      {failure.button}
+                    </button>
                   ) : (
                     <button type="button" className="button" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
                       Build again
                     </button>
                   )}
+                  {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
                   {failure?.kind === "docker" ? null : (
                     <button type="button" className="button" onClick={() => onAskAboutBuild(build)}>
                       <MessageCircle size={14} aria-hidden="true" />

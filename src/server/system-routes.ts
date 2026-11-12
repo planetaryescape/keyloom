@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts lists them). startServer calls `handleSystemRoute` for every /api request
 // after its Host check, and serves the Response when one comes back.
 import { z } from "zod";
-import { DockerReadinessResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
+import { DockerReadinessResponseSchema, DockerRestartRequestSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
 import type { ApiErrorBody } from "../api/http.ts";
 import { InstallRequestSchema, InstallStateSchema, InstallableToolSchema } from "../api/tool-install.ts";
 import { checkToken } from "./guard.ts";
@@ -56,9 +56,14 @@ export async function handleSystemRoute(request: Request, pathname: string, back
       if (!body.success) return errorResponse(400, "schema", "Name the tool to install: docker, zapp, dfu-util, dfu-programmer, avrdude or codex.");
       return Response.json(InstallStateSchema.parse(await backend.install(body.data.tool)));
     }
-    const parsed = EmptyBody.safeParse(await request.json().catch(() => null));
+    const body: unknown = await request.json().catch(() => null);
+    if (route.action === "restartDocker") {
+      const restart = DockerRestartRequestSchema.safeParse(body);
+      if (!restart.success) return errorResponse(400, "schema", "The request body must be {} or {\"force\": true}.");
+      return Response.json(DockerStartResponseSchema.parse(await backend.restartDocker("force" in restart.data && restart.data.force ? { force: true } : {})));
+    }
+    const parsed = EmptyBody.safeParse(body);
     if (!parsed.success) return errorResponse(400, "schema", "The request body must be an empty object.");
-    if (route.action === "restartDocker") return Response.json(DockerStartResponseSchema.parse(await backend.restartDocker()));
     return Response.json(DockerStartResponseSchema.parse(await backend.startDocker()));
   } catch (err) {
     console.error("keyloom: system request failed", err);

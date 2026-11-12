@@ -35,6 +35,20 @@ describe("appSystemBackend", () => {
     expect(await backend.restartDocker()).toMatchObject({ ok: false, code: "engine_busy" });
   });
 
+  test("a forced restart is refused while a build or flash runs, and refused when nothing can say whether one does (R6-09)", async () => {
+    const asked: unknown[] = [];
+    const restart = async (opts?: { force?: boolean }) => (asked.push(opts), { ok: true as const, version: "28", engine: "Colima", waitedMs: 1 });
+    let blocker: string | null = "A build or flash is running, and restarting Docker now would stop it.";
+    const guarded = appSystemBackend({}, { restart, restartBlocker: () => blocker });
+    expect(await guarded.restartDocker({ force: true })).toMatchObject({ ok: false, code: "build_running", reason: blocker });
+    expect(asked).toEqual([]);
+    blocker = null;
+    expect(await guarded.restartDocker({ force: true })).toMatchObject({ ok: true, engine: "Colima" });
+    expect(asked).toEqual([{ force: true }]);
+    expect(await appSystemBackend({}, { restart }).restartDocker({ force: true })).toMatchObject({ ok: false, code: "build_running" });
+    expect(asked).toHaveLength(1);
+  });
+
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

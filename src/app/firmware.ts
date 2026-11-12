@@ -5,7 +5,8 @@ import { requirePlatformSupport } from "../firmware/toolchain/platform-support.t
 import { join, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
-import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES, isBuildErrorCode } from "../firmware/toolchain/build-failure.ts";
+import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES, ENGINE_RESTART_BUILD_CODES, isBuildErrorCode } from "../firmware/toolchain/build-failure.ts";
+import { keyboardWriteInProgress } from "../firmware/toolchain/write-guard.ts";
 import { CheckoutError } from "../firmware/toolchain/checkout.ts";
 import type { FlashNote, FlashPermissionCode, FlashState } from "../firmware/toolchain/flash-state.ts";
 import { LockAbortedError, LockTimeoutError, processAlive } from "../firmware/toolchain/lock.ts";
@@ -14,7 +15,7 @@ import { LogSink } from "../firmware/toolchain/run.ts";
 import { listUsbDevices } from "../firmware/toolchain/usb.ts";
 import {
   type BuildRow, type FlashRow, activeFlashes, builtRevisionIds, createBuild, createFlash, finishBuild, finishFlash, findBuild, findFlash, latestSuccessfulBuild,
-  newBuildId, newFlashId, setFlashProgress,
+  newBuildId, newFlashId, runningBuilds, setFlashProgress,
 } from "../persistence/builds.ts";
 import { recordHandsFreeProof } from "../persistence/syncs.ts";
 import { appendLog } from "../persistence/log.ts";
@@ -28,7 +29,7 @@ import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor }
 import { BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
-import { ensureDocker } from "./toolchain.ts";
+import { ensureDocker, forcedRestartEngine } from "./toolchain.ts";
 import { syncSupported } from "./sync-keyboard.ts";
 
 // These are the shapes of Build and Flash in src/api/http.ts (a superset: the extra fields are for
@@ -47,6 +48,8 @@ export type BuildView = {
   errorCode: BuildErrorCode | null;
   /** For a build that fails the same way every time: the newest earlier revision in its history that built, or null (R5-02). */
   lastBuilt: { revisionId: string; summary: string } | null;
+  /** For a build that failed on the engine's own state (`stale_mount`, `stuck_container`): the engine keyloom can restart, or null (R6-09). */
+  restartEngine: string | null;
   /** What flashing this build will need, so the dialog knows before anyone clicks (D-489, D-490). */
   flashPlan: FlashPlan;
   startedAt: number;
@@ -191,6 +194,8 @@ async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
     id: row.id, revisionId: row.revisionId, layoutId: row.layoutId, boardRevision: row.boardRevision, status: row.status, error: row.error,
     errorCode,
     lastBuilt: row.status === "failed" && errorCode !== null && DETERMINISTIC_BUILD_CODES.has(errorCode) ? lastBuiltBefore(app, row) : null,
+    // Asked only for these failures, so a poll of a running or finished build never looks for the engine.
+    restartEngine: row.status === "failed" && errorCode !== null && ENGINE_RESTART_BUILD_CODES.has(errorCode) ? ((await forcedRestartEngine())?.name ?? null) : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
@@ -361,6 +366,17 @@ export async function waitForBuild(app: App, id: string): Promise<BuildView> {
 export function firmwareBusy(app: App): boolean {
   if (buildTasks.size > 0) return true;
   return activeFlashes(app.db).map((f) => reapFlash(app, f)).some((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
+}
+
+export const ENGINE_RESTART_BLOCKED = "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.";
+
+/**
+ * Why Docker can't be restarted for a build now, or null (R6-09). A forced restart stops every container, so it waits for any build
+ * here or in another live keyloom, a flash and a keyboard write: the same things a sync waits for (`firmwareBusy`, D-506).
+ */
+export function engineRestartBlocker(app: App): string | null {
+  const building = runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
+  return firmwareBusy(app) || building || keyboardWriteInProgress() ? ENGINE_RESTART_BLOCKED : null;
 }
 
 /** Builds and waits. Throws BuildFailedError (exit 7) when the build fails. */

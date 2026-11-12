@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, restartDocker, startDocker } from "../../src/app/toolchain.ts";
+import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
@@ -98,6 +98,22 @@ describe("a daemon that refuses this account (D-497)", () => {
     expect(stopped).toMatchObject({ ok: false });
     if (!stopped.ok) expect(stopped.reason).toContain("a Docker app when it refuses this account");
     expect(restarted).toBe(0);
+  });
+
+  test("a forced restart restarts a Colima or Mac app that answers, for a build its state stopped; any other engine is named, not guessed at (R6-09)", async () => {
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } };
+    const restarted: string[] = [];
+    const restartColima = async (engine: { name: string }) => (restarted.push(`colima:${engine.name}`), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
+    const restartApp = async (engine: { name: string }) => (restarted.push(`app:${engine.name}`), { ok: true as const, version: "29", engine: engine.name, waitedMs: 1 });
+    const up = async () => ({ ok: true as const, version: "29" });
+    expect(await restartDocker({ force: true, overrides: { status: up, detect: async () => colima, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Colima" });
+    expect(await restartDocker({ force: true, overrides: { platform: "darwin", status: up, detect: async () => desktop, restartColima, restartApp } })).toMatchObject({ ok: true, engine: "Docker Desktop" });
+    const service = { kind: "engine" as const, engine: { name: "the Docker service", command: ["systemctl", "start", "docker"] } };
+    const refused = await restartDocker({ force: true, overrides: { platform: "linux", status: up, detect: async () => service, restartColima, restartApp } });
+    expect(refused).toMatchObject({ ok: false, engine: null });
+    expect(restarted).toEqual(["colima:Colima", "app:Docker Desktop"]);
+    expect(await forcedRestartEngine({ platform: "linux", detect: async () => desktop })).toBeNull();
+    expect((await forcedRestartEngine({ detect: async () => colima }))?.name).toBe("Colima");
   });
 
   test("a Colima that won't start is stopped and started from scratch; one that answers, or refuses, is left alone (R3-04)", async () => {

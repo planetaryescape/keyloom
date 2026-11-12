@@ -9,11 +9,13 @@ import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
 import { buildCancelProblem } from "./flash-words.ts";
+import { restartDockerApp } from "../system.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is said to be gone; polling goes on, and the line clears when it answers (R2-13).
 const MAX_MISSES = 3;
 const POLL_LOST = "keyloom stopped answering. Check that it is still running, then try again.";
+const BUILD_READ_FAILED = "keyloom couldn't read this build again. Try again to read it.";
 
 export interface Release {
   build: Build | null;
@@ -59,10 +61,14 @@ export interface Release {
   /** Opens the System Settings pane a permission code names (D-492, D-501). */
   openSettings: (pane: SettingsPaneName) => void;
   settingsProblem: string | null;
+  /** Restarts the Docker engine whatever it answers, then builds `revisionId` again, for a `stale_mount` or `stuck_container` (R6-09). */
+  restartAndBuild: (revisionId: string) => void;
+  /** That restart: running, and why it didn't go through. `again` is false once a restart has failed, so it isn't offered twice (D-511). */
+  engineRestart: { running: boolean; problem: string | null; again: boolean };
 }
 
-// What Try again repeats. A start that failed is sent again; a poll that gave up starts polling again.
-type LastAction = { kind: "build"; revisionId: string } | { kind: "flash" } | { kind: "poll" };
+// What Try again repeats. A start that failed is sent again; a poll that gave up starts polling again; a build read that failed is read again.
+type LastAction = { kind: "build"; revisionId: string } | { kind: "flash" } | { kind: "poll" } | { kind: "read" };
 
 // Starts builds and flashes and follows them once a second until they finish. Nothing here
 // starts a flash by itself: flashNow only runs from an explicit click.
@@ -82,6 +88,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [settingsProblem, setSettingsProblem] = useState<string | null>(null);
   const [stoppingBuild, setStoppingBuild] = useState(false);
   const [buildCancelProblemText, setBuildCancelProblem] = useState<string | null>(null);
+  const [engineRestart, setEngineRestart] = useState<Release["engineRestart"]>({ running: false, problem: null, again: true });
   const docker = useDocker(token);
   const dockerInstall = useInstall(token, "docker", docker.refresh);
 
@@ -107,9 +114,18 @@ export function useRelease(token: string, layoutRef: string): Release {
 
   // Re-reads the build, whose flash plan says whether the flash tool is here now.
   const buildId = build?.id;
+  // A read that fails says so in the dialog's callout, whose Try again reads it again (R6-21).
   const refreshBuild = useCallback(() => {
     if (buildId === undefined) return;
-    fetchBuild(token, buildId, new AbortController().signal).then(setBuild).catch(() => undefined);
+    fetchBuild(token, buildId, new AbortController().signal)
+      .then((next) => {
+        setBuild(next);
+        setError((now) => (now === BUILD_READ_FAILED ? null : now));
+      })
+      .catch(() => {
+        setLast({ kind: "read" });
+        setError(BUILD_READ_FAILED);
+      });
   }, [token, buildId]);
   const toolInstall = useInstall(token, build?.flashPlan.tool?.name ?? "zapp", refreshBuild);
 
@@ -157,8 +173,25 @@ export function useRelease(token: string, layoutRef: string): Release {
     setError(null);
     if (last.kind === "build") buildNow(last.revisionId);
     else if (last.kind === "flash") flashNow();
+    else if (last.kind === "read") refreshBuild();
     else setResumes((n) => n + 1);
-  }, [last, buildNow, flashNow]);
+  }, [last, buildNow, flashNow, refreshBuild]);
+
+  // A restart that went through builds again at once. One refused because a build or flash runs may pass once it ends, so it stays
+  // offered; one that failed says why and isn't offered again (D-511), and Build again stays.
+  const restartAndBuild = useCallback((revisionId: string) => {
+    setEngineRestart({ running: true, problem: null, again: true });
+    restartDockerApp(token, undefined, true)
+      .then((result) => {
+        if (result.ok) {
+          setEngineRestart({ running: false, problem: null, again: true });
+          buildNow(revisionId);
+        } else setEngineRestart({ running: false, problem: result.reason, again: result.code === "build_running" || result.code === "engine_busy" });
+      })
+      .catch((e: unknown) => setEngineRestart({ running: false, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted.", again: true }));
+  }, [token, buildNow]);
+  // A new build starts the step afresh.
+  useEffect(() => setEngineRestart({ running: false, problem: null, again: true }), [buildId]);
 
   const download = useCallback(() => {
     if (buildId === undefined) return;
@@ -244,6 +277,7 @@ export function useRelease(token: string, layoutRef: string): Release {
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
     cancelBuild: stopBuild, stoppingBuild, buildCancelProblem: buildRunning ? buildCancelProblemText : null,
     cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,
+    restartAndBuild, engineRestart,
   };
 }
 

@@ -9,7 +9,7 @@ import {
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
-import { checkoutDirFor } from "../../src/app/firmware.ts";
+import { checkoutDirFor, engineRestartBlocker } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { FAKE_ZAPP_HANG, PIN, REVA, REVB, toolchainEnv } from "../helpers/toolchain-env.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
@@ -217,6 +217,18 @@ describe("startBuild / getBuild / buildAndWait", () => {
     const b = await getBuild(e.app, id);
     expect(b.status).toBe("failed");
     expect(b.error).toContain("stopped before this build finished");
+  });
+
+  test("a forced Docker restart waits for a build in another live keyloom, and not for one whose process died (R6-09)", async () => {
+    const e = await toolchainEnv();
+    expect(engineRestartBlocker(e.app)).toBeNull();
+    const dead = newBuildId();
+    createBuild(e.app.db, { id: dead, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${dead}.log`, pid: 2147483646 });
+    expect(engineRestartBlocker(e.app)).toBeNull();
+    const live = newBuildId();
+    createBuild(e.app.db, { id: live, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${live}.log`, pid: process.ppid });
+    expect(engineRestartBlocker(e.app)).toContain("would stop it");
+    e.closeApp();
   });
 
   test("an unknown build is not found", async () => {

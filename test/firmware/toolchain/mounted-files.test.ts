@@ -61,6 +61,8 @@ describe("awaitMountedFiles", () => {
     const result = s.check({ FAKE_STALE_CALLS: "forever" }, { settleMs: 50 });
     await expect(result).rejects.toBeInstanceOf(BuildFailure);
     await expect(result).rejects.toThrow(/still sees an old or missing copy of a\/default\.nix, b\.conf after 0 s.*colima restart/);
+    // The page reads the code and offers a restart; the sentence stays for the terminal (R6-09).
+    await expect(result).rejects.toMatchObject({ code: "stale_mount" });
   });
 
   test("a cancelled build stops waiting", async () => {

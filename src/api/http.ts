@@ -189,9 +189,12 @@ export const BuildSchema = z.object({
   // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a build the
   // person stopped, which the page shows as the Build firmware step again (R3-10); "compile_error" and "too_large" fail the same way every
   // time, so the page offers `lastBuilt` and a question to keyloom instead of Build again (R5-02).
-  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large"]).nullable(),
-  // For those two: the newest earlier revision in this one's history that built, or null. Absent on older senders.
+  // "stale_mount" and "stuck_container" fail on the engine's own state, so the page offers a forced restart of it, then the build (R6-09).
+  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container"]).nullable(),
+  // For compile_error and too_large: the newest earlier revision in this one's history that built, or null. Absent on older senders.
   lastBuilt: z.object({ revisionId: z.string().min(1), summary: z.string() }).nullable().optional(),
+  // For stale_mount and stuck_container: the engine keyloom can restart (Colima or a Mac app), or null. Absent on older senders.
+  restartEngine: z.string().min(1).nullable().optional(),
   flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
