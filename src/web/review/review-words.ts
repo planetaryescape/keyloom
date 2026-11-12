@@ -4,7 +4,7 @@ import type { BoardReview } from "../../api/review.ts";
 import type { ReviewItem } from "../../validation/review-item.ts";
 
 /** A message as a sentence that ends in a full stop. */
-const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
+export const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
 
 export type Segment = { kind: "text"; text: string } | { kind: "key"; layerId: string; position: number } | { kind: "layer"; layerId: string };
 

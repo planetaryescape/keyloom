@@ -20,7 +20,7 @@ import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { CREDITS_PAGES, PROVIDER_NAMES } from "../chat/setup-words.ts";
 import { chooseProvider } from "../chat/api-chat.ts";
-import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments } from "./review-words.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, fixesFor, grouped, markerWords, placeOf, placeWords, segments, sentence } from "./review-words.ts";
 import { type Review, asFailure } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -209,7 +209,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       provider.replace(next);
       setSettingUpOther(false);
       void r.run(true);
-    }, (error: unknown) => setSwitchFailed({ id, words: `keyloom couldn't switch to ${PROVIDER_NAMES[id]}.${error instanceof Error && error.message.trim() !== "" ? ` ${error.message.trim().replace(/([^.!?])$/, "$1.")}` : ""}` }))
+    }, (error: unknown) => setSwitchFailed({ id, words: `keyloom couldn't switch to ${PROVIDER_NAMES[id]}.${error instanceof Error && error.message.trim() !== "" ? ` ${sentence(error.message)}` : ""}` }))
       .finally(() => setSwitching(null));
   };
   // The billing page of the provider the review runs on; Codex sells no credits, so it has none.

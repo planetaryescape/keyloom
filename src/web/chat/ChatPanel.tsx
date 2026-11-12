@@ -502,7 +502,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     const id = transcript.conversationId;
     if (id === null) return;
     const failed = await chat.open(id);
-    if (typeof failed === "string") throw new Error(failed);
+    // null: shown; undefined: replaced by another open, which says its own outcome.
+    if (failed !== null && failed !== undefined) throw new Error(failed);
   };
 
   const newConversation = () => {

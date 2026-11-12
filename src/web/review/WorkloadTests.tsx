@@ -13,7 +13,7 @@ export const testsNeedDocker = (evidence: ReviewWorkload | undefined): boolean =
 
 /** What a Docker callout outside the release dialog says: why Docker is needed, the button once it answers, and what that does. */
 export type NeedsDockerWords = { need: string; again: string; readyNext: string };
-const TESTS_NEED_DOCKER: NeedsDockerWords = { need: "Activity tests run in Docker, and Docker isn't ready on this computer.", again: "Test again", readyNext: "Test again to see the results." };
+export const TESTS_NEED_DOCKER: NeedsDockerWords = { need: "Activity tests run in Docker, and Docker isn't ready on this computer.", again: "Test again", readyNext: "Test again to see the results." };
 
 /**
  * The release dialog's Docker callout, with a button to go on once Docker answers: the same Install, Start or Open as a build gets. The
@@ -44,8 +44,6 @@ export function NeedsDockerView({ docker, install, busy, onRetry, words }: { doc
     {ready ? <div className="br-actions br-actions-start"><button type="button" className="sheet-action" disabled={busy} onClick={onRetry}>{words.again}</button></div> : null}
   </div>;
 }
-
-export const TestsNeedDockerView = (props: { docker: Docker; install: Install; busy: boolean; onRetry: () => void }) => <NeedsDockerView {...props} words={TESTS_NEED_DOCKER} />;
 
 export function ActivityChoices({ value, onChange, disabled = false }: { value: readonly ReviewActivity[]; onChange: (value: ReviewActivity[]) => void; disabled?: boolean }) {
   return <fieldset className="br-activities" disabled={disabled}>
