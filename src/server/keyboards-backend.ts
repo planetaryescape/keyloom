@@ -22,6 +22,10 @@ export class KeyboardsError extends Error {
     readonly status: 400 | 404 | 409,
     readonly code: string,
     message: string,
+    /** The board the refusal names (R6-07). */
+    readonly board?: string,
+    /** keyloom's own name for `board`, for the page's words. */
+    readonly boardName?: string,
   ) {
     super(message);
     this.name = "KeyboardsError";

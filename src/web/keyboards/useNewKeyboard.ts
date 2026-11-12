@@ -7,6 +7,8 @@ import { firstFreeName } from "../import/export-steps.ts";
 import { createConfig, fetchAllConfigs } from "../configs/api-configs.ts";
 import * as api from "./api-keyboards.ts";
 import { deriveProblem } from "./derive-words.ts";
+import { putProblem, type PutProblem } from "./put-words.ts";
+import { keyboardRemoved } from "./RestoreKeyboard.tsx";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
 // is (and, for a ZMK shield, the controller), sees the board keyloom would add, adds it, and puts one of his configs on it. Nothing here
@@ -25,8 +27,11 @@ export type NewBoardStep =
   | { kind: "confirm"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number | null; controller: string | null; layout: string | null }
   /** The board as keyloom would add it: hands, fingers, the flash. */
   | { kind: "review"; keyboard: DetectedKeyboard | null; candidate: ApiCandidate; homeRow: number; controller: string | null; layout: string | null }
-  /** Added, or already known: pick a config to put on it, see it mapped, choose where the keys with no place go. */
-  | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number>; origin: "new" | "known" };
+  /**
+   * Added, or already known: pick a config to put on it, see it mapped, choose where the keys with no place go. `matched`: the keyboard
+   * picked as new is one keyloom already has (R6-07), which may have configs of its own.
+   */
+  | { kind: "put"; boardId: string; boardName: string; source: string | null; choices: Record<string, number>; origin: "new" | "known" | "matched" };
 
 /** A keyboard is the same one across frames by what it says over USB. */
 export const keyboardKey = (k: DetectedKeyboard): string => `${k.device.vendorId}:${k.device.productId}:${k.device.product}:${k.device.serial ?? ""}`;
@@ -43,6 +48,13 @@ export function reviewStep(step: NewBoardStep, preview: PreviewResponse | null):
   if (step.kind !== "confirm" || preview === null || layoutUnpicked(step, preview)) return null;
   return { kind: "review", keyboard: step.keyboard, candidate: step.candidate, homeRow: step.homeRow ?? preview.guessedHomeRow, controller: step.controller, layout: step.layout ?? preview.layout };
 }
+
+/** The board keyloom already has for a candidate (R6-07), as the `board_known` refusal names it. */
+export type KnownBoardRef = { id: string; name: string };
+
+/** The board a `board_known` preview refusal names, by keyloom's own name; the candidate's only if the server sent none. */
+export const knownBoardOf = (error: unknown, candidateName: string): KnownBoardRef | null =>
+  error instanceof ApiError && error.board !== undefined ? { id: error.board, name: error.boardName ?? candidateName } : null;
 
 const message = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
 
@@ -65,7 +77,17 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const [previewProblem, setPreviewProblem] = useState<string | null>(null);
   // The server's code for a preview that can't work for this keyboard (R5-06), so the page offers the guide instead of Try again.
   const [previewProblemCode, setPreviewProblemCode] = useState<string | null>(null);
+  // The board keyloom already has for a keyboard picked as new (R6-07): the page offers to put a config on it instead. Its name is
+  // keyloom's, not the search result's ("Moonlander", not "Moonlander Mark I"), so the steps after it name the board as keyloom does.
+  const [previewProblemBoard, setPreviewProblemBoard] = useState<KnownBoardRef | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
+  // The Put step's map that failed replaces "Mapping it…"; Try again reads it again (R6-05).
+  const [putFailure, setPutFailure] = useState<PutProblem | null>(null);
+  const [putAttempt, setPutAttempt] = useState(0);
+  // A failed QMK and ZMK search, apart from other problems, so its alert carries Search again (R6-19).
+  const [searchProblem, setSearchProblem] = useState<string | null>(null);
+  // A config refused because its keyboard was removed (R6-08): the page offers Restore, then does this again.
+  const [removed, setRemoved] = useState<"blank" | "make" | null>(null);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
   const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
@@ -110,6 +132,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     setProblem(null);
     setPreviewProblem(null);
     setPreviewProblemCode(null);
+    setPreviewProblemBoard(null);
     // The drawing of the old home row or controller must not stay up while the new one is read, or a failed read would hide behind it.
     setPreview(null);
     api.previewKeyboard(token, {
@@ -121,6 +144,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       if (controller.signal.aborted) return;
       setPreviewProblem(message(e));
       setPreviewProblemCode(e instanceof ApiError ? (e.code ?? null) : null);
+      setPreviewProblemBoard(knownBoardOf(e, step.candidate.name));
     });
     return () => controller.abort();
     // The key stands for the step's inputs; the attempt is Try again.
@@ -130,22 +154,28 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   // What the put would make, mapped, before anything is made.
   const putKey = step.kind === "put" && step.source !== null ? `${step.boardId}|${step.source}|${JSON.stringify(step.choices)}` : null;
   useEffect(() => {
+    setPutFailure(null);
     if (step.kind !== "put" || step.source === null) {
       setPutPreview(null);
       return;
     }
     const controller = new AbortController();
+    const boardName = step.boardName;
     setProblem(null);
+    // The map of the config picked before must not stay up while this one is read, or a failure would hide behind it.
+    setPutPreview(null);
     api.previewPut(token, { from: step.source, board: step.boardId, placements: step.choices }, controller.signal).then(setPutPreview, (e: unknown) => {
-      if (!controller.signal.aborted) setProblem(message(e));
+      if (!controller.signal.aborted) setPutFailure(putProblem(e, boardName));
     });
     return () => controller.abort();
+    // The key stands for the step's inputs; the attempt is Try again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, putKey]);
+  }, [token, putKey, putAttempt]);
 
   const search = useCallback(async (text: string) => {
     const sequence = ++searchSequence.current;
     setProblem(null);
+    setSearchProblem(null);
     setSearchText(text);
     if (text.trim().length < 2) {
       setFound([]);
@@ -159,7 +189,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setFoundFor(text.trim());
       }
     } catch (e) {
-      if (searchSequence.current === sequence) setProblem(message(e));
+      if (searchSequence.current === sequence) setSearchProblem(message(e));
     }
   }, [token]);
 
@@ -174,9 +204,25 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setProblem(null); setPreview(null);
       setStep({ kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null });
     },
-    step, preview, previewProblem, previewProblemCode, putPreview, busy, problem, waiting,
+    step, preview, previewProblem, previewProblemCode, previewProblemBoard, putPreview, putFailure, busy, problem, searchProblem, removed, waiting,
     /** Reads the board preview again after it failed. */
     retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
+    /** Restores a removed keyboard, for a config refused because of it (R6-08). */
+    restoreKeyboard: (board: string) => api.restoreKeyboard(token, board),
+    /** Maps the picked config again after the map failed (R6-05). */
+    retryPut: () => setPutAttempt((n) => n + 1),
+    /** Runs the failed QMK and ZMK search again (R6-19). */
+    retrySearch: () => void search(searchText),
+    /** "Pick another config": the Put step without a config picked, so the list is the next thing to do (R6-05). */
+    clearSource: () => setStep((s) => (s.kind === "put" ? { ...s, source: null, choices: {} } : s)),
+    /** "Put a config on it": the keyboard picked as new is a board keyloom has (R6-07), so the put step for that board, by its own name. */
+    putOnKnown: () => {
+      if ((step.kind !== "confirm" && step.kind !== "review") || previewProblemBoard === null) return;
+      setPreview(null);
+      setPutPreview(null);
+      setProblem(null);
+      setStep({ kind: "put", boardId: previewProblemBoard.id, boardName: previewProblemBoard.name, source: null, choices: {}, origin: "matched" });
+    },
     /** Opens the card again for a keyboard put off with "Not now". */
     reopen: (k: DetectedKeyboard) => {
       setDismissed((d) => new Set([...d].filter((x) => x !== keyboardKey(k))));
@@ -199,6 +245,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setStep({ kind: "idle" });
       setPreview(null);
       setProblem(null);
+      setRemoved(null);
     },
     choose: (id: string) => setStep((s) => (s.kind === "card" ? { ...s, choice: id } : s)),
     search,
@@ -251,6 +298,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setPreview(null);
       setPutPreview(null);
       setProblem(null);
+      // A Start blank refused on the setup card must not follow to the Put step, where its Restore would start a blank config (#299 review).
+      setRemoved(null);
       setStep({ kind: "put", boardId: step.boardId, boardName: step.boardName, source: null, choices: {}, origin: "known" });
     },
     /** "Start blank": a new config from the board's own starting point, then open it. Resolves to its id, or null on a failure. */
@@ -259,25 +308,32 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       if (step.kind !== "setup" && step.kind !== "put") return null;
       setBusy(true);
       setProblem(null);
+      setRemoved(null);
       try {
         // Every config's name, archived ones and removed keyboards' included: they still hold their names (#290 review).
         const taken = opts.free === true ? (await fetchAllConfigs(token)).map((config) => config.name) : [];
         const config = await createConfig(token, { from: "blank", name: firstFreeName(name.trim(), taken), board: step.boardId });
         return config.id;
       } catch (e) {
-        setProblem(message(e));
+        if (keyboardRemoved(e)) setRemoved("blank");
+        else setProblem(message(e));
         return null;
       } finally {
         setBusy(false);
       }
     },
-    chooseSource: (id: string) => setStep((s) => (s.kind === "put" ? { ...s, source: id, choices: {} } : s)),
+    chooseSource: (id: string) => {
+      // A refused Start a config doesn't follow to the config just picked; a refused make stays, and its Restore makes the one picked now.
+      setRemoved((r) => (r === "blank" ? null : r));
+      setStep((s) => (s.kind === "put" ? { ...s, source: id, choices: {} } : s));
+    },
     choosePlacement: (source: number, target: number) => setStep((s) => (s.kind === "put" ? { ...s, choices: { ...s.choices, [String(source)]: target } } : s)),
     /** Makes the config with its proposals. Resolves to what was made, so the page can open it. */
     make: async (): Promise<PutResponse | null> => {
       if (step.kind !== "put" || step.source === null) return null;
       setBusy(true);
       setProblem(null);
+      setRemoved(null);
       try {
         const out = await api.putConfig(token, { from: step.source, board: step.boardId, placements: step.choices, ...(activities.length ? { reviewActivities: activities } : {}) });
         setStep({ kind: "idle" });
@@ -286,7 +342,8 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setActivities([]);
         return out;
       } catch (e) {
-        setProblem(message(e));
+        if (keyboardRemoved(e)) setRemoved("make");
+        else setProblem(message(e));
         return null;
       } finally {
         setBusy(false);
@@ -294,6 +351,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     close: () => {
       setActivities([]);
+      setRemoved(null);
       setStep({ kind: "idle" });
       setPreview(null);
       setPutPreview(null);

@@ -67,6 +67,8 @@ export async function failure(response: Response): Promise<ApiError> {
       return new ApiError(response.status, parsed.data.error.message, {
         code: parsed.data.error.code,
         ...(parsed.data.validation === undefined ? {} : { validation: parsed.data.validation }),
+        ...(parsed.data.error.board === undefined ? {} : { board: parsed.data.error.board }),
+        ...(parsed.data.error.boardName === undefined ? {} : { boardName: parsed.data.error.boardName }),
       });
     }
   } catch {

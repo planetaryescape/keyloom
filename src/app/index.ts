@@ -3,7 +3,7 @@ export { type App, closeApp, openApp } from "./context.ts";
 export { type CollectionKeyboard, listKeyboardCollection, listSetupLayouts, removeKeyboard, restoreKeyboard } from "./keyboard-collection.ts";
 export { prepareBoardContribution, exportBoardContribution } from "./board-contribution.ts";
 export { drainDeviceConsumers, shutdownDeviceConnections } from "./device-connections.ts";
-export { BusyError, CredentialError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, NotOpenError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
+export { BoardRefusal, BusyError, CredentialError, IncompatibleError, LabCaptureError, LabStartError, ModelError, NotFoundError, NotOpenError, StaleBaseError, UsageError, ValidationFailedError } from "./errors.ts";
 export {
   type ApplyOutcome, type ChangeSetView, applyChange, applyOps, checkChange, editorDraft, listChanges, openProposalsOutsideChat, proposeChange, rejectChange, showChange, undo,
 } from "./changes.ts";

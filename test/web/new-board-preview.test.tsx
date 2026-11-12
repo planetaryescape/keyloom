@@ -110,13 +110,19 @@ test("a QMK keyboard with several layouts asks which is yours first, with keyloo
   }));
   expect(html).toContain("Two things can&#x27;t be read over USB");
   expect(html).toMatch(/<span>1<\/span>Which layout is yours\?/);
-  expect(html).toMatch(/<span>2<\/span>Where do your fingers rest\?/);
+  // Picking a layout resets the home row, so it is asked once the layout is picked, not beside it (R6-13).
+  expect(html).not.toContain("Where do your fingers rest?");
+  const picked = render(flow(null, {
+    step: { kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: "LAYOUT_semi_standard" },
+    preview: atomicGuess,
+  }));
+  expect(picked).toMatch(/<span>2<\/span>Where do your fingers rest\?/);
   expect(html).toContain("LAYOUT_ortho_5x15 · 75 keys · guess");
   expect(html).toContain("LAYOUT_semi_standard · 66 keys");
 });
 
 test("every code the server sends has words; one that can be fixed here doesn't block, and an unknown code is left to the caller", () => {
-  for (const code of ["controller_unknown", "boot_drive_unknown", "layout_macro_missing", "no_key_positions"]) {
+  for (const code of ["controller_unknown", "boot_drive_unknown", "layout_macro_missing", "no_key_positions", "layout_unreadable"]) {
     const words = deriveProblem(code, "Corne");
     expect(words?.blocked).toBe(true);
     expect(words?.text).not.toMatch(/--|`/);

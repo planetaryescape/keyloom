@@ -17,6 +17,7 @@ import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
 import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
+import type { BoardsRead } from "./keyboards/catalogue-words.ts";
 import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened, undoChange } from "./api-write.ts";
 import { fetchFittingRevision } from "./release/flash-api.ts";
@@ -80,12 +81,22 @@ export function App({ token }: { token: string }) {
   const banner = gone ? <ServerGoneBanner tokenRejected={sync.tokenRejected} /> : null;
   // Every board keyloom knows, for the silhouettes in the board switcher. Without it the switcher shows a plain keyboard icon.
   const [boardChoices, setBoardChoices] = useState<BoardChoice[]>([]);
+  // Whether the list was read, so first run says it is reading or that it couldn't, never "No supported board matches" (R6-04).
+  // A read again after one that worked keeps the list it has.
+  const [boardsRead, setBoardsRead] = useState<BoardsRead>("loading");
+  const [boardsAttempt, setBoardsAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetchBoards(token, controller.signal).then(setBoardChoices, () => {});
+    setBoardsRead((now) => (now === "ready" ? now : "loading"));
+    fetchBoards(token, controller.signal).then((boards) => {
+      setBoardChoices(boards);
+      setBoardsRead("ready");
+    }, () => {
+      if (!controller.signal.aborted) setBoardsRead((now) => (now === "ready" ? now : "failed"));
+    });
     return () => controller.abort();
     // Again on a reload: a keyboard just added is a board the switch should draw (D-336).
-  }, [token, attempt]);
+  }, [token, attempt, boardsAttempt]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -176,7 +187,7 @@ export function App({ token }: { token: string }) {
   if (layouts.length === 0 || adding) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: () => setImporting(true) }}>
-        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name,
+        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} onRetryBoards={() => setBoardsAttempt((n) => n + 1)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
           onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />

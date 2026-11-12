@@ -1,7 +1,7 @@
 // The server's configs and versions interface over the app (rung 23). The server stays ignorant of storage and the sync
 // engine; this adapter is the one place that knows both.
 import {
-  NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newBlankConfig, newConfig, newConfigFromUpload, openProposalsOutsideChat, renameConfig, restoreConfig,
+  BoardRefusal, NotFoundError, StaleBaseError, UsageError, ValidationFailedError, archiveConfig, compareRevision, deleteConfig, listConfigs, nameVersion, newBlankConfig, newConfig, newConfigFromUpload, openProposalsOutsideChat, renameConfig, restoreConfig,
   restoreVersion, versionHistory, ValidationResultSchema, type App, type GeometryOptions,
 } from "../app/index.ts";
 import { SyncRefusal, type SyncEngine } from "../app/sync-engine.ts";
@@ -15,6 +15,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     if (err instanceof NotFoundError) throw new ConfigsError(404, "not_found", err.message);
     // Before UsageError, which it extends: a refused put-on keeps its code, which the page turns into the action that fixes it (R3-01).
     if (err instanceof SyncRefusal) throw new ConfigsError(400, err.code, err.message);
+    // A removed keyboard's config: the page offers Restore {board}, then makes it again (R6-08). The page knows the board.
+    if (err instanceof BoardRefusal) throw new ConfigsError(400, err.code, err.message);
     if (err instanceof UsageError) throw new ConfigsError(400, "usage", err.message);
     if (err instanceof StaleBaseError) throw new ConfigsError(409, "stale_base", err.message);
     if (err instanceof ValidationFailedError) throw new ConfigsError(422, "validation", err.message, ValidationResultSchema.parse(err.details));

@@ -103,3 +103,15 @@ export class CredentialError extends Error {
     super(message);
   }
 }
+
+/**
+ * A refusal about a keyboard that the page answers with a button (R6-08, R6-18): `keyboard_removed` offers Restore {board}, then the
+ * import or the new config again; `layout_for_other_board` offers Import it as a {board} config. `board` is the board the button acts
+ * on. The message is the CLI's. Exit 2 like any usage error.
+ */
+export class BoardRefusal extends UsageError {
+  override name = "BoardRefusal";
+  constructor(readonly code: "keyboard_removed" | "layout_for_other_board", readonly board: string, message: string) {
+    super(message);
+  }
+}

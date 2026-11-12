@@ -27,6 +27,14 @@ export function deriveProblem(code: string | null | undefined, name: string): De
         text: `The ${name}'s firmware files don't give the position of each key, so keyloom can't draw it. Until someone adds its drawing, keyloom can't add this keyboard.`,
         blocked: true,
       };
+    case "layout_unreadable":
+      // The file is at a fixed commit, so reading it again gives the same answer (R6-14).
+      return {
+        text: `keyloom can't read the ${name}'s layout file from its firmware, so it can't draw it. Until keyloom learns to read it, keyloom can't add this keyboard.`,
+        blocked: true,
+      };
+    case "firmware_unreachable":
+      return { text: `keyloom couldn't get the ${name}'s layout from GitHub. Check that this computer is online, then try again.`, blocked: false };
     case "home_row_out_of_range":
       return { text: "That row isn't on this layout. Pick the home row again.", blocked: false };
     default:
