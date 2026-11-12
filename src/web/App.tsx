@@ -10,6 +10,7 @@ import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
 import { rememberShape } from "./shell/shape.ts";
 import { ErrorState } from "./shell/States.tsx";
 import { RestartAdvice, ServerGoneBanner, useServerGone } from "./shell/ServerGone.tsx";
+import { buildQuestion } from "./release/build-failure-words.ts";
 import { ReleaseHost, type ReleaseHandle } from "./release/ReleaseHost.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
 import { useSync, type SyncApi } from "./sync/useSync.ts";
@@ -366,6 +367,8 @@ function LayoutPage({
   }, [summary.boardId, rotated, board.hands.left]);
 
   const failure = problem ?? ("error" in rotated ? rotated.error : null);
+  // "Ask keyloom about this build" (R5-02): the dialog closes and the Viewer puts this question in the chat.
+  const [asked, setBuildQuestion] = useState<{ id: string; buildId: string; request: string } | null>(null);
   const page = (release: ReleaseHandle | null, dialog: ReactNode) => (
     <Shell menu={menu} bare={failure === null && "keys" in rotated} fill>
       {failure !== null || !("keys" in rotated) ? (
@@ -382,6 +385,7 @@ function LayoutPage({
           onOpenRelease={release?.open ?? noRelease}
           repairDraft={repairDraft}
           onRepairDraft={onRepairDraft}
+          buildQuestion={asked}
           chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry }}
         />
       )}
@@ -391,7 +395,16 @@ function LayoutPage({
   // The MacBook keyboard is applied by kanata, never built or flashed (R2-01): no dialog, no header button, no Docker check.
   if (board.firmware === "kanata") return page(null, null);
   return (
-    <ReleaseHost token={token} layoutId={summary.id} head={detail.revision} boardName={board.name} boardRevisions={board.revisions} autoSync={autoSync}>
+    <ReleaseHost
+      token={token}
+      layoutId={summary.id}
+      head={detail.revision}
+      boardName={board.name}
+      boardRevisions={board.revisions}
+      autoSync={autoSync}
+      onChanged={onChanged}
+      onAskAboutBuild={(build) => setBuildQuestion({ id: crypto.randomUUID(), buildId: build.id, request: buildQuestion({ boardName: board.name, error: build.error, logTail: build.logTail }) })}
+    >
       {page}
     </ReleaseHost>
   );

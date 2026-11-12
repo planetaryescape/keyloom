@@ -12,7 +12,7 @@ test("an invalidated review offers one fresh-review action rather than pretendin
       review: { id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "connect", checkedAt: 0,
         checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai: { status: "failed", reason: "The keyboard reconnected.", model: null },
         freshness: { current: false, reason: "The keyboard reconnected. A fresh analysis is required." }, items: [], fixed: [] },
-      stale: true, loaded: true, busy: false, refreshing: false, problem: null, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
+      stale: true, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
      }, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
     onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {},
   }));
@@ -32,7 +32,7 @@ function populatedReview(): Review {
         { id: "suggestion", source: "agent", kind: "suggestion", severity: "info", code: "suggestion", title: "Previous suggestion", body: "Old proposal", keys: [], layers: [], proposalId: "proposal", fixes: [], dismissedAt: null },
         { id: "hidden", source: "check", kind: "hint", severity: "info", code: "hidden", title: "Hidden finding", body: "Hidden", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: 1 },
       ] },
-    stale: false, loaded: true, busy: false, refreshing: false, problem: null, activities: [], justFixed: [], clearJustFixed() {},
+    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
     run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
   };
 }
@@ -85,11 +85,13 @@ test("dismissal busy state retains the findings and activity controls rather tha
 test("a failed replacement read has a reachable read-only retry and no running spinner", () => {
   const r = populatedReview();
   r.refreshing = true;
-  r.problem = "Could not read this review";
+  r.problem = "keyloom couldn't read this config's review. The server didn't answer.";
+  r.readFailed = true;
+  r.problemAction = { label: "Try again", run() {} };
   for (const loaded of [false, true]) {
     r.loaded = loaded;
     const html = panel(r);
-    expect(html).toContain("Try loading again");
+    expect(html).toContain(">Try again</button>");
     expect(html).not.toContain('class="spin"');
     expect(html).not.toContain("Looking over");
     expect(html).not.toContain("Previous finding");

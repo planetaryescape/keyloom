@@ -51,3 +51,16 @@ export function locateCompileError(log: readonly string[], keymapC: string, boar
 export function describeLocated(e: LocatedError): string {
   return e.layerId === undefined ? e.message : `${e.layerId}${e.position === undefined ? "" : `, position ${e.position}`}: ${e.message}`;
 }
+
+/**
+ * A compiler error in another file keyloom generated (config.h, a keyloom_*.c), as `file:line: message`, or undefined. GCC prints
+ * `<path>:<line>:<col>: error: <message>` for every file; only the keymap's own folder is keyloom's source (R5-02).
+ */
+export function generatedSourceError(log: readonly string[], keymapName: string): string | undefined {
+  const folder = `keymaps/${keymapName}/`;
+  for (const line of log) {
+    const m = /(\S+):(\d+):\d+: (?:fatal )?error: (.*)$/.exec(line);
+    if (m && (m[1] as string).includes(folder)) return `${(m[1] as string).slice((m[1] as string).indexOf(folder) + folder.length)}:${m[2]}: ${m[3]}`;
+  }
+  return undefined;
+}

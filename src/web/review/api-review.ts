@@ -11,3 +11,6 @@ export const dismissItem = (token: string, ref: string, id: string): Promise<Rev
   request("POST", `${at(ref)}/items/${encodeURIComponent(id)}/dismiss`, token, ReviewResponseSchema, undefined, {});
 export const restoreItem = (token: string, ref: string, id: string): Promise<ReviewResponse> =>
   request("POST", `${at(ref)}/items/${encodeURIComponent(id)}/restore`, token, ReviewResponseSchema, undefined, {});
+/** Stops the run going on this config, its activity tests included (R5-17). */
+export const stopReview = (token: string, ref: string): Promise<ReviewResponse> =>
+  request("POST", `${at(ref)}/stop`, token, ReviewResponseSchema, undefined, {});

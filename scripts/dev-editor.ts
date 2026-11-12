@@ -7,7 +7,8 @@
 // Environment: KEYLOOM_FAKE_FAIL_BUILD=1 or KEYLOOM_FAKE_FAIL_FLASH=1 make that step fail;
 // KEYLOOM_FAKE_NO_KEYBOARD=0 makes the fake detect a keyboard (the default asks for Rev A or B);
 // KEYLOOM_FAKE_BUILD_MS and KEYLOOM_FAKE_FLASH_STEP_MS change how long they take.
-// KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488).
+// KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488); =compile fails it with a compile
+// error that repeats every time, naming the previous revision as the last that built (R5-02).
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
 // KEYLOOM_FAKE_INPUT_MONITORING=1 makes the flash wait for the reset key because Input Monitoring was refused; KEYLOOM_FAKE_CHECK_FINDS
 // sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
@@ -44,6 +45,7 @@ const flashPlan: FlashPlan = flashMode === "manual"
 const fake = new FakeEditor(fixture, {
   flashPlan,
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
+  failBuildCompile: process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile",
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
   flashResult: process.env.KEYLOOM_FAKE_FLASH_RESULT === "unverified" ? "unverified" : process.env.KEYLOOM_FAKE_FLASH_RESULT === "files_and_folders" ? "permission_files_and_folders" : "verified",
@@ -53,6 +55,11 @@ const fake = new FakeEditor(fixture, {
   buildMs: Number(process.env.KEYLOOM_FAKE_BUILD_MS ?? 10_000),
   flashStepMs: Number(process.env.KEYLOOM_FAKE_FLASH_STEP_MS ?? 5_000),
 });
+// A compile failure goes back to the revision before it (R5-02), so it needs one: an edit made before the page loads.
+if (process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile") {
+  const layerId = fixture.document.layers[0]?.id ?? "layer-0";
+  await fake.apply("moonlander-daily", { baseRevisionId: fixture.revision.id, summary: "Cleared the top-left key", ops: [{ op: "setBinding", at: { layerId, position: 0 }, binding: { kind: "none" } }] });
+}
 
 const chatMode = process.env.KEYLOOM_FAKE_CHAT;
 function failAfterAcceptance(mode: string | undefined): ShownFailureKind | null {

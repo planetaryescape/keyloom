@@ -12,7 +12,7 @@ const EmptyBody = z.object({}).strict();
 const errorResponse = (status: number, code: string, message: string): Response =>
   Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "show" | "run" | "dismiss" | "restore";
+type Action = "show" | "run" | "stop" | "dismiss" | "restore";
 
 /** The route a path names, with the config and item segments URL-decoded; "wrong-method" when only the method is off. */
 function match(method: string, pathname: string): { action: Action; ref: string; itemId?: string } | "wrong-method" | null {
@@ -31,7 +31,7 @@ function match(method: string, pathname: string): { action: Action; ref: string;
   if (ref === null) return null;
   const rest = segments.slice(5);
   if (rest.length === 0) return method === "GET" ? { action: "show", ref } : "wrong-method";
-  if (rest.length === 1 && rest[0] === "run") return method === "POST" ? { action: "run", ref } : "wrong-method";
+  if (rest.length === 1 && (rest[0] === "run" || rest[0] === "stop")) return method === "POST" ? { action: rest[0], ref } : "wrong-method";
   if (rest.length === 3 && rest[0] === "items" && (rest[2] === "dismiss" || rest[2] === "restore")) {
     const itemId = decode(rest[1]);
     if (itemId === null) return null;
@@ -75,9 +75,10 @@ export async function handleReviewRoute(request: Request, pathname: string, back
       if (body instanceof Response) return body;
       return Response.json(ReviewResponseSchema.parse(await backend.run(ref, { force: body.force === true, ...(body.activities === undefined ? {} : { activities: body.activities }) })), { status: 202 });
     }
-    // dismiss and restore take no body; reading `{}` keeps the content-type rule the same on every POST.
+    // stop, dismiss and restore take no body; reading `{}` keeps the content-type rule the same on every POST.
     const empty = await readBody(request, EmptyBody);
     if (empty instanceof Response) return empty;
+    if (action === "stop") return Response.json(ReviewResponseSchema.parse(await backend.stop(ref)));
     const view = action === "dismiss" ? await backend.dismiss(ref, itemId as string) : await backend.restore(ref, itemId as string);
     return Response.json(ReviewResponseSchema.parse(view));
   } catch (err) {

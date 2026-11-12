@@ -1,5 +1,7 @@
 # 27: Board review
 
+Status update, 2026-11-11 (D-524): every failed review request shows its words and a button: **Try again** repeats it, and a refused one offers **Read the review again**. That holds before the first review too. **Stop testing** ends a look with activity tests, through `POST /review/stop`. Their container goes with the run's signal.
+
 Status update, 2026-11-11 (D-518): an account the provider refuses ends the review `unavailable` with its code (`ai.code`), **Set up a model** and **Try again**, and **Add credits** when it ran out. An Apply that changed nothing says why beside it, with **Run a fresh review** for a suggestion that no longer fits.
 
 Status: engine and screens built (D-340), with scoped repair requests (D-479) and activity tests (D-473). Grounded automatic proposals, affected-behavior checks, review-contract migration and reconnect invalidation shipped in v0.68.1 (D-474), 2026-11-01. Published CLI and installed desktop-sidecar verification passed on synthetic scratch data; [grounded-review evidence](../research/grounded-board-review.md) records the checks and limits. No real config was applied or keyboard flashed; hardware acceptance is separate.
@@ -141,6 +143,7 @@ Choose **Plan a repair** on one current problem or hint to open an editable requ
 
 - `GET /api/layouts/:ref/review` gives `{ layoutId, headRevisionId, review }`, the newest review of the config. It is stale when revisions differ **or** `review.freshness.current` is false. Stale model recommendations and their measurements are withheld; historical source checks remain visible as such.
 - `POST /api/layouts/:ref/review/run` (202) stores the head's checks and answers with them; measurement and the agent's part continue. Body `{ force?: boolean, activities?: ("prose"|"typescript"|"python"|"json"|"shell"|"shortcuts")[] }`. Supplying activities remembers the profile and reruns the same revision; `[]` disables tests. Unknown/duplicate IDs fail schema validation before writes. The response's optional `workloadActivities` names the current profile, while `review.workload.activities` names the profile that produced that evidence.
+- `POST /api/layouts/:ref/review/stop` `{}` stops the run going on the config, activity tests included, and answers once it has stopped, or after 5 s while it is still ending (D-524). The review ends `failed`, saying the person stopped it. With nothing running it answers with the review as it is.
 - `POST /api/layouts/:ref/review/items/:id/dismiss` and `…/restore` (`:id` URL-encoded). 404 for an id the latest review doesn't have.
 - `GET /api/events` carries `event: review` frames (`{ type: "review", layoutId, revisionId, reviewId, aiStatus }`) when a review is made and each time its agent part moves. The frame holds no review; the page reads it again.
 - `keyloom review [layout] [--run] [--force] [--activities <ids|none>] [--json]` prints the review in plain words, or the JSON with `schema_version`. `--run` makes the head's review now and waits for the agent; `--activities` requires `--run`.

@@ -15,6 +15,15 @@ import { getLayout } from "./layouts.ts";
 import { ensureDocker } from "./toolchain.ts";
 import { compareWorkloadToBaseline, evaluateStoredWorkload, validateWorkloadPatch, workloadHash, type WorkloadDeps, type WorkloadReport } from "./workload.ts";
 
+/** The abort reason when the person pressed Stop (R5-17), so the review says they stopped it rather than that keyloom closed. */
+export class ReviewStopped extends Error {
+  override name = "ReviewStopped";
+  constructor() {
+    super("You stopped the review.");
+  }
+}
+export const stoppedByPerson = (signal: AbortSignal | undefined): boolean => signal?.reason instanceof ReviewStopped;
+
 export const REVIEW_WORKLOAD_MAX_PROPOSALS = 2;
 export const REVIEW_WORKLOAD_TIMEOUT_MS = 8 * 60_000;
 
@@ -89,7 +98,7 @@ export async function measureReviewBaseline(app: App, row: BoardReviewRow, signa
     return report;
   } catch (error) {
     evidence.status = signal.aborted ? "failed" : "unavailable";
-    evidence.reason = signal.aborted ? "Workload testing stopped or reached its time limit." : error instanceof Error ? error.message : "Workload testing could not start.";
+    evidence.reason = stoppedByPerson(signal) ? "You stopped the tests. Test again when you're ready." : signal.aborted ? "Workload testing stopped or reached its time limit." : error instanceof Error ? error.message : "Workload testing could not start.";
     if (current(app, row)) saveReviewWorkload(app.db, row.id, evidence);
     return;
   }

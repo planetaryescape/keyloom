@@ -60,6 +60,8 @@ keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the temp
 
 Rejected: building in MoErgo's cloud Layout Editor, because it needs an account, has unpublished build limits, and takes the build off BK's machine (D-028). Rejected: GitHub Actions in a user config repo, because it needs a repo and a push for every change and takes minutes per round trip.
 
+Status update, 2026-11-11 (D-523): a keymap or devicetree error and a rejected `.conf` setting fail with `compile_error`, and a firmware too big for the flash with `too_large`, on both the MoErgo template and `west build`. Build and flash then offers the last revision that built and a question to keyloom instead of Build again. Checked against recorded log lines with a fake Docker; no real build was run for this.
+
 ## Emulate runs ZMK itself on the host, with a mock keyboard
 
 `keyloom emulate <layout> --keys "<script>"` says what the keyboard would send for a sequence of key presses, without the keyboard ([10](10-cli.md#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses)). It runs ZMK itself (D-075): the layout's generated keymap is built for Zephyr's `native_posix_64` board, with a mock kscan that replays the key events, which is how ZMK's own test suite (`app/tests`) works. `src/firmware/zmk/emulate.ts` does it in the images the real builds use:

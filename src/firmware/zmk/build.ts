@@ -3,7 +3,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
@@ -131,16 +131,17 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       if (result.timedOut) throw new BuildFailure(`The build took longer than ${Math.round((input.timeoutMs ?? BUILD_TIMEOUT_MS) / 60_000)} minutes and was stopped.`);
       if (result.aborted) throw new BuildFailure("The build was cancelled.");
       if (result.exitCode !== 0) {
-        const at = locateCompileError(output);
-        const keymap = input.source.files.find((f) => f.path === KEYMAP_FILE)?.content ?? "";
-        const conf = locateConfError(output, input.source.files.find((f) => f.path === CONF_FILE)?.content ?? "");
-        const detail =
-          hint(output) ??
-          conf ??
-          (at
-            ? `The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(keymap, at)}.`
-            : `The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
-        throw new BuildFailure(detail);
+        throw classifyBuildFailure(output, {
+          boardName: input.board.name,
+          docker: hint(output),
+          compileError: () => {
+            const conf = locateConfError(output, input.source.files.find((f) => f.path === CONF_FILE)?.content ?? "");
+            if (conf !== undefined) return conf;
+            const at = locateCompileError(output);
+            return at ? `The generated keymap doesn't compile: ${at.message || "error"} at ${describeLocation(input.source.files.find((f) => f.path === KEYMAP_FILE)?.content ?? "", at)}.` : undefined;
+          },
+          generic: `The firmware build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`,
+        });
       }
 
       const file = Bun.file(join(input.checkoutDir, "glove80.uf2"));

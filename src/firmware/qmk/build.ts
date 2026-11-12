@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -11,7 +11,7 @@ import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
 import { artifactKind, artifactProblem } from "./artifact.ts";
 import type { GeneratedSource } from "./generate.ts";
-import { describeLocated, locateCompileError } from "./locate-error.ts";
+import { describeLocated, generatedSourceError, locateCompileError } from "./locate-error.ts";
 import { writeSource } from "./write-source.ts";
 
 export const BUILD_TIMEOUT_MS = 20 * 60_000;
@@ -118,11 +118,16 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       if (result.timedOut) throw new BuildFailure(`The build took longer than ${Math.round((input.timeoutMs ?? BUILD_TIMEOUT_MS) / 60_000)} minutes and was stopped.`);
       if (result.aborted) throw new BuildFailure("The build was cancelled.");
       if (result.exitCode !== 0) {
-        const located = locateCompileError(output, input.source.files.find((f) => f.path === "keymap.c")?.content ?? "", input.board);
-        const detail =
-          hint(output) ??
-          (located ? `The generated firmware doesn't compile: ${describeLocated(located)}` : `QMK's build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`);
-        throw new BuildFailure(detail);
+        throw classifyBuildFailure(output, {
+          boardName: input.board.name,
+          docker: hint(output),
+          compileError: () => {
+            const located = locateCompileError(output, input.source.files.find((f) => f.path === "keymap.c")?.content ?? "", input.board);
+            const at = located === undefined ? generatedSourceError(output, input.source.keymapName) : describeLocated(located);
+            return at === undefined ? undefined : `The generated firmware doesn't compile: ${at}`;
+          },
+          generic: `QMK's build failed (exit ${result.exitCode ?? result.signalCode}): ${output.filter((l) => l.trim()).slice(-3).join(" | ")}`,
+        });
       }
 
       if (input.source.requiredSymbols?.length) {

@@ -30,6 +30,7 @@ import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
+import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
@@ -118,6 +119,8 @@ interface ViewerProps {
   onOpenRelease: (revision?: { id: string; summary: string }) => void;
   repairDraft: FindingRepairDraft | null;
   onRepairDraft: (id: string, draft: FindingRepairDraft | null, replace?: boolean) => void;
+  /** "Ask keyloom about this build" from Build and flash (R5-02): a new one opens the chat with the question in it to check and send. */
+  buildQuestion?: { id: string; buildId: string; request: string } | null;
   /** The keyboard's sync state, for the sync line and the toasts that say a change reached it or didn't. */
   sync: SyncApi;
   /** What the top bar needs from the page around the layout: the layouts and boards to switch between, and Build and flash. */
@@ -172,7 +175,7 @@ const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 // The selected key survives a layer change, so flipping layers shows what the same key does on each.
-export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, sync, chrome }: ViewerProps) {
+export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onOpenRelease, repairDraft, onRepairDraft, buildQuestion = null, sync, chrome }: ViewerProps) {
   const [repairNotice, setRepairNotice] = useState<string | null>(null);
   const planRecovery = (source: RecoverySource, context: RecoveryContext) => {
     if (repairDraft) { setRepairNotice("Finish or dismiss the existing repair request first. It has been kept."); return; }
@@ -182,6 +185,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setChatOpen(true);
   };
   const { document: layout, board, geometry, revision } = detail;
+  // Each question asked from Build and flash once (R5-02): into the chat as a request to check and send, unless one is already waiting there.
+  const askedBuild = useRef<string | null>(null);
+  useEffect(() => {
+    if (buildQuestion === null || askedBuild.current === buildQuestion.id) return;
+    askedBuild.current = buildQuestion.id;
+    if (repairDraft) setRepairNotice("Finish or dismiss the existing request first. It has been kept; ask about the build again after.");
+    else onRepairDraft(buildQuestion.id, { id: buildQuestion.id, buildId: buildQuestion.buildId, headRevisionId: detail.revision.id, request: buildQuestion.request, sent: false }, true);
+    setChatOpen(true);
+    // Once per question; the draft and the setters are read as they are when it arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildQuestion?.id]);
   // Arriving from another board or config lands on the layer of the same name, if this layout has one (D-317).
   const [layerId, setLayerId] = useState<string | null>(() => {
     const name = chrome.arrival?.layerName?.trim().toLowerCase();
@@ -975,8 +989,19 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   async function labApply(card: ProposalCard) {
     const result = await applyChangeSet(token, card.changeSetId);
     setLabOpen(false);
-    await onProposalApplied(card, result);
+    if (!(await onProposalApplied(card, result))) return;
     toasts.show({ kind: "success", message: "Applied", detail: `${card.title}. Type again in a few days to see if it stuck.` });
+  }
+
+  // The change is in the config but the board still shows the old layout: say so, and Show the new layout reads it again. A read that
+  // fails again says so the same way, with the same button (R5-08, R5-09).
+  function showAppliedNotShown(error: unknown) {
+    toasts.show({
+      kind: "error",
+      message: APPLIED_NOT_SHOWN.words,
+      ...(error instanceof Error && error.message.trim() !== "" ? { detail: error.message } : {}),
+      action: { label: "Show the new layout", run: () => void onChanged().catch(showAppliedNotShown) },
+    });
   }
 
   function toggleLibrary() {
@@ -1376,13 +1401,20 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setPinnedProposal(unpin ? null : card);
   }
 
-  // A proposal was applied on the server: show the new layout, on the layer where it changed.
-  async function onProposalApplied(card: ProposalCard, result: ApplyResponse) {
+  // A proposal was applied on the server: show the new layout, on the layer where it changed. True once it is on screen. A layout that
+  // couldn't be read afterwards is not an Apply failure, wherever the Apply came from (R5-08): the toast says it is applied and offers to
+  // show it, and this resolves false. A caller that says so in place passes its own `notShown`.
+  async function onProposalApplied(card: ProposalCard, result: ApplyResponse, notShown: (error: unknown) => void = showAppliedNotShown): Promise<boolean> {
     setHoveredProposal(null);
     setPinnedProposal(null);
     // The apply lands on the board, not in the bar: the bar closes and the changed caps press (P3 review).
     setChatOpen(false);
-    await onChanged();
+    try {
+      await onChanged();
+    } catch (error) {
+      notShown(error);
+      return false;
+    }
     const changed = [...card.validation.diff.changed, ...card.validation.diff.retuned];
     const here = changed.find((slot) => slot.layerId === layout.layers[headIndex]?.id) ?? changed[0];
     if (here !== undefined) {
@@ -1394,6 +1426,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const next = afterApply(afterApplyKeyboard.board, boardSync, summary.id, result.revisionId);
     const run = afterApplyRun(next.action, afterApplyKeyboard, () => onOpenRelease());
     toasts.show({ kind: "success", message: "Applied", detail: `${withStop(card.title)} ${next.toast}`, ...(next.action === null || run === null ? {} : { action: { label: next.action.label, run } }) });
+    return true;
   }
 
   // The panel stays on the key after an apply, so the next slot can be filled straight away (16#the-key-panel).
@@ -1699,6 +1732,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   if (layer === undefined) return null;
   function currentRepair(): boolean {
     if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return false;
+    // A question about a build stays good to send whatever the review says; its log is in it.
+    if ("buildId" in repairDraft) return true;
     if ("source" in repairDraft) {
       const source = repairDraft.source;
       return source.conversationId !== undefined || (source.kind === "proposal" && waiting?.some((proposal) => proposal.changeSetId === source.proposalId && proposal.status === "proposed") === true);
@@ -1744,7 +1779,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 pinnedId={pinnedProposal?.changeSetId ?? null}
                 onPreview={setHoveredProposal}
                 onPin={pinProposal}
-                onApplied={onProposalApplied}
+                onApplied={async (card, result) => { await onProposalApplied(card, result); }}
                 onOpenRelease={onOpenRelease}
                 commands={chatCommands}
                 drafts={chatDrafts}
@@ -1979,7 +2014,12 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer ?? (waitingCount === 0 || proposalsOpen ? null : (
+            notice={offer ?? (proposalsOpen ? null : waitingFailed ? (
+              // A read that failed is not "nothing waiting": the slot says so and reads again (R5-11).
+              <button type="button" className="sheet-action nb-waiting" onClick={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}>
+                Couldn&apos;t read proposals · Try again
+              </button>
+            ) : waitingCount === 0 ? null : (
               <button type="button" className="sheet-action nb-waiting" onClick={() => { setReviewOpen(false); setProposalsOpen(true); }}>
                 {waitingCount === 1 ? "1 proposal waiting" : `${waitingCount} proposals waiting`} · Show
               </button>
@@ -2315,8 +2355,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
                 setWaitingRead((read) => read + 1);
-                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied".
-                try { await onProposalApplied(card, result); } catch { return { showAgain: onChanged }; }
+                // The Apply landed; a layout that couldn't be read afterwards is not "nothing was applied". The panel says so beside it.
+                if (!(await onProposalApplied(card, result, () => {}))) return { showAgain: onChanged };
               }}
               onShowLayer={(id) => setLayerId(id)}
                  onPlanRepair={(item) => {
@@ -2353,8 +2393,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onPreview={setHoveredProposal}
               onApply={async (card) => {
                 const result = await applyChangeSet(token, card.changeSetId);
-                await onProposalApplied(card, result);
                 setWaitingRead((read) => read + 1);
+                // The Apply landed; a layout that couldn't be read afterwards is not "Apply failed" on the card (R5-08).
+                await onProposalApplied(card, result);
               }}
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}

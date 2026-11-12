@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
 import type { ReviewItem } from "../../src/validation/review-item.ts";
-import { aiMissingWords, applyFailureWords, grouped, markerWords, placeOf, placeWords, segments } from "../../src/web/review/review-words.ts";
+import { aiMissingWords, appliedNotShown, applyFailureWords, grouped, markerWords, placeOf, placeWords, reviewProblemWords, segments } from "../../src/web/review/review-words.ts";
 
 const item = (over: Partial<ReviewItem>): ReviewItem => ({
   id: "x", source: "check", kind: "problem", severity: "warning", code: "c", title: "t", body: "b", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: null, ...over,
@@ -84,3 +84,22 @@ describe("Apply that changed nothing says so beside Apply (R4-07)", () => {
   });
 });
 
+
+describe("reviewProblemWords (R5-10)", () => {
+  test("no answer or a server fault repeats the same request", () => {
+    expect(reviewProblemWords("run", { code: undefined, status: -1, message: "fetch failed" })).toEqual({ words: "keyloom couldn't start the review. The server didn't answer.", button: "Try again", next: "repeat" });
+    expect(reviewProblemWords("dismiss", { code: "internal", status: 500, message: "internal error" })).toEqual({ words: "keyloom couldn't hide that. It hit an unexpected error.", button: "Try again", next: "repeat" });
+  });
+  test("a refusal reads the review again with the server's reason, since repeating it would be refused too", () => {
+    expect(reviewProblemWords("restore", { code: "not_found", status: 404, message: "the latest review of x has no item \"y\"" })).toEqual({ words: "keyloom couldn't show that again. the latest review of x has no item \"y\".", button: "Read the review again", next: "reload" });
+    expect(reviewProblemWords("run", { code: "usage", status: 400, message: "The review is still running. Wait for it to finish before changing activities." })).toMatchObject({ next: "reload" });
+  });
+  test("a failed read is always tried again", () => {
+    expect(reviewProblemWords("load", { code: "not_found", status: 404, message: "no layout" })).toMatchObject({ button: "Try again", next: "repeat" });
+  });
+});
+
+test("Show the new layout that fails again still says the change is applied, with why (R5-09)", () => {
+  expect(appliedNotShown(new Error("Failed to fetch"))).toEqual({ words: "Applied. keyloom still couldn't show the new layout. Failed to fetch.", action: "show" });
+  expect(appliedNotShown("x")).toEqual({ words: "Applied. keyloom still couldn't show the new layout.", action: "show" });
+});

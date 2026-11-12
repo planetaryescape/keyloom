@@ -187,8 +187,11 @@ export const BuildSchema = z.object({
   status: z.enum(["running", "succeeded", "failed"]),
   error: z.string().nullable(),
   // A cause the UI acts on instead of showing `error`: "docker_unavailable" shows the Docker callout (D-488); "cancelled" is a build the
-  // person stopped, which the page shows as the Build firmware step again (R3-10).
-  errorCode: z.enum(["docker_unavailable", "cancelled"]).nullable(),
+  // person stopped, which the page shows as the Build firmware step again (R3-10); "compile_error" and "too_large" fail the same way every
+  // time, so the page offers `lastBuilt` and a question to keyloom instead of Build again (R5-02).
+  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large"]).nullable(),
+  // For those two: the newest earlier revision in this one's history that built, or null. Absent on older senders.
+  lastBuilt: z.object({ revisionId: z.string().min(1), summary: z.string() }).nullable().optional(),
   flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
@@ -301,11 +304,14 @@ export const QuestionCardSchema = z.object({
 });
 export type QuestionCard = z.infer<typeof QuestionCardSchema>;
 
+/** The longest chat message the server takes. */
+export const CHAT_MESSAGE_MAX = 8000;
+
 export const ChatRequestSchema = z.object({
   presentationVersion: z.literal(1, { error: "Unsupported presentation version. Upgrade keyloom or omit presentationVersion for legacy chat." }).optional(),
   // Omitted to start a conversation; its id comes back in the `start` event.
   conversationId: z.string().min(1).optional(),
-  message: z.string().min(1).max(8000).optional(),
+  message: z.string().min(1).max(CHAT_MESSAGE_MAX).optional(),
   // The answer to the question the conversation is waiting on, in place of a message (D-382).
   answer: z.object({ toolUseId: z.string().min(1), text: z.string().min(1).max(500) }).optional(),
   // The keys selected in the editor when the message was sent (D-012).

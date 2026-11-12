@@ -23,6 +23,8 @@ export interface FakeOptions {
   needsBoardRevision?: boolean;
   /** Fail the build because Docker is missing, with its code (D-488), instead of a compiler error. */
   failBuildDocker?: boolean;
+  /** Fail the build with a compile error that repeats every time, coded, naming the newest earlier revision as the last that built (R5-02). */
+  failBuildCompile?: boolean;
   /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */
   flashPlan?: FlashPlan;
   /** How a flash that isn't failed ends (D-501): verified by default, written but not confirmed, or refused by Files and Folders. */
@@ -79,7 +81,7 @@ export class FakeEditor implements EditorBackend {
     options: FakeOptions = {},
   ) {
     this.options = {
-      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false,
+      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false,
       flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
       ...options,
@@ -389,9 +391,16 @@ export class FakeEditor implements EditorBackend {
     }
   }
 
+  /** The revision before `revisionId`, standing in for the last one that built. */
+  private lastBuiltBefore(revisionId: string): { revisionId: string; summary: string } | null {
+    const parentId = this.history.find((r) => r.id === revisionId)?.parentId;
+    const parent = parentId === undefined || parentId === null ? undefined : this.history.find((r) => r.id === parentId);
+    return parent === undefined ? null : { revisionId: parent.id, summary: parent.summary };
+  }
+
   private progressBuild(id: string, revisionId: string, startedAt: number): Build {
-    const { buildMs, failBuildDocker } = this.options;
-    const failBuild = this.options.failBuild || failBuildDocker;
+    const { buildMs, failBuildDocker, failBuildCompile } = this.options;
+    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
@@ -405,8 +414,9 @@ export class FakeEditor implements EditorBackend {
       id,
       revisionId,
       status: !done ? "running" : failBuild ? "failed" : "succeeded",
-      error: done && failBuild ? (failBuildDocker ? "Docker is not on this computer." : "The compiler stopped with an error. The last lines of the log say where.") : null,
-      errorCode: done && failBuildDocker ? "docker_unavailable" : null,
+      error: done && failBuild ? (failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
+      errorCode: done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : null,
+      ...(done && failBuildCompile ? { lastBuilt: this.lastBuiltBefore(revisionId) } : {}),
       flashPlan: this.options.flashPlan,
       startedAt,
       finishedAt: done ? startedAt + endsAt : null,

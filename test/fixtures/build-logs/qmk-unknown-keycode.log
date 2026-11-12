@@ -1,0 +1,4 @@
+keyboards/zsa/moonlander/keymaps/keyloom/keymap.c:3:11: error: 'KC_NOPE' undeclared here (not in a function); did you mean 'KC_NO'?
+    3 |   { KC_A, KC_NOPE },
+      |           ^~~~~~~
+      |           KC_NO

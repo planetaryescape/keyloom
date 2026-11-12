@@ -104,7 +104,7 @@ case " $* " in *" --entrypoint sha256sum "*)
 esac`;
 
 // Stands in for `docker`: `version`, `rm`, the "can the container see the checkout" probe, and `make`.
-// Modes (FAKE_MODE): ok, nobin, compile, disk, hang, nodaemon.
+// Modes (FAKE_MODE): ok, nobin, compile, log (prints the file FAKE_LOG names), disk, hang, nodaemon.
 export const FAKE_DOCKER = `
 case "$1" in
   version) [ "$FAKE_MODE" = nodaemon ] && exit 1; echo 28.0.0; exit 0;;
@@ -122,6 +122,7 @@ case "$FAKE_MODE" in
   ok) mkdir -p "$vol/.build"; cp "$bin" "$vol/.build/$id.bin"; [ -n "$FAKE_ELF" ] && cp "$FAKE_ELF" "$vol/.build/$id.elf"; echo "Compiling: quantum/keymap.c  [OK]"; exit 0;;
   nobin) echo "make finished"; exit 0;;
   compile) echo "keyboards/zsa/moonlander/keymaps/keyloom/keymap.c:$FAKE_LINE:$FAKE_COL: error: 'KC_NOPE' undeclared"; exit 2;;
+  log) cat "$FAKE_LOG"; exit 2;;
   disk) echo "cp: write error: No space left on device"; exit 2;;
   hang) echo started; exec sleep 600;;
 esac

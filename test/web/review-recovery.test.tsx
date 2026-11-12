@@ -10,7 +10,7 @@ import { tinyBoard, tinyLayout } from "../helpers/workload.ts";
 function panel(ai: BoardReview["ai"], items: BoardReview["items"] = [], proposalsFailed = false) {
   const review: Review = {
     review: { id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "manual", checkedAt: 0, checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai, freshness: { current: true, reason: null }, fixed: [], items },
-    stale: false, loaded: true, busy: false, refreshing: false, problem: null, activities: [], justFixed: [], clearJustFixed() {},
+    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
     run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
   };
   return renderToStaticMarkup(createElement(ReviewPanel, {
@@ -39,4 +39,47 @@ test("an unread proposals list says so with Try again, and a suggestion says its
   expect(html).toContain("Try again");
   expect(html).toContain("change not read");
   expect(html).not.toContain("invalid for this version");
+});
+
+// R5-03, R5-10, R5-17: every failed review request shows its words with the button that moves on, before a first review too.
+function shown(over: Partial<Review>) {
+  const review: Review = {
+    review: null, stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {},
+    activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined, ...over,
+  };
+  return renderToStaticMarkup(createElement(ReviewPanel, {
+    token: "synthetic", review, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: null,
+    pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {},
+  }));
+}
+const reviewed = (ai: BoardReview["ai"], workload?: BoardReview["workload"]): BoardReview => ({
+  id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "manual", checkedAt: 0, checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai,
+  freshness: { current: true, reason: null }, fixed: [], items: [], ...(workload === undefined ? {} : { workload }),
+});
+
+test("Look it over now that failed before the first review says so with Try again (R5-03)", () => {
+  const html = shown({ problem: "keyloom couldn't start the review. The server didn't answer.", problemAction: { label: "Try again", run() {} } });
+  expect(html).toContain("Look it over now");
+  expect(html).toContain("couldn&#x27;t start the review");
+  expect(html).toContain(">Try again</button>");
+});
+
+test("a refused action after a review has loaded offers to read the review again (R5-10)", () => {
+  const html = shown({ review: reviewed({ status: "done", reason: null, model: "synthetic", code: null }), problem: "keyloom couldn't hide that. no item.", problemAction: { label: "Read the review again", run() {} } });
+  expect(html).toContain("couldn&#x27;t hide that");
+  expect(html).toContain(">Read the review again</button>");
+});
+
+test("running activity tests offer Stop testing, and a look without tests does not (R5-17)", () => {
+  const workload = { status: "running" as const, activities: ["prose" as const], reason: null, identity: null, baseline: [], comparisons: [] };
+  expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload) })).toContain("Stop testing");
+  expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }) })).not.toContain("Stop testing");
+  expect(shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload), stopping: true })).toContain("Stopping");
+});
+
+test("a failed Stop is said beside the running look, not as an unreadable review", () => {
+  const workload = { status: "running" as const, activities: ["prose" as const], reason: null, identity: null, baseline: [], comparisons: [] };
+  const html = shown({ review: reviewed({ status: "running", reason: null, model: null, code: null }, workload), problem: "keyloom couldn't stop the tests. The server didn't answer.", problemAction: { label: "Try again", run() {} } });
+  expect(html).toContain("couldn&#x27;t stop the tests");
+  expect(html).not.toContain("review unavailable");
 });

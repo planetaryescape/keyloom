@@ -3,6 +3,9 @@
 import type { BoardReview } from "../../api/review.ts";
 import type { ReviewItem } from "../../validation/review-item.ts";
 
+/** A message as a sentence that ends in a full stop. */
+const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
+
 export type Segment = { kind: "text"; text: string } | { kind: "key"; layerId: string; position: number } | { kind: "layer"; layerId: string };
 
 const MARKER = /\{(key|layer):([^{}:]+)(?::(\d+))?\}/g;
@@ -111,9 +114,32 @@ export type ApplyFailure = { words: string; action: "fresh_review" | "retry" | "
 
 /** The Apply landed but the page couldn't read the new layout, so the board still shows the old one (#288 review). */
 export const APPLIED_NOT_SHOWN: ApplyFailure = { words: "Applied. keyloom couldn't show the new layout yet.", action: "show" };
+/** Show the new layout failed again (R5-09): the change is still applied, so the words say that, with why, and the button stays. */
+export function appliedNotShown(error: unknown): ApplyFailure {
+  const why = error instanceof Error && error.message.trim() !== "" ? ` ${sentence(error.message)}` : "";
+  return { words: `Applied. keyloom still couldn't show the new layout.${why}`, action: "show" };
+}
 export function applyFailureWords(error: { code: string | undefined; status: number; message: string }): ApplyFailure {
   if (error.status < 400) return { words: "keyloom didn't confirm this Apply, so it may have gone through. Check before applying it again.", action: "check" };
   if (error.code === "stale_base" || error.code === "validation_failed") return { words: "This suggestion no longer fits your config, so nothing was applied.", action: "fresh_review" };
   if (error.code === "not_found" || error.code === "usage") return { words: "This suggestion is no longer open, so nothing was applied.", action: "fresh_review" };
   return { words: `Nothing was applied: ${error.message}`, action: "retry" };
+}
+
+/** The review request that failed, so its Try again repeats that one request (R5-03, R5-10). */
+export type ReviewAction = "load" | "run" | "dismiss" | "restore" | "stop";
+
+/**
+ * What a failed review request offers (R5-10). No answer, or a server fault, may pass: Try again repeats the same request. A refusal
+ * (400, 404) would be refused again, because the review changed under the page (a run already going, an item gone), so the button reads
+ * the review again instead. A read that failed is always tried again. By the status and code only, never the text.
+ */
+export type ReviewProblem = { words: string; button: "Try again" | "Read the review again"; next: "repeat" | "reload" };
+export function reviewProblemWords(action: ReviewAction, error: { code: string | undefined; status: number; message: string }): ReviewProblem {
+  const what = action === "load" ? "keyloom couldn't read this config's review." : action === "run" ? "keyloom couldn't start the review." : action === "stop" ? "keyloom couldn't stop the tests." : action === "dismiss" ? "keyloom couldn't hide that." : "keyloom couldn't show that again.";
+  const refused = action !== "load" && error.status >= 400 && error.status < 500;
+  if (refused) return { words: `${what} ${sentence(error.message)}`, button: "Read the review again", next: "reload" };
+  // Each of these requests is safe to repeat: a second run replaces the first, and hiding a hidden item hides it.
+  // A server fault's own words ("internal error") say nothing to a person; its detail is in the server's log.
+  return { words: `${what} ${error.status < 400 ? "The server didn't answer." : "It hit an unexpected error."}`, button: "Try again", next: "repeat" };
 }

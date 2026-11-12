@@ -82,6 +82,6 @@ const response = (): ReviewResponse => ({
       title: proposal.title, body: proposal.explanation, keys: [], layers: [], proposalId: proposal.changeSetId, fixes: [], dismissedAt: null })),
   },
 });
-const review: ReviewBackend = { show: async () => response(), run: async () => response(), dismiss: async () => response(), restore: async () => response(), subscribe: () => () => {} };
+const review: ReviewBackend = { show: async () => response(), run: async () => response(), stop: async () => response(), dismiss: async () => response(), restore: async () => response(), subscribe: () => () => {} };
 const server = startServer({ port: Number(process.argv[2] ?? 4531), token: "dev-editor-token", source: editor.source("glove80-daily"), editor, chat: new FakeChat(editor, "glove80-daily"), configs, review });
 console.log(JSON.stringify({ url: server.url, proposals: cards.map(({ changeSetId, title, ops }) => ({ changeSetId, title, ops })) }));

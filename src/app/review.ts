@@ -19,7 +19,7 @@ import type { App } from "./context.ts";
 import { ModelError, NotFoundError, UsageError } from "./errors.ts";
 import { getLayout } from "./layouts.ts";
 import { type BoardReview, type ReviewView, itemOf, showReview, toReview } from "./review-read.ts";
-import { measureReviewBaseline, measureReviewSuggestions, pendingReviewWorkload, reviewWorkloadRequest, REVIEW_WORKLOAD_MAX_PROPOSALS, REVIEW_WORKLOAD_TIMEOUT_MS } from "./review-workloads.ts";
+import { measureReviewBaseline, measureReviewSuggestions, pendingReviewWorkload, reviewWorkloadRequest, REVIEW_WORKLOAD_MAX_PROPOSALS, REVIEW_WORKLOAD_TIMEOUT_MS, stoppedByPerson } from "./review-workloads.ts";
 import type { WorkloadDeps } from "./workload.ts";
 import { automaticProposalDescription, automaticReviewErrors } from "../validation/review-policy.ts";
 import { reviewFreshness, reviewSnapshotKey } from "./review-freshness.ts";
@@ -146,7 +146,9 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   announce("running");
 
   const started = now();
-  const finish = (status: "done" | "unavailable" | "failed", reason: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = [], code: string | null = null) => {
+  const finish = (status: "done" | "unavailable" | "failed", given: string | null, model: string | null, items: ReviewItem[], rejectedProposals: readonly string[] = [], code: string | null = null) => {
+    // Stop (R5-17) aborts the run like a closing keyloom does; whichever step it interrupted, the review says the person stopped it.
+    const reason = status === "failed" && stoppedByPerson(hooks.signal) ? STOPPED_WORDS : given;
     const updated = transact(app.db, () => {
       for (const id of rejectedProposals) if (findChangeSet(app.db, id)?.status === "proposed") markRejected(app.db, id, now());
       if (!ownsReviewRun(app.db, row)) return false;
@@ -276,6 +278,8 @@ export async function runReviewAi(app: App, reviewId: string, deps: ReviewAiDeps
   }
   return toReview(app, findReview(app.db, row.id) as BoardReviewRow);
 }
+
+const STOPPED_WORDS = "You stopped this review, so there are no suggestions this time.";
 
 const MAX_AGENT_ITEMS = 6;
 

@@ -88,6 +88,29 @@ describe("the review", () => {
     const done = await read(base);
     expect(done.review?.workload).toMatchObject({ activities: ["prose"], status: "done", baseline: [{ id: "prose-prose", physicalKeydowns: null }] });
   });
+  test("Stop ends activity tests through their signal and the review says the person stopped it (R5-17)", async () => {
+    // The replay holds until its signal aborts, as the emulator does; its onKill is what removes the container.
+    const replayAborted = gate();
+    const { base, post, w } = await serve({
+      workload: {
+        replay: (_app, _view, _events, options) => new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () => { replayAborted.open(); reject(new Error("aborted")); }, { once: true });
+        }),
+      },
+    });
+    expect((await post(`${base}/run`, { activities: ["prose"] })).status).toBe(202);
+    await waitFor(() => (w.app.db.query("SELECT ai_status FROM board_reviews").get() as { ai_status: string } | null)?.ai_status === "running", "a running review");
+    const stopped = await post(`${base}/stop`);
+    expect(stopped.status).toBe(200);
+    await replayAborted.promise;
+    const view = ReviewResponseSchema.parse(await stopped.json());
+    expect(view.review?.ai).toMatchObject({ status: "failed", reason: "You stopped this review, so there are no suggestions this time." });
+    expect(view.review?.workload).toMatchObject({ status: "failed", reason: "You stopped the tests. Test again when you're ready." });
+    // Nothing running: Stop is the review as it is, never a refusal.
+    expect((await post(`${base}/stop`)).status).toBe(200);
+    expect((await post(`${base}/stop`, { extra: 1 })).status).toBe(400);
+  });
+
   test("before any run there is none, and the head is named so the page can tell", async () => {
     const { w, read, base } = await serve();
     expect(await read(base)).toEqual({ layoutId: w.layoutId, headRevisionId: w.head(), review: null });
