@@ -25,24 +25,27 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt">, 
   return { kind: "same_every_time", next, goBack };
 }
 
-// The log keeps its newest lines within what a chat message may hold.
+// The log keeps its newest lines within what a chat message may hold. The error and each line are capped first, so one huge line or
+// error can never push the whole log out: with these caps, the heading and the newest line always fit.
 const MAX_REQUEST = CHAT_MESSAGE_MAX;
 const MAX_LOG_LINES = 60;
+const MAX_ERROR = 2000;
+const MAX_LINE = 1000;
+const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
 
 /** The question "Ask keyloom about this build" puts in the chat for the person to check and send: what failed and the log's last lines. */
 export function buildQuestion(input: { boardName: string; error: string | null; logTail: readonly string[] }): string {
   const head = [
     `My firmware build for the ${input.boardName} failed. Explain what went wrong in plain words, and what I can change in my layout so it builds.`,
-    `keyloom said: ${input.error ?? "The build failed."}`,
+    `keyloom said: ${clip(input.error ?? "The build failed.", MAX_ERROR)}`,
     "The last lines of the build log:",
   ].join("\n\n");
-  const lines = input.logTail.slice(-MAX_LOG_LINES);
-  // Drop the oldest lines until the whole request fits; the newest lines carry the error.
+  const lines = input.logTail.slice(-MAX_LOG_LINES).map((line) => clip(line, MAX_LINE));
+  // Drop the oldest lines until the whole request fits; the newest lines carry the error, so the newest one always stays.
   let start = 0;
   const fenced = (from: number) => `${head}\n\n\`\`\`\n${lines.slice(from).join("\n")}\n\`\`\``;
-  while (start < lines.length && fenced(start).length > MAX_REQUEST) start++;
-  const text = fenced(start);
-  return text.length <= MAX_REQUEST ? text : text.slice(0, MAX_REQUEST);
+  while (start < lines.length - 1 && fenced(start).length > MAX_REQUEST) start++;
+  return fenced(start);
 }
 
 /** A refused Go back, for the build it was refused on. `retry`: the request may pass if asked again, so the button stays. */

@@ -43,6 +43,14 @@ describe("buildQuestion", () => {
     expect(text).not.toContain("line 100 ");
     expect(text).toEndWith("```");
   });
+  test("one huge log line or a huge error never pushes the whole log out", () => {
+    const hugeLine = buildQuestion({ boardName: "Glove80", error: "The build failed.", logTail: ["older", `error: ${"y".repeat(20000)}`] });
+    expect(hugeLine.length).toBeLessThanOrEqual(8000);
+    expect(hugeLine).toContain("```\nolder\nerror: yyy");
+    const hugeError = buildQuestion({ boardName: "Glove80", error: "z".repeat(20000), logTail: ["make: *** [keymap.o] Error 1"] });
+    expect(hugeError.length).toBeLessThanOrEqual(8000);
+    expect(hugeError).toEndWith("```\nmake: *** [keymap.o] Error 1\n```");
+  });
 });
 
 const noop = () => {};
