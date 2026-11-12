@@ -70,6 +70,7 @@ export async function failure(response: Response): Promise<ApiError> {
       const { code, message, generic } = parsed.data.error;
       return new ApiError(response.status, failureWords(code, generic === true ? null : message), {
         code,
+        ...(generic === true ? { generic: true } : {}),
         ...(parsed.data.validation === undefined ? {} : { validation: parsed.data.validation }),
         ...(parsed.data.error.board === undefined ? {} : { board: parsed.data.error.board }),
         ...(parsed.data.error.boardName === undefined ? {} : { boardName: parsed.data.error.boardName }),
@@ -80,7 +81,7 @@ export async function failure(response: Response): Promise<ApiError> {
   }
   // No code from the server: the page gives one, so no screen shows a status number (R7-01).
   const code = failureCode(response.status, undefined);
-  return new ApiError(response.status, failureWords(code, null), { code });
+  return new ApiError(response.status, failureWords(code, null), { code, generic: true });
 }
 
 /**
@@ -95,8 +96,11 @@ export async function removeOrGone(remove: () => Promise<void>): Promise<void> {
   }
 }
 
-/** keyloom no longer has the thing a request named (`not_found`), so the same request fails the same way on a repeat. */
-export const isGone = (error: unknown): boolean => error instanceof ApiError && error.code === "not_found";
+/**
+ * keyloom no longer has the thing a request named (a route's own `not_found`), so the same request fails the same way on a repeat. The
+ * catch-all 404 is not that: it means this keyloom has no such address (an older keyloom behind a newer page), so nothing was removed.
+ */
+export const isGone = (error: unknown): boolean => error instanceof ApiError && error.code === "not_found" && !error.generic;
 
 const layoutPath = (ref: string, action: string) => `/api/layouts/${encodeURIComponent(ref)}/${action}`;
 

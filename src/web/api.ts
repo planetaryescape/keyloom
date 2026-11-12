@@ -20,8 +20,14 @@ export class ApiError extends Error {
   readonly board: string | undefined;
   /** keyloom's own name for `board`, when the server sends it. */
   readonly boardName: string | undefined;
+  /** The server named nothing it no longer has: its catch-all `not_found`, or a refusal with no code at all (D-534). */
+  readonly generic: boolean;
 
-  constructor(status: number, message: string, detail: { code?: string; validation?: ValidationResult; board?: string; boardName?: string } = {}) {
+  constructor(
+    status: number,
+    message: string,
+    detail: { code?: string; validation?: ValidationResult; board?: string; boardName?: string; generic?: boolean } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -29,6 +35,7 @@ export class ApiError extends Error {
     this.validation = detail.validation;
     this.board = detail.board;
     this.boardName = detail.boardName;
+    this.generic = detail.generic === true;
   }
 }
 

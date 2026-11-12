@@ -89,6 +89,14 @@ test("removing something another tab already removed counts as removed; any othe
   expect(isGone(new ApiError(409, "x", { code: "stale_base" }))).toBe(false);
 });
 
+test("a 404 from an address this keyloom doesn't have is not something removed: an older keyloom can't remove it either", async () => {
+  const catchAll = await failure(Response.json({ error: { code: "not_found", message: "not found", generic: true } }, { status: 404 }));
+  const bare = await failure(new Response("Not Found", { status: 404 }));
+  const routes = await failure(Response.json({ error: { code: "not_found", message: 'no priority "p1"' } }, { status: 404 }));
+  expect([isGone(catchAll), isGone(bare), isGone(routes)]).toEqual([false, false, true]);
+  await expect(removeOrGone(async () => { throw catchAll; })).rejects.toMatchObject({ code: "not_found", message: NOT_FOUND_WORDS });
+});
+
 test("an answer the page can't read is `unreadable`, with words that send the person to Restart keyloom (R7-09)", async () => {
   mock = spyOn(globalThis, "fetch").mockImplementation((async () => json({ unexpected: true }, 200)) as unknown as typeof fetch);
   const logged = spyOn(console, "error").mockImplementation(() => {});
