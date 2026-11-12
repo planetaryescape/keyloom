@@ -68,6 +68,8 @@ describe("deriveState", () => {
     expect(deriveState(base({ reading: { state: "absent" }, detectable: false }))).toEqual({ kind: "not_connected", firstFlash: true });
     // Once keyloom put a build on it, or tried to sync it, keyloom can see it, so absent means unplugged again.
     expect(deriveState(base({ reading: { state: "absent" }, detectable: false, lastKnown: { changes: 0 } }))).toEqual({ kind: "not_connected" });
+    // keyloom's firmware went on from another config, or by a flash keyloom couldn't confirm: no "first flash" (PR #297 review).
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, flashedBefore: true }))).toEqual({ kind: "not_connected" });
     expect(deriveState(base({ reading: { state: "absent" }, detectable: false, latestSync: { id: "s", revisionId: "r", status: "failed", trigger: "manual", startedAt: 1, finishedAt: 2, error: "x", failure: "flash", instruction: null } as never }))).toEqual({ kind: "not_connected" });
   });
 

@@ -5,6 +5,7 @@ import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
 import { EditorError } from "../../src/server/editor-backend.ts";
+import { createBuild, finishBuild, newBuildId } from "../../src/persistence/builds.ts";
 import { FIXTURE_DIR } from "../helpers/board.ts";
 import { setKey } from "../helpers/ops.ts";
 import { tempDir } from "../helpers/tmp.ts";
@@ -36,6 +37,22 @@ async function editorError(promise: Promise<unknown>): Promise<EditorError> {
 }
 
 describe("appEditorBackend", () => {
+  test("a build that fails the same way every time carries lastBuilt to the page, so Go back shows in the real app (R5-02, PR #297 review)", async () => {
+    const { app, backend, head } = await setup();
+    const layoutId = getLayout(app, "synchronized").layout.id;
+    const built = newBuildId();
+    createBuild(app.db, { id: built, revisionId: head, layoutId, boardRevision: "revb", logPath: `logs/build-${built}.log` });
+    finishBuild(app.db, built, { artifactPath: `artifacts/${built}.bin` });
+    const applied = await backend.apply("synchronized", { baseRevisionId: head, ops: F17, summary: "Layer 0, key 7: F17" });
+    const failed = newBuildId();
+    createBuild(app.db, { id: failed, revisionId: applied.revisionId, layoutId, boardRevision: "revb", logPath: `logs/build-${failed}.log` });
+    finishBuild(app.db, failed, { error: "keymap.c: error", errorCode: "compile_error" });
+    const view = await backend.getBuild(failed);
+    expect(view?.lastBuilt).toEqual({ revisionId: head, summary: getLayout(app, "synchronized", head).revision.summary });
+    // restartEngine is only looked up for an engine code, so a compile error carries null without asking Docker.
+    expect(view?.restartEngine).toBeNull();
+  });
+
   test("check, apply and undo a one-key change", async () => {
     const { app, backend, head } = await setup();
     expect((await backend.check("synchronized", { baseRevisionId: head, ops: F17 })).ok).toBe(true);

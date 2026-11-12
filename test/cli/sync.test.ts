@@ -1,6 +1,7 @@
 // keyloom sync, sync status and autosync (10#commands), against the fake world of the sync engine tests: the JSON contract,
 // the exit codes, and the refusals.
 import { afterEach, describe, expect, test } from "bun:test";
+import { describeSync } from "../../src/cli/commands/sync.ts";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { claimSync, finishSync, getBoardSync, newSyncId } from "../../src/persistence/syncs.ts";
@@ -156,5 +157,13 @@ describe("keyloom autosync", () => {
     const w = await world();
     expect((await cli(w, ["autosync", "on", "nope/board"])).code).toBe(3);
     expect((await cli(w, ["autosync", "on", "keebio/iris"])).code).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("sync status words", () => {
+  test("a board keyloom sees only once its firmware is on it names a build before the flash, since a flash needs a build (R6-10, PR #297 review)", () => {
+    const line = describeSync({ state: { kind: "not_connected", firstFlash: true }, remapper: false } as never);
+    expect(line).toBe("not seen yet: keyloom sees it once keyloom's firmware is on it; `keyloom build`, then `keyloom flash`, puts it on");
+    expect(describeSync({ state: { kind: "not_connected" }, remapper: false } as never)).toBe("not connected");
   });
 });

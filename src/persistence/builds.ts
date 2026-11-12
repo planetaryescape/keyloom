@@ -129,6 +129,18 @@ export function runningBuilds(db: Database): BuildRow[] {
   return (db.query("SELECT * FROM builds WHERE status = 'running'").all() as BuildDb[]).map(toBuild);
 }
 
+/**
+ * Whether keyloom has ever written its firmware to `boardId`, from any of its configs: a version put on it, a flash that succeeded, or
+ * one whose write finished and only the confirmation failed (`not_confirmed`).
+ */
+export function keyloomFirmwareWrittenTo(db: Database, boardId: string): boolean {
+  return db.query(
+    `SELECT 1 WHERE EXISTS (SELECT 1 FROM versions WHERE board_id = ?1 AND put_on_at IS NOT NULL)
+       OR EXISTS (SELECT 1 FROM flashes f JOIN builds b ON b.id = f.build_id JOIN revisions r ON r.id = b.revision_id JOIN layouts l ON l.id = r.layout_id
+                  WHERE l.board_id = ?1 AND (f.status = 'succeeded' OR (f.status = 'failed' AND f.error_code = 'not_confirmed')))`,
+  ).get(boardId) !== null;
+}
+
 /** A flash that has not finished, if any: only one board can be in its bootloader at a time. */
 export function activeFlashes(db: Database): FlashRow[] {
   return (db.query("SELECT * FROM flashes WHERE status IN ('waiting_for_bootloader','writing') ORDER BY started_at").all() as FlashDb[]).map(toFlash);
