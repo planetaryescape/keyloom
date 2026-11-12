@@ -134,7 +134,35 @@ describe("restartThenBuild", () => {
     expect(states.at(-1)).toEqual(IDLE);
   });
 
-  test("a refusal with nothing named to wait for shows its reason and keeps the button: an older server, or work that just ended", async () => {
+  test("a dialog closed while the request is out builds nothing after it went through, but still shows a failure (PR #303 CodeRabbit)", async () => {
+    for (const answer of [{ ok: true } as const, new Error("keyloom stopped answering")]) {
+      const close = new AbortController();
+      const restart = Promise.withResolvers<Result>();
+      let built = 0;
+      let failed = 0;
+      const states: EngineRestartRun[] = [];
+      const run = restartThenBuild({
+        restart: () => restart.promise,
+        waitingFor: async () => [],
+        requests: () => built,
+        build: () => built++,
+        show: (state) => states.push(state),
+        signal: close.signal,
+        failed: () => failed++,
+      });
+      close.abort();
+      if (answer instanceof Error) restart.reject(answer);
+      else restart.resolve(answer);
+      await run;
+      expect(built).toBe(0);
+      if (answer instanceof Error) {
+        expect(states.at(-1)).toEqual({ ...IDLE, problem: "keyloom stopped answering" });
+        expect(failed).toBe(1);
+      } else expect(states.at(-1)).toEqual(IDLE);
+    }
+  });
+
+    test("a refusal with nothing named to wait for shows its reason and keeps the button: an older server, or work that just ended", async () => {
     for (const wait of [null, []] as const) {
       const h = harness({ results: [busy], waits: [wait] });
       await h.run;

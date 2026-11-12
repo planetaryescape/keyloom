@@ -389,6 +389,9 @@ export async function restartThenBuild(deps: {
     }
     if (superseded()) return deps.show(RESTART_IDLE);
     if (result.ok) {
+      // Closed while the request was out: the restart is done, but a build with no dialog on screen would surprise (PR #303 CodeRabbit).
+      // A failure still shows below, since it may leave the engine down.
+      if (deps.signal.aborted) return deps.show(RESTART_IDLE);
       deps.show(RESTART_IDLE);
       deps.build();
       return;
