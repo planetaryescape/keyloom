@@ -1,4 +1,4 @@
-import { Eye, MousePointerClick, Repeat2, X } from "lucide-react";
+import { Eye, MousePointerClick, RefreshCw, Repeat2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AgentView, ViewResult } from "../api/open-view.ts";
 import type { OpenRequestedView } from "./chat/useChat.ts";
@@ -32,6 +32,7 @@ import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
 import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
 import { readAfterApply, readIfChanged } from "./editor/read-after-apply.ts";
+import { NOT_SHOWN_LINE, notShownLine } from "./editor/not-shown.ts";
 import { LATEST_NOT_SHOWN, STALE_EDIT, STALE_UNDO } from "./editor/stale-edit-words.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
@@ -188,6 +189,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setChatOpen(true);
   };
   const { document: layout, board, geometry, revision } = detail;
+  // The revision on screen when a read after a write failed (R7-06): the editor marks it until a read works.
+  const [notShownOn, setNotShownOn] = useState<string | null>(null);
   // Each question asked from Build and flash once (R5-02): into the chat as a request to check and send, unless one is already waiting there.
   const askedBuild = useRef<string | null>(null);
   useEffect(() => {
@@ -1000,6 +1003,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // The change is in the config but the board still shows the old layout: say so, and Show the new layout reads it again. A read that
   // fails again says so the same way, with the same button (R5-08, R5-09).
   function showAppliedNotShown(error: unknown) {
+    setNotShownOn(revision.id);
     toasts.show({
       kind: "error",
       message: APPLIED_NOT_SHOWN.words,
@@ -2195,6 +2199,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             </div>
           </div>
           <div className="stage-notes">
+            {/* The toast closes by itself; this stays until a read of the layout works (R7-06). */}
+            {notShownLine(notShownOn, revision.id) ? (
+              <p className="place-banner not-shown" role="status">
+                <RefreshCw size={16} aria-hidden="true" />
+                <span>{NOT_SHOWN_LINE.words}</span>
+                <button type="button" className="button" onClick={() => void onChanged().catch(showAppliedNotShown)}>{NOT_SHOWN_LINE.button}</button>
+              </p>
+            ) : null}
             {/* On a wide screen the bar itself says what is previewed; the banner is for the narrow sheet. */}
             {preview !== null && proposal !== null && narrow ? (
               <PreviewBanner

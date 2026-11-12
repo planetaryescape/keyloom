@@ -258,6 +258,8 @@ export function knownRefusal(code: string | undefined): RefusalNotice | null {
     case "kanata_not_seen": return { message: "keyloom hasn't seen kanata running lately", detail: "A kanata that stopped long ago, or never started, doesn't show the chord worked. Start kanata, then hold Left Control, Space and Escape and press the button again.", action: { id: "open_status", label: "Open keyboard status" } };
     case "kanata_unreadable": return { message: "keyloom couldn't tell whether kanata stopped", detail: "kanata's port didn't answer, so nothing was recorded. Check again in a moment.", action: { id: "check_exit_chord", label: "Check again" } };
     case "kanata_not_foreign": return { message: "kanata's config changed, so nothing was replaced", detail: "The keyboard's status shows what kanata runs now.", action: { id: "open_status", label: "Open keyboard status" } };
+    // kanata didn't take the plain map: the status popover shows whether it runs, and the chord stops it if it is stuck (R7-08).
+    case "disable_failed": return { message: "keyloom couldn't turn remapping off", detail: "kanata didn't take the change. If your MacBook keyboard types wrongly, hold Left Control, Space and Escape together to stop kanata.", action: { id: "open_status", label: "Open keyboard status" } };
     case "keyboard_removed": return { message: "This keyboard was removed from your setup", detail: "Restore it to sync it again. Its configs and history were kept.", action: { id: "restore_keyboard", label: "Restore" } };
     default: return null;
   }

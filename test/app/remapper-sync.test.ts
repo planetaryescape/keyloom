@@ -294,6 +294,20 @@ describe("the MacBook's sync state", () => {
   });
 });
 
+describe("Disable remapping refused", () => {
+  test("a kanata that doesn't take the plain map is a coded refusal, so the page offers the keyboard's status (R7-08)", async () => {
+    const world = make();
+    world.deps.remapper = { ...world.deps.remapper!, disable: async () => ({ ok: false, error: "kanata didn't answer on its port" }) };
+    const e = world.engine();
+    await e.start();
+    const err = await e.disableRemapping(MAC).catch((x: unknown) => x);
+    expect(err).toBeInstanceOf(SyncRefusal);
+    expect(err).toMatchObject({ code: "disable_failed" });
+    // The CLI keeps its sentence, with the chord.
+    expect((err as Error).message).toContain("Left Control + Space + Escape");
+  });
+});
+
 describe("auto-apply", () => {
   test("cannot turn on until the exit chord has been proved", async () => {
     const world = make();

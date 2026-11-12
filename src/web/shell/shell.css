@@ -397,7 +397,9 @@ a.menu-item {
 
 .stage-notes {
   position: absolute;
-  z-index: 3;
+  /* Above the caption and the floor (6): the caption's box spans the stage's width, so it took the clicks meant for a banner's button
+     (R7-06). The notes take no clicks themselves, only their banners do. */
+  z-index: 7;
   /* Below the selection bar, which is the first row of the stage. */
   top: calc(var(--selection-bar-h, 48px) + var(--space-3));
   right: var(--space-3);

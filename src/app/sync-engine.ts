@@ -132,7 +132,8 @@ const ABSENT: KeyboardReading = { state: "absent" };
  */
 export type SyncRefusalCode =
   | "keyboard_removed" | "archived" | "not_on_keyboard" | "cant_sync" | "not_connected" | "kanata_not_running" | "kanata_foreign"
-  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running" | "kanata_unreadable" | "kanata_not_foreign" | "kanata_not_seen";
+  | "foreign_firmware" | "busy" | "unproven" | "kanata_still_running" | "kanata_unreadable" | "kanata_not_foreign" | "kanata_not_seen"
+  | "disable_failed";
 
 export class SyncRefusal extends UsageError {
   constructor(readonly code: SyncRefusalCode, message: string) {
@@ -804,7 +805,8 @@ export class SyncEngine {
       const run = this.running;
       if (run && run.row.boardId === boardId) await run.done;
       const r = await remapper.disable(boardId);
-      if (!r.ok) throw new UsageError(`couldn't disable remapping: ${r.error}. If kanata is stuck, hold Left Control + Space + Escape to stop it`);
+      // A code, so the page offers the keyboard's status instead of this sentence (R7-08); the CLI keeps the sentence.
+      if (!r.ok) throw new SyncRefusal("disable_failed", `couldn't disable remapping: ${r.error}. If kanata is stuck, hold Left Control + Space + Escape to stop it`);
       this.remappingOffAfter.set(boardId, lastSyncOfBoard(this.app.db, boardId)?.id ?? null);
       await this.refresh(true);
       this.publish();
