@@ -23,8 +23,8 @@ export interface SystemBackend {
    */
   restartDocker: (opts?: { force?: boolean }) => Promise<DockerStartResponse>;
   /**
-   * Fix Colima's files (D-533): the administrator password dialog, then root stops the other copy of Colima and gives ~/.colima back,
-   * and Colima starts as this account. Refused while a build or flash runs; repeated calls share one attempt.
+   * Fix Colima's files (D-533): the administrator password dialog, then root gives ~/.colima back, and Colima stops and starts as this
+   * account. Refused while a build or flash runs; repeated calls share one attempt.
    */
   fixColimaFiles: () => Promise<DockerStartResponse>;
 }

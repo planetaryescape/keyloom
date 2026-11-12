@@ -1,8 +1,8 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
-  DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
-  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, startDockerEngine,
+  COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 import { type ColimaFilesPlan, adminRunner, colimaFilesPlan, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
@@ -80,6 +80,8 @@ export type ToolchainOverrides = {
   restartColima?: typeof restartColima;
   /** Runs the osascript call for Fix Colima's files; the real one shows macOS's password dialog. */
   adminRun?: Runner;
+  /** Stops Colima as the person after Fix Colima's files; the real one runs `colima stop`. */
+  colimaStop?: ColimaStop;
   /** The checked paths and IDs for Fix Colima's files; the real one reads this computer. */
   colimaPlan?: (engine: DockerEngine) => { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string };
   /** The process's environment, for the opt-out below. */
@@ -296,8 +298,8 @@ async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult & 
 
 /**
  * Fix Colima's files (D-533), for a Colima that refuses this account because its files belong to another one. macOS asks for the
- * administrator password, root stops the other copy and gives the files back (`runColimaRootSteps`), then Colima starts as the person and
- * keyloom waits for Docker. Refused while keyloom starts or restarts Docker. The stop ends whatever the other copy runs, so `blocker` is
+ * administrator password, root gives the files back (`runColimaRootSteps`), then Colima stops and starts as the person and keyloom
+ * waits for Docker. Refused while keyloom starts or restarts Docker. The stop ends whatever the other copy runs, so `blocker` is
  * asked inside the engine lock, right before the password dialog, and the fix is refused without one, as a forced restart is (D-529).
  */
 export async function fixColimaFiles(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | "build_running" | "cancelled" | "linked_file" }> {
@@ -328,8 +330,13 @@ async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartRe
     const code = root.code === "cancelled" ? "cancelled" as const : root.code === "colima_linked_file" ? "linked_file" as const : null;
     return { ok: false, engine: engine.name, reason: root.reason, ...(code === null ? {} : { code }) };
   }
-  // The files are the person's now, so Colima starts as them; `relaunch` keeps waiting while the socket still refuses as it comes up.
+  // The files are the person's now, so Colima stops and starts as them: a copy of the person's that is still up keeps the socket root
+  // made, and a start of a running Colima does nothing. The stop runs after the dialog, so a closed dialog changes nothing, and as the
+  // person, never as root (#300 review). It usually has nothing to stop; a stop that fails is said and the start still runs.
   const profile = planned.plan.profile === null ? [] : ["--profile", planned.plan.profile];
+  const stopped = await (over.colimaStop ?? colimaStopAsPerson)(["colima", "stop", ...profile], COLIMA_STOP_MS, opts.signal);
+  if (!stopped.ok) opts.onProgress?.(`keyloom: Colima didn't stop cleanly${stopped.detail ? ` (${stopped.detail})` : ""}; starting it anyway`);
+  // `relaunch` keeps waiting while the socket still refuses as Colima comes up.
   const fresh: DockerEngine = { ...engine, command: ["colima", "start", ...profile] };
   const started = await (over.startEngine ?? startDockerEngine)({
     relaunch: true,
@@ -340,6 +347,12 @@ async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartRe
   });
   return started.ok ? started : { ...started, reason: `Colima's files are yours again, but Colima didn't come up. ${started.reason.replace(/\.?$/, ".")}` };
 }
+
+/** `colima stop` as the person. Refused under `bun test`, so a forgotten fake fails its test instead of stopping the machine's Colima. */
+const colimaStopAsPerson: ColimaStop = async (command, budgetMs, signal) => {
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to stop Colima in a test");
+  return runStart({ name: "Colima", command }, budgetMs, signal);
+};
 
 // Container runs other than builds that a forced restart would stop: a lab analysis, a board review's tests, `keyloom emulate`. Builds
 // are found from their own rows; these have none, so each run says what it is for as long as it may run a container (D-529).

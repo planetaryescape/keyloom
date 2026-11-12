@@ -10,8 +10,8 @@ import { z } from "zod";
 //                                       Body `{}`, or `{ "force": true }` to restart an engine that answers, for a build that failed with
 //                                       `stale_mount` or `stuck_container` (R6-09); that is refused with `build_running` while a build,
 //                                       flash, lab analysis, review test or emulator run is under way, because the restart would stop it.
-//   POST /api/system/docker/fix-colima-files -> DockerStartResponse (for `access.fixFiles`: macOS's password dialog, then root stops the
-//                                       other copy of Colima and gives ~/.colima back to this account, and Colima starts as it (D-533).
+//   POST /api/system/docker/fix-colima-files -> DockerStartResponse (for `access.fixFiles`: macOS's password dialog, then root gives
+//                                       ~/.colima back to this account, and Colima stops and starts as it (D-533).
 //                                       Body `{}`. `cancelled` when the person closes the dialog; `build_running` and `engine_busy` as above)
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
