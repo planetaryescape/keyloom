@@ -15,7 +15,7 @@ import { keyboardRemoved } from "../persistence/keyboard-collection.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { readDefaultKeymap } from "./default-keymap.ts";
-import { NotFoundError, UsageError } from "./errors.ts";
+import { BoardRefusal, NotFoundError, UsageError } from "./errors.ts";
 import { type UploadInput, importUpload } from "./import-upload.ts";
 import { importLayout } from "./layouts.ts";
 import { versionRevision } from "./versions.ts";
@@ -124,7 +124,7 @@ export function newConfig(app: App, input: NewConfigInput): ConfigView {
   }
   try {
     const created = transact(app.db, () => {
-      if (keyboardRemoved(app.db, layout.boardId)) throw new UsageError("restore this keyboard in Manage keyboards or with `keyloom keyboard restore <board>` before creating another config");
+      if (keyboardRemoved(app.db, layout.boardId)) throw new BoardRefusal("keyboard_removed", layout.boardId, `restore this keyboard in Manage keyboards or with \`keyloom keyboard restore ${layout.boardId}\` before creating another config`);
       const creation: Parameters<typeof createLayout>[1] = { name, layout, summary, origin: "import" };
       if (input.selectFirst !== undefined) creation.selectFirst = input.selectFirst;
       if (copiedFrom !== undefined) creation.copiedFrom = copiedFrom;

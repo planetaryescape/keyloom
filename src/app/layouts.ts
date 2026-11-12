@@ -21,7 +21,7 @@ import {
 } from "../persistence/layouts.ts";
 import type { App } from "./context.ts";
 import { showBoard } from "./boards.ts";
-import { NotFoundError, UsageError } from "./errors.ts";
+import { BoardRefusal, NotFoundError, UsageError } from "./errors.ts";
 
 /** A portable layout document is far smaller than this; the cap only stops a huge file being read as one. */
 const MAX_LAYOUT_EXPORT_BYTES = 8_000_000;
@@ -109,7 +109,7 @@ function storeImported(app: App, imported: Imported, explicit: string | undefine
     const name = attempt === 1 ? base : `${base}-${attempt}`;
     try {
       const created = transact(app.db, () => {
-        if (keyboardRemoved(app.db, layout.boardId)) throw new UsageError("restore this keyboard in Manage keyboards or with `keyloom keyboard restore <board>` before importing another config");
+        if (keyboardRemoved(app.db, layout.boardId)) throw new BoardRefusal("keyboard_removed", layout.boardId, `restore this keyboard in Manage keyboards or with \`keyloom keyboard restore ${layout.boardId}\` before importing another config`);
         const made = createLayout(app.db, { name, layout, summary, origin: "import" });
         if (activities !== undefined) setReviewActivities(app.db, made.layout.id, [...activities].sort());
         return made;
@@ -130,7 +130,7 @@ function importExportedLayout(app: App, input: ImportInput, board: Board, explic
     throw new UsageError(`${input.source} is damaged: its board_id is ${document.board_id}, but its layout is for ${document.layout.boardId}`);
   }
   if (document.layout.boardId !== wanted) {
-    throw new UsageError(`${input.source} is a layout for ${document.layout.boardId}, not ${wanted}; pass --board ${document.layout.boardId}`);
+    throw new BoardRefusal("layout_for_other_board", document.layout.boardId, `${input.source} is a layout for ${document.layout.boardId}, not ${wanted}; pass --board ${document.layout.boardId}`);
   }
   return storeImported(app, { layout: document.layout, report: reportOfLayout(document.layout), suggestedName: document.layout_name ?? `${board.definition.name} layout` }, explicit, input.reviewActivities);
 }

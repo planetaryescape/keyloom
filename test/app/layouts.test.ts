@@ -122,6 +122,8 @@ describe("keyloom layout documents", () => {
     const mismatch = await importLayout(damaged, { board: "moergo/glove80", source: await write(document) }).then(() => null, (err: unknown) => err);
     expect(mismatch).toBeInstanceOf(UsageError);
     expect(String(mismatch)).toContain("is a layout for zsa/moonlander, not moergo/glove80");
+    // R6-18: the page reads the board from the refusal, never from its sentence, and offers to import it as that board's config.
+    expect(mismatch).toMatchObject({ code: "layout_for_other_board", board: "zsa/moonlander" });
     expect(listLayouts(damaged)).toHaveLength(0);
     closeApp(app);
     closeApp(damaged);

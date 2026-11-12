@@ -1,7 +1,10 @@
 // `keyboard add` for QMK keyboards and the refusals (22#building-the-board-definition). The pinned QMK tree is replaced by fixtures
 // copied from it, so nothing here reads the network.
 import { afterAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { type AddDeps, addKeyboard, openApp, previewKeyboard, showBoard } from "../../src/app/index.ts";
+import { PINNED_SOURCES } from "../../src/boards/derive/pins.ts";
 import { GeometryError } from "../../src/boards/geometry-error.ts";
 import { loadBoardDir } from "../../src/boards/load.ts";
 import { listBoards, setUserBoards } from "../../src/boards/registry.ts";
@@ -91,17 +94,87 @@ describe("a QMK keyboard", () => {
     await expect(addKeyboard(app, { candidate: "zmk:corne", homeRow: 2, controller: "nice_nano//zmk" }, d)).rejects.toThrow(/already a board: foostan\/corne/);
   });
 
+  // R6-07: the preview says so first, with the board, so the page offers to put a config on it instead of drawing it as new.
+  test("a preview of a keyboard keyloom has is refused with board_known and the board, before anything is read", async () => {
+    let reads = 0;
+    const counting = async (url: string) => {
+      reads += 1;
+      return tree(url);
+    };
+    const refused = previewKeyboard({ candidate: "zmk:corne" }, { fetchText: counting, cacheDir: tempDir() });
+    await expect(refused).rejects.toMatchObject({ name: "KeyboardAddError", code: "board_known", board: "foostan/corne" });
+    expect(reads).toBe(0);
+  });
+
+  // #299 review: the search result is "Moonlander Mark I"; the page names the board as keyloom does.
+  test("board_known carries keyloom's own name for the board, not the search result's", async () => {
+    const refused = previewKeyboard({ candidate: "qmk:zsa/moonlander" }, deps());
+    await expect(refused).rejects.toMatchObject({ code: "board_known", board: "zsa/moonlander", boardName: "Moonlander" });
+    await expect(refused).rejects.toThrow(/Moonlander Mark I is already a board/);
+  });
+
+  test("a board derived before can be previewed again with force, as `keyboard add --force` does", async () => {
+    const { app, deps: d } = world();
+    await addKeyboard(app, { candidate: "qmk:crkbd/rev1", homeRow: 2 }, { ...d, boards: [] });
+    const known = { ...d, boards: listBoards().filter((b) => b.definition.id === "local/crkbd-rev1") };
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, known)).rejects.toMatchObject({ code: "board_known", board: "local/crkbd-rev1" });
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1", force: true }, known)).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+  });
+
+  // R6-14: a layout file that isn't one is a code the page answers with the contribution guide; it never names keyloom's cache.
+  test("a layout file keyloom can't read is refused with layout_unreadable", async () => {
+    const garbled = async (url: string) => (url.endsWith("keyboards/crkbd/rev1/keyboard.json") ? "{ not json" : tree(url));
+    const refused = previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: garbled, cacheDir: tempDir(), boards: [] });
+    await expect(refused).rejects.toMatchObject({ name: "KeyboardAddError", code: "layout_unreadable" });
+    await expect(refused).rejects.not.toThrow(/cache/);
+  });
+
+  // #299 review: a captive portal's page answered with 200 must not block the keyboard for good, and a cache write isn't the network.
+  test("a cached copy keyloom can't parse is downloaded again, and the good copy replaces it", async () => {
+    const cacheDir = tempDir();
+    const cached = join(cacheDir, PINNED_SOURCES.qmk.sha, "keyboards/crkbd/rev1/keyboard.json");
+    mkdirSync(dirname(cached), { recursive: true });
+    writeFileSync(cached, "<html>Sign in to the Wi-Fi</html>");
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: tree, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+    expect(JSON.parse(readFileSync(cached, "utf8"))).toBeDefined();
+  });
+
+  test("a download keyloom can't parse is refused once and never cached, so the next try reads GitHub again", async () => {
+    let portal = true;
+    const once = async (url: string) => (portal && url.endsWith("keyboards/crkbd/rev1/keyboard.json") ? "<html>Sign in</html>" : tree(url));
+    const cacheDir = tempDir();
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).rejects.toMatchObject({ code: "layout_unreadable" });
+    portal = false;
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: once, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+  });
+
+  test("an info.json that is valid JSON but not an object is unreadable, and isn't cached", async () => {
+    const cacheDir = tempDir();
+    const nulled = async (url: string) => (url.endsWith("keyboards/crkbd/rev1/keyboard.json") ? "null" : tree(url));
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: nulled, cacheDir, boards: [] })).rejects.toMatchObject({ code: "layout_unreadable" });
+    expect(existsSync(join(cacheDir, PINNED_SOURCES.qmk.sha, "keyboards/crkbd/rev1/keyboard.json"))).toBe(false);
+  });
+
+  test("a cache that can't be written doesn't fail the read or blame the network", async () => {
+    // A file where the cache folder should be: every write under it fails, as a full disk or a locked folder would.
+    const cacheDir = join(tempDir(), "not-a-folder");
+    writeFileSync(cacheDir, "");
+    await expect(previewKeyboard({ candidate: "qmk:crkbd/rev1" }, { fetchText: tree, cacheDir, boards: [] })).resolves.toMatchObject({ candidate: { id: "qmk:crkbd/rev1" } });
+  });
+
   test("a network failure is reported as one, not as a bug", async () => {
     const { app } = world();
     const offline = async () => {
       throw new Error("fetch failed");
     };
-    // fetchPinned wraps nothing; a thrown non-GeometryError is a real error the CLI logs.
-    await expect(addKeyboard(app, { candidate: "qmk:crkbd/rev1", homeRow: 2 }, { fetchText: offline, cacheDir: tempDir(), boards: [] })).rejects.toThrow("fetch failed");
+    // GitHub not answering is a code the page offers Try again for (R6-14), with the CLI's words and the cause in the message.
+    const refused = addKeyboard(app, { candidate: "qmk:crkbd/rev1", homeRow: 2 }, { fetchText: offline, cacheDir: tempDir(), boards: [] });
+    await expect(refused).rejects.toMatchObject({ name: "KeyboardAddError", code: "firmware_unreachable" });
+    await expect(refused).rejects.toThrow("fetch failed");
   });
 
   test("the preview lists the rows and what is still needed", async () => {
-    const p = await previewKeyboard({ candidate: "qmk:zsa/moonlander" }, deps());
+    const p = await previewKeyboard({ candidate: "qmk:zsa/moonlander" }, { ...deps(), boards: [] });
     expect(p.layout).toBe("LAYOUT");
     expect(p.rows.map((r) => r.keys)).toEqual([14, 14, 14, 12, 10]);
     expect(p.guessedHomeRow).toBe(3);
@@ -156,7 +229,8 @@ describe("what the new-keyboard screen is told", () => {
   test("a keyboard whose firmware tree has no key positions is refused with no_key_positions, by preview and add alike", async () => {
     const { app } = world();
     const refusal = { name: "KeyboardAddError", code: "no_key_positions" };
-    await expect(previewKeyboard({ candidate: "zmk:glove80" }, d())).rejects.toMatchObject(refusal);
+    // keyloom ships a Glove80, so the preview would say board_known first (R6-07); without it, the firmware tree's answer shows.
+    await expect(previewKeyboard({ candidate: "zmk:glove80" }, { ...d(), boards: [] })).rejects.toMatchObject(refusal);
     await expect(addKeyboard(app, { candidate: "zmk:glove80", homeRow: 2 }, { ...d(), boards: [] })).rejects.toMatchObject(refusal);
   });
 

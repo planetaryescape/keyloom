@@ -4,6 +4,9 @@ import type { ApiConfig, NewConfigRequest, VersionHistoryResponse } from "../../
 import { ApiError } from "../api.ts";
 import { versionTitle, versionWhen } from "../history/version-words.ts";
 import { fetchVersions } from "./api-configs.ts";
+import { newConfigWaits, renameWaits } from "./dialog-words.ts";
+import { RestoreKeyboard, keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
+import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
 import "./configs.css";
 
 const message = (error: unknown) => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
@@ -128,8 +131,9 @@ export function RenameDialog({ current, onRename, onClose }: { current: string; 
   const [name, setName] = useState(current);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const waits = renameWaits(name, current);
   const go = async () => {
-    if (name.trim() === "" || name.trim() === current) return;
+    if (waits !== null) return;
     setBusy(true);
     try {
       await onRename(name.trim());
@@ -148,12 +152,13 @@ export function RenameDialog({ current, onRename, onClose }: { current: string; 
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Cancel</button>
-          <button type="submit" className="bar-apply" disabled={busy || name.trim() === "" || name.trim() === current}>Rename</button>
+          <button type="submit" className="bar-apply" disabled={busy || waits !== null}>Rename</button>
         </>
       }
     >
       <label className="config-label" htmlFor="config-rename">Name</label>
-      <input id="config-rename" className="config-input" value={name} data-autofocus onChange={(e) => setName(e.target.value)} />
+      <input id="config-rename" className="config-input" value={name} data-autofocus aria-describedby="config-rename-waits" onChange={(e) => setName(e.target.value)} />
+      <p id="config-rename-waits" className="config-waits">{waits}</p>
       {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
     </ConfigDialog>
   );
@@ -189,6 +194,8 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
   const [version, setVersion] = useState<string>(initialVersion ?? "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The keyboard was removed, so no config can be made for it until it is restored (R6-08).
+  const [removed, setRemoved] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -211,6 +218,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
     }
     setBusy(true);
     setProblem(null);
+    setRemoved(false);
     const request: NewConfigRequest =
       start === "blank" ? { from: "blank", name, board: boardId }
       : start === "version" ? { from: "config", name, config: source.id, version }
@@ -219,11 +227,13 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
       await onCreate(request);
       onClose();
     } catch (error) {
-      setProblem(message(error));
+      if (keyboardRemoved(error)) setRemoved(true);
+      else setProblem(message(error));
       setBusy(false);
     }
   };
-  const ready = start === "file" || (name.trim() !== "" && (start !== "version" || version !== ""));
+  const waits = newConfigWaits(start, name, version);
+  const ready = waits === null;
   const choice = (id: Start, title: string, detail: string, extra?: ReactNode) => (
     <label className="config-choice" data-on={start === id || undefined}>
       <input type="radio" name="config-start" value={id} checked={start === id} onChange={() => setStart(id)} />
@@ -254,7 +264,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
       {start === "file" ? null : (
         <>
           <label className="config-label" htmlFor="config-name">Name</label>
-          <input id="config-name" className="config-input" value={name} data-autofocus placeholder="Colemak" onChange={(e) => setName(e.target.value)} />
+          <input id="config-name" className="config-input" value={name} data-autofocus placeholder="Colemak" aria-describedby="config-name-waits" onChange={(e) => setName(e.target.value)} />
         </>
       )}
       <fieldset className="config-choices">
@@ -281,6 +291,8 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
         {choice("blank", "Blank", "The keyboard's own default keymap where keyloom can get it, otherwise one empty layer")}
         {choice("file", "A file", "Oryx, QMK keymap.c or ZMK .keymap")}
       </fieldset>
+      <p id="config-name-waits" className="config-waits">{waits}</p>
+      {removed ? <RestoreKeyboard restore={() => restoreKeyboard(token, boardId)} boardName={boardName} doing="make this config" onRestored={go} /> : null}
       {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
     </ConfigDialog>
   );

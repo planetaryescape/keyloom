@@ -1,6 +1,6 @@
 // The adapter behind the editor's write routes, over a real database with BK's imported layout.
 import { afterEach, describe, expect, test } from "bun:test";
-import { type App, closeApp, getLayout, importLayout, listChanges, openApp, proposeChange } from "../../src/app/index.ts";
+import { type App, closeApp, getLayout, importLayout, layoutExportDocument, listChanges, openApp, proposeChange, removeKeyboard } from "../../src/app/index.ts";
 import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import type { ChangeOp } from "../../src/layout/change.ts";
 import { deepEqual } from "../../src/layout/equal.ts";
@@ -129,5 +129,25 @@ describe("applyChangeSet", () => {
     await backend.apply("synchronized", { baseRevisionId: getLayout(app, "synchronized").revision.id, ops: setKey(6, "F20"), summary: "meanwhile" });
     const stale = await editorError(backend.applyChangeSet(clash.id));
     expect([stale.status, stale.code]).toEqual([409, "stale_base"]);
+  });
+});
+
+// R6-08, R6-18: an import refused for a keyboard reason keeps its code and the board it names, so the import card offers Restore, or
+// Import it as that board's config, instead of the CLI's sentence.
+describe("import refusals the page acts on", () => {
+  test("a keyloom export for another board names that board", async () => {
+    const { app, backend } = await setup();
+    const document = new TextEncoder().encode(JSON.stringify(layoutExportDocument(app, getLayout(app, "synchronized").layout.id)));
+    const refused = await backend.importUpload({ board: "moergo/glove80", filename: "layout.json", bytes: document }).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(EditorError);
+    expect(refused).toMatchObject({ status: 400, code: "layout_for_other_board", board: "zsa/moonlander" });
+  });
+
+  test("a removed keyboard's import is refused with keyboard_removed", async () => {
+    const { app, backend } = await setup();
+    const document = new TextEncoder().encode(JSON.stringify(layoutExportDocument(app, getLayout(app, "synchronized").layout.id)));
+    removeKeyboard(app, "zsa/moonlander");
+    const refused = await backend.importUpload({ board: "zsa/moonlander", filename: "layout.json", bytes: document }).then(() => null, (err: unknown) => err);
+    expect(refused).toMatchObject({ status: 400, code: "keyboard_removed", board: "zsa/moonlander" });
   });
 });
