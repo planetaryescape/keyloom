@@ -4,7 +4,7 @@ import {
   COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
   dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
-import { adminRunner, colimaFilesPlan, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
+import { adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
@@ -46,6 +46,8 @@ export type DockerAccessFix = {
   command: string | null; note: string; restartApp: string | null;
   /** keyloom can run Colima's command itself, through macOS's password dialog (D-533): a Colima on a Mac. */
   fixFiles: boolean;
+  /** A file in ~/.colima has a second name, so `command`, whose `chown -R` would change it, is held back (null). Readiness only. */
+  linkedFile?: boolean;
 };
 
 export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
@@ -84,6 +86,8 @@ export type ToolchainOverrides = {
   colimaStop?: ColimaStop;
   /** The checked paths and IDs for Fix Colima's files; the real one reads this computer. */
   colimaPlan?: (engine: DockerEngine) => ReturnType<typeof colimaFilesPlan>;
+  /** Looks in ~/.colima, as the person, for a file with a second name; the real one runs `find`. */
+  colimaLinkedScan?: typeof colimaLinkedFileSeen;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
@@ -122,13 +126,28 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     canStart: autoStart && engine !== null && now.kind !== "no-access" && now.kind !== "cli-missing",
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
-    access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
+    access: now.kind === "no-access" ? await accessFix(platform, found, over) : null,
     // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
     restartEngine: colima ? found.name : null,
     alternatives: colima ? otherEngines(platform, found.name, over.has) : [],
     engineAction: engineHolder?.kind ?? null,
   };
 }
+
+/**
+ * The way to get access, with Colima's command held back while a linked file is known: one Fix Colima's files found since the last fix
+ * that completed, or one the person's own look finds now. Kept here, not only in the page, so a reload or another page can't show the
+ * `chown -R` again (PR #300 CodeRabbit).
+ */
+async function accessFix(platform: NodeJS.Platform, engine: DockerEngine | null, over: ToolchainOverrides): Promise<DockerAccessFix> {
+  const fix = dockerAccessFix(platform, engine);
+  if (!fix.fixFiles || engine === null) return fix;
+  const linked = colimaLinkedFileFound || await (over.colimaLinkedScan ?? colimaLinkedFileSeen)(engine);
+  return linked ? { ...fix, command: null, linkedFile: true } : fix;
+}
+
+/** Fix Colima's files stopped at a linked file, and no fix has completed since. Reset when this process starts; the look covers that. */
+let colimaLinkedFileFound = false;
 
 /** The engines to install instead of one that won't start: this platform's install and its alternatives, without the one that failed. */
 function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command: string) => boolean): Array<{ name: string; url: string }> {
@@ -345,9 +364,11 @@ async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartRe
   opts.onProgress?.("keyloom: asking macOS for an administrator password to fix Colima's files");
   const root = await runColimaRootSteps(planned.plan, over.adminRun ?? adminRunner);
   if (!root.ok) {
+    if (root.code === "colima_linked_file") colimaLinkedFileFound = true;
     const code = root.code === "cancelled" ? "cancelled" as const : root.code === "colima_linked_file" ? "linked_file" as const : root.code === "colima_vm_running" ? "vm_running" as const : null;
     return { ok: false, engine: engine.name, reason: root.reason, ...(code === null ? {} : { code }) };
   }
+  colimaLinkedFileFound = false;
   // The files are the person's now, so Colima stops and starts as them: a copy of the person's that is still up keeps the socket root
   // made, and a start of a running Colima does nothing. The stop runs after the dialog, so a closed dialog changes nothing, and as the
   // person, never as root (#300 review). It usually has nothing to stop; a stop that fails is said and the start still runs.

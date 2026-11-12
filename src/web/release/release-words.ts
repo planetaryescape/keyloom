@@ -82,7 +82,7 @@ export function dockerView(
   if (problem !== null && readiness?.ok !== true) {
     // While Docker still refuses, the fix's outcome stays beside it; once Docker needs something else, that readiness decides below.
     if (lastAction === "fix-files" && down?.problem === "no-access" && down.access !== null) {
-      const noCommand = linkedFile || problemCode === "linked_file";
+      const noCommand = linkedFile || down.access.linkedFile === true || problemCode === "linked_file";
       return noAccess(down.access, fixOutcome(problem, problemCode, noCommand), noCommand);
     }
     if (restartApp !== null) return { kind: "start-failed", reason: plain(problem), retry: "restart", restartEngine: null, helpUrl: null };
@@ -103,12 +103,18 @@ export function dockerView(
       : { kind: "download", engine: i.engine, url: i.url, note: i.note, alternatives: i.alternatives };
   }
   if (down.problem === "cli-missing" && down.engine !== null) return { kind: "cli-missing", app: down.engine };
-  if (down.problem === "no-access" && down.access !== null) return noAccess(down.access, { offered: true, note: null }, linkedFile);
+  if (down.problem === "no-access" && down.access !== null) {
+    // The server holds the command back too, so a reload or another page says the same (PR #300 CodeRabbit).
+    const held = linkedFile || down.access.linkedFile === true;
+    return noAccess(down.access, { offered: true, note: held ? LINKED_FILE_HELD : null }, held);
+  }
   if (down.engine === null) return { kind: "other", reason: plain(down.reason), problem: down.problem };
   return { kind: "down", engine: down.engine, canStart: down.canStart, afterInstall: afterInstall(install), restartEngine };
 }
 
 type Access = NonNullable<Extract<DockerReadinessResponse, { ok: false }>["access"]>;
+
+const LINKED_FILE_HELD = "A file in Colima's folder also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.";
 
 function noAccess(access: Access, fix: { offered: boolean; note: string | null }, noCommand = false): Extract<DockerView, { kind: "no-access" }> {
   return { kind: "no-access", command: noCommand ? null : access.command, note: access.note, restartApp: access.restartApp, fix: access.fixFiles === true ? fix : null };

@@ -254,6 +254,21 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
   ].join("\n");
 }
 
+/**
+ * Whether ~/.colima holds a file that isn't the person's and has a second name, looked for as the person, without root (PR #300
+ * CodeRabbit): Colima's command to copy runs `chown -R`, which would change that file wherever its other name is. A folder the person
+ * can't read hides what is in it, so false means "none seen", not "none". Under `bun test` it reports none and reads nothing, so no
+ * test reads the machine's own ~/.colima; `deps` lets a test point it at a temporary one.
+ */
+export async function colimaLinkedFileSeen(engine: DockerEngine, deps: () => PlanDeps = realPlanDeps): Promise<boolean> {
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") return false;
+  const planned = colimaFilesPlan(engine, deps());
+  if (!planned.ok) return false;
+  const { colimaHome, uid } = planned.plan;
+  const r = await capture(["/usr/bin/find", "-P", colimaHome, "-xdev", "!", "-type", "d", "-links", "+1", "!", "-user", String(uid), "-print", "-quit"], { timeoutMs: 10_000 });
+  return r.stdout.trim() !== "";
+}
+
 /** The password dialog stays open until the person answers it; a dialog nobody answers mustn't hold Docker's lock for good. */
 const ADMIN_TIMEOUT_MS = 10 * 60_000;
 

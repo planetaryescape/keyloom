@@ -44,7 +44,8 @@ export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
     // How to get this account access when the problem is `no-access`: a command to copy (Linux) or null, and a note; null otherwise.
     // `restartApp` is the Mac app keyloom can quit and reopen to give the socket back (R2-07), or null.
     // `fixFiles`: keyloom can run Colima's command itself (POST /api/system/docker/fix-colima-files, D-533). Optional for older servers.
-    access: z.object({ command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable(), fixFiles: z.boolean().optional() }).nullable(),
+    // `linkedFile`: a file in ~/.colima has a second name, so `command`, whose `chown -R` would change it, is null (PR #300 CodeRabbit).
+    access: z.object({ command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable(), fixFiles: z.boolean().optional(), linkedFile: z.boolean().optional() }).nullable(),
     // The engine keyloom can stop and start from scratch (POST /api/system/docker/restart) when a start fails: Colima (R3-04). Optional
     // so an older server's answer still reads.
     restartEngine: z.string().min(1).nullable().optional(),

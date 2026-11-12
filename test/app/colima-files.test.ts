@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COLIMA_VM_RUNNING, type ColimaFilesPlan, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, parsePsLine, parseAccountHome, realPlanDeps, runColimaRootSteps } from "../../src/app/colima-files.ts";
+import { COLIMA_VM_RUNNING, type ColimaFilesPlan, colimaLinkedFileSeen, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, parsePsLine, parseAccountHome, realPlanDeps, runColimaRootSteps } from "../../src/app/colima-files.ts";
 import { dockerAccessFix, dockerReadiness, ensureDocker, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView, linkedFileAfter } from "../../src/web/release/release-words.ts";
@@ -464,6 +464,46 @@ describe("Fix Colima's files, the use case", () => {
     expect(await build).toMatchObject({ ok: true });
   });
 
+  test("readiness holds back Colima's command while a linked file is known, so a reload can't show it again (PR #300 CodeRabbit)", async () => {
+    const base = { status: refused, detect: found, env: {}, platform: "darwin" as const };
+    const linked = "execution error: keyloom colima fix stopped (colima_linked_file): A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: /Users/someone/.colima/x (1)";
+    const fixWith = (adminRun: () => Promise<{ code: number; out: string }>) => fixColimaFiles({ blocker: free, overrides: { status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }), adminRun, colimaStop: async () => ({ ok: true }), startEngine: async () => ({ ok: true, version: "29", engine: "Colima", waitedMs: 1 }) } });
+    // The hold is the server's, so a fix that completes first starts this test from none.
+    expect(await fixWith(async () => ({ code: 0, out: "" }))).toMatchObject({ ok: true });
+    // The person's own look finds one.
+    expect(await dockerReadiness({ ...base, colimaLinkedScan: async () => true })).toMatchObject({ access: { command: null, linkedFile: true, fixFiles: true } });
+    expect(await dockerReadiness({ ...base, colimaLinkedScan: async () => false })).toMatchObject({ access: { command: expect.stringContaining("chown -R") } });
+    // Root found one that the look can't see: held until a fix completes, whatever ends the presses between.
+    const none = async () => false;
+    expect(await fixWith(async () => ({ code: 1, out: linked }))).toMatchObject({ code: "linked_file" });
+    expect(await dockerReadiness({ ...base, colimaLinkedScan: none })).toMatchObject({ access: { command: null, linkedFile: true } });
+    await fixWith(async () => ({ code: 1, out: "execution error: User canceled. (-128)" }));
+    expect(await dockerReadiness({ ...base, colimaLinkedScan: none })).toMatchObject({ access: { command: null } });
+    expect(await fixWith(async () => ({ code: 0, out: "" }))).toMatchObject({ ok: true });
+    expect(await dockerReadiness({ ...base, colimaLinkedScan: none })).toMatchObject({ access: { command: expect.stringContaining("chown -R") } });
+  });
+
+  test.skipIf(process.platform !== "darwin")("the person's own look finds a file with a second name in ~/.colima, and passes over one that is already theirs", async () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "kl-colima-look-")));
+    const refuse = process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS;
+    try {
+      mkdirSync(join(home, ".colima", "default"), { recursive: true });
+      writeFileSync(join(home, ".colima", "default", "disk"), "disk\n");
+      const me = process.getuid?.() ?? 0;
+      const at = (uid: number) => () => deps({ home, accountHome: home, uid });
+      // Under bun test it reads nothing.
+      expect(await colimaLinkedFileSeen(colima, at(me + 1))).toBe(false);
+      delete process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS;
+      expect(await colimaLinkedFileSeen(colima, at(me + 1))).toBe(false);
+      linkSync(join(home, ".colima", "default", "disk"), join(home, "other-name"));
+      expect(await colimaLinkedFileSeen(colima, at(me + 1))).toBe(true);
+      expect(await colimaLinkedFileSeen(colima, at(me))).toBe(false);
+    } finally {
+      if (refuse !== undefined) process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS = refuse;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("readiness offers the button for a Colima on a Mac only", async () => {
     expect(dockerAccessFix("darwin", colima).fixFiles).toBe(true);
     expect(dockerAccessFix("linux", colima).fixFiles).toBe(false);
@@ -519,6 +559,13 @@ describe("what the page shows (D-533)", () => {
     expect(dockerView(refused, false, null, null, null, null, true)).toMatchObject({ command: null, fix: { offered: true } });
     // Without it, the cancel shows the command again, as before.
     expect(dockerView(refused, false, "You cancelled the password dialog.", null, "fix-files", "cancelled", false)).toMatchObject({ command: access.command });
+  });
+
+  test("a linked file the server reports holds back the command on a fresh page too, and says why (PR #300 CodeRabbit)", () => {
+    const held = { ...refused, access: { ...access, command: null, linkedFile: true } };
+    const view = dockerView(held, false, null, null);
+    expect(view).toMatchObject({ kind: "no-access", command: null, fix: { offered: true, note: expect.stringContaining("doesn't offer Colima's command") } });
+    expect(dockerView(held, false, "You cancelled the password dialog.", null, "fix-files", "cancelled")).toMatchObject({ command: null, fix: { offered: true } });
   });
 
   test("another account's running VM is said with the way on: the command that stops it, or the button once no command is offered", () => {
