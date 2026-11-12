@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DockerReadinessResponse } from "../../api/system.ts";
 import type { DockerStartResponse } from "../../api/system.ts";
 import { fetchDockerReadiness, fixColimaFiles, restartDockerApp, startDockerEngine } from "../system.ts";
+import { linkedFileAfter } from "./release-words.ts";
 
 export type Docker = {
   /** Null when the server offers no system routes, or the page hasn't asked yet. */
@@ -16,6 +17,11 @@ export type Docker = {
   problem: string | null;
   /** The server's code for `problem`, such as `cancelled` for a password dialog the person closed (D-533). */
   problemCode: DockerStartCode | null;
+  /**
+   * Fix Colima's files found a file with a second name, and no fix has completed since, so the page holds back Colima's `chown -R`
+   * command. Kept apart from `problemCode`, which the next press replaces (PR #300 CodeRabbit).
+   */
+  linkedFile: boolean;
   /** What this page last asked for, so a restart that failed isn't offered as the way on again (R3-04). */
   lastAction: DockerAction | null;
   /** Starts the engine; for `cli-missing` the server opens the app instead (R2-07). */
@@ -37,6 +43,7 @@ export function useDocker(token: string): Docker {
   const [problem, setProblem] = useState<string | null>(null);
   const [problemCode, setProblemCode] = useState<Docker["problemCode"]>(null);
   const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
+  const [linkedFile, setLinkedFile] = useState(false);
   const [asks, setAsks] = useState(0);
 
   useEffect(() => {
@@ -72,6 +79,7 @@ export function useDocker(token: string): Docker {
     setLastAction(action);
     ask(token)
       .then((result) => {
+        setLinkedFile((before) => linkedFileAfter(before, action, result));
         if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
         else if (result.code === "engine_busy") {
           // keyloom is already starting the engine (R4-04): nothing failed, so nothing is recorded, and the readiness follows that start.
@@ -94,7 +102,7 @@ export function useDocker(token: string): Docker {
   const fixFiles = useCallback(() => run("fix-files", fixColimaFiles), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
-  return { readiness, unanswered, starting, problem, problemCode, lastAction, start, restart, fixFiles, refresh };
+  return { readiness, unanswered, starting, problem, problemCode, linkedFile, lastAction, start, restart, fixFiles, refresh };
 }
 
 const ENGINE_ACTION_POLL_MS = 2000;

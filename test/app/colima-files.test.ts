@@ -5,13 +5,13 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ColimaFilesPlan, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, parseAccountHome, runColimaRootSteps } from "../../src/app/colima-files.ts";
+import { COLIMA_VM_RUNNING, type ColimaFilesPlan, type PlanDeps, adminRunner, colimaFilesPlan, colimaFilesScript, colimaFixFailure, parsePsLine, parseAccountHome, realPlanDeps, runColimaRootSteps } from "../../src/app/colima-files.ts";
 import { dockerAccessFix, dockerReadiness, ensureDocker, fixColimaFiles, restartDocker } from "../../src/app/toolchain.ts";
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
-import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
+import { buildBlockedReason, dockerView, linkedFileAfter } from "../../src/web/release/release-words.ts";
 
 const colima = { name: "Colima", command: ["colima", "restart", "--profile", "work"] };
-const deps = (over: Partial<PlanDeps> = {}): PlanDeps => ({ home: "/Users/someone", accountHome: "/Users/someone", uid: 501, kind: () => "dir", ...over });
+const deps = (over: Partial<PlanDeps> = {}): PlanDeps => ({ home: "/Users/someone", accountHome: "/Users/someone", uid: 501, kind: () => "dir", hostAgentPids: () => [], processOf: () => null, ...over });
 
 describe("the checks before the password dialog", () => {
   test("a Colima with a usual home gets a plan: its profile and the account's ~/.colima", () => {
@@ -38,6 +38,36 @@ describe("the checks before the password dialog", () => {
     expect(colimaFilesPlan(colima, deps({ kind: () => "missing" }))).toMatchObject({ ok: false, reason: expect.stringContaining("~/.colima") });
   });
 
+  test("another account's Colima VM running from ~/.colima stops it before the password dialog, as the root script would (PR #300 CodeRabbit)", () => {
+    const seen: number[] = [];
+    const processOf = (pid: number) => (seen.push(pid), pid === 700 ? { uid: 0, comm: "/opt/homebrew/bin/limactl" } : pid === 701 ? { uid: 501, comm: "/opt/homebrew/bin/limactl" } : pid === 702 ? { uid: 0, comm: "/usr/sbin/sshd" } : null);
+    expect(colimaFilesPlan(colima, deps({ hostAgentPids: () => ["700"], processOf }))).toEqual({ ok: false, reason: COLIMA_VM_RUNNING, code: "colima_vm_running" });
+    // The person's own VM, another program that took the number, a host agent that has gone, and a pid file without a number all pass.
+    expect(colimaFilesPlan(colima, deps({ hostAgentPids: () => ["701", "702", "703", "", "70 0", "$(id)"], processOf }))).toMatchObject({ ok: true });
+    expect(seen).toEqual([700, 701, 702, 703]);
+    expect(parsePsLine("    0 /opt/homebrew/Cellar/lima/1.0/bin/limactl\n")).toEqual({ uid: 0, comm: "/opt/homebrew/Cellar/lima/1.0/bin/limactl" });
+    expect(parsePsLine("  501 /Applications/My App.app/Contents/MacOS/limactl")).toEqual({ uid: 501, comm: "/Applications/My App.app/Contents/MacOS/limactl" });
+    expect(parsePsLine("")).toBeNull();
+  });
+
+  test("the real probes read each instance's pid file, skip links and anything unreadable, and name a running process's owner", () => {
+    const home = mkdtempSync(join(tmpdir(), "kl-colima-probe-"));
+    try {
+      const real = realPlanDeps();
+      expect(real.hostAgentPids(join(home, ".colima"))).toEqual([]);
+      for (const instance of ["colima", "colima-work", "linked", "empty"]) mkdirSync(join(home, ".colima", "_lima", instance), { recursive: true });
+      writeFileSync(join(home, ".colima", "_lima", "colima", "ha.pid"), "4242\nmore\n");
+      writeFileSync(join(home, ".colima", "_lima", "colima-work", "ha.pid"), "x");
+      writeFileSync(join(home, "elsewhere"), "1\n");
+      symlinkSync(join(home, "elsewhere"), join(home, ".colima", "_lima", "linked", "ha.pid"));
+      expect(real.hostAgentPids(join(home, ".colima")).sort()).toEqual(["4242", "x"]);
+      expect(real.processOf(process.pid)).toMatchObject({ uid: process.getuid?.() });
+      expect(real.processOf(2 ** 22 + 12345)).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("the script refuses values that skipped the checks", () => {
     const plan: ColimaFilesPlan = { colimaHome: "/h/.colima", uid: 501, profile: null };
     expect(() => colimaFilesScript({ ...plan, uid: 0 })).toThrow();
@@ -62,9 +92,9 @@ describe("how the dialog's answer is read", () => {
     const calls: string[][] = [];
     expect(await runColimaRootSteps(plan, async (cmd) => (calls.push([...cmd]), { code: 0, out: "" }))).toEqual({ ok: true });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.[0]).toBe("osascript");
-    expect(calls[0]?.[2]).toContain("with administrator privileges");
-    expect(calls[0]?.[2]).toContain("give Colima's files in your home folder back to you");
+    expect(calls[0]?.[3]).toBe("/usr/bin/osascript");
+    expect(calls[0]?.at(-1)).toContain("with administrator privileges");
+    expect(calls[0]?.at(-1)).toContain("give Colima's files in your home folder back to you");
   });
 
   test("a closed dialog is `cancelled`, the script's own stop is its code, and anything else says what macOS printed", async () => {
@@ -121,7 +151,7 @@ describe.skipIf(process.platform !== "darwin")("the root script, run as this acc
     }
     const plan: ColimaFilesPlan = { colimaHome: dir, uid: other, profile: "work" };
     const run = async (p: ColimaFilesPlan = plan, env: Record<string, string> = {}) => {
-      const proc = Bun.spawn(["/bin/sh", "-c", colimaFilesScript(p, chown === undefined ? undefined : { chown })], { cwd: base, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
+      const proc = Bun.spawn(["/bin/sh", "-c", colimaFilesScript(p, chown === undefined ? undefined : { chown, root: uid })], { cwd: base, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
       const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
       return { code: await proc.exited, out: `${out}${err}` };
     };
@@ -129,7 +159,8 @@ describe.skipIf(process.platform !== "darwin")("the root script, run as this acc
     return { base, home, dir, bin, plan, run, calls };
   }
 
-  // Records each call as "<folder>|<args>". `-h 0` takes the folder's owner write, as root's ownership would; giving a folder back returns
+  // Records each call as "<folder>|<args>". `-h 0` takes the folder's owner write, as root's ownership would (the script is told this
+  // account is "root", so its check of a folder's owner passes); giving a folder back returns
   // it; giving a file records the inode it would change.
   const RECORDING_CHOWN = `owner=$2; shift 2
 for f in "$@"; do
@@ -181,8 +212,9 @@ done`;
     const calls = s.calls().map((line) => line.replace(/ inode=\d+$/, ""));
     const { dir } = s;
     expect(calls).toEqual([
-      `${dir}|-h 0 ./.`, `${dir}|-h 0 ./work`, `${join(dir, "work")}|-h 0 ./sub`,
-      `${join(dir, "work", "sub")}|-h ${other} disk`, `${join(dir, "work")}|-h ${other} colima.yaml`,
+      // Each folder changes from inside it, as `.`, so the change lands on the folder the ID is read from (#300 re-review).
+      `${dir}|-h 0 .`, `${join(dir, "work")}|-h 0 .`, `${join(dir, "work", "sub")}|-h 0 .`,
+      `${join(dir, "work", "sub")}|-h ${other} ./disk`, `${join(dir, "work")}|-h ${other} ./colima.yaml`,
       `${join(dir, "work")}|-h ${other} ./sub`, `${dir}|-h ${other} ./work`, `${dir}|-h ${other} ./.`,
     ]);
     // Group write went while the folder was root's, so nobody but root could rename in it, and it came back after.
@@ -207,13 +239,90 @@ ${RECORDING_CHOWN}`);
     expect(statSync(secret).nlink).toBe(1);
   });
 
+  test("a disk image mounted on a folder in ~/.colima can't leave that folder the person's while files in it change owner (#300 re-review)", async () => {
+    const secret = join(root, "mount-secret");
+    writeFileSync(secret, "root's file\n");
+    const secretInode = statSync(secret).ino;
+    // The person's moves: a disk image mounted on ~/.colima/work before the run, so root's change to `work` lands on the image's root
+    // folder; then, as soon as that change is made, the image goes, and the real `work` is the person's again. Any file root then hands
+    // back by name in it can be swapped for a hard link to a file elsewhere.
+    const s = setup("mount", `if [ "$2" = 0 ] && [ ! -e "$LOG.detached" ] && [ "$(cd "$3" 2>/dev/null && /bin/pwd -P)" = "$KL_MNT" ]; then
+  : > "$LOG.detached"
+  /bin/chmod u-w "$3"
+  printf '%s|-h 0 %s (image)\\n' "$(/bin/pwd -P)" "$3" >> "$LOG"
+  /usr/bin/hdiutil detach -quiet -force "$KL_MNT" && echo detached >> "$LOG.detached"
+  exit 0
+fi
+if [ "$2" != 0 ] && [ ! -d "$3" ] && /bin/mv "$3" "$3.moved" 2>/dev/null && /bin/ln '${secret}' "$3" 2>/dev/null; then echo swapped >> "$LOG.detached"; fi
+${RECORDING_CHOWN}`);
+    const mnt = join(s.dir, "work");
+    const image = join(s.base, "work.dmg");
+    try {
+      expect(Bun.spawnSync(["/usr/bin/hdiutil", "create", "-quiet", "-size", "2m", "-fs", "HFS+", "-volname", "kl-colima-test", "-o", image]).exitCode).toBe(0);
+      expect(Bun.spawnSync(["/usr/bin/hdiutil", "attach", "-quiet", "-nobrowse", "-noverify", "-noautofsck", "-mountpoint", mnt, image]).exitCode).toBe(0);
+      expect(statSync(mnt).dev).not.toBe(statSync(s.dir).dev);
+      const r = await s.run(s.plan, { KL_MNT: mnt });
+      expect(readFileSync(`${join(s.base, "chown.log")}.detached`, "utf8")).toContain("detached");
+      const changed = s.calls().flatMap((line) => line.match(/inode=(\d+)$/)?.[1] ?? []).map(Number);
+      expect(changed).not.toContain(secretInode);
+      expect(statSync(secret).nlink).toBe(1);
+      // It stops, says so, and changes nothing more.
+      expect(r.code).toBe(1);
+      expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+    } finally {
+      Bun.spawnSync(["/usr/bin/hdiutil", "detach", "-quiet", "-force", mnt]);
+    }
+  }, 30_000);
+
+  test("a file changes owner only from a folder that is root's, unwritable, without an ACL and recorded; the first that isn't stops it (#300 re-review)", async () => {
+    // As the first file changes owner, the other folder holding a file loses one of the things the check asks for.
+    const other_folder = `case $(/bin/pwd -P) in */sub) t=..;; *) t=./sub;; esac`;
+    const tampers = { acl: `/bin/chmod +a "everyone allow add_file" "$t"`, "group write": `/bin/chmod g+w "$t"` };
+    for (const [name, tamper] of Object.entries(tampers)) {
+      const s = setup(`check-${name.replace(" ", "-")}`, `if [ "$2" != 0 ] && [ ! -e "$LOG.t" ]; then : > "$LOG.t"; ${other_folder}; ${tamper}; fi\n${RECORDING_CHOWN}`);
+      const r = await s.run();
+      expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+      // The first file, and then nothing more but step 3 giving the folders back.
+      expect(s.calls().filter((line) => line.includes(" inode="))).toHaveLength(1);
+      expect(s.calls().at(-1)).toBe(`${s.dir}|-h ${other} ./.`);
+    }
+    // A folder that isn't root's: the script is told root is another account, so no folder here passes, and no file changes.
+    const s = setup("check-owner", RECORDING_CHOWN);
+    const proc = Bun.spawn(["/bin/sh", "-c", colimaFilesScript(s.plan, { chown: join(s.bin, "chown"), root: uid + 7 })], { cwd: s.base, stdout: "pipe", stderr: "pipe" });
+    expect(await proc.exited).toBe(1);
+    expect(colimaFixFailure(await new Response(proc.stderr).text())?.code).toBe("colima_chown_failed");
+    expect(s.calls().filter((line) => line.includes(" inode="))).toEqual([]);
+  });
+
+  test("a folder step 1 never recorded is never one a file changes owner in, even when it was never seen as failing (#300 re-review)", async () => {
+    // As root takes `work`, the person's folder of the same name takes its place, the way an unmounted disk image's folder does, and
+    // step 1's walk passes it by without a word.
+    const s = setup("unrecorded", `if [ "$2" = 0 ] && [ ! -e "$LOG.t" ]; then case $(/bin/pwd -P) in */work)
+  : > "$LOG.t"; cd .. && /bin/chmod u+w . && /bin/mv work work.real && /bin/mkdir work && echo planted > work/planted && /bin/chmod u-w . && cd work.real;;
+esac; fi
+${RECORDING_CHOWN}`);
+    const r = await s.run();
+    expect(existsSync(join(s.dir, "work", "planted"))).toBe(true);
+    expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+    expect(s.calls().filter((line) => line.includes(" inode=") && line.startsWith(`${join(s.dir, "work")}|`))).toEqual([]);
+  });
+
+  test("a folder's whole mode comes back, its sticky bit included (#300 re-review)", async () => {
+    const s = setup("sticky", RECORDING_CHOWN);
+    // macOS's chmod: Bun's chmodSync drops the sticky bit.
+    expect(Bun.spawnSync(["/bin/chmod", "1777", join(s.dir, "work")]).exitCode).toBe(0);
+    expect(statSync(join(s.dir, "work")).mode & 0o7777).toBe(0o1777);
+    expect(await s.run()).toMatchObject({ code: 0 });
+    expect(statSync(join(s.dir, "work")).mode & 0o7777).toBe(0o1777);
+  });
+
   test("a folder root can't take stops the walk there: no file changes, and only folders it took go back", async () => {
-    const s = setup("partial", `if [ "$2" = 0 ] && [ "$3" = ./work ]; then exit 1; fi\n${RECORDING_CHOWN}`);
+    const s = setup("partial", `if [ "$2" = 0 ]; then case $(/bin/pwd -P) in */work) exit 1;; esac; fi\n${RECORDING_CHOWN}`);
     const r = await s.run();
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
     // Not ./work's subfolder, which the person could still rename in, nor any file.
-    expect(s.calls()).toEqual([`${s.dir}|-h 0 ./.`, `${s.dir}|-h ${other} ./.`]);
+    expect(s.calls()).toEqual([`${s.dir}|-h 0 .`, `${s.dir}|-h ${other} ./.`]);
   });
 
   test("a Colima VM another account runs from this folder stops it before anything changes", async () => {
@@ -262,6 +371,17 @@ describe("Fix Colima's files, the use case", () => {
   const plan: ColimaFilesPlan = { colimaHome: "/Users/someone/.colima", uid: 501, profile: "work" };
   const free = () => null;
 
+  test("another account's running VM is said without opening the password dialog, and root's own stop says the same (PR #300 CodeRabbit)", async () => {
+    let asked = 0;
+    const base = { status: refused, detect: found, platform: "darwin" as const, adminRun: async () => (asked++, { code: 0, out: "" }) };
+    const before = await fixColimaFiles({ blocker: free, overrides: { ...base, colimaPlan: () => ({ ok: false as const, reason: COLIMA_VM_RUNNING, code: "colima_vm_running" as const }) } });
+    expect(before).toEqual({ ok: false, engine: "Colima", reason: COLIMA_VM_RUNNING, code: "vm_running" });
+    expect(asked).toBe(0);
+    const out = `execution error: keyloom colima fix stopped (colima_vm_running): ${COLIMA_VM_RUNNING} (1)`;
+    const atRoot = await fixColimaFiles({ blocker: free, overrides: { ...base, colimaPlan: () => ({ ok: true as const, plan }), adminRun: async () => ({ code: 1, out }) } });
+    expect(atRoot).toMatchObject({ ok: false, reason: COLIMA_VM_RUNNING, code: "vm_running" });
+  });
+
   test("running work or no way to check for it stops it inside the lock, before the password dialog (D-529)", async () => {
     let asked = 0;
     const overrides = { status: refused, detect: found, platform: "darwin" as const, colimaPlan: () => ({ ok: true as const, plan }), adminRun: async () => (asked++, { code: 0, out: "" }) };
@@ -278,7 +398,7 @@ describe("Fix Colima's files, the use case", () => {
       onProgress: (line) => progress.push(line),
       overrides: {
         status: refused, detect: found, platform: "darwin", colimaPlan: () => ({ ok: true, plan }),
-        adminRun: async (cmd) => (steps.push(`admin ${cmd[0]}`), { code: 0, out: "" }),
+        adminRun: async (cmd) => (steps.push(`admin ${cmd[3]}`), { code: 0, out: "" }),
         // Colima's own stop, as the person: it usually has nothing to stop, and a stop that fails still starts it.
         colimaStop: async (command) => (steps.push(command.join(" ")), { ok: false, detail: "colima is not running" }),
         startEngine: async (opts) => {
@@ -289,7 +409,7 @@ describe("Fix Colima's files, the use case", () => {
       },
     });
     expect(result).toEqual({ ok: true, version: "29", engine: "Colima", waitedMs: 9 });
-    expect(steps).toEqual(["admin osascript", "colima stop --profile work", "relaunch colima start --profile work"]);
+    expect(steps).toEqual(["admin /usr/bin/osascript", "colima stop --profile work", "relaunch colima start --profile work"]);
     expect(progress).toContain("keyloom: Colima didn't stop cleanly (colima is not running); starting it anyway");
   });
 
@@ -376,6 +496,36 @@ describe("what the page shows (D-533)", () => {
     // A linked file keeps the button, which checks again, and drops the command, whose chown -R would change that file.
     const linked = "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: /Users/someone/.colima/default/disk";
     expect(dockerView(refused, false, linked, null, "fix-files", "linked_file")).toMatchObject({ kind: "no-access", command: null, fix: { offered: true, note: expect.stringContaining("check what it is") } });
+  });
+
+  test("after a linked file, a later cancel, refusal or failure never brings back the chown -R command; only a completed fix does (PR #300 CodeRabbit)", () => {
+    const no = (code?: "engine_busy" | "build_running" | "cancelled" | "linked_file" | "vm_running") => ({ ok: false as const, reason: "r", engine: "Colima", ...(code === undefined ? {} : { code }) });
+    let held = linkedFileAfter(false, "fix-files", no("linked_file"));
+    expect(held).toBe(true);
+    for (const result of [no("cancelled"), no("build_running"), no("engine_busy"), no("vm_running"), no()]) {
+      held = linkedFileAfter(held, "fix-files", result);
+      expect(held).toBe(true);
+    }
+    // A start or restart says nothing about the file, even when Docker comes up.
+    held = linkedFileAfter(held, "start", { ok: true, version: "29", engine: "Colima", waitedMs: 1 });
+    expect(held).toBe(true);
+    expect(linkedFileAfter(held, "fix-files", { ok: true, version: "29", engine: "Colima", waitedMs: 1 })).toBe(false);
+    expect(linkedFileAfter(false, "fix-files", no("cancelled"))).toBe(false);
+
+    // What the page shows while it holds: the button, which checks for the file again, and no command, whatever ended the last press.
+    expect(dockerView(refused, false, "You cancelled the password dialog.", null, "fix-files", "cancelled", true)).toMatchObject({ kind: "no-access", command: null, fix: { offered: true } });
+    expect(dockerView(refused, false, "A build or flash is running.", null, "fix-files", "build_running", true)).toMatchObject({ command: null, fix: { offered: true } });
+    expect(dockerView(refused, false, "macOS couldn't fix Colima's files: x", null, "fix-files", null, true)).toMatchObject({ command: null, fix: { offered: true, note: "macOS couldn't fix Colima's files: x" } });
+    expect(dockerView(refused, false, null, null, null, null, true)).toMatchObject({ command: null, fix: { offered: true } });
+    // Without it, the cancel shows the command again, as before.
+    expect(dockerView(refused, false, "You cancelled the password dialog.", null, "fix-files", "cancelled", false)).toMatchObject({ command: access.command });
+  });
+
+  test("another account's running VM is said with the way on: the command that stops it, or the button once no command is offered", () => {
+    const shown = dockerView(refused, false, COLIMA_VM_RUNNING, null, "fix-files", "vm_running");
+    expect(shown).toMatchObject({ kind: "no-access", command: access.command, fix: { offered: false, note: expect.stringContaining("The command below stops that copy, gives the files back and starts Colima as you.") } });
+    expect(buildBlockedReason(shown)).toBe("Give keyloom access to Docker first.");
+    expect(dockerView(refused, false, COLIMA_VM_RUNNING, null, "fix-files", "vm_running", true)).toMatchObject({ command: null, fix: { offered: true, note: expect.stringContaining("Stop that copy of Colima, then press Fix Colima's files again.") } });
   });
 
   test("once Docker needs something else, that readiness decides: a Colima that didn't come up gets Restart Colima", () => {

@@ -60,7 +60,7 @@ const noop = () => {};
 function release(build: Build, over: Partial<Release> = {}): Release {
   return {
     build, flash: null, starting: null, error: null, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
-    docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
+    docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
     cancelFlash: noop, cancelling: false, cancelNote: null, checkKeyboard: noop, check: { running: false, found: null, problem: null }, openSettings: noop, settingsProblem: null,

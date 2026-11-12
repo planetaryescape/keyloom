@@ -4,7 +4,7 @@ import {
   COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
   dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
-import { type ColimaFilesPlan, adminRunner, colimaFilesPlan, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
+import { adminRunner, colimaFilesPlan, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
@@ -83,7 +83,7 @@ export type ToolchainOverrides = {
   /** Stops Colima as the person after Fix Colima's files; the real one runs `colima stop`. */
   colimaStop?: ColimaStop;
   /** The checked paths and IDs for Fix Colima's files; the real one reads this computer. */
-  colimaPlan?: (engine: DockerEngine) => { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string };
+  colimaPlan?: (engine: DockerEngine) => ReturnType<typeof colimaFilesPlan>;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
@@ -317,13 +317,16 @@ async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult & 
  * waits for Docker. Refused while keyloom starts or restarts Docker. The stop ends whatever the other copy runs, so `blocker` is
  * asked inside the engine lock, right before the password dialog, and the fix is refused without one, as a forced restart is (D-529).
  */
-export async function fixColimaFiles(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | "build_running" | "cancelled" | "linked_file" }> {
+export async function fixColimaFiles(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | ColimaFixCode }> {
   return engineBusy() ?? holdEngine("fix-files", () => fixColimaFilesUnheld(opts));
 }
 
 export const COLIMA_FIX_UNGUARDED = "keyloom can't tell whether a build is running here, so it didn't change Colima.";
 
-async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartResult & { code?: "build_running" | "cancelled" | "linked_file" }> {
+/** The codes the page acts on. `vm_running`: another account's Colima VM runs from ~/.colima, found before the dialog or by root. */
+type ColimaFixCode = "build_running" | "cancelled" | "linked_file" | "vm_running";
+
+async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartResult & { code?: ColimaFixCode }> {
   const over = opts.overrides ?? {};
   const now = await (over.status ?? (() => dockerStatus()))();
   if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
@@ -336,13 +339,13 @@ async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartRe
   }
   const engine = finding.engine;
   const planned = (over.colimaPlan ?? ((e: DockerEngine) => colimaFilesPlan(e, realPlanDeps())))(engine);
-  if (!planned.ok) return { ok: false, engine: engine.name, reason: planned.reason };
+  if (!planned.ok) return { ok: false, engine: engine.name, reason: planned.reason, ...(planned.code === "colima_vm_running" ? { code: "vm_running" as const } : {}) };
   const blocked = opts.blocker === undefined ? COLIMA_FIX_UNGUARDED : opts.blocker();
   if (blocked !== null) return { ok: false, engine: null, reason: blocked, code: "build_running" };
   opts.onProgress?.("keyloom: asking macOS for an administrator password to fix Colima's files");
   const root = await runColimaRootSteps(planned.plan, over.adminRun ?? adminRunner);
   if (!root.ok) {
-    const code = root.code === "cancelled" ? "cancelled" as const : root.code === "colima_linked_file" ? "linked_file" as const : null;
+    const code = root.code === "cancelled" ? "cancelled" as const : root.code === "colima_linked_file" ? "linked_file" as const : root.code === "colima_vm_running" ? "vm_running" as const : null;
     return { ok: false, engine: engine.name, reason: root.reason, ...(code === null ? {} : { code }) };
   }
   // The files are the person's now, so Colima stops and starts as them: a copy of the person's that is still up keeps the socket root

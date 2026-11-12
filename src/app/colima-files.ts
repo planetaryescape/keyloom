@@ -2,7 +2,7 @@
 // The fix gives the files back to the person as root through macOS's password dialog (D-493), and then keyloom stops and starts Colima as
 // the person. Only the ownership change runs as root, and it runs only macOS's own tools: nothing the person's account can replace runs as
 // root. Every outside command goes through an injected runner, so no test stops Colima or asks for a password.
-import { lstatSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { DockerEngine } from "../firmware/toolchain/docker.ts";
@@ -35,6 +35,9 @@ export function colimaFixFailure(out: string): { code: ColimaFixFailureCode; rea
   return found;
 }
 
+/** Said when another account's Colima VM runs from ~/.colima: by the check before the dialog, and by the root script's own. */
+export const COLIMA_VM_RUNNING = "A copy of Colima started as an administrator is still running, and keyloom won't run Colima as one to stop it, so nothing changed.";
+
 // Colima's own profile names: letters, digits, dot, dash and underscore. Anything else never reaches the script.
 const PROFILE = /^[A-Za-z0-9._-]+$/;
 
@@ -46,6 +49,10 @@ export type PlanDeps = {
   uid: number;
   /** What is at a path, without following a symbolic link. */
   kind: (path: string) => "dir" | "symlink" | "missing" | "other";
+  /** The first line of each `_lima/<instance>/ha.pid` under ~/.colima that is a plain file this account can read. */
+  hostAgentPids: (colimaHome: string) => string[];
+  /** The owner and command of a running process, or null when there is none or `ps` can't say. */
+  processOf: (pid: number) => { uid: number; comm: string } | null;
 };
 
 export const realPlanDeps = (): PlanDeps => {
@@ -63,8 +70,39 @@ export const realPlanDeps = (): PlanDeps => {
         return "missing";
       }
     },
+    hostAgentPids: (colimaHome) => {
+      const lima = join(colimaHome, "_lima");
+      let instances: string[];
+      try {
+        instances = readdirSync(lima);
+      } catch {
+        return [];
+      }
+      return instances.flatMap((instance) => {
+        const file = join(lima, instance, "ha.pid");
+        try {
+          return lstatSync(file).isFile() ? [readFileSync(file, "utf8").split("\n")[0] ?? ""] : [];
+        } catch {
+          return [];
+        }
+      });
+    },
+    processOf: (pid) => {
+      try {
+        const r = Bun.spawnSync(["/bin/ps", "-o", "uid=,comm=", "-p", String(pid)], { stdout: "pipe", stderr: "ignore" });
+        return r.exitCode === 0 ? parsePsLine(r.stdout.toString()) : null;
+      } catch {
+        return null;
+      }
+    },
   };
 };
+
+/** `ps -o uid=,comm=`'s line: the uid, then the command, which may hold spaces. */
+export function parsePsLine(line: string): { uid: number; comm: string } | null {
+  const m = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
+  return m === null ? null : { uid: Number(m[1]), comm: m[2] ?? "" };
+}
 
 function realPath(path: string): string {
   try {
@@ -98,7 +136,7 @@ export function parseAccountHome(line: string, uid: number): string | null {
 }
 
 /** The plan for this Colima, or the sentence that says why keyloom can't fix it from here. Checked again inside the root script. */
-export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string } {
+export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string; code?: "colima_vm_running" } {
   if (engine.command[0] !== "colima") return { ok: false, reason: `${engine.name} isn't Colima, so keyloom can't fix its files.` };
   const at = engine.command.indexOf("--profile");
   const profile = at < 0 ? null : engine.command[at + 1] ?? null;
@@ -115,11 +153,20 @@ export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: tru
   if (kind !== "dir") {
     return { ok: false, reason: kind === "symlink" ? "~/.colima is a link to another folder, so keyloom won't change its files as an administrator." : "keyloom can't find Colima's folder, ~/.colima, so there are no files to give back." };
   }
+  // The root script's own check, made here without root, so a password isn't asked for a fix that would stop at it (PR #300
+  // CodeRabbit). The script still checks, because what runs can change while the dialog is open. A pid file keyloom can't read, or
+  // one without a number, is passed over here as there.
+  for (const pid of deps.hostAgentPids(colimaHome)) {
+    if (!/^\d+$/.test(pid)) continue;
+    const proc = deps.processOf(Number(pid));
+    if (proc !== null && proc.uid !== deps.uid && proc.comm.endsWith("limactl")) return { ok: false, reason: COLIMA_VM_RUNNING, code: "colima_vm_running" };
+  }
   return { ok: true, plan: { colimaHome, uid: deps.uid, profile } };
 }
 
 /**
- * `tools` only lets a test stand in for `chown`; the app always uses macOS's own.
+ * `tools` only lets a test, which runs as its own account, stand in for `chown` and for root's uid; the app always uses macOS's own
+ * chown and uid 0.
  *
  * The root half. It runs only tools from /usr/bin, /bin and /usr/sbin, with a PATH of only those, so nothing the person's account can
  * write runs as root. It gives every file in ~/.colima that isn't the person's back to them; Colima stops and starts as the person after.
@@ -131,23 +178,46 @@ export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: tru
  *   keyloom won't run Colima as root to stop it; the command to copy does.
  * - A process running as the person can rename and link in any folder the person can write. A file found by name and changed by name
  *   later could by then be a hard link to one of macOS's own files. So no name is changed while the person can change it:
- *   1. Every folder goes to root, top down, with group and other write and any ACL taken off. Each folder's parent is root's by the time
- *      the folder is changed, so the name still means that folder; giving a folder to root gives the person nothing.
- *   2. With no folder the person can write, each file with one name that isn't theirs goes to them. A name can't change between find's
- *      look and chown, and a file with one name, found inside ~/.colima, is not a file elsewhere.
- *   3. Folders go back to the person bottom up, each while its parent is still root's, with any mode step 1 changed put back. Only a
- *      folder step 1 gave to root goes back: a name can point at one only inside a folder that is still root's.
+ *   1. Every folder goes to root, top down, with group and other write and any ACL taken off. Each change is made from inside the
+ *      folder, on `.`, and the folder recorded is the one changed: a disk image the person mounts on a folder they own changes what its
+ *      name means without a write to the parent, so a change made by name could land on the image while the real folder stays theirs
+ *      (#300 re-review).
+ *   2. Each file with one name that isn't the person's goes to them, from its own folder, and only once that folder (`.`, which no name
+ *      change can move) is checked in the same shell: root's, with no group or other write and no ACL, and one step 1 recorded. A
+ *      folder that fails stops the step there, so nothing more changes. In a folder the person can't write, a name can't change between
+ *      find's look and chown, and a file with one name, found inside ~/.colima, is not a file elsewhere.
+ *   3. Folders go back to the person bottom up, each while its parent is still root's, with any mode step 1 changed put back, setuid,
+ *      setgid and sticky bits included. Only a folder step 1 gave to root goes back: a name can point at one only inside a folder that
+ *      is still root's.
  *   A folder root can't take stops step 1 at that folder, and step 2 never runs, so no file is changed by a name the person can swap.
  * - `find -P` never follows a link; `-xdev` stays on its disk; `chown -h` changes a link itself; `-execdir` runs each change from the
  *   file's own folder, with `./` before the name so a name that starts with `-` is never read as an option.
  * Every value is quoted, the uid is a number, and nothing in the script comes from the page.
  */
-export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string } = { chown: "/usr/sbin/chown" }): string {
+export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string; root?: number } = { chown: "/usr/sbin/chown" }): string {
   if (!Number.isInteger(plan.uid) || plan.uid <= 0) throw new Error("the uid must be a positive integer");
   if (plan.profile !== null && !PROFILE.test(plan.profile)) throw new Error("the Colima profile has characters keyloom doesn't allow");
   const uid = String(plan.uid);
   const chown = shellQuote(tools.chown);
+  const root = String(tools.root ?? 0);
+  if (!/^\d+$/.test(root)) throw new Error("root's uid must be a number");
   const find = "/usr/bin/find -P . -xdev";
+  // Step 1, run per folder from its parent. `cd -P` first, so every change lands on the one folder `.` is, whatever its name means later,
+  // and the ID recorded is that folder's. The ID is printed right after the owner change, so step 3 gives back a folder whose later
+  // change failed.
+  const lock = [
+    `cd -P "./$1" || exit 1`,
+    `${chown} -h 0 . && /usr/bin/stat -f ' %d:%i ' . && /bin/chmod -N . && exec /bin/chmod go-w .`,
+  ].join("; ");
+  // Step 2, run per file from its folder: `.` is checked, then the file changes owner, in one shell, so nothing can change `.` between.
+  // `ls -lde` prints one line more for each ACL entry; the patterns match `stat`'s symbolic mode, which has no group or other write.
+  const give = [
+    `s=$(/usr/bin/stat -f '%u %d:%i %Sp' .) || exit 1`,
+    `case $s in "${root} "*" "d????-??-?) ;; *) exit 1;; esac`,
+    `k=\${s#* }; k=\${k%% *}; case $KEYLOOM_LOCKED in *" $k "*) ;; *) exit 1;; esac`,
+    `a=$(/bin/ls -lde .) || exit 1; case $a in *"\n"*) exit 1;; esac`,
+    `exec ${chown} -h ${uid} "./$1"`,
+  ].join("; ");
   // Run per folder in step 3, from the folder's parent: the folder goes back only when step 1 recorded it, then gets its mode back.
   const giveBack = [
     `k=$(/usr/bin/stat -f %d:%i "./$1") || exit 1`,
@@ -166,17 +236,19 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string 
     `  [ -f "$f" ] && [ ! -L "$f" ] || continue`,
     `  pid=$(/usr/bin/head -n 1 "$f"); case $pid in ''|*[!0-9]*) continue;; esac`,
     `  owner=$(/bin/ps -o uid= -p "$pid" | /usr/bin/tr -d ' '); [ -n "$owner" ] && [ "$owner" != ${uid} ] || continue`,
-    `  case $(/bin/ps -o comm= -p "$pid") in *limactl) fail colima_vm_running "A copy of Colima started as an administrator is still running, and keyloom won't run Colima as one to stop it, so nothing changed.";; esac`,
+    `  case $(/bin/ps -o comm= -p "$pid") in *limactl) fail colima_vm_running "${COLIMA_VM_RUNNING}";; esac`,
     `done`,
     `linked=$(${find} ! -type d -links +1 ! -user ${uid} -print | /usr/bin/head -n 1)`,
     `if [ -n "$linked" ]; then fail colima_linked_file "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: $dir/\${linked#./}"; fi`,
     // Each token is " dev:inode:mode ", so a lookup can't match part of another; nothing but digits and colons comes from stat.
-    `KEYLOOM_MODES=" $(${find} -type d -perm +022 -exec /usr/bin/stat -f ' %d:%i:%Lp ' {} +) "`,
+    // %Mp%Lp is the whole mode, setuid, setgid and sticky bits included, which a bare `chmod 777` would clear.
+    `KEYLOOM_MODES=" $(${find} -type d -perm +022 -exec /usr/bin/stat -f ' %d:%i:%Mp%Lp ' {} +) "`,
     // Step 1. A folder's ID is recorded once it is root's; a folder root can't fully take is pruned, so nothing below it is touched.
-    `KEYLOOM_LOCKED=" $(${find} -type d \\( \\( -execdir ${chown} -h 0 ./{} \\; -execdir /usr/bin/stat -f ' %d:%i ' ./{} \\; -execdir /bin/chmod -N ./{} \\; -execdir /bin/chmod go-w ./{} \\; \\) -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\)) "`,
+    `KEYLOOM_LOCKED=" $(${find} -type d \\( -execdir /bin/sh -c ${shellQuote(lock)} sh {} \\; -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\)) "`,
     `export KEYLOOM_MODES KEYLOOM_LOCKED`,
     `gave=yes`,
-    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) ${find} ! -type d -links 1 ! -user ${uid} -execdir ${chown} -h ${uid} {} + || gave=no;; esac`,
+    // Step 2. The first file whose folder fails the check, or whose change fails, ends it: -quit stops find, so nothing more changes.
+    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) case $(${find} ! -type d -links 1 ! -user ${uid} \\( -execdir /bin/sh -c ${shellQuote(give)} sh {} \\; -o -exec /usr/bin/printf ' failed ' \\; -quit \\)) in *failed*) gave=no;; esac;; esac`,
     `back=$(${find} -depth -type d ! -execdir /bin/sh -c ${shellQuote(giveBack)} sh {} \\; -exec /usr/bin/printf ' failed ' \\;)`,
     `[ "$gave" = yes ] && [ -z "$back" ] || fail colima_chown_failed "macOS didn't let keyloom give all of Colima's files back to you."`,
   ].join("\n");

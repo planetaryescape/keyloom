@@ -97,7 +97,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
     if (wentBackTo !== null && wentBackTo.toHead === null && head.id !== wentBackTo.fromHead) setWentBackTo({ ...wentBackTo, toHead: head.id });
   }, [head.id, wentBackTo]);
   const wentBack = wentBackSummary(wentBackTo, lastBuildId, head.id);
-  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction, docker.problemCode);
+  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction, docker.problemCode, docker.linkedFile);
   const blocked = buildBlockedReason(dockerNow);
   const buildOff = buildDisabledReason(blocked, release.needsBoardRevision, release.boardRevision, boardName);
   // While Docker is missing, the dialog asks again by itself, so installing it elsewhere needs no click here (D-488).

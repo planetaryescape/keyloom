@@ -64,7 +64,9 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
   // `build_running`: a forced restart refused because a build, flash or container run is under way, which it would stop (R6-09); the reason names it.
   // `cancelled`: the person closed Fix Colima's files' password dialog (D-533), so nothing changed and the button stays. `linked_file`: a
   // file in ~/.colima has a second name elsewhere, so nothing changed owner, and the page doesn't offer the `chown -R` command either.
-  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file"]).optional() }),
+  // `vm_running`: another account's Colima VM runs from ~/.colima, usually one started with sudo, so nothing changed; most often found
+  // before the password dialog opens.
+  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file", "vm_running"]).optional() }),
 ]);
 
 export const DockerRestartRequestSchema = z.union([

@@ -2,7 +2,7 @@
 // brew, osascript or open. The quoting is checked against a real /bin/sh with printf, which only prints.
 import { afterEach, describe, expect, test } from "bun:test";
 import {
-  ADMIN_PROMPT, IDLE_INSTALL, type KanataInstall, SETTINGS_PANES, SETTINGS_PANE_NAMES, type Runner, type SetupDeps, type StreamRunner, adminCommand, appleScriptString,
+  ADMIN_PROMPT, IDLE_INSTALL, type KanataInstall, ROOT_SCRIPT_ENV, SETTINGS_PANES, SETTINGS_PANE_NAMES, type Runner, type SetupDeps, type StreamRunner, adminCommand, appleScriptString,
   compareVersions, daemonInstallScript, installKanata, kanataInstaller, kanataUpdate, openSettingsPane, remapperSetupStatus, shellQuote, startKanataDaemon,
   streamRunner,
 } from "../../src/app/remapper-setup.ts";
@@ -31,7 +31,9 @@ function recorder(answers: Record<string, { code: number; out: string }> = {}) {
   const calls: string[][] = [];
   const run: Runner = async (cmd) => {
     calls.push([...cmd]);
-    return answers[(cmd[0] ?? "").split("/").at(-1) ?? ""] ?? { code: 0, out: "" };
+    // An admin command starts `/usr/bin/env -i PATH=… /usr/bin/osascript`, so it answers as osascript.
+    const program = cmd[0] === "/usr/bin/env" ? cmd.slice(1).find((a) => !a.startsWith("-") && !a.includes("=")) : cmd[0];
+    return answers[(program ?? "").split("/").at(-1) ?? ""] ?? { code: 0, out: "" };
   };
   return { calls, run };
 }
@@ -73,6 +75,14 @@ const unAppleScript = (literal: string): string => {
   return literal.slice(1, -1).replace(/\\(.)/g, "$1");
 };
 
+/** The root script inside an admin command: AppleScript's quoting, then `env -i … /bin/sh -c` and the shell's own quoting, taken off. */
+function rootScriptOf(cmd: readonly string[]): string {
+  const shell = unAppleScript(/^do shell script (".*?") with prompt /s.exec(cmd.at(-1) ?? "")?.[1] ?? '""');
+  const prefix = `/usr/bin/env -i ${ROOT_SCRIPT_ENV} /bin/sh -c '`;
+  expect(shell.startsWith(prefix) && shell.endsWith("'")).toBe(true);
+  return shell.slice(prefix.length, -1).replaceAll("'\\''", "'");
+}
+
 describe("quoting", () => {
   const nasty = [`plain`, `with space`, `it's`, `"double"`, `$(touch /tmp/x)`, "`tick`", `back\\slash`, `semi;colon && rm`, `new\nline`];
 
@@ -91,16 +101,41 @@ describe("quoting", () => {
   test("the admin command is osascript with one script argument that names what it does", () => {
     const plist = launchDaemonPlist({ kanataPath: "/opt/homebrew/bin/kanata", configPath: `/Users/o'brien/Library/Application Support/kanata/keyloom.kbd`, port: 10000 });
     const cmd = adminCommand(daemonInstallScript(install(plist)), ADMIN_PROMPT);
-    expect(cmd.slice(0, 2)).toEqual(["osascript", "-e"]);
-    expect(cmd).toHaveLength(3);
-    const m = /^do shell script (".*") with prompt (".*") with administrator privileges$/s.exec(cmd[2]!);
+    expect(cmd.slice(0, 5)).toEqual(["/usr/bin/env", "-i", ROOT_SCRIPT_ENV, "/usr/bin/osascript", "-e"]);
+    expect(cmd).toHaveLength(6);
+    const m = /^do shell script (".*") with prompt (".*") with administrator privileges$/s.exec(cmd[5]!);
     expect(m).not.toBeNull();
-    const shell = unAppleScript(m![1]!);
-    expect(shell).toBe(daemonInstallScript(install(plist)));
+    expect(unAppleScript(m![1]!)).toBe(`/usr/bin/env -i ${ROOT_SCRIPT_ENV} /bin/sh -c ${shellQuote(daemonInstallScript(install(plist)))}`);
+    const shell = daemonInstallScript(install(plist));
     expect(unAppleScript(m![2]!)).toContain("kanata");
     expect(shell).toContain("mv -f \"$t\" '/Library/LaunchDaemons/dev.keyloom.kanata.plist'");
     expect(shell).toContain("launchctl bootstrap system '/Library/LaunchDaemons/dev.keyloom.kanata.plist'");
     expect(shell).not.toContain("sudo");
+  });
+
+  test("nothing from keyloom's environment reaches the root script: no shell function, no variable, no xtrace hook (#300 re-review)", async () => {
+    // What whoever starts keyloom could put in its environment. bash, macOS's /bin/sh, runs an exported function in place of `cd`, and
+    // runs PS4's command under SHELLOPTS=xtrace.
+    const poisoned = { PATH: process.env.PATH ?? "/usr/bin:/bin", KLTEST: "leaked", "BASH_FUNC_cd%%": "() { echo FUNC-RAN; }", SHELLOPTS: "xtrace", PS4: "$(echo PS4-RAN >&2)" };
+    const probe = `cd /; echo "[$KLTEST]"; /usr/bin/env`;
+    const run = async (argv: string[]) => {
+      const proc = Bun.spawn(argv, { env: poisoned, stdout: "pipe", stderr: "pipe" });
+      const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+      await proc.exited;
+      return `${out}${err}`;
+    };
+    // The environment does what it says without the wrapper, so the test below is not passing for want of an attack.
+    expect(await run(["/bin/sh", "-c", probe])).toContain("FUNC-RAN");
+    // The built command line, with `/bin/sh -c` standing in for osascript's `do shell script … with administrator privileges`.
+    const cmd = adminCommand(probe, ADMIN_PROMPT);
+    const shell = unAppleScript(/^do shell script (".*?") with prompt /s.exec(cmd.at(-1)!)![1]!);
+    expect(cmd.slice(0, 4)).toEqual(["/usr/bin/env", "-i", ROOT_SCRIPT_ENV, "/usr/bin/osascript"]);
+    const out = await run([...cmd.slice(0, 3), "/bin/sh", "-c", shell]);
+    expect(out).not.toContain("FUNC-RAN");
+    expect(out).not.toContain("PS4-RAN");
+    expect(out).toContain("[]");
+    expect(out).not.toMatch(/KLTEST|BASH_FUNC|SHELLOPTS|PS4/);
+    expect(out).toContain(ROOT_SCRIPT_ENV);
   });
 
   test("the root script carries the plist itself, and the only file it reads is kanata, pinned to the hash keyloom checked", () => {
@@ -409,8 +444,8 @@ describe("starting kanata", () => {
     const r = recorder();
     expect(await startKanataDaemon(MAC, deps(r.run, { kanata: () => world.kanataBin, remapper: world.over }))).toEqual({ ok: true });
     expect(r.calls).toHaveLength(1);
-    expect(r.calls[0]?.[0]).toBe("osascript");
-    const script = r.calls[0]?.[2] ?? "";
+    expect(r.calls[0]?.[3]).toBe("/usr/bin/osascript");
+    const script = rootScriptOf(r.calls[0] ?? []);
     // The plist names keyloom.kbd under the home folder, but the script carries it encoded and never names the home folder itself.
     expect(script).not.toContain(world.home);
     const carried = /printf %s '([A-Za-z0-9+/=]+)'/.exec(script)?.[1] ?? "";
