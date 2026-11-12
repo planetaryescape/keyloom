@@ -32,6 +32,9 @@ export class ApiError extends Error {
   }
 }
 
+/** An answer this page can't read: keyloom and the page are different versions, so the answer is the same until a restart (R7-09). */
+export const unreadableError = (status: number): ApiError => new ApiError(status, UNREADABLE_WORDS, { code: "unreadable" });
+
 /** A request that never reached keyloom (D-494). The page reconnects by itself, so the sentence names no terminal. */
 export const UNREACHABLE = "keyloom stopped answering. This page reconnects by itself when it is back.";
 /** keyloom answered 401: it restarted with a new link, so this page's token is no longer its. */
@@ -67,7 +70,7 @@ async function getJson<T>(
   if (!parsed.success) {
     // The detail is for whoever is debugging; the page gets a sentence it can show.
     console.error(`keyloom: unreadable response from ${path}`, parsed.error);
-    throw new ApiError(response.status, UNREADABLE_WORDS, { code: "unreadable" });
+    throw unreadableError(response.status);
   }
   return parsed.data;
 }

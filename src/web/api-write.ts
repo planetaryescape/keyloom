@@ -23,8 +23,8 @@ import {
   type UpgradeResponse,
 } from "../api/http.ts";
 import type { ValidationResult } from "../validation/result.ts";
-import { ApiError, TOKEN_REJECTED, UNREACHABLE } from "./api.ts";
-import { UNREADABLE_WORDS, failureCode, failureWords } from "./shell/unexpected.ts";
+import { ApiError, TOKEN_REJECTED, UNREACHABLE, unreadableError } from "./api.ts";
+import { failureCode, failureWords } from "./shell/unexpected.ts";
 
 export async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -53,7 +53,7 @@ export async function request<T>(
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) {
     console.error(`keyloom: unreadable response from ${path}`, parsed.error);
-    throw new ApiError(response.status, UNREADABLE_WORDS, { code: "unreadable" });
+    throw unreadableError(response.status);
   }
   return parsed.data;
 }
