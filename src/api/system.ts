@@ -10,6 +10,8 @@ import { z } from "zod";
 //                                       Body `{}`, or `{ "force": true }` to restart an engine that answers, for a build that failed with
 //                                       `stale_mount` or `stuck_container` (R6-09); that is refused with `build_running` while a build,
 //                                       flash, lab analysis, review test or emulator run is under way, because the restart would stop it.
+//   GET  /api/system/docker/restart   -> DockerRestartLogResponse (a forced restart's progress lines, for the build log tail, and the
+//                                       work it would wait for now, so the page can restart once that ends; R7-04)
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
@@ -59,6 +61,13 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
   // `build_running`: a forced restart refused because a build, flash or container run is under way, which it would stop (R6-09); the reason names it.
   z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.enum(["engine_busy", "build_running"]).optional() }),
 ]);
+
+// A forced restart's state (R7-04). `running`: one runs here now. `lines`: its progress (the last few, oldest first), kept after it ends
+// until the next one starts. `waitingFor`: the work a forced restart would wait for now, named for the person ("a build", "a lab
+// analysis", "a keyboard write"); empty when nothing holds it. The page asks this while it waits, and asks for the restart only once it
+// is empty; the restart still checks for itself inside the engine lock (D-529).
+export const DockerRestartLogResponseSchema = z.object({ running: z.boolean(), lines: z.array(z.string()), waitingFor: z.array(z.string().min(1)) });
+export type DockerRestartLogResponse = z.infer<typeof DockerRestartLogResponseSchema>;
 
 export const DockerRestartRequestSchema = z.union([
   z.object({}).strict(),

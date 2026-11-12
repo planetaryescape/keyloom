@@ -127,6 +127,9 @@ function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command:
  */
 let engineHolder: { kind: "start" | "restart"; done: Promise<void> } | null = null;
 
+/** What holds the engine lock in this process now: a start or a restart, or null (R4-04, R7-04). */
+export const engineActionNow = (): "start" | "restart" | null => engineHolder?.kind ?? null;
+
 class EngineWaitAborted extends Error {}
 
 // Waits until nothing (or, with `only`, no action of that kind) holds the engine. Each waiter checks again when it wakes.

@@ -1,5 +1,5 @@
 // The browser side of the system routes (src/api/system.ts): whether the Docker a build needs is up, and starting it.
-import { DockerReadinessResponseSchema, DockerStartResponseSchema, type DockerReadinessResponse, type DockerStartResponse } from "../api/system.ts";
+import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, type DockerReadinessResponse, type DockerRestartLogResponse, type DockerStartResponse } from "../api/system.ts";
 import { ApiError } from "./api.ts";
 import { request } from "./api-write.ts";
 
@@ -28,4 +28,9 @@ export function startDockerEngine(token: string, signal?: AbortSignal): Promise<
  */
 export function restartDockerApp(token: string, signal?: AbortSignal, force = false): Promise<DockerStartResponse> {
   return request("POST", `${DOCKER_PATH}/restart`, token, DockerStartResponseSchema, signal, force ? { force: true } : {});
+}
+
+/** The forced restart's progress lines (R7-04). Rejects on a server without the route, which the page reads as no lines. */
+export function fetchRestartLog(token: string, signal?: AbortSignal): Promise<DockerRestartLogResponse> {
+  return request("GET", `${DOCKER_PATH}/restart`, token, DockerRestartLogResponseSchema, signal);
 }

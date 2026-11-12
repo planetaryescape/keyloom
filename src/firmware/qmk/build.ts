@@ -84,6 +84,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       if (visible.exitCode !== 0) {
         throw new BuildFailure(
           `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`,
+          "folder_not_shared",
         );
       }
       await awaitMountedFiles({

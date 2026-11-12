@@ -9,7 +9,7 @@ import {
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
-import { checkoutDirFor, engineRestartBlocker } from "../../src/app/firmware.ts";
+import { checkoutDirFor, engineRestartBlocker, engineRestartWork } from "../../src/app/firmware.ts";
 import { holdContainerWork } from "../../src/app/toolchain.ts";
 import { holdKeyboardWrite } from "../../src/firmware/toolchain/write-guard.ts";
 import { showBoard } from "../../src/app/boards.ts";
@@ -247,6 +247,20 @@ describe("startBuild / getBuild / buildAndWait", () => {
     expect(engineRestartBlocker(e.app)).toBe("keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.");
     write();
     expect(engineRestartBlocker(e.app)).toBeNull();
+    e.closeApp();
+  });
+
+  test("what a forced restart waits for is named for the page's wait, keyboard writes included (R7-04)", async () => {
+    const e = await toolchainEnv();
+    expect(engineRestartWork(e.app)).toEqual([]);
+    const lab = holdContainerWork("a lab analysis");
+    const write = holdKeyboardWrite();
+    expect(engineRestartWork(e.app)).toEqual(["a lab analysis", "a keyboard write"]);
+    const live = newBuildId();
+    createBuild(e.app.db, { id: live, revisionId: e.imported.revisionId, layoutId: e.imported.layoutId, boardRevision: "revb", logPath: `logs/build-${live}.log`, pid: process.ppid });
+    expect(engineRestartWork(e.app)).toEqual(["a build", "a lab analysis", "a keyboard write"]);
+    lab();
+    write();
     e.closeApp();
   });
 

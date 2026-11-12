@@ -49,9 +49,32 @@ describe("appSystemBackend", () => {
     blocker = null;
     expect(await guarded.restartDocker({ force: true })).toMatchObject({ ok: true, engine: "Colima" });
     expect(stopped).toBe(1);
-    expect(asked).toEqual([["blocker", "force"], ["blocker", "force"]]);
+    expect(asked).toEqual([["blocker", "force", "onProgress"], ["blocker", "force", "onProgress"]]);
     expect(await appSystemBackend({}, { restart }).restartDocker({ force: true })).toMatchObject({ ok: false, code: "build_running" });
     expect(asked).toHaveLength(2);
+  });
+
+  test("a forced restart's progress lines and the work it waits for reach the page's log read (R7-04)", async () => {
+    const done = Promise.withResolvers<void>();
+    let work: string[] = ["a lab analysis"];
+    const restart: typeof restartDocker = async (opts = {}) => {
+      opts.onProgress?.("keyloom: stopping Colima so it starts from scratch");
+      await done.promise;
+      return { ok: true, version: "28", engine: "Colima", waitedMs: 1 };
+    };
+    const backend = appSystemBackend({}, { restart, restartBlocker: () => null, restartWork: () => work });
+    expect(await backend.restartLog?.()).toEqual({ running: false, lines: [], waitingFor: ["a lab analysis"] });
+    work = [];
+    const restarting = backend.restartDocker({ force: true });
+    // While it runs, nothing is waited for: the restart itself is under way.
+    expect(await backend.restartLog?.()).toEqual({ running: true, lines: ["keyloom: stopping Colima so it starts from scratch"], waitingFor: [] });
+    done.resolve();
+    await restarting;
+    expect(await backend.restartLog?.()).toEqual({ running: false, lines: ["keyloom: stopping Colima so it starts from scratch"], waitingFor: [] });
+  });
+
+  test("a server that can't name the work waits for nothing, so the page shows the refusal with its button (R7-04)", async () => {
+    expect(await appSystemBackend().restartLog?.()).toEqual({ running: false, lines: [], waitingFor: [] });
   });
 
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {

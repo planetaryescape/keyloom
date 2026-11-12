@@ -3,25 +3,30 @@ import { type Build, CHAT_MESSAGE_MAX } from "../../api/http.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { ApiError } from "../api.ts";
 import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
+import { COLIMA_HELP_URL } from "./release-words.ts";
 
 /**
  * `docker`: the Docker callout answers it (D-488). `same_every_time`: the layout doesn't compile or fit, so building again fails the same
  * way; the step offers the last revision that built, when there is one in this revision's history and this is the head, and a question to
  * keyloom. `restart_engine`: the engine's own state stopped it (a stale shared folder, a container it can't remove), so the step offers to
  * restart the engine and build again (R6-09, R6-17). `may_pass`: anything else, such as a download that failed, keeps Build again beside
- * the question.
+ * the question. `folder_not_shared`: the engine doesn't share keyloom's build folder (R7-02); the step says which folder and where it is
+ * shared, with `openApp` (Docker Desktop, whose settings hold its file sharing) or `helpUrl` (Colima's own page on its mounts), and Build
+ * again for after it is shared.
  */
 export type BuildFailureView =
   | { kind: "docker" }
+  | { kind: "folder_not_shared"; text: string; next: string; openApp: "docker_desktop" | null; helpUrl: string | null }
   | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
   | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
 /** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
-export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine">, earlierRevision: boolean, restartFailed = false): BuildFailureView {
+export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine" | "folderNotShared">, earlierRevision: boolean, restartFailed = false): BuildFailureView {
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
   if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed);
-  if (build.errorCode !== "compile_error" && build.errorCode !== "too_large") return { kind: "may_pass" };
+  if (build.errorCode === "folder_not_shared") return folderView(build.folderNotShared ?? null);
+  if (build.errorCode !== "compile_error" && build.errorCode !== "too_large" && build.errorCode !== "source_error") return { kind: "may_pass" };
   // Going back moves the head; a build of an earlier revision chosen in History has no head to move.
   const goBack = earlierRevision ? null : (build.lastBuilt ?? null);
   const next = goBack === null
@@ -35,9 +40,34 @@ function engineRestartView(code: "stale_mount" | "stuck_container", engine: stri
   const text = code === "stale_mount"
     ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
     : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
-  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Restart ${engine} yourself, then build again.`, button: null, busy: null };
+  // Build again starts the engine itself (ensureDocker), so the way on is that button, never a terminal (R7-03).
+  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Build again starts ${engine} once more.`, button: null, busy: null };
   if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
   return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
+}
+
+/** Colima's FAQ entry on a bind mount outside the home folder, which says to add it to `mounts` (checked 2026-11-12). */
+export const COLIMA_MOUNTS_URL = `${COLIMA_HELP_URL}#docker-bind-mount-showing-empty`;
+
+// The build's own sentence names XDG_CACHE_HOME, which the CLI keeps; the page names the folder and where the engine shares it (R7-02).
+function folderView(found: { folder: string; engine: string | null } | null): BuildFailureView {
+  const folder = found?.folder ?? null;
+  const where = folder === null ? "the folder keyloom builds in" : `the folder keyloom builds in (${folder})`;
+  const text = `Docker can't see ${where}, so the build stopped before it started.`;
+  const engine = found?.engine ?? null;
+  if (engine === "Docker Desktop") return { kind: "folder_not_shared", text, next: "Add that folder in Docker Desktop's Settings, under Resources > File sharing, then build again.", openApp: "docker_desktop", helpUrl: null };
+  if (engine === "Colima") return { kind: "folder_not_shared", text, next: "Colima shares only your home folder unless you add more. Add that folder to Colima's mounts, then build again.", openApp: null, helpUrl: COLIMA_MOUNTS_URL };
+  return { kind: "folder_not_shared", text, next: `Share that folder with ${engine ?? "your Docker engine"}, then build again.`, openApp: null, helpUrl: null };
+}
+
+/**
+ * What the step says while a restart waits for work to end (R7-04): "Restarts Colima when the lab analysis ends, then builds again." The
+ * server names each piece of work with its article ("a lab analysis"), so the words say "the" for the one running now.
+ */
+export function restartWaitText(engine: string | null, waitingFor: readonly string[]): string {
+  const names = waitingFor.map((name) => name.replace(/^an? /, "the "));
+  const list = names.length <= 1 ? (names[0] ?? "that work") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  return `Restarts ${engine ?? "Docker"} when ${list} ${names.length > 1 ? "end" : "ends"}, then builds again.`;
 }
 
 /** The log lines a restart_engine step shows: without keyloom's closing "build failed" line, which repeats the terminal advice. */

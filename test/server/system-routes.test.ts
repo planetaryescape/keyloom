@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts, D-486): the Docker a build needs, and starting it. Over a fake backend,
 // so nothing here looks for a daemon.
 import { afterAll, describe, expect, test } from "bun:test";
-import { DockerReadinessResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../../src/api/system.ts";
+import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../../src/api/system.ts";
 import { InstallStateSchema } from "../../src/api/tool-install.ts";
 import { handleSystemRoute } from "../../src/server/system-routes.ts";
 import type { SystemBackend } from "../../src/server/system-backend.ts";
@@ -88,12 +88,29 @@ describe("the Docker routes", () => {
     expect(restarts).toBe(1);
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{}", headers: { "content-type": "application/json" } }, null)).status).toBe(401);
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
-    expect((await call("/api/system/docker/restart")).status).toBe(405);
+    expect((await call("/api/system/docker/restart", { method: "PUT" })).status).toBe(405);
+    // A GET reads the restart's log (R7-04); this backend keeps none.
+    const noLog = await call("/api/system/docker/restart");
+    expect(noLog.status).toBe(404);
+    expect(await noLog.json()).toMatchObject({ error: { code: "restart_log_unavailable" } });
     expect(restarts).toBe(1);
     // A build that failed on the engine's state asks for a forced restart (R6-09); only `force` is accepted beside the empty body.
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true}", headers: { "content-type": "application/json" } })).status).toBe(200);
     expect((await call("/api/system/docker/restart", { method: "POST", body: "{\"force\":true,\"x\":1}", headers: { "content-type": "application/json" } })).status).toBe(400);
     expect(forced).toEqual([false, true]);
+  });
+
+  test("a GET of the restart reads its progress and what it waits for, behind the same guard (R7-04)", async () => {
+    backend.restartLog = async () => ({ running: true, lines: ["keyloom: stopping Colima so it starts from scratch"], waitingFor: [] });
+    try {
+      const { call } = await serve();
+      const read = await call("/api/system/docker/restart");
+      expect(read.status).toBe(200);
+      expect(DockerRestartLogResponseSchema.parse(await read.json())).toEqual({ running: true, lines: ["keyloom: stopping Colima so it starts from scratch"], waitingFor: [] });
+      expect((await call("/api/system/docker/restart", {}, null)).status).toBe(401);
+    } finally {
+      delete backend.restartLog;
+    }
   });
 
   test("the guard: a token on every route, JSON on the write, and the method named when it is wrong", async () => {

@@ -27,6 +27,10 @@ export interface FakeOptions {
   failBuildCompile?: boolean;
   /** Fail builds as a stale Colima mount (R6-09) until `staleMount` is set false, as a forced engine restart does in the dev editor. */
   failBuildStale?: boolean;
+  /** The engine a stale-mount build names as the one keyloom can restart (R6-09); Colima by default. */
+  restartEngine?: string;
+  /** Fail every build because the engine doesn't share the build folder, naming that engine, or null when it can't tell (R7-02). */
+  failBuildFolder?: { engine: string | null } | null;
   /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */
   flashPlan?: FlashPlan;
   /** How a flash that isn't failed ends (D-501): verified by default, written but not confirmed, or refused by Files and Folders. */
@@ -72,6 +76,9 @@ const FLASH_LOG: readonly string[] = [
 
 const STALE_MOUNT_ERROR = "Docker still sees an old or missing copy of keymap.c after 30 s, so the build would not use what keyloom wrote. This is a stale shared folder (Colima's sshfs mount); restart it with `colima restart`, or move XDG_CACHE_HOME to a folder it shares reliably, then build again.";
 
+const FOLDER = "/Volumes/Cache/keyloom/build/zsa-moonlander";
+const FOLDER_ERROR = `Docker can't see ${FOLDER}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`;
+
 export class FakeEditor implements EditorBackend {
   /** The pretend stale mount `failBuildStale` fails on; a forced restart in the dev editor clears it. */
   staleMount = true;
@@ -89,7 +96,7 @@ export class FakeEditor implements EditorBackend {
   ) {
     this.options = {
       buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false, failBuildStale: false,
-      flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
+      restartEngine: "Colima", failBuildFolder: null, flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
       ...options,
     };
@@ -408,7 +415,8 @@ export class FakeEditor implements EditorBackend {
 
   private progressBuild(id: string, revisionId: string, startedAt: number, stale: boolean): Build {
     const { buildMs, failBuildDocker, failBuildCompile } = this.options;
-    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale;
+    const folder = this.options.failBuildFolder;
+    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale || folder !== null;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
@@ -422,9 +430,10 @@ export class FakeEditor implements EditorBackend {
       id,
       revisionId,
       status: !done ? "running" : failBuild ? "failed" : "succeeded",
-      error: done && failBuild ? (stale ? STALE_MOUNT_ERROR : failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
-      errorCode: done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : done && stale ? "stale_mount" : null,
-      ...(done && stale ? { restartEngine: "Colima" } : {}),
+      error: done && failBuild ? (folder !== null ? FOLDER_ERROR : stale ? STALE_MOUNT_ERROR : failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
+      errorCode: done && folder !== null ? "folder_not_shared" : done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : done && stale ? "stale_mount" : null,
+      ...(done && stale ? { restartEngine: this.options.restartEngine } : {}),
+      ...(done && folder !== null ? { folderNotShared: { folder: FOLDER, engine: folder.engine } } : {}),
       ...(done && failBuildCompile ? { lastBuilt: this.lastBuiltBefore(revisionId) } : {}),
       flashPlan: this.options.flashPlan,
       startedAt,

@@ -90,7 +90,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
         timeoutMs: 5 * 60_000,
       });
       if (visible.exitCode !== 0) {
-        throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+        throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`, "folder_not_shared");
       }
 
       const handsFree = rev.flash.handsFree;

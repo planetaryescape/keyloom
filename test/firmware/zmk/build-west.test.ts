@@ -227,6 +227,6 @@ describe("buildZmkWest (fake docker)", () => {
           artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l.log")), containerName: "x",
         }),
       ),
-    ).rejects.toThrow(/Docker can't see/);
+    ).rejects.toMatchObject({ message: expect.stringContaining("Docker can't see"), code: "folder_not_shared" });
   });
 });
