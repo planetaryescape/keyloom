@@ -94,6 +94,10 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
       if (s.changes != null && s.changes > 0) {
         return { label: `${plural(s.changes, "change", "changes")} not on your ${name}`, short: "Not connected", detail: board.auto.on && !board.auto.paused ? `Your ${name} isn't connected. Plug it in and keyloom sends ${s.changes === 1 ? "it" : "them"}.` : `Your ${name} isn't connected. Plug it in, then sync.`, tone: "neutral", action: null };
       }
+      // A board keyloom can't see until its firmware is on it would read "not connected" while plugged in; the build is the way in (R6-10).
+      if (s.firstFlash === true) {
+        return { label: `Put keyloom's firmware on your ${name}`, short: "Not seen yet", detail: `keyloom sees your ${name} once keyloom's firmware is on it.`, tone: "neutral", action: { id: "open_release", label: "Build and flash…" } };
+      }
       return { label: `${name} not connected`, short: "Not connected", detail: "Plug it in and keyloom checks it.", tone: "neutral", action: null };
     case "not_keyloom":
       return {

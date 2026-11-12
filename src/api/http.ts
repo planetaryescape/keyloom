@@ -637,7 +637,8 @@ export const SyncStateSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),
   // changes: what was applied since the last build keyloom put on the keyboard, when it knows (see SyncFacts.lastKnown).
-  z.object({ kind: z.literal("not_connected"), changes: z.number().int().nonnegative().nullable().optional() }),
+  // `firstFlash`: keyloom sees this board only once its firmware is on it, and it never has been (R6-10). Absent on older senders.
+  z.object({ kind: z.literal("not_connected"), changes: z.number().int().nonnegative().nullable().optional(), firstFlash: z.literal(true).optional() }),
   z.object({ kind: z.literal("not_keyloom"), detail: z.string() }),
 ]);
 export type SyncState = z.infer<typeof SyncStateSchema>;

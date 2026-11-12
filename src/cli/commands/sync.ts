@@ -32,7 +32,7 @@ export function describeSync(v: BoardSyncView): string {
       return `behind: ${n} not on it (${why})${s.error ? `; ${s.error}` : ""}`;
     }
     case "needs_hand": return `needs a hand: ${s.instruction} (${s.reason})`;
-    case "not_connected": return "not connected";
+    case "not_connected": return s.firstFlash === true ? "not seen yet: keyloom sees it once keyloom's firmware is on it; `keyloom flash` puts it on" : "not connected";
     case "not_keyloom": return `running firmware keyloom didn't build (${s.detail}); keyloom never replaces that by itself`;
   }
 }

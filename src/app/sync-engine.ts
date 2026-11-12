@@ -443,6 +443,7 @@ export class SyncEngine {
       auto: { on: proven && (bs.autoSync ?? true), paused: bs.paused, proven },
       quiet: this.now() - layout.updatedAt >= this.quietMs,
       ...(lastKnown === undefined ? {} : { lastKnown }),
+      ...(definition.firmware !== "kanata" && definition.revisions.every((revision) => revision.detect === null) ? { detectable: false } : {}),
     };
     return { boardId, boardName, layout, layouts, reading, facts };
   }

@@ -64,6 +64,13 @@ describe("deriveState", () => {
     expect(deriveState(base({ reading: { state: "bootloader" } })).kind).toBe("needs_hand");
   });
 
+  test("a board keyloom can't see until its firmware is on it, never synced or flashed, asks for the first flash (R6-10)", () => {
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false }))).toEqual({ kind: "not_connected", firstFlash: true });
+    // Once keyloom put a build on it, or tried to sync it, keyloom can see it, so absent means unplugged again.
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, lastKnown: { changes: 0 } }))).toEqual({ kind: "not_connected" });
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, latestSync: { id: "s", revisionId: "r", status: "failed", trigger: "manual", startedAt: 1, finishedAt: 2, error: "x", failure: "flash", instruction: null } as never }))).toEqual({ kind: "not_connected" });
+  });
+
   test("behind says how many changes and why nothing is happening", () => {
     expect(deriveState(base())).toMatchObject({ kind: "behind", changes: 2, why: "waiting" });
     expect(deriveState(base({ auto: { on: true, paused: true, proven: true } }))).toMatchObject({ why: "paused" });
