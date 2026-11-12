@@ -1254,8 +1254,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setEditing({ layerId: onLayer ?? layer.id, position, focus: true, ...resumeFor(onLayer ?? layer.id, position) });
   }
 
-  function closeEditor(refocus: boolean) {
-    keepOpenDraft();
+  // `keepDraft` false drops the card's draft instead of parking it on the board: after a write, the draft is no longer unapplied.
+  function closeEditor(refocus: boolean, keepDraft = true) {
+    if (keepDraft) keepOpenDraft();
     const position = editing?.position ?? null;
     setBoardLayout({ shift: 0, part: null, scale: 1 });
     setPointAt(null);
@@ -1334,7 +1335,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         const source = chatSelection?.positions.length === 1 ? { layerId: chatSelection.layerId, position: chatSelection.positions[0] ?? 0 } : editing !== null ? { layerId: editing.layerId, position: editing.position } : null;
         if (event.key.toLowerCase() === "c" && source !== null) {
           event.preventDefault();
-          copyKey(source);
+          // The same guard as the card's Copy button: with a draft open, the saved binding isn't what the card shows (R6-16).
+          if (!draftBlocks()) copyKey(source);
           return;
         }
         if (event.key.toLowerCase() === "v" && clipboard !== null && (chatSelection !== null || editing !== null)) {
@@ -1445,6 +1447,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     setLastChange({ layerId: appliedLayer, position, ...change });
     // The draft is written either way, so it is cleared either way; only the toast depends on the read (R6-03).
     const shown = await readAfterApply(onChanged, showAppliedNotShown);
+    if (!shown) {
+      closeUnshownCard();
+      return;
+    }
     setApplied({ layerId: appliedLayer, position });
     setDraft(CLEAN);
     setPlacements([]);
@@ -1689,6 +1695,15 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   async function onTuned(summaryText: string) {
     if (await readAfterApply(onChanged, showAppliedNotShown)) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
+    else closeUnshownCard();
+  }
+
+  // A key written but not read back: the card is keyed by revision, so it would stay on the old one, keeping the written draft with
+  // Apply on, and Swap, Copy and Paste would act on the old binding. It closes instead, and the not-shown toast's Show the new layout
+  // reads the layout again. A card opened on the old layout before then can only write against the old revision, which the server
+  // refuses as stale (PR #297 CodeRabbit).
+  function closeUnshownCard() {
+    closeEditor(true, false);
   }
 
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).

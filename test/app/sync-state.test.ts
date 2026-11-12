@@ -70,7 +70,10 @@ describe("deriveState", () => {
     expect(deriveState(base({ reading: { state: "absent" }, detectable: false, lastKnown: { changes: 0 } }))).toEqual({ kind: "not_connected" });
     // keyloom's firmware went on from another config, or by a flash keyloom couldn't confirm: no "first flash" (PR #297 review).
     expect(deriveState(base({ reading: { state: "absent" }, detectable: false, flashedBefore: true }))).toEqual({ kind: "not_connected" });
-    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, latestSync: { id: "s", revisionId: "r", status: "failed", trigger: "manual", startedAt: 1, finishedAt: 2, error: "x", failure: "flash", instruction: null } as never }))).toEqual({ kind: "not_connected" });
+    // A sync that reached the flash may have written it; one that failed at its build wrote nothing (PR #297 CodeRabbit).
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, latestSync: row({ status: "failed", failure: "flash", error: "x", flashId: "fla_1" }) }))).toEqual({ kind: "not_connected" });
+    expect(deriveState(base({ reading: { state: "absent" }, detectable: false, latestSync: row({ status: "failed", failure: "build", error: "compile error" }) })))
+      .toEqual({ kind: "not_connected", firstFlash: true });
   });
 
   test("behind says how many changes and why nothing is happening", () => {
