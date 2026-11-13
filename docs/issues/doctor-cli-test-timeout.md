@@ -1,6 +1,6 @@
 # Doctor CLI tests timed out while their probes still ran
 
-Status: fixed in candidate `ed38b50ed815355c8ab336ea7575372ab04402dc`, pending merge. Observed on main `3499376af34d1c9348f9f6477df5d6a48a59efe6`, 2026-11-13.
+Status: fixed by merge commit `a69ba7c3403d1fdb28a5fd183ffa13e54ef115d4`. Observed on main `3499376af34d1c9348f9f6477df5d6a48a59efe6`, 2026-11-13.
 
 Two CLI doctor tests timed out at five seconds during the design review's clean-main comparison. The environment guard then reported unrestored `FAKE_*` variables. The same cases failed on the UI candidate, whose relevant backend and test subtrees matched the baseline.
 
