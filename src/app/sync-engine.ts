@@ -53,8 +53,13 @@ export type SyncRunView = {
   revisionId: string;
   failure: SyncRow["failure"];
   error: string | null;
-  /** Why a failed build failed, as its code (D-501), such as "docker_unavailable"; the page maps it to the fix instead of showing `error`. */
+  /**
+   * Why a failed build or flash failed, as its code (D-501), such as "docker_unavailable" or "write_timeout" (R8-11); the page maps it to
+   * the fix instead of showing `error`.
+   */
   errorCode: string | null;
+  /** The build this sync made, or null before it started one: Build and flash opens on it after a failed build (R8-01). */
+  buildId: string | null;
   startedAt: number;
   finishedAt: number | null;
   timings: SyncTimings;
@@ -182,6 +187,7 @@ export class SyncEngine {
   private readonly sameDocument = new Map<string, boolean>();
   /** A failed build's code, by build: it never changes, and the views are built every tick. */
   private readonly buildCodes = new Map<string, string | null>();
+  private readonly flashCodes = new Map<string, string | null>();
   /**
    * The board's latest sync when this engine last turned remapping off. A `foreign_file` failure that is that sync no longer stands
    * for the person's choice: replacing then would turn remapping back on (#290 review). Kept in memory, so a restart forgets it.
@@ -471,7 +477,10 @@ export class SyncEngine {
   private runView(s: SyncRow): SyncRunView {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
-      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : this.replaceable(s) ? "foreign_file" : null,
+      errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId)
+        : s.failure === "flash" && s.flashId !== null ? this.flashCodeOf(s.flashId)
+        : this.replaceable(s) ? "foreign_file" : null,
+      buildId: s.buildId,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
   }
@@ -479,6 +488,17 @@ export class SyncEngine {
   /** A remapper apply refused because keyloom.kbd isn't keyloom's, and remapping wasn't turned off after it: Replace it answers it. */
   private replaceable(s: SyncRow): boolean {
     return s.status === "failed" && s.failure === "foreign_file" && this.remappingOffAfter.get(s.boardId) !== s.id;
+  }
+
+  /** A failed flash's code, such as "write_timeout", so the page says it in its own words, not the CLI's (R8-11). */
+  private flashCodeOf(flashId: string): string | null {
+    let code = this.flashCodes.get(flashId);
+    if (code === undefined) {
+      const flash = findFlash(this.app.db, flashId);
+      code = flash?.errorCode ?? null;
+      if (flash !== undefined && flash.status !== "waiting_for_bootloader" && flash.status !== "writing") this.flashCodes.set(flashId, code);
+    }
+    return code;
   }
 
   private buildCodeOf(buildId: string): string | null {

@@ -1,4 +1,4 @@
-import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Info, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { Issue, ValidationResult } from "../../validation/result.ts";
@@ -19,12 +19,17 @@ interface Props {
   showMoves?: boolean;
   /** The editor asks about lost functions itself (LostFunctions), so they aren't listed a second time. */
   hideLost?: boolean;
+  /**
+   * Reads the layout again, for a draft checked against a head that has moved on (`stale_base`). The page usually reads it by itself when it
+   * hears of the change; this is the button for when it doesn't (R8-13, the D-524 pattern).
+   */
+  onShowLatest?: () => void;
 }
 
 // A key by what it prints, never its number (D-279); the board lights which one.
 const slotName = (layout: Layout, slot: Slot): string => keyIn(layout, slot);
 
-function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot | undefined }) {
+function IssueItem({ issue, kind, layout, slot, onShowLatest }: { issue: Issue; kind: "error" | "warning"; layout: Layout; slot: Slot | undefined; onShowLatest?: (() => void) | undefined }) {
   const Icon = kind === "error" ? CircleX : TriangleAlert;
   const others = issue.slots ?? [];
   return (
@@ -35,6 +40,12 @@ function IssueItem({ issue, kind, layout, slot }: { issue: Issue; kind: "error" 
           <span className="sr-only">{kind === "error" ? "Error: " : "Warning: "}</span>
           {issue.plain ?? issue.message}
         </p>
+        {issue.code !== "stale_base" || onShowLatest === undefined ? null : (
+          <button type="button" className="button" onClick={onShowLatest}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Show the latest version
+          </button>
+        )}
         {others.length === 0 ? null : (
           <ul className="slot-chips" aria-label="Keys involved">
             {others.map((other) => (
@@ -87,7 +98,7 @@ function Summary({ result, layout, showMoves }: { result: ValidationResult; layo
 
 // Everything the validator said about the draft, in the order it matters: errors block Apply,
 // warnings don't, and a clean pass says so rather than staying silent.
-export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true, hideLost = false }: Props) {
+export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true, hideLost = false, onShowLatest }: Props) {
   let body;
   if (state.status === "idle") {
     body = (
@@ -133,7 +144,7 @@ export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves
         ) : (
           <ul className="issues">
             {errors.map((issue, index) => (
-              <IssueItem key={`e${index}`} issue={issue} kind="error" layout={layout} slot={slot} />
+              <IssueItem key={`e${index}`} issue={issue} kind="error" layout={layout} slot={slot} onShowLatest={onShowLatest} />
             ))}
             {warnings.map((issue, index) => (
               <IssueItem key={`w${index}`} issue={issue} kind="warning" layout={layout} slot={slot} />

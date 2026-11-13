@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { afterApply, buildCancelProblem, checkOutcome, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
+import { afterApply, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -45,6 +45,25 @@ describe("failedFlashText", () => {
     expect(failedFlashText(null, "zapp exited with code 1")).toEqual({ lead: null, detail: "zapp exited with code 1" });
     expect(failedFlashText("cancelled", "Cancelled. Nothing was flashed.")).toEqual({ lead: null, detail: "Cancelled. Nothing was flashed." });
     expect(failedFlashText(null, null)).toEqual({ lead: null, detail: "Flashing failed." });
+  });
+});
+
+describe("a write that timed out (R8-11)", () => {
+  test("says what happened and what Try again does, never the CLI flag", () => {
+    const text = failedFlashText("write_timeout", "Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.");
+    expect(text).toEqual({ lead: "Flashing didn't finish within 3 minutes, so keyloom stopped it.", detail: "The keyboard may be left in its bootloader, where it doesn't type. Try again to put this build on it." });
+    expect(JSON.stringify(text)).not.toContain("--build");
+  });
+});
+
+describe("errorWayOut (R8-03, R8-12)", () => {
+  test("picks the dialog error's buttons from its code", () => {
+    expect(errorWayOut("build_file_gone")).toBe("build_again");
+    expect(errorWayOut("internal")).toBe("unexpected");
+    expect(errorWayOut("not_found")).toBe("unexpected");
+    expect(errorWayOut("unreadable")).toBe("unexpected");
+    expect(errorWayOut(null)).toBe("try_again");
+    expect(errorWayOut("unreachable")).toBe("try_again");
   });
 });
 

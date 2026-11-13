@@ -1,10 +1,10 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
-  COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
-  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
+  type BuildCachePrune, COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus,
+  type EngineFinding, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
-import { adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
+import { PROFILE, adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
@@ -32,7 +32,7 @@ export type DockerReadiness =
        * keyloom is starting or restarting the engine, or fixing Colima's files, now, for a page or a build, so the page shows that instead
        * of a button (R4-04, D-533).
        */
-      engineAction: EngineAction | null;
+      engineAction: Exclude<EngineAction, "prune"> | null;
     };
 
 /**
@@ -50,6 +50,11 @@ export type DockerAccessFix = {
   linkedFile?: string;
   /** keyloom's look for such a file didn't finish, so `command` is held back (null) too: it is shown only after a look that did (D-533). */
   scanIncomplete?: boolean;
+  /**
+   * Colima only: the stop on its own, which changes no file's owner, so no hold applies to it. Shown when Fix Colima's files finds another
+   * account's copy still running while `command` is held, so the person can stop it and press the button again (R8-05).
+   */
+  stopCommand?: string;
 };
 
 export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
@@ -61,10 +66,14 @@ export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine 
   }
   if (engine?.command[0] === "colima") {
     const at = engine.command.indexOf("--profile");
-    const profile = at < 0 ? "" : ` ${engine.command.slice(at, at + 2).join(" ")}`;
+    const name = at < 0 ? undefined : engine.command[at + 1];
+    // The name comes from the Docker context's host path, which nothing checks, and these lines run under sudo. A name outside Colima's
+    // own pattern is single-quoted, so a space or `;` in a hand-edited context stays one argument (PR #306 review).
+    const profile = name === undefined ? "" : ` --profile ${PROFILE.test(name) ? name : `'${name.replaceAll("'", "'\\''")}'`}`;
+    // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
+    const stop = `sudo env HOME="$HOME" colima stop${profile}`;
     return {
-      // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
-      command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`, restartApp: null,
+      command: `${stop}; sudo chown -R "$USER" ~/.colima && colima start${profile}`, restartApp: null, stopCommand: stop,
       fixFiles: platform === "darwin",
       note: "Colima's files belong to another account, usually because Colima was started with sudo. This stops that copy, gives the files back to you and starts Colima as you. Then check again.",
     };
@@ -88,6 +97,8 @@ export type ToolchainOverrides = {
   colimaStop?: ColimaStop;
   /** The checked paths and IDs for Fix Colima's files; the real one reads this computer. */
   colimaPlan?: (engine: DockerEngine) => ReturnType<typeof colimaFilesPlan>;
+  /** Frees Docker's build cache; the real one runs `docker builder prune -f`. */
+  pruneCache?: () => Promise<BuildCachePrune>;
   /** Looks in ~/.colima, as the person, for a file with a second name; the real one runs `find`. */
   colimaLinkedScan?: typeof colimaLinkedFileSeen;
   /** The process's environment, for the opt-out below. */
@@ -132,7 +143,8 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
     restartEngine: colima ? found.name : null,
     alternatives: colima ? otherEngines(platform, found.name, over.has) : [],
-    engineAction: engineHolder?.kind ?? null,
+    // A cache prune runs only on a Docker that answers, so it is never what a page waiting on a down Docker follows.
+    engineAction: engineHolder === null || engineHolder.kind === "prune" ? null : engineHolder.kind,
   };
 }
 
@@ -175,17 +187,21 @@ function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command:
  */
 let engineHolder: { kind: EngineAction; done: Promise<void> } | null = null;
 
-/** What holds the engine: a start, a restart, or Fix Colima's files, whose password dialog can stay open for minutes (D-533). */
-type EngineAction = "start" | "restart" | "fix-files";
+/**
+ * What holds the engine: a start, a restart, Fix Colima's files, whose password dialog can stay open for minutes (D-533), or freeing
+ * Docker's build cache (R8-04).
+ */
+type EngineAction = "start" | "restart" | "fix-files" | "prune";
+const ENGINE_ACTION_WORDS = { "fix-files": "fixing Colima's files", restart: "restarting Docker", start: "starting Docker", prune: "freeing Docker's build cache" } as const satisfies Record<EngineAction, string>;
 
 /** The refusal for an action that would fight the one holding the engine; null when nothing holds it. */
 function engineBusy(): { ok: false; engine: null; code: "engine_busy"; reason: string } | null {
   if (engineHolder === null) return null;
-  const what = engineHolder.kind === "fix-files" ? "fixing Colima's files" : engineHolder.kind === "restart" ? "restarting Docker" : "starting Docker";
+  const what = ENGINE_ACTION_WORDS[engineHolder.kind];
   return { ok: false, engine: null, code: "engine_busy", reason: `keyloom is already ${what}, for this page or for a build. Wait for that to finish, then check again.` };
 }
 
-/** What holds the engine lock in this process now: a start, a restart or a Colima files fix, or null (R4-04, R7-04, D-533). */
+/** What holds the engine lock in this process now: a start, a restart, a Colima files fix or a cache prune, or null (R4-04, R7-04, D-533, R8-04). */
 export const engineActionNow = (): EngineAction | null => engineHolder?.kind ?? null;
 
 class EngineWaitAborted extends Error {}
@@ -407,6 +423,28 @@ async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartRe
   return started.ok ? started : { ...started, reason: `Colima's files are yours again, but Colima didn't come up. ${started.reason.replace(/\.?$/, ".")}` };
 }
 
+export const BUILD_CACHE_UNGUARDED = "keyloom can't tell whether a build is running here, so it didn't free Docker's build cache.";
+
+/**
+ * Frees Docker's build cache for a build that ran out of disk (R8-04). It holds the engine lock, so a start, a restart or Fix Colima's
+ * files refuses it as `engine_busy`, and a build waits for it in `ensureDocker`. A prune while a build runs would take the cache that build
+ * reads, so it asks `blocker` (serve's `buildCachePruneBlocker`, which waits for what D-529's restart waits for) inside the lock, and is
+ * refused as `build_running` while a build, flash, keyboard write, lab analysis, review test or emulator run is under way, and refused
+ * without a blocker at all.
+ */
+export async function freeBuildCache(opts: { blocker?: () => string | null; overrides?: ToolchainOverrides } = {}): Promise<{ ok: true; freed: string | null } | { ok: false; reason: string; code?: "engine_busy" | "build_running" }> {
+  // The page keeps Free Docker's build cache for this refusal and has no Check again, so the words say when to press it (PR #306 review).
+  if (engineHolder !== null) {
+    const what = ENGINE_ACTION_WORDS[engineHolder.kind];
+    return { ok: false, code: "engine_busy", reason: `keyloom is ${engineHolder.kind === "prune" ? "already " : ""}${what}. Free Docker's build cache once that has finished.` };
+  }
+  return holdEngine("prune", async () => {
+    const blocked = opts.blocker === undefined ? BUILD_CACHE_UNGUARDED : opts.blocker();
+    if (blocked !== null) return { ok: false as const, reason: blocked, code: "build_running" as const };
+    return (opts.overrides?.pruneCache ?? pruneBuildCache)();
+  });
+}
+
 /** `colima stop` as the person. Refused under `bun test`, so a forgotten fake fails its test instead of stopping the machine's Colima. */
 const colimaStopAsPerson: ColimaStop = async (command, budgetMs, signal) => {
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to stop Colima in a test");
@@ -438,14 +476,14 @@ export type EnsureDockerResult =
 export async function ensureDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<EnsureDockerResult> {
   const over = opts.overrides ?? {};
   const status = over.status ?? (() => dockerStatus());
-  // A forced restart stops every container, even on a Docker that answers, and Fix Colima's files stops Colima. A build or replay that
-  // gets here while one runs waits for it, so it never starts a container between the last check for running work and the stop (D-529,
-  // D-533).
+  // A forced restart stops every container, even on a Docker that answers, Fix Colima's files stops Colima, and a cache prune takes the
+  // cache a build reads. A build or replay that gets here while one runs waits for it, so it never starts a container between the last
+  // check for running work and the stop (D-529, D-533, R8-04).
   // The wait can take minutes, so the build log says why it has stopped moving.
-  if (engineHolder?.kind === "restart") opts.onProgress?.("keyloom: waiting for keyloom to finish restarting Docker");
-  if (engineHolder?.kind === "fix-files") opts.onProgress?.("keyloom: waiting for keyloom to finish fixing Colima's files");
+  const waitsFor: readonly EngineAction[] = ["restart", "fix-files", "prune"];
+  if (engineHolder !== null && waitsFor.includes(engineHolder.kind)) opts.onProgress?.(`keyloom: waiting for keyloom to finish ${ENGINE_ACTION_WORDS[engineHolder.kind]}`);
   try {
-    await waitForEngine(opts.signal, ["restart", "fix-files"]);
+    await waitForEngine(opts.signal, waitsFor);
   } catch (err) {
     if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
     throw err;

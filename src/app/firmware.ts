@@ -26,7 +26,7 @@ import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
-import { BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
+import { BoardRevisionNeededError, BuildFailedError, BuildFileGoneError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
 import { containerWorkRunning, ensureDocker, forcedRestartEngine } from "./toolchain.ts";
@@ -96,7 +96,7 @@ export type FlashView = {
 };
 
 /** Why a flash failed, as the UI acts on it (D-501). */
-export type FlashErrorCode = FlashPermissionCode | "cancelled" | "not_confirmed";
+export type FlashErrorCode = FlashPermissionCode | "cancelled" | "not_confirmed" | "write_timeout";
 
 const LOG_TAIL_LINES = 30;
 const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few seconds.";
@@ -407,6 +407,20 @@ export function engineRestartBlocker(app: App): string | null {
 }
 
 /**
+ * Why Docker's build cache can't be freed now, or null (R8-04). A prune takes the cache a running build reads, so it waits for the same
+ * work as a forced restart. It stops nothing and restarts nothing, so its words say only what runs and that freeing waits for it, never
+ * the restart's sentence (PR #306 review).
+ */
+export function buildCachePruneBlocker(app: App): string | null {
+  const { stopping, writing } = engineRestartHolds(app);
+  if (stopping.length === 0 && !writing) return null;
+  const names = stopping.length <= 1 ? stopping[0] : `${stopping.slice(0, -1).join(", ")} and ${stopping.at(-1)}`;
+  const doing = [...(names === undefined ? [] : [`running ${names}`]), ...(writing ? ["writing to a keyboard"] : [])];
+  const one = stopping.length + (writing ? 1 : 0) === 1;
+  return `keyloom is ${doing.join(" and ")}. Free Docker's build cache once ${one ? "it has" : "they have"} finished.`;
+}
+
+/**
  * What a forced restart waits for now, named for the person ("a build", "a lab analysis", "a keyboard write"), or empty when nothing
  * holds it. The page names it while it waits to restart by itself ("Restarts when the lab analysis ends", R7-04); the refusal itself
  * comes from `engineRestartBlocker`, inside the engine lock.
@@ -498,6 +512,7 @@ function flashErrorCode(code: string | null): FlashErrorCode | null {
   switch (code) {
     case "cancelled":
     case "not_confirmed":
+    case "write_timeout":
     case "permission_files_and_folders":
     case "permission_input_monitoring":
       return code;
@@ -572,7 +587,7 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
       throw new UsageError(`build ${build.id} is ${build.status}${build.error ? ` (${build.error})` : ""}; only a successful build can be flashed`);
     }
     const artifact = absolute(app, build.artifactPath);
-    if (!(await Bun.file(artifact).exists())) throw new UsageError(`build ${build.id}'s file ${artifact} is gone; build it again`);
+    if (!(await Bun.file(artifact).exists())) throw new BuildFileGoneError(`build ${build.id}'s file ${artifact} is gone; build it again`);
 
     const busy = activeFlashes(app.db).map((f) => reapFlash(app, f)).find((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
     if (busy) throw new UsageError(`flash ${busy.id} is already in progress; wait for it to finish`);

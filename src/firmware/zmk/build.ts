@@ -3,7 +3,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, DISK_FULL_MESSAGE, diskFull, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
@@ -45,7 +45,7 @@ export type ZmkBuildResult = { artifactPath: string; bytes: number; durationMs: 
 
 export function hint(lines: readonly string[]): string | undefined {
   const text = lines.join("\n");
-  if (/No space left on device/i.test(text)) return "Docker ran out of disk space. Free some with `docker builder prune` or raise the disk limit, then build again.";
+  if (diskFull(lines)) return DISK_FULL_MESSAGE;
   if (/Cannot connect to the Docker daemon/i.test(text)) return "Docker isn't running. Start it and build again.";
   return undefined;
 }
@@ -70,7 +70,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       try {
         image = (await ensureImage(rev.source.sha, input.imageContextDir, hooks)).tag;
       } catch (err) {
-        if (err instanceof ImageBuildError) throw new BuildFailure(err.message);
+        if (err instanceof ImageBuildError) throw new BuildFailure(err.message, err.code);
         throw err;
       }
 

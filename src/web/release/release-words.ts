@@ -38,7 +38,7 @@ export type DockerView =
    * shows the button, which a failure other than a cancel or a running build takes away, and `note` says how the last one ended. `command`
    * is null once a fix has found a linked file, until a fix completes, because its `chown -R` would change the very file the fix refused to.
    */
-  | { kind: "no-access"; command: string | null; note: string; restartApp: string | null; fix: { offered: boolean; note: string | null } | null }
+  | { kind: "no-access"; command: string | null; note: string; restartApp: string | null; fix: { offered: boolean; note: string | null } | null; stopCommand?: string }
   /**
    * Stopped. `afterInstall` is set when this page installed Docker but its first start failed or was stopped (R2-02): Docker is
    * there, so the way on is a start, not another install.
@@ -83,7 +83,7 @@ export function dockerView(
     // While Docker still refuses, the fix's outcome stays beside it; once Docker needs something else, that readiness decides below.
     if (lastAction === "fix-files" && down?.problem === "no-access" && down.access !== null) {
       const held = commandHeld(down.access, linkedFile);
-      return noAccess(down.access, fixOutcome(problem, problemCode, held), held !== null || problemCode === "linked_file");
+      return noAccess(down.access, fixOutcome(problem, problemCode, held, down.access.stopCommand), held !== null || problemCode === "linked_file");
     }
     if (restartApp !== null) return { kind: "start-failed", reason: plain(problem), retry: "restart", restartEngine: null, helpUrl: null };
     // A Colima that wouldn't start fails the same way again, so its way on is a restart from scratch; after that, its own guide (R3-04).
@@ -131,8 +131,12 @@ function commandHeld(access: Access, linkedFile: string | null): string | null {
 
 const withHeld = (note: string, held: string | null): string => (held === null ? note : `${note} ${held}`);
 
-function noAccess(access: Access, fix: { offered: boolean; note: string | null }, noCommand = false): Extract<DockerView, { kind: "no-access" }> {
-  return { kind: "no-access", command: noCommand ? null : access.command, note: access.note, restartApp: access.restartApp, fix: access.fixFiles === true ? fix : null };
+/** `stopCommand`: the fix found another account's Colima running while the full command is held, so Colima's stop shows on its own (R8-05). */
+function noAccess(access: Access, fix: { offered: boolean; note: string | null; stopCommand?: string }, noCommand = false): Extract<DockerView, { kind: "no-access" }> {
+  return {
+    kind: "no-access", command: noCommand ? null : access.command, note: access.note, restartApp: access.restartApp,
+    fix: access.fixFiles === true ? { offered: fix.offered, note: fix.note } : null, ...(fix.stopCommand === undefined ? {} : { stopCommand: fix.stopCommand }),
+  };
 }
 
 /**
@@ -142,17 +146,19 @@ function noAccess(access: Access, fix: { offered: boolean; note: string | null }
  * finish), the button stays, because it is then the only way on and it checks for linked files itself, and the reason stays beside the
  * latest outcome (PR #300 CodeRabbit).
  */
-function fixOutcome(problem: string, code: string | null, held: string | null): { offered: boolean; note: string } {
+function fixOutcome(problem: string, code: string | null, held: string | null, stopCommand?: string): { offered: boolean; note: string; stopCommand?: string } {
   const reason = plain(problem).replace(/\.?$/, ".");
   if (code === "cancelled") return { offered: true, note: withHeld("You closed the password dialog, so nothing changed.", held) };
   if (code === "build_running") return { offered: true, note: withHeld("A build or flash is running, and stopping Colima now would stop it. Fix Colima's files once it has finished.", held) };
   // The file may belong to macOS, so the way on is to look at it first; the button checks again once it is dealt with.
   if (code === "linked_file") return { offered: true, note: `${reason} A file with two names can be one of macOS's own, so check what it is before anything changes its owner.` };
-  // keyloom won't run Colima as root to stop that copy (D-533); Colima's command does, as the person's own step.
+  // keyloom won't run Colima as root to stop that copy (D-533); Colima's command does, as the person's own step. While that command is
+  // held, its stop is shown alone: it changes no file's owner, so no hold applies to it (R8-05). The root script's steps don't change.
   if (code === "vm_running") {
-    return held !== null
-      ? { offered: true, note: withHeld(`${reason} Stop that copy of Colima, then press Fix Colima's files again.`, held) }
-      : { offered: false, note: `${reason} The command below stops that copy, gives the files back and starts Colima as you.` };
+    if (held === null) return { offered: false, note: `${reason} The command below stops that copy, gives the files back and starts Colima as you.` };
+    return stopCommand !== undefined
+      ? { offered: true, stopCommand, note: withHeld(`${reason} Stop that copy with the command below, which changes no file's owner, then press Fix Colima's files again.`, held) }
+      : { offered: true, note: withHeld(`${reason} Stop that copy of Colima, then press Fix Colima's files again.`, held) };
   }
   return { offered: held !== null, note: withHeld(plain(problem), held) };
 }

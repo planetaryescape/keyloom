@@ -1,5 +1,5 @@
 // The browser side of the system routes (src/api/system.ts): whether the Docker a build needs is up, and starting it.
-import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, type DockerReadinessResponse, type DockerRestartLogResponse, type DockerStartResponse } from "../api/system.ts";
+import { DockerPruneResponseSchema, DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, type DockerPruneResponse, type DockerReadinessResponse, type DockerRestartLogResponse, type DockerStartResponse } from "../api/system.ts";
 import { ApiError } from "./api.ts";
 import { request } from "./api-write.ts";
 
@@ -38,4 +38,9 @@ export function fetchRestartLog(token: string, signal?: AbortSignal): Promise<Do
 /** Fix Colima's files (D-533): the server asks macOS for the password, gives ~/.colima back and starts Colima; answers like a start. */
 export function fixColimaFiles(token: string, signal?: AbortSignal): Promise<DockerStartResponse> {
   return request("POST", `${DOCKER_PATH}/fix-colima-files`, token, DockerStartResponseSchema, signal, {});
+}
+
+/** Frees Docker's build cache, for a build that ran out of disk (R8-04); no image, container or volume is removed. */
+export function pruneDockerBuildCache(token: string, signal?: AbortSignal): Promise<DockerPruneResponse> {
+  return request("POST", `${DOCKER_PATH}/prune-build-cache`, token, DockerPruneResponseSchema, signal, {});
 }

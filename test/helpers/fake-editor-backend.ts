@@ -1,6 +1,7 @@
 // An in-memory EditorBackend and LayoutSource for the dev harness and the server tests. It handles
 // only setBinding, checks only what the editor UI can get wrong, and times builds and flashes from
 // the clock, so a reader polling it sees the same progression a real build would show.
+import { DISK_FULL_MESSAGE } from "../../src/firmware/toolchain/build-failure.ts";
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
@@ -27,6 +28,8 @@ export interface FakeOptions {
   failBuildCompile?: boolean;
   /** Fail builds as a stale Colima mount (R6-09) until `staleMount` is set false, as a forced engine restart does in the dev editor. */
   failBuildStale?: boolean;
+  /** Fail builds because Docker's disk is full (R8-04) until `diskFull` is set false, as freeing Docker's build cache does in the dev editor. */
+  failBuildDisk?: boolean;
   /** The engine a stale-mount build names as the one keyloom can restart (R6-09); Colima by default. */
   restartEngine?: string;
   /** Fail every build because the engine doesn't share the build folder, naming that engine, or null when it can't tell (R7-02). */
@@ -79,13 +82,17 @@ const STALE_MOUNT_ERROR = "Docker still sees an old or missing copy of keymap.c 
 const FOLDER = "/Volumes/Cache/keyloom/build/zsa-moonlander";
 const FOLDER_ERROR = `Docker can't see ${FOLDER}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`;
 
+const DISK_ERROR = DISK_FULL_MESSAGE;
+
 export class FakeEditor implements EditorBackend {
   /** The pretend stale mount `failBuildStale` fails on; a forced restart in the dev editor clears it. */
   staleMount = true;
+  /** The pretend full disk `failBuildDisk` fails on; freeing Docker's build cache in the dev editor clears it. */
+  diskFull = true;
   private history: Revision[];
   private counter = 0;
   // `stale` is read once, when the build starts: a restart clears the mount for later builds, never a finished build's result.
-  private readonly builds = new Map<string, { build: Build; revisionId: string; stale: boolean; cancelledAt?: number }>();
+  private readonly builds = new Map<string, { build: Build; revisionId: string; stale: boolean; disk?: boolean; cancelledAt?: number }>();
   private readonly flashes = new Map<string, { flash: Flash; startedAt: number; cancelledAt?: number; checkedAt?: number }>();
   private readonly options: Required<FakeOptions>;
   private readonly proposals = new Map<string, StoredProposal>();
@@ -95,7 +102,7 @@ export class FakeEditor implements EditorBackend {
     options: FakeOptions = {},
   ) {
     this.options = {
-      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false, failBuildStale: false,
+      buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false, failBuildStale: false, failBuildDisk: false,
       restartEngine: "Colima", failBuildFolder: null, flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
       ...options,
@@ -240,8 +247,9 @@ export class FakeEditor implements EditorBackend {
     }
     const id = `build_${++this.counter}`;
     const stale = this.options.failBuildStale === true && this.staleMount;
-    const build = this.progressBuild(id, request.revisionId, Date.now(), stale);
-    this.builds.set(id, { build, revisionId: request.revisionId, stale });
+    const disk = this.options.failBuildDisk === true && this.diskFull;
+    const build = this.progressBuild(id, request.revisionId, Date.now(), stale, disk);
+    this.builds.set(id, { build, revisionId: request.revisionId, stale, disk });
     return build;
   }
 
@@ -249,9 +257,9 @@ export class FakeEditor implements EditorBackend {
     const entry = this.builds.get(id);
     if (entry === undefined) return null;
     if (entry.cancelledAt !== undefined) {
-      return { ...this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale), status: "failed", error: "Build stopped.", errorCode: "cancelled", finishedAt: entry.cancelledAt };
+      return { ...this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale, entry.disk === true), status: "failed", error: "Build stopped.", errorCode: "cancelled", finishedAt: entry.cancelledAt };
     }
-    return this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale);
+    return this.progressBuild(id, entry.revisionId, entry.build.startedAt, entry.stale, entry.disk === true);
   }
 
   /** Stops a running build (R3-10); a finished one is refused like the real backend refuses it. */
@@ -413,16 +421,17 @@ export class FakeEditor implements EditorBackend {
     return parent === undefined ? null : { revisionId: parent.id, summary: parent.summary };
   }
 
-  private progressBuild(id: string, revisionId: string, startedAt: number, stale: boolean): Build {
+  private progressBuild(id: string, revisionId: string, startedAt: number, stale: boolean, disk = false): Build {
     const { buildMs, failBuildDocker, failBuildCompile } = this.options;
     const folder = this.options.failBuildFolder;
-    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale || folder !== null;
+    const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale || disk || folder !== null;
     const elapsed = Date.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
     const progress = Math.min(1, elapsed / buildMs);
     const lines = BUILD_LOG.filter(([at]) => at <= progress).map(([, line]) => line);
-    if (done && failBuild) {
+    if (done && disk) lines.push("cp: write error: No space left on device", `keyloom: build failed: ${DISK_ERROR}`);
+    else if (done && failBuild) {
       lines.push("keymap.c:212:5: error: 'LAYER_9' undeclared (first use in this function)", "make: *** [Makefile:410: keymap.o] Error 1");
     }
     if (done && !failBuild) lines.push("Build finished: zsa_moonlander_keyloom.bin");
@@ -430,8 +439,8 @@ export class FakeEditor implements EditorBackend {
       id,
       revisionId,
       status: !done ? "running" : failBuild ? "failed" : "succeeded",
-      error: done && failBuild ? (folder !== null ? FOLDER_ERROR : stale ? STALE_MOUNT_ERROR : failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
-      errorCode: done && folder !== null ? "folder_not_shared" : done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : done && stale ? "stale_mount" : null,
+      error: done && failBuild ? (disk ? DISK_ERROR : folder !== null ? FOLDER_ERROR : stale ? STALE_MOUNT_ERROR : failBuildDocker ? "Docker is not on this computer." : failBuildCompile ? "The generated firmware doesn't compile: layer-0, position 30: 'LAYER_9' undeclared (first use in this function)" : "The compiler stopped with an error. The last lines of the log say where.") : null,
+      errorCode: done && disk ? "disk_full" : done && folder !== null ? "folder_not_shared" : done && failBuildDocker ? "docker_unavailable" : done && failBuildCompile ? "compile_error" : done && stale ? "stale_mount" : null,
       ...(done && stale ? { restartEngine: this.options.restartEngine } : {}),
       ...(done && folder !== null ? { folderNotShared: { folder: FOLDER, engine: folder.engine } } : {}),
       ...(done && failBuildCompile ? { lastBuilt: this.lastBuiltBefore(revisionId) } : {}),

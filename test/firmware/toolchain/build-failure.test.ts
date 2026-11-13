@@ -1,7 +1,8 @@
 // R5-02: the lines that say a firmware doesn't fit, read from what the toolchains print (test/fixtures/build-logs/README.md).
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, firmwareOverflow, probeFailure, tooLargeMessage } from "../../../src/firmware/toolchain/build-failure.ts";
+import { NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, firmwareOverflow, probeFailure, tooLargeMessage } from "../../../src/firmware/toolchain/build-failure.ts";
+import { pruneTotal } from "../../../src/firmware/toolchain/docker.ts";
 import { generatedSourceError } from "../../../src/firmware/qmk/locate-error.ts";
 
 const log = async (name: string) => (await Bun.file(join(import.meta.dir, "../../fixtures/build-logs", name)).text()).split("\n");
@@ -39,6 +40,22 @@ test("a probe is folder_not_shared only when its sentinel is missing; a failed c
   expect(docker.code).toBeNull();
   expect(docker.message).toContain("(exit 125)");
   expect(probeFailure(null, [], "/c", "x").message).toContain("it was stopped");
+});
+
+test("a full Docker disk is disk_full wherever it shows, and the terminal keeps the prune command (R8-04)", async () => {
+  const full = await log("zmk-docker-disk-full.log");
+  const driver = { boardName: "Glove80", docker: "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.", compileError: () => undefined, generic: "x" };
+  expect(classifyBuildFailure(full, driver)).toMatchObject({ code: "disk_full", message: expect.stringContaining("`docker builder prune`") });
+  // A stopped daemon, the drivers' other Docker trouble, may pass, so it keeps no code.
+  expect(classifyBuildFailure(["Cannot connect to the Docker daemon"], { ...driver, docker: "Docker isn't running." }).code).toBeNull();
+  expect(probeFailure(1, ["cp: write error: No space left on device"], "/c", "x").code).toBe("disk_full");
+});
+
+test("the total `docker builder prune` prints, from BuildKit and from older clients (R8-04)", () => {
+  expect(pruneTotal("ID\tRECLAIMABLE\tSIZE\nabc\ttrue\t1.2GB\nTotal:\t1.234GB\n")).toBe("1.234GB");
+  expect(pruneTotal("Deleted build cache objects:\nxyz\n\nTotal reclaimed space: 512.5 MB\n")).toBe("512.5MB");
+  expect(pruneTotal("Total:\t0B\n")).toBe("0B");
+  expect(pruneTotal("")).toBeNull();
 });
 
 test("Docker Desktop's refused mount is folder_not_shared, and the CLI's words name File sharing (PR #303 review)", () => {

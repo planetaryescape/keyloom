@@ -5,12 +5,15 @@ import type { ConfirmProblem } from "../configs/ConfigDialogs.tsx";
 import type { SyncApi } from "./useSync.ts";
 import { type RefusalAction, knownRefusal, noticeOnPage, refusalNotice, syncNotice } from "./words.ts";
 
-/** What a refusal's button does on this page. An action the page can't take leaves the toast without a button. */
-export type RefusalHandlers = Partial<Record<RefusalAction, () => void>>;
+/**
+ * What a refusal's button does on this page. An action the page can't take leaves the toast without a button. `open_release` takes the
+ * sync's failed build, which the dialog opens on (R8-01).
+ */
+export type RefusalHandlers = Partial<Record<RefusalAction, (buildId?: string) => void>>;
 
 /** A notice's button, when this page has a handler for it. Read at press time, so the button acts on the page as it is then. */
-const buttonFor = (action: { id: RefusalAction; label: string } | undefined, handlers: () => RefusalHandlers): { label: string; run: () => void } | undefined =>
-  action !== undefined && handlers()[action.id] !== undefined ? { label: action.label, run: () => handlers()[action.id]?.() } : undefined;
+const buttonFor = (action: { id: RefusalAction; label: string; buildId?: string | undefined } | undefined, handlers: () => RefusalHandlers): { label: string; run: () => void } | undefined =>
+  action !== undefined && handlers()[action.id] !== undefined ? { label: action.label, run: () => handlers()[action.id]?.(action.buildId) } : undefined;
 
 /**
  * A refused request (its server code) as words and the button that fixes it, for a dialog that shows it in place of a toast (R3-01).
@@ -35,8 +38,8 @@ export function refusalProblem(error: { code?: string | undefined }, handlers: R
 /** The page that has a refusal's fix when this one doesn't: a config, by name. */
 export type Elsewhere = { name: string; open: () => void };
 
-/** The board on screen, and how to open another board's page, which a toast about that board offers. */
-export type SyncToastPage = { boardId: string; openBoard: (boardId: string) => void };
+/** The board and config on screen, and how to open another board's or config's page, which a toast about that one offers. */
+export type SyncToastPage = { boardId: string; layoutId: string; openBoard: (boardId: string) => void; openConfig: (layoutId: string) => void };
 
 // Says when a change reaches a keyboard, and when it doesn't. The first state after the page opens says nothing: it isn't news.
 export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, handlers: RefusalHandlers = {}, page?: SyncToastPage): void {
@@ -53,11 +56,13 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
       for (const board of sync.boards) {
         const raw = syncNotice(before.current.get(board.boardId), board);
         if (raw === null) continue;
-        const notice = noticeOnPage(raw, board, pageNow.current?.boardId);
-        const openBoard = pageNow.current?.openBoard;
-        const action = notice.action?.id === "open_board"
-          ? (openBoard === undefined ? undefined : { label: notice.action.label, run: () => openBoard(board.boardId) })
-          : buttonFor(notice.action === undefined ? undefined : { id: notice.action.id, label: notice.action.label }, current);
+        const onScreen = pageNow.current;
+        const notice = noticeOnPage(raw, board, onScreen);
+        const to = notice.action;
+        const action = to === undefined ? undefined
+          : to.id === "open_config" ? (onScreen === undefined ? undefined : { label: to.label, run: () => onScreen.openConfig(to.layoutId) })
+          : to.id === "open_board" ? (onScreen === undefined ? undefined : { label: to.label, run: () => onScreen.openBoard(board.boardId) })
+          : buttonFor({ id: to.id, label: to.label, buildId: to.buildId }, current);
         show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
       }
     }
