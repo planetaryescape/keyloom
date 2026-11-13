@@ -2,6 +2,7 @@
 // use cases and the CLI run against it without building or flashing anything for real.
 import { join } from "node:path";
 import { closeApp, importLayout, openApp } from "../../src/app/index.ts";
+import { trustedCheckoutDir } from "../../src/firmware/toolchain/checkout.ts";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { FAKE_DOCKER, FAKE_GIT, dfuImage, fakeBinDir, withPath } from "./fake-bin.ts";
@@ -34,11 +35,13 @@ export async function toolchainEnv(opts: { zapp?: string } = {}) {
     XDG_CACHE_HOME: cache, FAKE_MODE: "ok", FAKE_DOCKER_LOG: join(root, "docker.calls"), FAKE_BIN_REVA: revaFile, FAKE_BIN_REVB: revbFile, FAKE_ELF: elfFile,
     FAKE_GIT_HEAD: PIN, ZAPP_CALLS: join(root, "zapp.calls"), FAKE_USB: '{"SPUSBDataType":[]}',
   };
-  // The pinned checkout "exists": a .git folder for the state check and a Makefile for the mount probe.
+  // Seed the trusted download, outside the disposable workspace.
   const checkout = withPath(bin, async () => checkoutDirFor(showBoard("zsa/moonlander")), vars);
   const dir = await checkout;
-  await Bun.$`mkdir -p ${join(dir, ".git")}`;
-  await Bun.write(join(dir, "Makefile"), "all:\n");
+  const rev = showBoard("zsa/moonlander").definition.revisions[0]!;
+  const trusted = trustedCheckoutDir({ dir, repo: rev.source.repo, sha: PIN, submodules: rev.build.kind === "qmk-docker" ? rev.build.submodules : [] });
+  await Bun.$`mkdir -p ${join(trusted, ".git")}`;
+  await Bun.write(join(trusted, "Makefile"), "all:\n");
   const app = openApp({ dataDir });
   const imported = await importLayout(app, { board: "zsa/moonlander", source: FIXTURE_DIR });
   const run = <T>(fn: () => Promise<T>, extra: Record<string, string> = {}) => withPath(bin, fn, { ...vars, ...extra });

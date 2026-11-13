@@ -58,7 +58,8 @@ describe("buildZmk (fake docker)", () => {
 
     const calls = (await Bun.file(s.dockerLog).text()).split("\n");
     const run = calls.find((l) => l.includes(" --name keyloom-test "));
-    expect(run).toBe(`run --rm --name keyloom-test -v ${join(s.dir, "checkout")}:/config -e UID=${process.getuid?.()} -e GID=${process.getgid?.()} ${imageTag(ZMK_SHA)}`);
+    expect(run).toContain(`run --rm --name keyloom-test -v ${join(s.dir, "checkout")}.run-`);
+    expect(run).toContain(`:/config -e UID=${process.getuid?.()} -e GID=${process.getgid?.()} ${imageTag(ZMK_SHA)}`);
     expect(s.lines.some((l) => l.includes("2 images: family 0x9807b007"))).toBe(true);
   });
 
@@ -162,9 +163,7 @@ describe("buildZmk (fake docker)", () => {
 
   test("Docker not able to see the checkout is called what it is, before the build's confusing failure", async () => {
     const s = await setup();
-    await s.build("ok");
-    await Bun.$`rm ${join(s.dir, "checkout", "config", "default.nix")}`;
-    await expect(s.build("ok")).rejects.toThrow(/Docker can't see .*home directory/);
+    await expect(s.build("ok", { FAKE_MOUNT: "missing" })).rejects.toThrow(/Docker can't see .*home directory/);
   });
 
   test("a build past its timeout is stopped, the container removed, and the message says so", async () => {

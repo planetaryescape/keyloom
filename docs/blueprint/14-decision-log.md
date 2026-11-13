@@ -11,6 +11,65 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 Each container gets a unique workspace path
+
+### D-582: Never bind a later run to a host path an older container used. Replaces D-580 and D-581's stable workspace path.
+
+A real Colima probe proved that an old bind mount follows a host directory replaced at the same path.
+The old container read the new source and changed it. A lock cannot stop a container whose owner died.
+
+Each build and emulator now uses a new sibling path, `<board>.run-<random>`. The source cache remains outside every writable mount.
+QMK and Glove80 copy trusted source into that run. West mounts locked source read-only beside fresh writable config and output.
+The lock stays held through container exit, artifact validation, and snapshot publication.
+All existing QMK path and symlink guards use the new run root.
+
+After the callback ends, the run becomes the stable base's untrusted debug snapshot.
+That snapshot is never an input to Git, the doctor, source preparation, or another build.
+Even a container that can change that snapshot cannot reach a later run's separate sibling path.
+Failed runs retain debug files too. The next run still starts from trusted source and empty output.
+
+Docker file sharing must cover the parent build-cache folder, which contains both trusted sources and run folders.
+The folder-sharing recovery action now names that parent. Firmware formats and freshness checks stay unchanged.
+
+Verification: unique-workspace tests cover fresh paths and failed-run retries. The real Docker regression retains an old writable bind while two later runs use separate paths.
+
+## 2026-11-13 West builds use resolved inputs and read-only source
+
+### D-581: Replace recursive west imports with a reviewed dependency lock. Extends D-036, D-040 and D-580.
+
+`src/firmware/zmk/west-inputs.json` locks all 39 active projects for ZMK `edf5c0814fd3ea202e43aad2d68fd32e882a518c`.
+Zephyr is `dacab4875df72109b96cc8977547a0dc04875bcd`. The lock preserves ZMK's nanopb override, project paths, groups, and west commands.
+West's own manifest resolver produced the flattened project list from the pinned upstream manifests.
+The board's pinned hardware and RGB modules join that list without importing their config manifests, as before.
+A new ZMK commit requires a reviewed lock. An unknown source commit fails before any build rather than resolving mutable dependencies.
+
+Builds and emulation mount each trusted project read-only. Git metadata stays read-only too, because west uses it to locate projects.
+The writable workspace contains generated config and output. Each run recreates it without opening its old Git or west metadata.
+No build-time `west update` remains. CMake receives the pinned `ZEPHYR_BASE` and exact `Zephyr_DIR` directly. Package registration is omitted because this Zephyr version writes into its source directory during `west zephyr-export`. Repository URLs, every resolved commit, and the image digest form the source-cache identity.
+The emulator's result key also includes the full resolved manifest, including hardware and RGB modules.
+
+Reason: C2 reproduced the mutable `v3.5.0+zmk-fixes` import under an otherwise pinned ZMK commit.
+The read-only mounts also prevent a prior west build or emulator from changing later source inputs.
+See [the input-lock evidence](../research/west-input-lock.md) for provenance and compatibility checks.
+
+## 2026-11-13 Firmware workspaces cannot change later builds
+
+### D-580: Keep trusted Git downloads outside writable build and emulation mounts. Replaces D-081's shared checkout reuse.
+
+The writable workspace is disposable. Host Git only reads the separate source cache, keyed by repository URL, full commit SHA, and requested submodules.
+Each run copies pinned source and its requested submodules into a fresh workspace, without Git metadata or earlier output.
+Copies use filesystem reflinks where available. They never use hard links.
+A source snapshot publishes only after every requested submodule succeeds. An interrupted copy cannot replace the workspace. A later run retries from trusted source.
+The caller holds the workspace lock through the run. Downloads remain available for later builds.
+
+Reason: A2/C1 reproduced changed Makefiles, changed submodule files, and host command execution through writable Git configuration.
+Checking HEAD or running Git status inside the old workspace cannot establish trust.
+The doctor reads the trusted cache too. Old writable checkout metadata is never opened by host Git.
+
+Verification: `test/firmware/toolchain/checkout.test.ts` covers contaminated source, submodule files, Git configuration, stale output, and warm downloads.
+The QMK, Glove80, and emulation checks cover callers. West workspace preparation is a separate follow-up.
+No keyboard was flashed. Persistent compiler output requires a separate trust design before reuse.
+
 ## 2026-11-13 generated names and import limits
 
 ### D-663: Conditional-layer IDs cannot introduce devicetree source.

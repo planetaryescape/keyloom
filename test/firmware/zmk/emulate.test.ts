@@ -1,7 +1,7 @@
 // emulateZmk against a fake `docker`: everything keyloom does around the container (the native keymap it
 // sends, the command it runs, reading the log, the cache) without a real build. The real thing is
 // test/firmware/zmk/emulate-docker.test.ts.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { join } from "node:path";
 import { loadBoardDir } from "../../../src/boards/load.ts";
 import { EmulationError } from "../../../src/firmware/emulate/error.ts";
@@ -14,6 +14,10 @@ import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { STYLE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
+import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
+import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
+
+setDefaultTimeout(30_000);
 
 const FIXTURES = `${import.meta.dir}/../../fixtures/zmk`;
 
@@ -40,7 +44,9 @@ async function setup(boardDir: string, keymap: string, keymapName?: string) {
   const source = generateZmkSource({ layout, board: board.definition, geometry: board.geometry, revisionId: "rev_test", ...(keymapName ? { keymapName } : {}) });
   const dir = tempDir();
   const log = new LogSink(join(dir, "emulate.log"));
-  const bin = fakeBinDir({ docker: FAKE_DOCKER_EMULATE });
+  const rev = board.definition.revisions[0]!;
+  if (rev.build.kind === "zmk-west-docker") await seedWestSources(join(dir, "checkout"), westProjects(rev.source.repo, rev.source.sha, rev.build), rev.build.image);
+  const bin = fakeBinDir({ docker: FAKE_DOCKER_EMULATE, git: FAKE_WEST_GIT });
   const env = (mode: string, run: string) => ({
     FAKE_MODE: mode, FAKE_DOCKER_LOG: join(dir, "docker.calls"), FAKE_STDIN: join(dir, "stdin"), FAKE_RUN: `${FIXTURES}/emulate/${run}.log`,
   });
@@ -141,17 +147,17 @@ describe("emulateZmk for the Corne (ZMK's west image)", () => {
       { at: 40, kind: "consumer", usages: [] },
     ]);
     const [call] = await e.calls();
-    expect(call).toContain(`-v ${join(e.dir, "checkout")}:/work`);
+    expect(call).toContain(`-v ${join(e.dir, "checkout")}.run-`);
     expect(call).toContain("zmkfirmware/zmk-build-arm@sha256:");
     expect(call).toContain("west build -s zmk/app -d /tmp/emu-build -b native_posix_64");
-    expect(await Bun.file(join(e.dir, "checkout", "config", "west.yml")).text()).toContain("revision: edf5c0814fd3ea202e43aad2d68fd32e882a518c");
+    expect(await Bun.file(join(e.dir, "checkout", "config", "west.yml")).text()).toContain("edf5c0814fd3ea202e43aad2d68fd32e882a518c");
     expect((await e.stdin())[0]).not.toBe("");
   });
 });
 
 describe("the container scripts", () => {
   test("both read the config from standard input and build in the container, not on the mount", () => {
-    for (const script of [westEmulateScript("abc"), MOERGO_INNER_SCRIPT]) {
+    for (const script of [westEmulateScript(), MOERGO_INNER_SCRIPT]) {
       expect(script).toContain("read -r KEYLOOM_KEYMAP; read -r KEYLOOM_CONF");
       expect(script).toContain("-DZMK_CONFIG=/tmp/emu-config");
       expect(script).toContain("/tmp/emu-build");
@@ -159,7 +165,11 @@ describe("the container scripts", () => {
     }
   });
 
-  test("the west script downloads firmware only when the workspace isn't at the pinned commit", () => {
-    expect(westEmulateScript("abc123")).toContain('[ "$(git -C zmk rev-parse HEAD 2>/dev/null)" = abc123 ] || west update');
+  test("the west script cannot resolve source or Git from the writable workspace", () => {
+    expect(westEmulateScript()).not.toContain("west update");
+    expect(westEmulateScript()).not.toContain("git -C");
+    expect(westEmulateScript()).not.toContain("west zephyr-export");
+    expect(westEmulateScript()).toContain("-DUSER_CACHE_DIR=/tmp/keyloom-cache");
+    expect(westEmulateScript()).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
   });
 });

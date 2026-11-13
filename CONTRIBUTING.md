@@ -206,7 +206,9 @@ For external hardware definitions, set `boardModule` to their repository URL and
 - `physicalLayout` is the file in the ZMK tree that holds the `zmk,physical-layout` node. Look in `app/dts/layouts/` for your board, such as `app/dts/layouts/foostan/corne/6column.dtsi`. Boards with several layouts, such as 5-column and 6-column, have several files. To find which one your shield uses, open the shield's `.dtsi` under `app/boards/shields/<shield>/` and look for `chosen { zmk,physical-layout = &...; }`; the file that defines that label is the one. Its key count must equal `keyCount`.
 - Each flash step has a `target` that names a build target. `volume` is the label of the boot drive. A nice!nano shows up as `NICENANO`. `enter` is how to put that half into its bootloader. For a nice!nano that is a double tap on the reset button.
 
-keyloom builds in the Docker image with `west`. The first build downloads Zephyr and ZMK's modules into `~/.cache/keyloom/build/<board>`, so it takes several minutes. Later builds reuse them. The Docker image's Zephyr must match your pinned ZMK. Use the `stable` image for a stable ZMK release.
+keyloom builds in the Docker image with `west`. The first build downloads each locked project into a trusted cache beside `~/.cache/keyloom/build/<board>`. Later builds reuse those downloads through read-only mounts. Each build uses a new sibling path for writable config and output. The stable path keeps an untrusted debug snapshot after the run. Share the parent build-cache folder with Docker, so it can see each new run and the trusted sources.
+
+The reviewed dependency lock in `src/firmware/zmk/west-inputs.json` supports ZMK `edf5c0814fd3ea202e43aad2d68fd32e882a518c` (v0.3.0), including Corne and Keebart recipes. If you change that ZMK commit, resolve and review every transitive input before updating the lock. Pin every project to a full commit and remove all imports from the emitted manifest. Preserve project paths, active groups, overrides, and west commands. See [the lock evidence](docs/research/west-input-lock.md). An unknown ZMK commit fails before a build.
 
 ## Test the board end to end
 

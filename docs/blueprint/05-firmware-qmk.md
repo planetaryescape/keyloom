@@ -74,9 +74,11 @@ ZIP imports inspect metadata before inflation. The compressed limit is 8 MiB, th
 
 ## Build runs QMK's Docker script from the pinned fork
 
+Status, 2026-11-13: D-580 separates trusted downloads from disposable build and emulation workspaces. D-582 gives each run a unique mount path.
+
+Each writable run uses `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander.run-<random>/`. After the run, `zsa-moonlander/` keeps an untrusted debug snapshot. That snapshot never supplies a later build. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. The identity hashes the repository URL, full commit SHA, and requested submodules. Each run copies pinned source and requested submodules into the workspace, without Git metadata or previous output. Downloads remain warm. Host Git never reads a writable workspace or debug snapshot. Share the parent `keyloom/build/` folder with Docker so it can see each new run and the trusted sources. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
 Board `keymapsDir` values must be relative paths without traversal. Before host cleanup or source writes, keyloom rejects symlinks within the workspace and checks every generated filename (D-661). This also covers emulation source and stale QMK artifact cleanup. The checks protect host writes between builds. They do not claim isolation from a process that changes directories during a write.
 
-The build checkout lives at `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander/`. It's `zsa/qmk_firmware` at the pinned SHA, with submodules. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
 
 ```
 docker run --rm --user "$(id -u):$(id -g)" -w /qmk_firmware -v <checkout>:/qmk_firmware \
