@@ -1,6 +1,8 @@
 // `keyloom layout settings` (10, D-030, D-459): the Settings page's view of a layout from the CLI, read only. Each firmware option
 // with the value in force, the baseline, whether the layout stores it, and why it is forced.
 import { afterEach, describe, expect, test } from "bun:test";
+import { appendFileSync, cpSync } from "node:fs";
+import { join } from "node:path";
 import { type App, applyOps, closeApp, getLayout, importLayout, openApp } from "../../src/app/index.ts";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
@@ -15,11 +17,11 @@ afterEach(() => {
   for (const app of opened.splice(0)) closeApp(app);
 });
 
-async function world() {
+async function world(source = FIXTURE_DIR) {
   const dataDir = tempDir();
   const app = openApp({ dataDir });
   opened.push(app);
-  const { layoutId } = await importLayout(app, { board: "zsa/moonlander", source: FIXTURE_DIR, name: "my-moonlander" });
+  const { layoutId } = await importLayout(app, { board: "zsa/moonlander", source, name: "my-moonlander" });
   return { app, dataDir, layoutId };
 }
 
@@ -74,12 +76,10 @@ describe("layout settings", () => {
   });
 
   test("a stored expression has no known value: null in JSON, expression in the table, the text kept", async () => {
-    const { app, dataDir, layoutId } = await world();
-    const head = getLayout(app, layoutId);
-    applyOps(app, layoutId, {
-      baseRevisionId: head.revision.id, summary: "Tapping term as an expression",
-      ops: [{ op: "setFirmwareSetting", setting: { firmware: "qmk", key: "TAPPING_TERM", value: "(TAPPING_TERM + 10)" } }],
-    });
+    const source = tempDir();
+    cpSync(FIXTURE_DIR, source, { recursive: true });
+    appendFileSync(join(source, "config.h"), "\n#define TAPPING_TERM (TAPPING_TERM + 10)\n");
+    const { dataDir } = await world(source);
     const settings = await rows(dataDir, "my-moonlander");
     expect(settings.TAPPING_TERM).toMatchObject({ value: null, default: 200, stored: true, source_text: "(TAPPING_TERM + 10)" });
     const line = (await cli(["--format", "table", "layout", "settings", "my-moonlander"], dataDir)).out.split("\n").find((l) => l.startsWith("TAPPING_TERM"));

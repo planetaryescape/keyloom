@@ -55,6 +55,10 @@ const MAX_LAYERS = 32;
 const KNOWN_FILES = new Set(["keymap.c", "config.h", "rules.mk", "keymap.json"]);
 
 function settingLine(s: FirmwareSetting): string {
+  // Imported expressions remain source, but one setting must never create another preprocessor line.
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(s.key) || (typeof s.value === "string" && (/[\r\n\0]/.test(s.value) || s.value.endsWith("\\")))) {
+    throw new GenerateError(`setting ${JSON.stringify(s.key)} cannot be written as one config.h definition`);
+  }
   // Flags are defined or not; `#define X false` would still define it, so a false flag is left out.
   if (s.value === true) return `#define ${s.key}`;
   if (s.value === false) return `// ${s.key} is off, so it is not defined`;
