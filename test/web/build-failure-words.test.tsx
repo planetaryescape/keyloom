@@ -7,7 +7,7 @@ import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
 import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
-import { LAYOUT_GONE, syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
+import { LAYOUT_GONE, buildReadFailure, syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
 
@@ -129,6 +129,19 @@ describe("the failed build step", () => {
     expect(html).toContain("Build again");
     expect(html).toContain("Ask keyloom about this build");
     expect(html).not.toContain("Go back to the last version that built");
+  });
+});
+
+// PR #315 review: a re-read (after a flash tool's install) that finds the build gone says "Build the firmware again", so the step shows
+// Build firmware in place of the old build's flash step.
+describe("a build a re-read found gone", () => {
+  test("the step offers Build firmware, not the old build's flash", () => {
+    const gone = buildReadFailure("not_found");
+    const html = failedStep(null, { status: "succeeded", error: null, errorCode: null, artifactPath: "/tmp/x.bin", flashPlan: { manual: null, tool: { name: "zapp", installed: false }, canReveal: true } } as never, { error: gone.text, errorCode: gone.code });
+    expect(html).toContain("Build the firmware again");
+    expect(html).toContain(">Build firmware<");
+    expect(html).toContain("Available once the build succeeds.");
+    expect(html).not.toContain("Install zapp");
   });
 });
 
