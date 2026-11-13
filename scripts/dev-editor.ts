@@ -10,7 +10,12 @@
 // KEYLOOM_FAKE_FAIL_BUILD=docker fails the build because Docker is missing, with its code (D-488); =compile fails it with a compile
 // error that repeats every time, naming the previous revision as the last that built (R5-02); =stale fails every build on a stale Colima
 // mount until Restart Colima and build again (a forced restart, about 3 s) clears it (R6-09); with KEYLOOM_FAKE_FORCE=busy that restart is
-// refused because a build runs, and with =fail it fails.
+// refused because a build runs, and with =fail it fails. With =wait it is refused while a pretend lab analysis runs for 12 s, the page
+// waits and restarts by itself once it ends (R7-04). KEYLOOM_FAKE_RESTART_ENGINE names the engine (Colima by default); with "Docker
+// Desktop" and =fail, Docker reads down after the failed restart (R7-03). KEYLOOM_FAKE_FAIL_BUILD=folder fails every build because the
+// engine doesn't share the build folder, naming KEYLOOM_FAKE_RESTART_ENGINE or Docker Desktop (R7-02).
+// KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY=1 fails the first layout read after each apply, as when the change is written but the page
+// can't show it (R7-06).
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
 // KEYLOOM_FAKE_INPUT_MONITORING=1 makes the flash wait for the reset key because Input Monitoring was refused; KEYLOOM_FAKE_CHECK_FINDS
 // sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
@@ -48,11 +53,14 @@ const zappPlan = (installed: boolean): FlashPlan => ({ manual: null, tool: { nam
 const flashPlan: FlashPlan = flashMode === "manual"
   ? { manual: "Put the board in its bootloader, then flash the file with QMK Toolbox.", tool: null, canReveal: true }
   : zappPlan(flashMode !== "no-zapp");
+const restartEngineName = process.env.KEYLOOM_FAKE_RESTART_ENGINE ?? "Colima";
 const fake = new FakeEditor(fixture, {
   flashPlan,
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
   failBuildCompile: process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile",
   failBuildStale: process.env.KEYLOOM_FAKE_FAIL_BUILD === "stale",
+  restartEngine: restartEngineName,
+  failBuildFolder: process.env.KEYLOOM_FAKE_FAIL_BUILD === "folder" ? { engine: process.env.KEYLOOM_FAKE_RESTART_ENGINE ?? "Docker Desktop" } : null,
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
   flashResult: process.env.KEYLOOM_FAKE_FLASH_RESULT === "unverified" ? "unverified" : process.env.KEYLOOM_FAKE_FLASH_RESULT === "files_and_folders" ? "permission_files_and_folders" : "verified",
@@ -108,8 +116,15 @@ const engineAction = (): "start" | null => {
   return Date.now() < busyUntil ? "start" : null;
 };
 const ALTERNATIVES = [{ name: "Docker Desktop", url: "https://www.docker.com/products/docker-desktop/" }, { name: "OrbStack", url: "https://orbstack.dev/" }];
+// A forced restart's pretend progress and the work it waits for (R7-04), and a Mac app it left down (R7-03).
+let forcedLines: string[] = [];
+let forcing = false;
+let labUntil: number | null = null;
+let appLeftDown = false;
 const system: SystemBackend = {
-  docker: async () => (dockerMode === "no-access-linux" || dockerMode === "no-access-mac") && !colimaFilesFixed
+  docker: async () => appLeftDown
+    ? { ok: false, problem: "daemon-down", reason: `${restartEngineName} isn't running.`, engine: restartEngineName, canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null }
+    : (dockerMode === "no-access-linux" || dockerMode === "no-access-mac") && !colimaFilesFixed
     ? {
         ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
         canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] }),
@@ -117,9 +132,13 @@ const system: SystemBackend = {
     : colimaBroken && !colimaRestarted
       ? { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima", alternatives: ALTERNATIVES, engineAction: engineAction() }
       : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
-  startDocker: async () => colimaBroken && !colimaRestarted
-    ? (await Bun.sleep(1500), { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" })
-    : { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 },
+  startDocker: async () => {
+    // Start it now brings back an app a failed forced restart left down (R7-03).
+    appLeftDown = false;
+    return colimaBroken && !colimaRestarted
+      ? (await Bun.sleep(1500), { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" })
+      : { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 };
+  },
   install: async (tool) => {
     if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false }]]);
     return installState(tool);
@@ -130,14 +149,31 @@ const system: SystemBackend = {
     if (started !== undefined && installState(tool).status === "running") started.cancelled = true;
     return installState(tool);
   },
+  restartLog: async () => ({ running: forcing, lines: forcedLines, waitingFor: !forcing && labUntil !== null && Date.now() < labUntil ? ["a lab analysis"] : [] }),
   restartDocker: async (opts) => {
     if (opts?.force === true) {
       const force = process.env.KEYLOOM_FAKE_FORCE;
       if (force === "busy") return { ok: false, code: "build_running", reason: "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.", engine: null };
-      await Bun.sleep(3000);
-      if (force === "fail") return { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" };
+      if (force === "wait") {
+        labUntil ??= Date.now() + 12_000;
+        if (Date.now() < labUntil) return { ok: false, code: "build_running", reason: "keyloom is running a lab analysis, and restarting Docker now would stop it. Restart Docker once that has finished.", engine: null };
+      }
+      forcing = true;
+      forcedLines = [];
+      const steps = restartEngineName === "Colima"
+        ? ["keyloom: stopping Colima so it starts from scratch", "keyloom: starting Colima", "INFO[0001] starting colima", "INFO[0002] provisioning ...", "keyloom: waiting for Docker to answer"]
+        : [`keyloom: quitting ${restartEngineName}`, `keyloom: opening ${restartEngineName}`, "keyloom: waiting for Docker to answer"];
+      for (const line of steps) {
+        forcedLines = [...forcedLines, line];
+        await Bun.sleep(3000 / steps.length);
+      }
+      forcing = false;
+      if (force === "fail") {
+        appLeftDown = restartEngineName !== "Colima";
+        return { ok: false, reason: `keyloom couldn't start ${restartEngineName}: it didn't answer within 2 minutes.`, engine: restartEngineName };
+      }
       fake.staleMount = false;
-      return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
+      return { ok: true, version: "29.0.0", engine: restartEngineName, waitedMs: 3000 };
     }
     if (!colimaBroken) return { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 };
     if (engineAction() !== null) return { ok: false, code: "engine_busy", reason: "keyloom is already starting Docker, for this page or for a build. Wait for that to finish, then check again.", engine: null };
@@ -161,5 +197,24 @@ const system: SystemBackend = {
   },
 };
 
-const server = startServer({ port, source: fake.source(), editor: fake, chat, system, token: "dev-editor-token" });
+
+// The first layout read after each apply fails, as when keyloom wrote the change but couldn't read it back (R7-06).
+const readFailsAfterApply = Number(process.env.KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY ?? 0);
+let readFailures = 0;
+const fakeApply = fake.apply.bind(fake);
+fake.apply = async (...args) => {
+  const applied = await fakeApply(...args);
+  readFailures = readFailsAfterApply;
+  return applied;
+};
+const fakeSource = fake.source();
+const source = { ...fakeSource, get: async (ref: string) => {
+  if (readFailures > 0) {
+    readFailures -= 1;
+    throw new Error("database is locked");
+  }
+  return fakeSource.get(ref);
+} };
+
+const server = startServer({ port, source, editor: fake, chat, system, token: "dev-editor-token" });
 console.log(server.url);

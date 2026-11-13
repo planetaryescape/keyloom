@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -76,15 +76,16 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       ];
       // Docker Desktop mounts an empty directory for a path it isn't allowed to share, and make then says only
       // "No rule to make target", which sends people hunting in the wrong place.
+      // Its output too: Docker Desktop refuses a folder it doesn't share in its own words, before the container starts.
+      const probeOutput: string[] = [];
       const visible = await run({
-        cmd: [...base, rev.build.image, "sh", "-c", `test -f Makefile && rm -rf .build/obj_${id}`],
+        cmd: [...base, rev.build.image, "sh", "-c", `test -f Makefile || exit ${NOT_SHARED_EXIT}; rm -rf .build/obj_${id} || exit ${PROBE_CLEANUP_EXIT}`],
         log: input.log,
         timeoutMs: 5 * 60_000,
+        onLine: (line) => probeOutput.push(line),
       });
       if (visible.exitCode !== 0) {
-        throw new BuildFailure(
-          `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`,
-        );
+        throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`);
       }
       await awaitMountedFiles({
         image: rev.build.image,

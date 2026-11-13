@@ -140,6 +140,8 @@ describe("buildQmk (fake docker)", () => {
   test("Docker not able to see the checkout is called what it is, before make's confusing 'no rule'", async () => {
     const s = await setup({ makefile: false });
     await expect(s.build("ok")).rejects.toThrow(/Docker can't see .*File sharing/);
+    // A code, so the page names the folder and opens Docker Desktop instead of showing the sentence (R7-02).
+    await expect(s.build("ok")).rejects.toMatchObject({ code: "folder_not_shared" });
   });
 
   test("a build past its timeout is stopped, the container removed, and the message says so", async () => {

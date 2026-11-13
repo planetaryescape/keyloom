@@ -10,6 +10,8 @@ import { z } from "zod";
 //                                       Body `{}`, or `{ "force": true }` to restart an engine that answers, for a build that failed with
 //                                       `stale_mount` or `stuck_container` (R6-09); that is refused with `build_running` while a build,
 //                                       flash, lab analysis, review test or emulator run is under way, because the restart would stop it.
+//   GET  /api/system/docker/restart   -> DockerRestartLogResponse (a forced restart's progress lines, for the build log tail, and the
+//                                       work it would wait for now, so the page can restart once that ends; R7-04)
 //   POST /api/system/docker/fix-colima-files -> DockerStartResponse (for `access.fixFiles`: macOS's password dialog, then root gives
 //                                       ~/.colima back to this account, and Colima stops and starts as it (D-533).
 //                                       Body `{}`. `cancelled` when the person closes the dialog; `build_running` and `engine_busy` as above)
@@ -76,6 +78,13 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
     code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file", "vm_running"]).optional(), file: z.string().min(1).optional(),
   }),
 ]);
+
+// A forced restart's state (R7-04). `running`: one runs here now. `lines`: its progress (the last few, oldest first), kept after it ends
+// until the next one starts. `waitingFor`: the work a forced restart would wait for now, named for the person ("a build", "a lab
+// analysis", "a keyboard write"); empty when nothing holds it. The page asks this while it waits, and asks for the restart only once it
+// is empty; the restart still checks for itself inside the engine lock (D-529).
+export const DockerRestartLogResponseSchema = z.object({ running: z.boolean(), lines: z.array(z.string()), waitingFor: z.array(z.string().min(1)) });
+export type DockerRestartLogResponse = z.infer<typeof DockerRestartLogResponseSchema>;
 
 export const DockerRestartRequestSchema = z.union([
   z.object({}).strict(),

@@ -37,6 +37,9 @@ export const SETTINGS_PANES = {
   // Not a pane: Karabiner-Elements' own settings, where its rules for the built-in keyboard are turned off (R3-21). The doctor reads the
   // same app bundle to see it is installed.
   karabiner_elements: "/Applications/Karabiner-Elements.app",
+  // Not a pane either: Docker Desktop, whose Settings > Resources > File sharing decides which folders a build can see (R7-02). Docker
+  // documents no link to that page, so this opens the app and the build step names the page. Docker Desktop installs here.
+  docker_desktop: "/Applications/Docker.app",
 } as const;
 export type SettingsPane = keyof typeof SETTINGS_PANES;
 export const SETTINGS_PANE_NAMES = Object.keys(SETTINGS_PANES) as [SettingsPane, ...SettingsPane[]];
@@ -46,7 +49,7 @@ export type OpenSettingsResult = { ok: true } | { ok: false; code: "unsupported_
 export async function openSettingsPane(pane: SettingsPane, deps: { run: Runner; platform: NodeJS.Platform }): Promise<OpenSettingsResult> {
   if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "System Settings is on macOS only." };
   const r = await deps.run(["open", SETTINGS_PANES[pane]]);
-  const what = pane === "karabiner_elements" ? "Karabiner-Elements" : "System Settings";
+  const what = pane === "karabiner_elements" ? "Karabiner-Elements" : pane === "docker_desktop" ? "Docker Desktop" : "System Settings";
   return r.code === 0 ? { ok: true } : { ok: false, code: "failed", reason: `macOS didn't open ${what}: ${lastLine(r.out) || `open exited ${r.code}`}` };
 }
 

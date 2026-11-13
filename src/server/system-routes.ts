@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts lists them). startServer calls `handleSystemRoute` for every /api request
 // after its Host check, and serves the Response when one comes back.
 import { z } from "zod";
-import { DockerReadinessResponseSchema, DockerRestartRequestSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
+import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerRestartRequestSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
 import type { ApiErrorBody } from "../api/http.ts";
 import { InstallRequestSchema, InstallStateSchema, InstallableToolSchema } from "../api/tool-install.ts";
 import { checkToken } from "./guard.ts";
@@ -11,7 +11,7 @@ const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "fixColimaFiles" | "karabinerConfig";
+type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "restartLog" | "fixColimaFiles" | "karabinerConfig";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/docker", action: "docker" },
   { method: "POST", path: "/api/system/docker/start", action: "startDocker" },
@@ -20,6 +20,7 @@ const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; a
   { method: "GET", path: "/api/system/karabiner-config", action: "karabinerConfig" },
   { method: "DELETE", path: "/api/system/install", action: "cancelInstall" },
   { method: "POST", path: "/api/system/docker/restart", action: "restartDocker" },
+  { method: "GET", path: "/api/system/docker/restart", action: "restartLog" },
   { method: "POST", path: "/api/system/docker/fix-colima-files", action: "fixColimaFiles" },
 ];
 
@@ -34,6 +35,10 @@ export async function handleSystemRoute(request: Request, pathname: string, back
 
   try {
     if (route.action === "docker") return Response.json(DockerReadinessResponseSchema.parse(await backend.docker()));
+    if (route.action === "restartLog") {
+      if (backend.restartLog === undefined) return errorResponse(404, "restart_log_unavailable", "This keyloom doesn't keep a restart log.");
+      return Response.json(DockerRestartLogResponseSchema.parse(await backend.restartLog()));
+    }
     if (route.action === "karabinerConfig") {
       if (backend.karabinerConfig === undefined) return errorResponse(404, "karabiner_unavailable", "keyloom can't read Karabiner's settings here. Drop a copy of karabiner.json instead.");
       const read = await backend.karabinerConfig();

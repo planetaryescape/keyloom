@@ -3,7 +3,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, classifyBuildFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
@@ -84,14 +84,14 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       // a cached view of the old directory (seen with QMK builds, 903da6b). The same command is the probe that
       // the container can see the checkout at all; Docker mounts an empty directory for a path it isn't
       // allowed to share, and the build then fails with a message that points the wrong way.
+      const probeOutput: string[] = [];
       const visible = await run({
-        cmd: ["docker", "run", "--rm", ...mount, "--entrypoint", "sh", image, "-c", "test -f config/default.nix && rm -f glove80.uf2"],
+        cmd: ["docker", "run", "--rm", ...mount, "--entrypoint", "sh", image, "-c", `test -f config/default.nix || exit ${NOT_SHARED_EXIT}; rm -f glove80.uf2 || exit ${PROBE_CLEANUP_EXIT}`],
         log: input.log,
         timeoutMs: 5 * 60_000,
+        onLine: (line) => probeOutput.push(line),
       });
-      if (visible.exitCode !== 0) {
-        throw new BuildFailure(`Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
-      }
+      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
 
       const handsFree = rev.flash.handsFree;
       // After the probe, which is about the template's own default.nix: this replaces it.

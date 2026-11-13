@@ -16,13 +16,45 @@ export class BuildFailure extends Error {
  * `stale_mount`: Docker still sees an old copy of what keyloom wrote (Colima's sshfs share) (R6-09). `stuck_container`: a build container
  * an earlier keyloom left can't be removed (R6-17). Building again hits the same engine state, so the UI offers a forced restart of the
  * engine and then the build (D-529).
+ * `source_error`: keyloom can't write this layout as the firmware's source, so every build of it stops the same way, like `compile_error`
+ * (R7-02). `folder_not_shared`: Docker mounts an empty folder for the build checkout, because the engine doesn't share it; building again
+ * fails the same way until that folder is shared, so the UI says where and offers the engine's own settings (D-536).
  */
-export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container"] as const;
+export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared"] as const;
 export type BuildErrorCode = (typeof BUILD_ERROR_CODES)[number];
 export const isBuildErrorCode = (code: string | null): code is BuildErrorCode => (BUILD_ERROR_CODES as readonly string[]).includes(code ?? "");
 
+/**
+ * The exit the drivers' "can the container see the checkout" probes use when their sentinel file is missing, which is what Docker
+ * mounting an empty folder looks like. Docker's own failures (125 to 127, a pull that failed) and a cleanup after the test exit otherwise,
+ * so only this one is `folder_not_shared` (PR #303 CodeRabbit).
+ */
+export const NOT_SHARED_EXIT = 86;
+/** The exit a probe uses when it found its sentinel but couldn't clear the last build's output after it. */
+export const PROBE_CLEANUP_EXIT = 87;
+
+/**
+ * Docker Desktop's refusal of a bind mount outside its File sharing list. It refuses before the container starts, so `docker run` exits
+ * 125 with "docker: Error response from daemon: Mounts denied: The path … is not shared from the host and is not known to Docker." (PR #303
+ * review). Colima mounts an empty folder instead, which the sentinel exit catches.
+ */
+const MOUNTS_DENIED = /Mounts denied|is not shared from the host/i;
+
+/**
+ * A probe that didn't pass. The folder isn't shared when its sentinel test said so, or when Docker Desktop refused the mount (its words in
+ * `output`). A cleanup that failed, or Docker's own failure, says what it was, with its words in the build log, and may pass on a second try.
+ */
+export function probeFailure(exitCode: number | null, output: readonly string[], checkoutDir: string, notShared: string): BuildFailure {
+  if (exitCode === NOT_SHARED_EXIT) return new BuildFailure(notShared, "folder_not_shared");
+  if (exitCode !== 0 && output.some((line) => MOUNTS_DENIED.test(line))) {
+    return new BuildFailure(`Docker Desktop doesn't share ${checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`, "folder_not_shared");
+  }
+  if (exitCode === PROBE_CLEANUP_EXIT) return new BuildFailure(`keyloom couldn't clear the last build's output in ${checkoutDir}. The error is in the build log; build again.`);
+  return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again.`);
+}
+
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
-export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large"]);
+export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large", "source_error"]);
 
 /** The codes a restart of the Docker engine clears, while Docker itself still answers (R6-09, R6-17). */
 export const ENGINE_RESTART_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["stale_mount", "stuck_container"]);

@@ -276,6 +276,9 @@ describe("refusalNotice", () => {
     // A stale Replace it has nothing to retry; kanata's state is in the keyboard's status, and the toast opens it (R2-14).
     expect(refusalNotice("kanata_not_foreign", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
     expect(refusalNotice("kanata_not_running", cli).action).toEqual({ id: "open_status", label: "Open keyboard status" });
+    // Disable remapping that kanata didn't take: words and the status popover, never the CLI's sentence (R7-08).
+    expect(refusalNotice("disable_failed", "couldn't disable remapping: kanata didn't answer. If kanata is stuck, hold Left Control + Space + Escape to stop it")).toMatchObject({ message: "keyloom couldn't turn remapping off", action: { id: "open_status", label: "Open keyboard status" } });
+    expect(refusalNotice("disable_failed", "couldn't disable remapping: x").detail).not.toContain("couldn't disable remapping");
     expect(refusalNotice("keyboard_removed", cli)).toMatchObject({ message: "This keyboard was removed from your setup", action: { id: "restore_keyboard", label: "Restore" } });
     for (const code of ["archived", "not_on_keyboard", "cant_sync", "foreign_firmware", "kanata_foreign", "kanata_not_running", "not_connected", "busy", "kanata_still_running", "kanata_unreadable", "kanata_not_foreign", "keyboard_removed"]) {
       const n = refusalNotice(code, cli);

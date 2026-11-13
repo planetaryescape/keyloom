@@ -201,11 +201,15 @@ export const BuildSchema = z.object({
   // person stopped, which the page shows as the Build firmware step again (R3-10); "compile_error" and "too_large" fail the same way every
   // time, so the page offers `lastBuilt` and a question to keyloom instead of Build again (R5-02).
   // "stale_mount" and "stuck_container" fail on the engine's own state, so the page offers a forced restart of it, then the build (R6-09).
-  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container"]).nullable(),
+  // "source_error" (the layout can't be written as source) fails the same way every time, like compile_error. "folder_not_shared" is a
+  // build folder the engine doesn't share, so the page says where and offers the engine's settings (R7-02).
+  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared"]).nullable(),
   // For compile_error and too_large: the newest earlier revision in this one's history that built, or null. Absent on older senders.
   lastBuilt: z.object({ revisionId: z.string().min(1), summary: z.string() }).nullable().optional(),
   // For stale_mount and stuck_container: the engine keyloom can restart (Colima or a Mac app), or null. Absent on older senders.
   restartEngine: z.string().min(1).nullable().optional(),
+  // For folder_not_shared: the folder Docker couldn't see, and the engine that shares folders (null when unknown). Absent on older senders.
+  folderNotShared: z.object({ folder: z.string().min(1), engine: z.string().min(1).nullable() }).nullable().optional(),
   flashPlan: FlashPlanSchema,
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
@@ -627,7 +631,7 @@ export type OutcomeAnswer = z.infer<typeof OutcomeAnswerSchema>;
 //                                    when keyloom hasn't seen kanata run its config in the last 10 minutes, D-509)
 // A refused sync answers 400 with a code the page maps to an action (R1-16): archived, not_on_keyboard, cant_sync, not_connected,
 // kanata_not_running, kanata_foreign, foreign_firmware, busy, unproven, keyboard_removed, kanata_still_running, kanata_unreadable,
-// kanata_not_foreign, kanata_not_seen; "usage" otherwise.
+// kanata_not_foreign, kanata_not_seen, disable_failed (kanata didn't take Disable remapping, R7-08); "usage" otherwise.
 //   GET  /api/events                     -> text/event-stream of SyncEvent; the first frame is the current state
 // A state is the same word the CLI prints: in_sync, syncing, behind, needs_hand, not_connected, not_keyloom.
 export const SyncStateSchema = z.discriminatedUnion("kind", [

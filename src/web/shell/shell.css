@@ -397,7 +397,9 @@ a.menu-item {
 
 .stage-notes {
   position: absolute;
-  z-index: 3;
+  /* Above the caption and the floor (6): the caption's box spans the stage's width, so it took the clicks meant for a banner's button
+     (R7-06). The notes take no clicks themselves, only their banners do. */
+  z-index: 7;
   /* Below the selection bar, which is the first row of the stage. */
   top: calc(var(--selection-bar-h, 48px) + var(--space-3));
   right: var(--space-3);
@@ -964,10 +966,12 @@ a.menu-item {
     margin: 0 auto auto;
   }
 
-  /* The board is at the top of a phone's stage, so the banners and toasts sit at the bottom of it. */
+  /* The board is at the top of a narrow stage, so the banners and toasts sit at the bottom of it. The notes are over the floor's layer
+     (z-index 7 over 6), so they sit above all of the floor: the strip, and the view controls that stand a row above it here (PR #303
+     review). */
   .stage-notes {
     top: auto;
-    bottom: var(--space-3);
+    bottom: calc(var(--floor-room) + var(--space-7));
   }
 
   .toasts {
@@ -1478,6 +1482,11 @@ a.menu-item {
 
   .view-controls {
     display: none;
+  }
+
+  /* No view controls above a phone's strip, so the notes need only clear the strip. */
+  .stage-notes {
+    bottom: var(--floor-room);
   }
 
   .caption-aside {

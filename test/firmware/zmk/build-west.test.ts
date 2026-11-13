@@ -24,7 +24,7 @@ echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/work}"; prev="$a"; done
 ${fakeSha256Probe("/work")}
-case " $* " in *" test -f config/west.yml "*) [ -f "$vol/config/west.yml" ] && exit 0 || exit 1;; esac
+case " $* " in *" test -f config/west.yml "*) [ -f "$vol/config/west.yml" ] && exit 0 || exit 86;; esac
 case "$FAKE_MODE" in
   ok) for t in left right; do mkdir -p "$vol/build/$t/zephyr"; cp "$FAKE_UF2" "$vol/build/$t/zephyr/zmk.uf2"; done; echo "Wrote zmk.uf2"; exit 0;;
   noright) mkdir -p "$vol/build/left/zephyr"; cp "$FAKE_UF2" "$vol/build/left/zephyr/zmk.uf2"; exit 0;;
@@ -219,14 +219,24 @@ describe("buildZmkWest (fake docker)", () => {
     const s = await setup();
     // The fake probe fails when config/west.yml isn't visible; it is written before the probe, so hide it by mode.
     // An engine that can't see the folder still answers `ps`.
-    const bin = fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\nexit 1` });
-    await expect(
-      withPath(bin, () =>
-        buildZmkWest({
-          board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w2"), imageContextDir: join(s.dir, "i"),
-          artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l.log")), containerName: "x",
-        }),
-      ),
-    ).rejects.toThrow(/Docker can't see/);
+    const probe = (exit: number) => withPath(fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\nexit ${exit}` }), () =>
+      buildZmkWest({
+        board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w2"), imageContextDir: join(s.dir, "i"),
+        artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l.log")), containerName: "x",
+      }));
+    await expect(probe(86)).rejects.toMatchObject({ message: expect.stringContaining("Docker can't see"), code: "folder_not_shared" });
+    // Docker's own failure (125: it couldn't create the container) isn't a folder it can't see, and may pass (PR #303 CodeRabbit).
+    const other = await probe(125).catch((x: unknown) => x);
+    expect(other).toBeInstanceOf(BuildFailure);
+    expect((other as BuildFailure).code).toBeNull();
+    expect((other as BuildFailure).message).toMatch(/exit 125/);
+    expect((other as BuildFailure).message).not.toMatch(/can't see/);
+    // Docker Desktop refuses a folder outside File sharing before the container starts: exit 125 with its own words (PR #303 review).
+    const denied = await withPath(fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
+      buildZmkWest({
+        board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w3"), imageContextDir: join(s.dir, "i"),
+        artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l3.log")), containerName: "x",
+      })).catch((x: unknown) => x);
+    expect(denied).toMatchObject({ code: "folder_not_shared", message: expect.stringContaining("Resources > File sharing") });
   });
 });

@@ -185,6 +185,9 @@ function engineBusy(): { ok: false; engine: null; code: "engine_busy"; reason: s
   return { ok: false, engine: null, code: "engine_busy", reason: `keyloom is already ${what}, for this page or for a build. Wait for that to finish, then check again.` };
 }
 
+/** What holds the engine lock in this process now: a start, a restart or a Colima files fix, or null (R4-04, R7-04, D-533). */
+export const engineActionNow = (): EngineAction | null => engineHolder?.kind ?? null;
+
 class EngineWaitAborted extends Error {}
 
 // Waits until nothing (or, with `only`, no action of those kinds) holds the engine. Each waiter checks again when it wakes.

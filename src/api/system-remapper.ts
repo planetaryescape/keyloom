@@ -9,7 +9,7 @@ import { z } from "zod";
 //   POST /api/system/open-settings   OpenSettings   -> SetupActionResponse     (400 schema for a pane not on the list; macOS only)
 
 /** The panes keyloom opens. A name, never a URL: the server maps it (src/app/remapper-setup.ts). */
-export const SettingsPaneSchema = z.enum(["input_monitoring", "accessibility", "files_and_folders", "full_disk_access", "login_items", "karabiner_elements"]);
+export const SettingsPaneSchema = z.enum(["input_monitoring", "accessibility", "files_and_folders", "full_disk_access", "login_items", "karabiner_elements", "docker_desktop"]);
 export type SettingsPaneName = z.infer<typeof SettingsPaneSchema>;
 
 export const OpenSettingsRequestSchema = z.object({ pane: SettingsPaneSchema }).strict();

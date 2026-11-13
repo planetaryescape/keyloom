@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, LoaderCircle, MessageCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, Undo2, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, ExternalLink, Hammer, LoaderCircle, MessageCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, Undo2, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Build, Flash, RevisionInfo } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -12,7 +12,7 @@ import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
-import { buildFailureView, engineRestartLog, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
 import "./release.css";
 
 interface Props {
@@ -90,6 +90,11 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
   const [goBackRefusedState, setGoBackRefused] = useState<GoBackProblem | null>(null);
   const [wentBackTo, setWentBackTo] = useState<WentBack | null>(null);
   const { build: lastBuild, flash: lastFlash, starting, error, docker } = release;
+  // The revision on screen now, read by a restart that waits, so it never builds one the dialog no longer shows (PR #303 review).
+  const shownHead = useRef(head.id);
+  useEffect(() => {
+    shownHead.current = head.id;
+  }, [head.id]);
   const lastBuildId = lastBuild?.id ?? null;
   const goBackRefused = shownGoBackProblem(goBackRefusedState, lastBuildId);
   // Record the revision the Go back made, so wentBackSummary can tell it from a later edit.
@@ -149,7 +154,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
         Replace the firmware on your {boardName}?
       </p>
       <p>
-        keyloom puts the keyboard in its bootloader itself when it can, and asks you to press the reset key when it can't, then
+        keyloom puts the keyboard in its bootloader itself when it can, and asks you to put it in its bootloader when it can't, then
         writes this build to it. The keyboard stops typing until the flash finishes, so have another keyboard to hand. Your
         layout stays safe in keyloom either way.
       </p>
@@ -299,6 +304,31 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                       <p>{failure.text}</p>
                     </div>
                     <p>{failure.next}</p>
+                    {/* A Mac app or Colima that a failed restart left down: the Docker callout's own button starts it (R7-03). */}
+                    {failure.button === null && release.engineRestart.problem !== null && dockerNow.kind !== "none" ? (
+                      <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} />
+                    ) : null}
+                    {release.engineRestart.waitingFor === null ? null : (
+                      <p className="release-docker" role="status">
+                        <LoaderCircle size={14} className="spin" aria-hidden="true" />
+                        <span>{restartWaitText(build.restartEngine ?? null, release.engineRestart.waitingFor)}</span>
+                      </p>
+                    )}
+                    {/* The restart's own progress, in the log tail while it runs and after it fails (R7-04). */}
+                    {release.engineRestart.log.length > 0 ? (
+                      <LogTail label="Restart log" lines={[...release.engineRestart.log]} />
+                    ) : (
+                      <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
+                    )}
+                  </>
+                ) : failure?.kind === "folder_not_shared" ? (
+                  // The build's sentence names XDG_CACHE_HOME, which stays the CLI's; the page names the folder and where it is shared (R7-02).
+                  <>
+                    <div className="callout callout-error" role="alert">
+                      <CircleAlert size={18} aria-hidden="true" />
+                      <p>{failure.text}</p>
+                    </div>
+                    <p>{failure.next}</p>
                     <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
                   </>
                 ) : (
@@ -312,6 +342,19 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                   </>
                 )}
                 <div className="step-actions">
+                  {/* Where the engine shares folders, before Build again, which passes once the folder is shared (R7-02). */}
+                  {failure?.kind !== "folder_not_shared" || failure.openApp === null ? null : (
+                    <button type="button" className="button button-primary" onClick={() => release.openSettings("docker_desktop")}>
+                      <Settings size={14} aria-hidden="true" />
+                      Open Docker Desktop
+                    </button>
+                  )}
+                  {failure?.kind !== "folder_not_shared" || failure.helpUrl === null ? null : (
+                    <a className="button button-primary" href={failure.helpUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink size={14} aria-hidden="true" />
+                      Open Colima's guide to mounts
+                    </a>
+                  )}
                   {/* A layout that doesn't compile or fit fails the same way again, so Build again is only for a failure that may pass (R5-02). */}
                   {failure?.kind === "same_every_time" ? (
                     failure.goBack === null || (goBackRefused !== null && !goBackRefused.retry) ? null : (
@@ -320,9 +363,15 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                         Go back to the last version that built
                       </button>
                     )
+                  ) : failure?.kind === "restart_engine" && failure.button !== null && release.engineRestart.waitingFor !== null ? (
+                    // Waiting for running work to end: the restart starts by itself, and Cancel stops waiting (R7-04).
+                    <button type="button" className="button" onClick={release.cancelRestartWait}>
+                      <X size={14} aria-hidden="true" />
+                      Cancel restart
+                    </button>
                   ) : failure?.kind === "restart_engine" && failure.button !== null ? (
                     // Building again hits the same engine state, so the restart comes first and the build follows it.
-                    <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id)}>
+                    <button type="button" className="button button-primary" disabled={release.engineRestart.running || starting !== null} onClick={() => release.restartAndBuild(head.id, () => shownHead.current)}>
                       {release.engineRestart.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
                       {release.engineRestart.running ? failure.busy : failure.button}
                     </button>
@@ -338,6 +387,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                     </button>
                   )}
                   {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
+                  {failure?.kind === "folder_not_shared" && release.settingsProblem !== null ? <p className="blocked-reason" role="alert">{release.settingsProblem}</p> : null}
                   {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
                   {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
                   {goBackRefused?.next !== "reload" ? null : (

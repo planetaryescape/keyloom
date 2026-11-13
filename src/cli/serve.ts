@@ -1,7 +1,7 @@
 // `keyloom serve`: the local web app over the same use cases the CLI calls (01#server-and-transport).
 import {
   type AddDeps, type App, type FlashOptions, type HandsFreeOverrides, NotFoundError, type ProviderId, ReviewEngine, type ReviewOptions, type SyncDeps, boardDevView, createSyncEngine, defaultAgentModel, getLayout,
-  engineRestartBlocker, listLayouts, upgradeOffer, drainDeviceConsumers, drainManualFlashTasks, shutdownDeviceConnections,
+  engineRestartBlocker, engineRestartWork, listLayouts, upgradeOffer, drainDeviceConsumers, drainManualFlashTasks, shutdownDeviceConnections,
 } from "../app/index.ts";
 import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
@@ -112,7 +112,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
   void started.catch((err: unknown) => console.error("keyloom: keyboard sync could not start", err));
   const watcher = createDataVersionWatcher(app.db);
   const lab = appLabBackend(app, opts.lab ?? realLabDeps());
-  const system = appSystemBackend({}, { restartBlocker: () => engineRestartBlocker(app) });
+  const system = appSystemBackend({}, { restartBlocker: () => engineRestartBlocker(app), restartWork: () => engineRestartWork(app) });
   const running = startServer({
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
     chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, system, remapperSetup: appRemapperSetupBackend(realSetupDeps(opts.handsFree?.remapper ?? {})), open: opts.open,

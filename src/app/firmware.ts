@@ -50,6 +50,11 @@ export type BuildView = {
   lastBuilt: { revisionId: string; summary: string } | null;
   /** For a build that failed on the engine's own state (`stale_mount`, `stuck_container`): the engine keyloom can restart, or null (R6-09). */
   restartEngine: string | null;
+  /**
+   * For `folder_not_shared`: the folder Docker couldn't see and the engine that decides what it shares (Colima or a Mac app), or null
+   * when keyloom can't tell which engine runs (D-536).
+   */
+  folderNotShared: { folder: string; engine: string | null } | null;
   /** What flashing this build will need, so the dialog knows before anyone clicks (D-489, D-490). */
   flashPlan: FlashPlan;
   startedAt: number;
@@ -196,6 +201,7 @@ async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
     lastBuilt: row.status === "failed" && errorCode !== null && DETERMINISTIC_BUILD_CODES.has(errorCode) ? lastBuiltBefore(app, row) : null,
     // Asked only for these failures, so a poll of a running or finished build never looks for the engine.
     restartEngine: row.status === "failed" && errorCode !== null && ENGINE_RESTART_BUILD_CODES.has(errorCode) ? ((await forcedRestartEngine())?.name ?? null) : null,
+    folderNotShared: row.status === "failed" && errorCode === "folder_not_shared" && board ? { folder: checkoutDirFor(board), engine: (await forcedRestartEngine())?.name ?? null } : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,
@@ -287,7 +293,7 @@ async function runBuild(app: App, view: LayoutView, row: BuildRow, onProgress: (
     try {
       source = driver.generate(view, row.boardRevision, row.id);
     } catch (err) {
-      if (err instanceof SourceError) throw new BuildFailure(`This layout can't be written as ${driver.name} source: ${err.message}`);
+      if (err instanceof SourceError) throw new BuildFailure(`This layout can't be written as ${driver.name} source: ${err.message}`, "source_error");
       throw err;
     }
     const artifactRel = `artifacts/${row.id}.${driver.artifactExtension(view.board, row.boardRevision)}`;
@@ -369,6 +375,15 @@ export function firmwareBusy(app: App): boolean {
 
 const flashing = (app: App): boolean => activeFlashes(app.db).map((f) => reapFlash(app, f)).some((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
 
+/**
+ * What a forced restart would wait for now: the work it would stop ("a build" here or in another live keyloom with the same data
+ * directory, then each container run), and whether keyloom is writing to a keyboard. One read for the refusal and for the page's wait.
+ */
+function engineRestartHolds(app: App): { stopping: string[]; writing: boolean } {
+  const building = buildTasks.size > 0 || runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
+  return { stopping: [...(building ? ["a build"] : []), ...containerWorkRunning()], writing: flashing(app) || keyboardWriteInProgress() };
+}
+
 /** The refusal of a forced restart, naming what it would stop ("a build", "a lab analysis"). */
 export function engineRestartBlocked(running: readonly string[]): string {
   const names = running.length === 1 ? running[0] : `${running.slice(0, -1).join(", ")} and ${running.at(-1)}`;
@@ -383,14 +398,22 @@ export function engineRestartBlocked(running: readonly string[]): string {
  * its own database, so this can't see them (D-529).
  */
 export function engineRestartBlocker(app: App): string | null {
-  const building = buildTasks.size > 0 || runningBuilds(app.db).map((row) => reapBuild(app, row)).some((row) => row.status === "running");
-  const running = [...(building ? ["a build"] : []), ...containerWorkRunning()];
+  const { stopping: running, writing } = engineRestartHolds(app);
   // A flash or a keyboard write uses no Docker, so a restart wouldn't stop it; the restart still waits, so nothing else happens to the
   // keyboard during a write, and the words say that instead of "would stop it".
-  const writing = flashing(app) || keyboardWriteInProgress();
   if (!writing) return running.length === 0 ? null : engineRestartBlocked(running);
   const wait = "keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.";
   return running.length === 0 ? wait : `${engineRestartBlocked(running)} keyloom is also writing to a keyboard; wait for that too.`;
+}
+
+/**
+ * What a forced restart waits for now, named for the person ("a build", "a lab analysis", "a keyboard write"), or empty when nothing
+ * holds it. The page names it while it waits to restart by itself ("Restarts when the lab analysis ends", R7-04); the refusal itself
+ * comes from `engineRestartBlocker`, inside the engine lock.
+ */
+export function engineRestartWork(app: App): string[] {
+  const { stopping, writing } = engineRestartHolds(app);
+  return [...stopping, ...(writing ? ["a keyboard write"] : [])];
 }
 
 /** Builds and waits. Throws BuildFailedError (exit 7) when the build fails. */

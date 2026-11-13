@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Build } from "../../src/api/http.ts";
 import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
-import { buildFailureView, buildQuestion, goBackProblem, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
+import { buildFailureView, buildQuestion, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import type { Release } from "../../src/web/release/useRelease.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
@@ -22,9 +22,27 @@ describe("buildFailureView", () => {
     expect(buildFailureView({ errorCode: "compile_error", lastBuilt: null }, false)).toMatchObject({ kind: "same_every_time", goBack: null });
     expect(buildFailureView({ errorCode: "too_large", lastBuilt }, true)).toMatchObject({ kind: "same_every_time", goBack: null });
   });
+  test("a layout keyloom can't write as source fails the same way every time, like a compile error (R7-02)", () => {
+    expect(buildFailureView({ errorCode: "source_error", lastBuilt }, false)).toMatchObject({ kind: "same_every_time", goBack: lastBuilt });
+  });
+  test("a folder the engine doesn't share names the folder and where it is shared, never XDG_CACHE_HOME (R7-02)", () => {
+    const folder = "/Volumes/cache/keyloom/build/zsa-moonlander";
+    const desktop = buildFailureView({ errorCode: "folder_not_shared", folderNotShared: { folder, engine: "Docker Desktop" } }, false);
+    expect(desktop).toEqual({ kind: "folder_not_shared", text: `Docker can't see the folder keyloom builds in (${folder}), so the build stopped before it started.`, next: "Add that folder in Docker Desktop's Settings, under Resources > File sharing, then build again.", openApp: "docker_desktop", helpUrl: null });
+    expect(buildFailureView({ errorCode: "folder_not_shared", folderNotShared: { folder, engine: "Colima" } }, false)).toMatchObject({ openApp: null, helpUrl: "https://colima.run/docs/faq/#docker-bind-mount-showing-empty", next: expect.stringContaining("Colima's mounts") });
+    expect(buildFailureView({ errorCode: "folder_not_shared", folderNotShared: null }, false)).toMatchObject({ openApp: null, text: expect.stringContaining("the folder keyloom builds in, so"), next: "Share that folder with your Docker engine, then build again." });
+  });
   test("Docker is Docker's callout, and a failure that may pass keeps Build again", () => {
     expect(buildFailureView({ errorCode: "docker_unavailable" }, false)).toEqual({ kind: "docker" });
     expect(buildFailureView({ errorCode: null }, false)).toEqual({ kind: "may_pass" });
+  });
+});
+
+describe("restartWaitText (R7-04)", () => {
+  test("names the work it waits for, with the, and says the build follows", () => {
+    expect(restartWaitText("Colima", ["a lab analysis"])).toBe("Restarts Colima when the lab analysis ends, then builds again.");
+    expect(restartWaitText("Docker Desktop", ["a build", "an emulator run", "a keyboard write"])).toBe("Restarts Docker Desktop when the build, the emulator run and the keyboard write end, then builds again.");
+    expect(restartWaitText(null, [])).toBe("Restarts Docker when that work ends, then builds again.");
   });
 });
 
@@ -64,7 +82,7 @@ function release(build: Build, over: Partial<Release> = {}): Release {
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
     cancelFlash: noop, cancelling: false, cancelNote: null, checkKeyboard: noop, check: { running: false, found: null, problem: null }, openSettings: noop, settingsProblem: null,
-    restartAndBuild: noop, engineRestart: { running: false, problem: null, again: true }, ...over,
+    restartAndBuild: noop, engineRestart: { running: false, problem: null, again: true, waitingFor: null, log: [] }, cancelRestartWait: noop, ...over,
   } as Release;
 }
 function failedStep(errorCode: Build["errorCode"], over: Partial<Build> = {}, releaseOver: Partial<Release> = {}) {
@@ -85,6 +103,25 @@ describe("the failed build step", () => {
     expect(html).toContain("Ask keyloom about this build");
     expect(html).toContain("Building it again fails the same way.");
     expect(html).not.toContain("Build again");
+  });
+  test("a layout keyloom can't write as source offers Go back and Ask keyloom, and no Build again (R7-02)", () => {
+    const html = failedStep("source_error", { error: "This layout can't be written as QMK source: layer 9 has no name" });
+    expect(html).toContain("Go back to the last version that built");
+    expect(html).not.toContain("Build again");
+  });
+  test("a folder Docker Desktop doesn't share offers Open Docker Desktop and Build again, and no XDG advice (R7-02)", () => {
+    // What Docker Desktop's refused mount leaves: its own words, then the probe's failure (probeFailure).
+    const error = "Docker Desktop doesn't share /x. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.";
+    const logTail = ["docker: Error response from daemon: Mounts denied: ", "The path /x is not shared from the host and is not known to Docker.", `keyloom: build failed: ${error}`];
+    const html = failedStep("folder_not_shared", { error, folderNotShared: { folder: "/x", engine: "Docker Desktop" }, logTail });
+    expect(html).toContain("Open Docker Desktop");
+    expect(html).toContain(">Build again<");
+    expect(html).toContain("Ask keyloom about this build");
+    expect(html).not.toContain("XDG_CACHE_HOME");
+    const colima = failedStep("folder_not_shared", { error, folderNotShared: { folder: "/x", engine: "Colima" } });
+    expect(colima).not.toContain("Open Docker Desktop");
+    expect(colima).toContain("Open Colima&#x27;s guide to mounts");
+    expect(colima).toContain("Build again");
   });
   test("a failure that may pass keeps Build again beside Ask keyloom", () => {
     const html = failedStep(null, { error: "QMK's build failed (exit 2): network" });
@@ -116,16 +153,38 @@ describe("a build the engine's own state stopped", () => {
     expect(html).toContain("Build again");
     expect(html).not.toContain("and build again</button>");
   });
+  test("a restart waiting for work says what it waits for, offers Cancel restart, and no restart button (R7-04)", () => {
+    const html = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: null, again: true, waitingFor: ["a lab analysis"], log: [] } });
+    expect(html).toContain("Restarts Colima when the lab analysis ends, then builds again.");
+    expect(html).toContain("Cancel restart");
+    expect(html).not.toContain("Restart Colima and build again");
+  });
+  test("a running restart shows its progress in the log tail (R7-04)", () => {
+    const html = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: true, problem: null, again: true, waitingFor: null, log: ["keyloom: stopping Colima so it starts from scratch"] } });
+    expect(html).toContain("Restarting Colima…");
+    expect(html).toContain("keyloom: stopping Colima so it starts from scratch");
+  });
+  test("a restart that left a Mac app down offers the Docker callout's button (R7-03)", () => {
+    const down = { ok: false as const, problem: "daemon-down" as const, reason: "Docker isn't answering.", engine: "Docker Desktop", canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null };
+    const html = failedStep("stale_mount", { error: stale, restartEngine: "Docker Desktop" }, {
+      engineRestart: { running: false, problem: "Docker Desktop didn't come back.", again: false, waitingFor: null, log: [] },
+      docker: { readiness: down, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
+    });
+    expect(html).toContain("Build again starts Docker Desktop if it isn&#x27;t running.");
+    expect(html).toContain("Start it now");
+  });
   test("a restart refused while a build runs keeps the button with its reason; one that failed shows why and Build again", () => {
-    const busy = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.", again: true } });
+    const busy = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.", again: true, waitingFor: null, log: [] } });
     expect(busy).toContain("Restart Colima and build again");
     expect(busy).toContain("restarting Docker now would stop it");
-    const failed = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "Colima didn't start: exit 1", again: false } });
+    const failed = failedStep("stale_mount", { error: stale, restartEngine: "Colima" }, { engineRestart: { running: false, problem: "Colima didn't start: exit 1", again: false, waitingFor: null, log: [] } });
     expect(failed).not.toContain("Restart Colima and build again");
     expect(failed).toContain("Colima didn&#x27;t start");
     expect(failed).toContain("Build again");
     // The words match the button left: no "Restarting Colima clears this" beside a Build again that hits the same state (PR #297 review).
-    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Restart Colima yourself, then build again.");
+    // Build again starts the engine itself, so the words point at it, never at a terminal (R7-03).
+    expect(failed).toContain("keyloom couldn&#x27;t restart Colima. Build again starts Colima if it isn&#x27;t running.");
+    expect(failed).not.toContain("yourself");
     expect(failed).not.toContain("Restarting Colima clears this");
   });
 });

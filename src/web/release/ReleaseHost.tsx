@@ -43,10 +43,15 @@ export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, 
       setOpen(true);
     },
   };
+  // A restart still waiting for work stops with the dialog, so it never stops Docker and builds with nothing on screen (PR #303 review).
+  const close = () => {
+    release.cancelRestartWait();
+    setOpen(false);
+  };
   const dialog = (
     <ReleaseDialog
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={close}
       release={release}
       head={target ?? head}
       earlierRevision={target !== null}
@@ -61,7 +66,7 @@ export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, 
       }}
       onShowLatest={onChanged}
       onAskAboutBuild={(build) => {
-        setOpen(false);
+        close();
         onAskAboutBuild(build);
       }}
     />
