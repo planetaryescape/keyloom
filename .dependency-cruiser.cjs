@@ -9,7 +9,7 @@ const ALLOWED = {
   boards: ["layout"],
   "firmware/qmk": ["layout", "boards", "firmware/toolchain", "firmware/emulate"],
   "firmware/zmk": ["layout", "boards", "firmware/toolchain", "firmware/emulate"],
-  "firmware/kanata": ["layout", "boards"],
+  "firmware/kanata": ["layout", "boards", "firmware/toolchain"], // toolchain: where keyloom keeps a kanata it downloaded (D-560)
   "firmware/emulate": ["layout", "boards", "firmware/toolchain"],
   "firmware/toolchain": [],
   agent: ["layout", "validation", "boards", "memory"],

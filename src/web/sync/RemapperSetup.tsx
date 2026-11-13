@@ -57,6 +57,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
       case "install_kanata": return installKanata("install");
       case "update_kanata": return installKanata("upgrade");
       case "reinstall_kanata": return installKanata("reinstall");
+      case "download_kanata": return installKanata("download");
       case "cancel_install": return cancelInstall();
       case "start_kanata": return startKanata(boardId);
       case "open_settings": return openSettings(id.pane);

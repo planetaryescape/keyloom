@@ -6,6 +6,7 @@ import { findKanata } from "../firmware/kanata/binary.ts";
 import { daemonInstallScript, rootScriptFailure, shellQuote } from "../firmware/kanata/daemon-install.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
+import { type DownloadDeps, canDownload, downloadReady, downloadTool } from "./tool-download.ts";
 
 export { daemonInstallScript, shellQuote } from "../firmware/kanata/daemon-install.ts";
 
@@ -81,8 +82,11 @@ export const ADMIN_PROMPT = "keyloom wants to copy kanata to a folder only macOS
 
 export type SetupFinding = Pick<Finding, "code" | "name" | "status" | "detail">;
 
-/** `reinstall` puts Homebrew's own kanata back over one changed outside Homebrew (D-498). */
-export type KanataInstallAction = "install" | "upgrade" | "reinstall";
+/**
+ * `reinstall` puts Homebrew's own kanata back over one changed outside Homebrew (D-498). `download` is Get kanata on a Mac without Homebrew:
+ * keyloom downloads kanata's pinned release, checks it and keeps it in its own folder (D-560).
+ */
+export type KanataInstallAction = "install" | "upgrade" | "reinstall" | "download";
 
 /** The install or update started from the app; the wire's KanataInstallSchema (src/api/system-remapper.ts) is the same shape. */
 export type KanataInstall = {
@@ -96,6 +100,8 @@ export type RemapperSetupStatus = {
   platform: "darwin" | "other";
   /** Homebrew is here, so "Install kanata" and "Update kanata" can run. */
   canInstall: boolean;
+  /** keyloom can download kanata's pinned release for this Mac, so "Get kanata" can run (D-560). */
+  canDownload: boolean;
   /** The install or update started from the app, while it runs and after it ends. */
   install: KanataInstall;
   /** `path` is where the kanata on PATH really is, and `copyVersion` the version of the root copy the daemon runs, when it differs. */
@@ -174,6 +180,8 @@ export type SetupDeps = {
   brew: () => string | undefined;
   kanata: () => string | undefined;
   remapper?: RemapperOverrides;
+  /** Where and how Get kanata downloads (D-560); tests pass a fake fetcher and a scratch folder. */
+  download?: DownloadDeps;
 };
 
 export const realSetupDeps = (remapper: RemapperOverrides = {}): SetupDeps => ({
@@ -219,6 +227,7 @@ export async function remapperSetupStatus(boardId: string, deps: SetupDeps, inst
   return {
     platform: deps.platform === "darwin" ? "darwin" : "other",
     canInstall,
+    canDownload: canDownloadKanata(deps),
     install,
     kanata: {
       version: report.kanata?.version ?? null, wanted: rev.kanataVersion, update: brewHasNothingNewer ? "link" : update,
@@ -231,11 +240,26 @@ export async function remapperSetupStatus(boardId: string, deps: SetupDeps, inst
 
 export type ActionResult = { ok: true } | { ok: false; code: string; reason: string };
 
+// Whether a download is possible here, Homebrew or not: a failed Homebrew install offers it too. (The flash plan's `canDownload` is narrower:
+// it is the way keyloom gets Zapp, so only without Homebrew.)
+const canDownloadKanata = (deps: SetupDeps): boolean => canDownload("kanata", { ...deps.download, platform: deps.platform });
+function downloadPrecheck(deps: SetupDeps): ActionResult {
+  const ready = downloadReady("kanata", { ...deps.download, platform: deps.platform });
+  return ready.ok ? { ok: true } : ready;
+}
+
 /**
  * `brew install kanata`, `brew upgrade kanata` for Update kanata, or `brew reinstall kanata`. Homebrew asks nothing for a formula, so it
- * runs without a terminal. Each line it prints goes to `onLine`, and `signal` stops it.
+ * runs without a terminal. Each line it prints goes to `onLine`, and `signal` stops it. `download` is Get kanata (D-560): no Homebrew.
  */
 export async function installKanata(deps: SetupDeps, action: KanataInstallAction, opts: { signal: AbortSignal; onLine: (line: string) => void }): Promise<ActionResult> {
+  if (action === "download") {
+    // downloadTool refuses a Mac it can't serve with the same codes as the job's precheck.
+    const got = await downloadTool("kanata", opts.onLine, { ...deps.download, platform: deps.platform }, opts.signal);
+    if (!got.ok) return got;
+    // The kanata keyloom uses is the first one found; one on PATH or from Homebrew comes before keyloom's own copy.
+    return deps.kanata() === undefined ? { ok: false, code: "failed", reason: "keyloom kept kanata, but still can't find it." } : { ok: true };
+  }
   const ready = installPrecheck(deps);
   if (!ready.ok) return ready;
   const lines: string[] = [];
@@ -274,7 +298,7 @@ export function kanataInstaller(deps: SetupDeps) {
     state: (): KanataInstall => ({ ...state, log: [...state.log] }),
     start(action: KanataInstallAction): ActionResult {
       if (state.state === "running") return { ok: true };
-      const ready = installPrecheck(deps);
+      const ready = action === "download" ? downloadPrecheck(deps) : installPrecheck(deps);
       if (!ready.ok) return ready;
       const own = new AbortController();
       controller = own;

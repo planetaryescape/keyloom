@@ -4,10 +4,11 @@
 import type { Board } from "../boards/load.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import type { DfuTool } from "../firmware/qmk/dfu-flash.ts";
-import { which } from "../firmware/toolchain/run.ts";
-import { type InstallableTool, TOOL_PAGES, canInstall } from "./tool-install.ts";
+import { findTool } from "../firmware/toolchain/kept-tools.ts";
+import { type InstallableTool, TOOL_PAGES, canInstall, downloadsHere } from "./tool-install.ts";
 
-export type FlashTool = { name: InstallableTool; installed: boolean; canInstall: boolean; url: string };
+/** `canDownload`: no Homebrew, and keyloom can fetch the tool's pinned release itself (Zapp only, D-561). */
+export type FlashTool = { name: InstallableTool; installed: boolean; canInstall: boolean; canDownload: boolean; url: string };
 
 export type FlashPlan = {
   /** The board's own steps when keyloom can't flash it; null when keyloom flashes it. */
@@ -21,12 +22,14 @@ export type FlashPlan = {
 export type FlashPlanDeps = {
   has?: (command: string) => boolean;
   platform?: NodeJS.Platform;
+  arch?: string | undefined;
   /** DFU tools a test or caller points at directly, in place of the ones on PATH. */
   dfuTools?: Partial<Record<DfuTool, string>>;
 };
 
 export function flashPlanFor(board: Board, boardRevision: string, deps: FlashPlanDeps = {}): FlashPlan {
-  const has = deps.has ?? ((command: string) => which(command) !== null);
+  // On PATH, or in keyloom's own folder where Get Zapp keeps it (D-561); the flash runs the same one.
+  const has = deps.has ?? ((command: string) => findTool(command) !== undefined);
   const platform = deps.platform ?? process.platform;
   const canReveal = platform === "darwin";
   // ZMK boards flash by copying to their boot drives, and a kanata board is never flashed: no tool either way.
@@ -38,7 +41,11 @@ export function flashPlanFor(board: Board, boardRevision: string, deps: FlashPla
   const given = flash.kind === "dfu-tool" ? deps.dfuTools?.[flash.tool] : undefined;
   return {
     manual: null,
-    tool: { name, installed: given !== undefined || has(name), canInstall: canInstall({ has, platform }), url: TOOL_PAGES[name] },
+    tool: {
+      name, installed: given !== undefined || has(name), canInstall: canInstall({ has, platform }),
+      canDownload: downloadsHere(name, { has, platform, download: { arch: deps.arch } }),
+      url: TOOL_PAGES[name],
+    },
     canReveal,
   };
 }
