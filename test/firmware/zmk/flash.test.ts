@@ -155,10 +155,15 @@ describe("flashUf2Drives (a temporary directory for /Volumes)", () => {
     const s = await setup();
     const boot = fakeBootloader(s.root);
     let checks = 0;
-    const locked = async () => ++checks >= 3 && checks < 8;
-    mount(s.root, RIGHT, 100);
-    mount(s.root, LEFT, 180);
-    const r = await s.flash({ screenLocked: locked, bootloaderWaitMs: 800 });
+    const locked = async () => {
+      checks++;
+      if (checks === 8) {
+        mkdirSync(join(s.root, RIGHT));
+        mkdirSync(join(s.root, LEFT));
+      }
+      return checks >= 3 && checks < 8;
+    };
+    const r = await s.flash({ screenLocked: locked });
     boot.stop();
     expect(r.state).toBe("succeeded");
     expect(s.states.some(([, instruction]) => instruction?.startsWith("Unlock your Mac first:"))).toBe(true);

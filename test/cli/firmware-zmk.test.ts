@@ -57,9 +57,9 @@ describe("keyloom generate, build and flash for a Glove80 layout", () => {
       expect(b).toMatchObject({ status: "succeeded", board_revision: "default" });
       expect(b.artifact_path).toBe(join(e.dataDir, "artifacts", `${b.build_id}.uf2`));
 
-      const boot = fakeBootloaders(e.volumes, ["GLV80RHBOOT", "GLV80LHBOOT"], { mountAfterMs: [100], onDemand: true });
-      // The left half goes into its bootloader once keyloom has asked for it.
+      const boot = fakeBootloaders(e.volumes, ["GLV80RHBOOT", "GLV80LHBOOT"], { onDemand: "all" });
       const r = await cli(["flash", "--layout", "glove80", "--volumes-root", e.volumes, "--data-dir", e.dataDir, "--format", "json"], (text) => {
+        if (text.includes("Flash the right half")) boot.mount("GLV80RHBOOT");
         if (text.includes("Flash the left half")) boot.mount("GLV80LHBOOT");
       });
       boot.stop();

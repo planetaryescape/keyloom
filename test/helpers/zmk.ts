@@ -128,13 +128,13 @@ export async function zmkEnv(opts: { keymap?: string } = {}) {
 /**
  * A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. With `onDemand`
  * only the first drive appears by itself; the test calls `mount(label)` for the others, as a person puts the next half into its
- * bootloader once keyloom has asked, so no fixed delay has to outlast a slow runner.
+ * bootloader once keyloom has asked. `onDemand: "all"` waits for each half's prompt.
  */
-export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean } = {}) {
+export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean | "all" } = {}) {
   const written: string[] = [];
   const mount = (label: string) => mkdirSync(joinPath(volumes, label), { recursive: true });
   labels.forEach((label, i) => {
-    if (!opts.onDemand || i === 0) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
+    if (!opts.onDemand || (opts.onDemand === true && i === 0)) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
   });
   const timer = setInterval(() => {
     for (const label of labels) {

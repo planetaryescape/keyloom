@@ -12,10 +12,17 @@ import * as serialMacos from "../../src/firmware/toolchain/serial-macos.ts";
 import * as usb from "../../src/firmware/toolchain/usb.ts";
 import { isSyntheticExecutable } from "./fake-bin.ts";
 import * as polled from "../../src/firmware/toolchain/polled-file.ts";
+import * as screenLock from "../../src/firmware/toolchain/screen-lock.ts";
 import * as serial from "../../src/firmware/toolchain/serial.ts";
 import * as serialDefault from "../../src/firmware/toolchain/serial-default.ts";
 import * as volumes from "../../src/firmware/zmk/volumes.ts";
 import * as helperSpawn from "../../src/firmware/toolchain/device-helper/spawn.ts";
+
+// Fake keyboard flows must not depend on the host's lock state or native probe timing.
+// Lock-transition tests inject their own probe into the flasher.
+mock.module("../../src/firmware/toolchain/screen-lock.ts", () => ({
+  ...screenLock, screenIsLocked: async () => false,
+}));
 
 // Even diagnostics must inject their intended synthetic child; no new helper backend can escape the preload.
 mock.module("../../src/firmware/toolchain/device-helper/spawn.ts", () => ({
