@@ -60,6 +60,17 @@ export function syncBuildReadFailure(code: string | null, generic = false): { te
 }
 
 /**
+ * What the dialog says when a read of the build on screen failed, such as after a flash tool's install (R10-07). A build that is gone can't
+ * be read again, so the step's Build firmware is the way on. Any other failure keeps its code, and the words name only the button its code
+ * gets: Try again, or Restart keyloom for an answer that fails the same way every time.
+ */
+export function buildReadFailure(code: string | null, generic = false): { text: string; code: string | null; generic?: true } {
+  if (code === "not_found" && !generic) return { text: "This build is no longer there, so keyloom can't read it again. Build the firmware again.", code: SYNC_BUILD_GONE_CODE };
+  const retry = errorWayOut(code, generic) === "try_again" || wayOutFor({ message: "", code: code ?? undefined, generic }, true)?.retry === true;
+  return { text: retry ? "keyloom couldn't read this build again. Try again to read it." : "keyloom couldn't read this build again. Restarting keyloom opens the page that matches it.", code, ...(generic ? { generic: true as const } : {}) };
+}
+
+/**
  * The System Settings pane a permission code opens, the button that opens it, and what to say beside it. `failed` leads a failed
  * flash's message in plain words; the server's sentence follows it, because on a split board it also says how recovery went.
  */

@@ -250,7 +250,10 @@ export function ReplaceForeignHost({ sync, boardId }: { sync: SyncApi; boardId: 
 function ReplaceForeignDialog({ sync, layoutId, board }: { sync: SyncApi; layoutId: string; board: BoardSync | undefined }) {
   const name = board === undefined ? "this layout" : board.layoutId === layoutId ? `“${board.layoutName}”` : "this layout";
   return (
+    // The token gives a failure no screen planned for Restart keyloom and the log, and turns Replace it off when it would fail the same
+    // way again (R10-05, D-551).
     <ConfirmDialog
+      token={sync.token}
       title="Replace kanata's config?"
       lines={[
         `keyloom loads ${name} into kanata in place of the config it runs now. Your MacBook keyboard types your layout from then on.`,

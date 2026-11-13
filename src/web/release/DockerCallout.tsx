@@ -2,7 +2,7 @@
 // release dialog and the board review's activity tests, so both offer the same Install or Start.
 import { AppWindow, CircleAlert, CircleCheck, Download, ExternalLink, LoaderCircle, Play, RefreshCw, RotateCcw, TriangleAlert, Wrench } from "lucide-react";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
-import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
+import { InstallCancel, InstallLost, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
 import type { DockerView } from "./release-words.ts";
 import type { Docker } from "./useDocker.ts";
@@ -193,6 +193,7 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
             <LogTail label="Install log" lines={view.logTail} />
             <InstallCancel phase={view.phase} onCancel={install.cancel} />
             {problem}
+            <InstallLost install={install} />
           </div>
         </div>
       );

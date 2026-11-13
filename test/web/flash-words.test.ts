@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { BUILD_FILE_GONE, LAYOUT_GONE, afterApply, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote, startFailure } from "../../src/web/release/flash-words.ts";
+import { BUILD_FILE_GONE, LAYOUT_GONE, afterApply, buildReadFailure, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote, startFailure } from "../../src/web/release/flash-words.ts";
 import { NOT_FOUND_WORDS } from "../../src/web/shell/unexpected.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
@@ -218,5 +218,16 @@ describe("cancelNote", () => {
   test("a Cancel accepted while the flash still waits says keyloom is stopping it, and that a keyboard in its bootloader is written first", () => {
     expect(cancelNote({ status: "waiting_for_bootloader" })).toContain("Stopping the flash");
     expect(cancelNote({ status: "failed" })).toBeNull();
+  });
+});
+
+// R10-07: a failed read of the build on screen keeps its code, and its words name only the button that code gets.
+describe("buildReadFailure", () => {
+  test("a lost connection or an exception says Try again; an answer that fails the same way says Restart; a gone build says build again", () => {
+    expect(buildReadFailure("unreachable")).toEqual({ text: "keyloom couldn't read this build again. Try again to read it.", code: "unreachable" });
+    expect(buildReadFailure("internal").text).toContain("Try again");
+    expect(buildReadFailure("unreadable")).toEqual({ text: "keyloom couldn't read this build again. Restarting keyloom opens the page that matches it.", code: "unreadable" });
+    expect(buildReadFailure("not_found", true)).toMatchObject({ code: "not_found", generic: true, text: expect.stringContaining("Restarting keyloom") });
+    expect(buildReadFailure("not_found")).toMatchObject({ code: "sync_build_gone", text: expect.stringContaining("Build the firmware again") });
   });
 });

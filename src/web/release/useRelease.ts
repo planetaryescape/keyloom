@@ -8,8 +8,8 @@ import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
-import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf, startFailure, syncBuildReadFailure } from "./flash-words.ts";
-import { pageFailure } from "../shell/unexpected.ts";
+import { type FileProblem, buildCancelProblem, buildReadFailure, fileProblem as fileProblemOf, startFailure, syncBuildReadFailure } from "./flash-words.ts";
+import { type PageFailure, failsAgain, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import { fetchRestartLog, pruneDockerBuildCache, restartDockerApp } from "../system.ts";
 import { type CachePruneOutcome, cachePruneOutcome } from "./build-failure-words.ts";
 
@@ -17,7 +17,6 @@ const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is said to be gone; polling goes on, and the line clears when it answers (R2-13).
 const MAX_MISSES = 3;
 const POLL_LOST = "keyloom stopped answering. Check that it is still running, then try again.";
-const BUILD_READ_FAILED = "keyloom couldn't read this build again. Try again to read it.";
 
 export interface Release {
   build: Build | null;
@@ -72,10 +71,12 @@ export interface Release {
   cancelNote: string | null;
   /** Reads what the keyboard runs now, for a flash keyloom couldn't confirm (D-501). It never builds or flashes. */
   checkKeyboard: () => void;
-  check: { running: boolean; found: FlashCheckResponse["found"] | null; problem: string | null };
+  /** `problem` keeps its code, so a check that fails the same way offers Restart keyloom, not Check again (R10-07). */
+  check: { running: boolean; found: FlashCheckResponse["found"] | null; problem: PageFailure | null };
   /** Opens the System Settings pane a permission code names (D-492, D-501). */
   openSettings: (pane: SettingsPaneName) => void;
-  settingsProblem: string | null;
+  /** Why System Settings didn't open, with its code for a failure no screen planned for (R10-07). */
+  settingsProblem: PageFailure | null;
   /**
    * Restarts the Docker engine whatever it answers, then builds `revisionId` again, for a `stale_mount` or `stuck_container` (R6-09).
    * `shown` reads the revision the dialog shows now: once it isn't `revisionId`, the restart stops waiting and builds nothing (PR #303 review).
@@ -96,7 +97,8 @@ export interface Release {
  */
 export type EngineRestart = EngineRestartRun & { log: readonly string[] };
 /** What `restartThenBuild` shows; the log comes from its own read. */
-export type EngineRestartRun = { running: boolean; problem: string | null; again: boolean; waitingFor: readonly string[] | null };
+/** `failure`: the restart's request failed no way the page planned for, so Restart keyloom and the log show beside `problem` (R10-07). */
+export type EngineRestartRun = { running: boolean; problem: string | null; failure?: PageFailure; again: boolean; waitingFor: readonly string[] | null };
 
 const RESTART_IDLE: EngineRestartRun = { running: false, problem: null, again: true, waitingFor: null };
 // How often a waiting restart asks whether the work has ended, and how often a running one reads its progress.
@@ -118,7 +120,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [starting, setStarting] = useState<Release["starting"]>(null);
   // The sentence and its code live together, so a code never outlives its sentence. `show`: a failed read of a sync's build, which a
   // later read of it that passes clears.
-  const [failure, setFailure] = useState<{ text: string; code: string | null; generic?: true; show?: true } | null>(null);
+  const [failure, setFailure] = useState<{ text: string; code: string | null; generic?: true; show?: true; read?: true } | null>(null);
   const error = failure?.text ?? null;
   const errorCode = failure?.code ?? null;
   const errorGeneric = failure?.generic === true;
@@ -138,7 +140,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [cancelling, setCancelling] = useState(false);
   const [cancelNoteText, setCancelNote] = useState<string | null>(null);
   const [check, setCheck] = useState<Release["check"]>({ running: false, found: null, problem: null });
-  const [settingsProblem, setSettingsProblem] = useState<string | null>(null);
+  const [settingsProblem, setSettingsProblem] = useState<PageFailure | null>(null);
   const [stoppingBuild, setStoppingBuild] = useState(false);
   const [buildCancelProblemText, setBuildCancelProblem] = useState<string | null>(null);
   const [engineRestart, setEngineRestart] = useState<EngineRestartRun>(RESTART_IDLE);
@@ -180,11 +182,12 @@ export function useRelease(token: string, layoutRef: string): Release {
     fetchBuild(token, buildId, new AbortController().signal)
       .then((next) => {
         setBuild(next);
-        setError((now) => (now === BUILD_READ_FAILED ? null : now));
+        setFailure((now) => (now?.read === true ? null : now));
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        // The code stays, so an answer that fails the same way offers Restart keyloom, not a Try again that can't pass (R10-07).
         setLast({ kind: "read" });
-        setError(BUILD_READ_FAILED);
+        setFailure({ ...buildReadFailure(codeOf(e), genericOf(e)), read: true });
       });
   }, [token, buildId]);
   const toolInstall = useInstall(token, build?.flashPlan.tool?.name ?? "zapp", refreshBuild);
@@ -404,7 +407,7 @@ export function useRelease(token: string, layoutRef: string): Release {
       })
       .catch((e: unknown) => {
         if (currentFlashId.current !== asked) return;
-        setCheck({ running: false, found: null, problem: e instanceof Error ? e.message : "keyloom couldn't read the keyboard." });
+        setCheck({ running: false, found: null, problem: pageFailure(e, "keyloom couldn't read the keyboard.") });
       });
   }, [token, flashId, starting]);
 
@@ -412,9 +415,9 @@ export function useRelease(token: string, layoutRef: string): Release {
     setSettingsProblem(null);
     openSettings(token, pane)
       .then((result) => {
-        if (!result.ok) setSettingsProblem(result.reason);
+        if (!result.ok) setSettingsProblem({ message: result.reason });
       })
-      .catch((e: unknown) => setSettingsProblem(e instanceof Error ? e.message : "System Settings didn't open."));
+      .catch((e: unknown) => setSettingsProblem(pageFailure(e, "System Settings didn't open.")));
   }, [token]);
 
   return {
@@ -484,7 +487,9 @@ export async function restartThenBuild(deps: {
       result = await deps.restart();
     } catch (e) {
       if (superseded()) return deps.show(RESTART_IDLE);
-      deps.show({ ...RESTART_IDLE, problem: e instanceof Error ? e.message : "keyloom didn't answer, so Docker wasn't restarted." });
+      // The request's code stays: an answer that fails the same way takes the restart away, and Restart keyloom is beside it (R10-07).
+      const failure = pageFailure(e, "keyloom didn't answer, so Docker wasn't restarted.");
+      deps.show({ ...RESTART_IDLE, problem: failure.message, ...(wayOutFor(failure, true) === null ? {} : { failure }), again: !failsAgain(failure) });
       // The request may have stopped the engine before it failed, so Docker is read again.
       deps.failed?.();
       return;
