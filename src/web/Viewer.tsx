@@ -35,7 +35,7 @@ import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel
 import { APPLIED_NOT_SHOWN } from "./review/review-words.ts";
 import { readAfterApply, readIfChanged } from "./editor/read-after-apply.ts";
 import { NOT_SHOWN_LINE, notShownLine } from "./editor/not-shown.ts";
-import { LATEST_NOT_SHOWN, STALE_EDIT, STALE_UNDO } from "./editor/stale-edit-words.ts";
+import { LATEST_NOT_SHOWN, STALE_CHECK, STALE_EDIT, STALE_UNDO } from "./editor/stale-edit-words.ts";
 import { fetchOpenProposals } from "./keyboards/api-keyboards.ts";
 import type { CarriedThread } from "./chat/CarriedThread.tsx";
 import { withoutRepeats } from "./chat/transcript.ts";
@@ -1918,9 +1918,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onTuned={onTuned}
                 onStale={onStale}
                 onShowLatest={() => {
-                  // The read can remount the card on a newer revision; the draft is parked first so it stays on its key (PR #306 CodeRabbit).
-                  keepOpenDraft();
-                  showLatest(STALE_UNDO);
+                  // The read remounts the card on the newer revision without its draft, so the card closes and parks the draft on its
+                  // key, where opening the key resumes it (PR #306 review).
+                  const kept = draft.dirty;
+                  closeEditor(true);
+                  showLatest(kept ? STALE_CHECK : STALE_UNDO);
                 }}
                 onShowLayer={(id) => {
                   if (!draft.dirty) setLayerId(id);

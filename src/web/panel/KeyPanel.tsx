@@ -105,7 +105,10 @@ interface Props {
   onTuned: (summary: string) => Promise<void>;
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;
-  /** Reads the layout again, for a check answered against a head that has moved on (R8-13). The draft stays open. */
+  /**
+   * Reads the layout again, for a check answered against a head that has moved on (R8-13). The Viewer closes the card and keeps the draft
+   * on its key, dashed amber, to resume on the latest version.
+   */
   onShowLatest?: () => void;
   onShowLayer: (layerId: string) => void;
   /** Icon actions in the card's header that act on this key outside its draft: swap, copy, paste, colour (16#moving-and-copying-keys). */
