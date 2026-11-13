@@ -8,6 +8,7 @@ import { LAB_NEEDS_DOCKER, labApplyFailure, labFixClosed, labFixes, labNeedsDock
 import { NeedsDocker } from "../review/WorkloadTests.tsx";
 import { ApiError } from "../api.ts";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import "./lab.css";
 
 const FINGER_ORDER = ["left-pinky", "left-ring", "left-middle", "left-index", "left-thumb", "right-thumb", "right-index", "right-middle", "right-ring", "right-pinky"];
@@ -196,7 +197,7 @@ export function LabPanel({ lab, heat, onHeat, onTry, onApply, onClose }: {
   const { readout, session } = phase;
   if (phase.trying !== null) {
     const s = readout.suggestions[phase.trying];
-    if (s !== undefined) return <TryFix suggestion={s} onBack={() => { lab.tryFix(null); onTry(null); }} onAgain={() => { onTry(null); lab.again(); }} onApply={onApply} />;
+    if (s !== undefined) return <TryFix token={lab.token} suggestion={s} onBack={() => { lab.tryFix(null); onTry(null); }} onAgain={() => { onTry(null); lab.again(); }} onApply={onApply} />;
   }
   const drill = readout.passageId === "finger-drill";
   const fingers = <Fingers readout={readout} heat={heat} onHeat={onHeat} />;
@@ -324,7 +325,7 @@ function FindingMore({ positions, suggestions, onTry }: { positions: number[]; s
   );
 }
 
-function TryFix({ suggestion: s, onBack, onAgain, onApply }: { suggestion: LabReadout["suggestions"][number]; onBack: () => void; onAgain: () => void; onApply: (p: ProposalCard) => Promise<void> }) {
+function TryFix({ token, suggestion: s, onBack, onAgain, onApply }: { token: string; suggestion: LabReadout["suggestions"][number]; onBack: () => void; onAgain: () => void; onApply: (p: ProposalCard) => Promise<void> }) {
   const [applying, setApplying] = useState(false);
   // A failed Apply says why beside the button, with the way on (R3-02): Type again for a layout that changed, Try again otherwise.
   const [failed, setFailed] = useState<ReturnType<typeof labApplyFailure> | null>(null);
@@ -370,9 +371,11 @@ function TryFix({ suggestion: s, onBack, onAgain, onApply }: { suggestion: LabRe
       </div>
       <footer className="lab-foot">
         <button type="button" className="sheet-action" onClick={onBack}>Not this</button>
+        {/* Restart keyloom, and the log for an exception, beside a failure no screen planned for (R9-05). Apply stays the Try again. */}
+        {failed?.failure === undefined ? null : <UnexpectedWayOut token={token} failure={failed.failure} primary={failed.next === "restart"} />}
         {shown?.next === "again" ? (
           <button type="button" className="bar-apply" onClick={onAgain}><Play size={13} aria-hidden="true" />Type again</button>
-        ) : (
+        ) : shown?.next === "restart" ? null : (
           <button type="button" className="bar-apply" disabled={s.proposal === null || applying} onClick={apply}>
             {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
             {failed === null ? "Apply" : "Try again"}

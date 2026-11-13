@@ -7,6 +7,7 @@ import { LogTail } from "./LogTail.tsx";
 import type { DockerView } from "./release-words.ts";
 import type { Docker } from "./useDocker.ts";
 import type { Install } from "./useInstall.ts";
+import { UnexpectedActions, retryHelps } from "./UnexpectedActions.tsx";
 
 function Alternatives({ items, lead = "Prefer an app?" }: { items: Array<{ name: string; url: string }>; lead?: string }) {
   if (items.length === 0) return null;
@@ -66,6 +67,7 @@ function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null;
           ) : null}
           <button type="button" className="button" onClick={docker.refresh}>Check again</button>
         </div>
+        <UnexpectedActions token={docker.token} failure={docker.problemFailure} />
         {view.command === null ? null : (
           <>
             <p className="callout-note">{fix.offered ? "Or run Colima's command in Terminal yourself, then check again:" : "Run this in Terminal to fix Colima's files yourself, then check again:"}</p>
@@ -82,7 +84,12 @@ function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null;
  * the person can do once Docker installed from here is running, said where they are.
  */
 export function DockerCallout({ view, docker, install, buildFailed = false, readyNext = "You can build now." }: { view: DockerView; docker: Docker; install: Install; buildFailed?: boolean; readyNext?: string }) {
-  const problem = install.problem === null ? null : <p className="callout-note" role="alert">{install.problem}</p>;
+  const problem = install.problem === null ? null : (
+    <>
+      <p className="callout-note" role="alert">{install.problem}</p>
+      <UnexpectedActions token={install.token} failure={install.failure} />
+    </>
+  );
   switch (view.kind) {
     case "none":
       return null;
@@ -111,7 +118,8 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
             {view.helpUrl === null ? null : <p className="callout-note">Restarting didn't help either. Colima's guide covers a virtual machine that won't start.</p>}
             <div className="callout-actions">
               {view.restartEngine === null ? null : <RestartEngine engine={view.restartEngine} docker={docker} />}
-              {view.retry === null ? null : <button type="button" className="button" onClick={view.retry === "restart" ? docker.restart : docker.start}>Try again</button>}
+              {/* An answer that fails the same way every time gets Restart keyloom below, never this Try again (R9-05). */}
+              {view.retry === null || !retryHelps(docker.problemFailure) ? null : <button type="button" className="button" onClick={view.retry === "restart" ? docker.restart : docker.start}>Try again</button>}
               {view.helpUrl === null ? null : (
                 <a className="button" href={view.helpUrl} target="_blank" rel="noreferrer">
                   <ExternalLink size={14} aria-hidden="true" />
@@ -128,6 +136,7 @@ export function DockerCallout({ view, docker, install, buildFailed = false, read
               <button type="button" className="button" onClick={docker.refresh}>Check again</button>
             </div>
             {view.alternatives === undefined ? null : <Alternatives items={view.alternatives.slice(1)} lead="Or install" />}
+            <UnexpectedActions token={docker.token} failure={docker.problemFailure} />
           </div>
         </div>
       );
