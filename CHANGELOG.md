@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.79.0](https://github.com/planetaryescape/keyloom/compare/v0.78.2...v0.79.0) (2026-11-13)
+
+
+### Features
+
+* get kanata and Zapp from their pinned releases on a Mac without Homebrew ([3473b0e](https://github.com/planetaryescape/keyloom/commit/3473b0e2d82ae3db92f7d0fc0bdc9d71141a5c68))
+* get kanata and Zapp from their pinned releases on a Mac without Homebrew ([b99ce1e](https://github.com/planetaryescape/keyloom/commit/b99ce1ee20bc7e9d07c748e8832030735c08b394))
+
+
+### Bug Fixes
+
+* give the last round-11 failures a way on and serve configs in the dev editor ([c78d625](https://github.com/planetaryescape/keyloom/commit/c78d6252d4139fdf0c7cea8e34f2ff623ddeeb5f))
+* honour a cancel before a checked tool is saved, and keep the download's exit code ([680b03d](https://github.com/planetaryescape/keyloom/commit/680b03da2719e210d85ceb3706f91dcd9a76a14c))
+* name only restart commands that fit, offer a fitting board only for one key count ([ea32a13](https://github.com/planetaryescape/keyloom/commit/ea32a133e7e0652d303cf3135b2f5eedf45b0a44))
+* restart kanata's service from its checked plist, keep its wait to one deadline, gate every setup on the driver, and hold the import screen per card ([ceda9ce](https://github.com/planetaryescape/keyloom/commit/ceda9ce682c0c88c54e82d55532a1c1d85dc42b7))
+* round-11 polish and the dev editor fixture ([c9ae359](https://github.com/planetaryescape/keyloom/commit/c9ae359f98f4b0957b0a920393e39f4de1161221))
+* show the Karabiner edit after a MacBook import, and restart kanata's service when it doesn't answer ([5309361](https://github.com/planetaryescape/keyloom/commit/5309361c3590833fa3127cf054519db66861bfce))
+* show the Karabiner edit after a MacBook import, and restart kanata's service when it doesn't answer ([4eae33b](https://github.com/planetaryescape/keyloom/commit/4eae33b6d534af365fffafe9543517a13523c68b))
+* start no kanata probe after the restart's deadline, and give each only the time left ([42e27b7](https://github.com/planetaryescape/keyloom/commit/42e27b7ffb3cdcfbea3ab2b243fa17c645e057ee))
+* tell a Linux browser from its user agent, not the rendering runtime ([f2e4c03](https://github.com/planetaryescape/keyloom/commit/f2e4c030d3a206a466725c171b92859011f45840))
+* trust keyloom's kept kanata and Zapp only while they match their pins, and check every download redirect hop ([545ef54](https://github.com/planetaryescape/keyloom/commit/545ef54240a1c138c4abc372ebac7c5e0fc6ba8f))
+
 ## [0.78.2](https://github.com/planetaryescape/keyloom/compare/v0.78.1...v0.78.2) (2026-11-13)
 
 
