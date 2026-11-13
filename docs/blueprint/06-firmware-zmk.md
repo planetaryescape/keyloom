@@ -1,5 +1,7 @@
 # 06: Firmware: ZMK (Glove80 and the Corne)
 
+Status update, 2026-11-13 round 11 (D-563): a keymap with another board's number of keys names both boards ("This keymap has 42 keys, and the Keebart Corne Choc Pro BT has 46."), and when another ZMK board has that many the import card offers to import it as that board's config (`keymap_for_other_board`).
+
 Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-471); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
 
 ## Per-layer encoder turns

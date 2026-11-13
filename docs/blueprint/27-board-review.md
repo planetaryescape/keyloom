@@ -1,5 +1,7 @@
 # 27: Board review
 
+Status update, 2026-11-13 round 11 (D-562): the review's "couldn't read this config's proposals" keeps its code, so a read that fails the same way offers Restart keyloom, not Try again, and a config deleted elsewhere offers the other layouts.
+
 Status update, 2026-11-12 (D-535): after a usage limit, a provider status keyloom couldn't read says so with **Check again**, and the words name the button shown (Switch to {model}, or Set up another model). Status update, 2026-11-12 (D-527): a Codex usage limit ends the review `unavailable` with code `usage_limit` and its reset time, and offers **Switch to** another ready model (never Codex itself) or **Set up another model**, then **Try again**; once keyloom has moved off Codex, Try again runs on the provider in use and says so. Every running look has a Stop: **Stop testing** while its tests run, **Stop the review** otherwise. A finding's repair request that went out of date offers **Dismiss and run a fresh review**; while the review is busy or being read again it says it is checking and only holds Send.
 
 Status update, 2026-11-11 (D-524): every failed review request shows its words and a button: **Try again** repeats it, and a refused one offers **Read the review again**. That holds before the first review too. **Stop testing** ends a look with activity tests, through `POST /review/stop`. Their container goes with the run's signal.
