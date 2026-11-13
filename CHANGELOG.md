@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.77.0](https://github.com/planetaryescape/keyloom/compare/v0.76.0...v0.77.0) (2026-11-13)
+
+
+### Features
+
+* fix Colima's files from a button through macOS's password dialog ([2d6311a](https://github.com/planetaryescape/keyloom/commit/2d6311a54a06d75eb8d23bcd787956a8e5b95bec))
+
+
+### Bug Fixes
+
+* answer PR [#303](https://github.com/planetaryescape/keyloom/issues/303) review: end a restart wait with the dialog, class Docker Desktop's refused mount as folder_not_shared, and keep the stage notes off the floor ([a920045](https://github.com/planetaryescape/keyloom/commit/a9200455a9bfad0a80ca24a790a16ccf161962cf))
+* answer PR [#303](https://github.com/planetaryescape/keyloom/issues/303) review: only a missing sentinel is folder_not_shared, and a restart wait stops on every Cancel ([1d3def0](https://github.com/planetaryescape/keyloom/commit/1d3def0a00c3bd17930e5efc7741dcf1aa55af05))
+* build nothing after a restart that went through once the dialog closed ([d713881](https://github.com/planetaryescape/keyloom/commit/d7138819dcda1cf960b868320f1fc66359246005))
+* change Colima's files only from folders root holds, in every step ([bd0c3f9](https://github.com/planetaryescape/keyloom/commit/bd0c3f9e1ff229b510b32cc69c02956a802d373b))
+* close the mount trick in Fix Colima's files and give root scripts an empty environment ([c5ff21a](https://github.com/planetaryescape/keyloom/commit/c5ff21a5bd3cf2a367b0ccb8fbf5603ee7ef56eb))
+* code build failures that repeat, and let a refused Docker restart wait for running work ([39ab82f](https://github.com/planetaryescape/keyloom/commit/39ab82ff0831b92ab04f60a4eb29453340477195))
+* count a failed find walk as a failed Colima fix ([95cc63b](https://github.com/planetaryescape/keyloom/commit/95cc63b2ef3fd9e85f69c42427dc30942298c0b7))
+* first-run keyboard steps offer only what can be done ([f717954](https://github.com/planetaryescape/keyloom/commit/f7179542caf72b4e331031ff6216d0e4ca39ec0b))
+* first-run keyboard steps offer only what can be done (R7-10, R7-11, R7-13) ([9db3df6](https://github.com/planetaryescape/keyloom/commit/9db3df6b1797e04f71a5eb6053804224213c8228))
+* give a failed probe cleanup its own failure, and read the last restart lines however fast it failed ([799a7db](https://github.com/planetaryescape/keyloom/commit/799a7dbd9441ea4de590b01c7dfee24aeb048e38))
+* give unexpected failures, lab refusals, the review's model list and stale repairs a way out ([19a2dbc](https://github.com/planetaryescape/keyloom/commit/19a2dbcbdbf654dfd217f71d010ee26d9363907f))
+* give unexpected failures, lab refusals, the review's model list and stale repairs a way out ([e8d52d7](https://github.com/planetaryescape/keyloom/commit/e8d52d7770b97b1fffb5cf19eb2dfd069e6b072f))
+* hold back Colima's chown -R command on the server while a linked file is known ([51ce62f](https://github.com/planetaryescape/keyloom/commit/51ce62fd1c54538f6a408fa7cc5b06dee3a49611))
+* hold Colima's command until a finished look finds no linked file, and keep file names out of the fix's status ([aa4aae3](https://github.com/planetaryescape/keyloom/commit/aa4aae326c6aa13c665c65f4e08f43884f7f83b5))
+* keep a route's own not_found words, map Bun's bare 413, and wait to show a proposal while a reply runs ([ccad23d](https://github.com/planetaryescape/keyloom/commit/ccad23da356336059fcd43f56743f8e71a304e94))
+* keep applied-not-shown in the editor, code the Disable remapping refusal, and give the phone's sync popover its gutter ([06af24c](https://github.com/planetaryescape/keyloom/commit/06af24c45e5e171e4a6dec6ca6428a741fb7e2f7))
+* never count a catch-all 404 as something already removed ([988f80b](https://github.com/planetaryescape/keyloom/commit/988f80bd194dc056134ce96728e6db7ce565cb47))
+* no dead ends in builds, the Docker restart, the editor and sync (round 7) ([7c6b4e8](https://github.com/planetaryescape/keyloom/commit/7c6b4e8eedb2affab0e046af64eb35f311ce6cb9))
+* say the MacBook's changes reach it through kanata, not by themselves ([04441a1](https://github.com/planetaryescape/keyloom/commit/04441a1ea31147d54f373dc83a691765dd4c3866))
+* start a config from a known board on the Review step, and keep each put source's board ([b7a98cf](https://github.com/planetaryescape/keyloom/commit/b7a98cf633ab1cae9fc1654883a02dc6f46fe606))
+
 ## [0.76.0](https://github.com/planetaryescape/keyloom/compare/v0.75.1...v0.76.0) (2026-11-12)
 
 
