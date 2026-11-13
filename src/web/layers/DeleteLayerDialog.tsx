@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Slot } from "../../layout/change.ts";
 import type { LayerReference } from "../../layout/layer-ops.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
+import { LayerRefusal, deleteWaits } from "./LayerRefusal.tsx";
 
 /** Why Open combo can't open that combo now (R5-13), decided before the dialog closes, with the button that shows what is in the way. */
 export type ComboOpenRefusal = { text: string; action: { label: string; run: () => void } };
@@ -22,6 +23,8 @@ interface Props {
   /** Removes a tap dance nothing uses, the one way past a dance that goes to this layer (#290 review). */
   onRemoveTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   onClose: () => void;
+  /** For Restart keyloom and the log beside a failure no screen planned for (R11-06). */
+  token?: string | undefined;
 }
 
 /** The button beside a reference: the place where it is changed, or, for a tap dance nothing uses, removing it. */
@@ -52,7 +55,7 @@ export function openReference(
 
 // Deleting is the one layer action that can strand keys, so it lists what points at the layer first
 // and asks the validator, which refuses while any of those keys would reach nothing (16#layers, D-090).
-export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onRemoveTapDance, onClose }: Props) {
+export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, nameFunction, onOpenKey, onOpenCombo, onRemoveTapDance, onClose, token }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [outcome, setOutcome] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -87,6 +90,8 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
   }
 
   const stuck = references.length > 0;
+  // A Delete whose answer fails the same way every time goes off, with its reason beside it (R11-06, D-551).
+  const waits = deleteWaits(outcome);
   return (
     <dialog ref={dialog} className="layer-dialog" aria-labelledby="delete-layer-title" onClose={onClose} onClick={(event) => event.target === event.currentTarget && onClose()}>
       <header className="shortcuts-head">
@@ -153,21 +158,12 @@ export function DeleteLayerDialog({ layerName, references, goesWith, onDelete, n
           </div>
         </div>
       )}
-      {outcome === null ? null : (
-        <div className="layer-refused" role="alert">
-          <strong>{outcome.message}</strong>
-          {outcome.problems.length === 0 ? null : (
-            <ul>
-              {outcome.problems.slice(0, 6).map((problem) => <li key={problem}>{problem}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
+      {outcome === null ? null : <LayerRefusal token={token} refused={outcome} problems={6} primary={waits !== null} />}
       <footer className="layer-dialog-foot">
         {/* The validator refuses while anything switches here, so the button waits for the list to be empty and says so (R4-09). */}
-        {stuck ? <span id="delete-layer-why" className="layer-dialog-why">Change what switches to {layerName} first.</span> : null}
+        {stuck ? <span id="delete-layer-why" className="layer-dialog-why">Change what switches to {layerName} first.</span> : waits !== null ? <span id="delete-layer-why" className="layer-dialog-why">{waits}</span> : null}
         <button type="button" className="button" onClick={onClose}>Keep the layer</button>
-        <button type="button" className="button button-danger" disabled={busy || stuck} aria-describedby={stuck ? "delete-layer-why" : undefined} onClick={() => void confirm()}>{dropping.length === 0 ? `Delete ${layerName}` : "Delete and drop them"}</button>
+        <button type="button" className="button button-danger" disabled={busy || stuck || waits !== null} aria-describedby={stuck || waits !== null ? "delete-layer-why" : undefined} onClick={() => void confirm()}>{dropping.length === 0 ? `Delete ${layerName}` : "Delete and drop them"}</button>
       </footer>
     </dialog>
   );

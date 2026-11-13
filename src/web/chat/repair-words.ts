@@ -67,7 +67,7 @@ export function findingRepairState(
 }
 
 /** Before a revised-proposal request goes out, keyloom reads the layout and the proposal again. This is when that read failed (R10-11). */
-export const RECHECK_FAILED = "keyloom couldn't check the proposal again, so nothing was sent. Your request is kept below.";
+export const RECHECK_FAILED = "keyloom couldn't check the proposal again, so nothing was sent. Your request is kept in the box above.";
 
 /**
  * A failed recheck, kept with its code (R10-11). Send request is its Try again. For a failure no screen planned for, keyloom's own sentence

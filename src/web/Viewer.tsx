@@ -13,7 +13,9 @@ import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
 import { RestartDialog } from "./shell/RestartDialog.tsx";
 import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
-import { type PageFailure, unexpectedWayOut, wayOutFor } from "./shell/unexpected.ts";
+import { type PageFailure, pageFailure, wayOutFor } from "./shell/unexpected.ts";
+import { proposalsReadWay } from "./chat/proposals-read.ts";
+import { usePanelLift } from "./chat/usePanelLift.ts";
 import { type UnexpectedDialog, failedToast as failedToastInput } from "./shell/failed-toast.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
@@ -458,18 +460,17 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const proposalsOpen = sidebar === "proposals";
   const setProposalsOpen = sidebarSetter("proposals");
   const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
-  // A read that failed is said, with Try again, never shown as "nothing is waiting" (R4-08); bumping `waitingRead` reads again.
-  const [waitingFailed, setWaitingFailed] = useState(false);
-  // The failed read's code: a read keyloom can't answer the same way again gets Restart keyloom, not Try again (R7-01).
-  const [waitingCode, setWaitingCode] = useState<string | undefined>(undefined);
+  // A read that failed is said, never shown as "nothing is waiting" (R4-08); bumping `waitingRead` reads again. Kept whole, so a read that
+  // fails the same way gets Restart keyloom, and a config deleted elsewhere gets the other layouts, never a Try again (R7-01, R11-05).
+  const [waitingFailure, setWaitingFailure] = useState<PageFailure | null>(null);
+  const waitingFailed = waitingFailure !== null;
   const [waitingRead, setWaitingRead] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, (error: unknown) => {
+    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailure(null); }, (error: unknown) => {
       if (controller.signal.aborted) return;
       setWaiting([]);
-      setWaitingFailed(true);
-      setWaitingCode(error instanceof ApiError ? error.code : undefined);
+      setWaitingFailure(pageFailure(error, "keyloom couldn't read this config's proposals."));
     });
     return () => controller.abort();
   }, [token, layoutRef, revision.id, waitingRead]);
@@ -926,6 +927,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           },
           notify: (message) => toasts.show({ kind: "info", message }),
           nameFunction: (fn) => functionName(fn, layout),
+          token,
         };
 
   // Selecting several keys: Shift- or Cmd-click, or taps in select mode. The key whose panel is open joins the first Shift-click.
@@ -1764,6 +1766,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   // The sheet's height is also the room the board keeps below it, so a key opened under it can be scrolled up (18#phones).
   const workbenchStyle = { "--sheet-h": `${sheetHeight(sheet, viewportHeight)}px` } as CSSProperties;
+  const sidePanelMode: PanelMode = keyOverChat ? "key" : !narrow && (mode === "key" || mode === "chat") ? "summary" : mode;
+  // The agent's work, while it runs and the chat is closed. On a phone a fixed corner pill would sit on the open sheet's Apply (R11-11), so
+  // while a bottom sheet is open it rides in the sheet's bar, beside the grabber, and the sheet's own controls stay clear.
+  const agentInSheet = narrow && sidePanelMode !== "summary";
+  // The lab's card and the sheets that float at the stage's foot have no bar, so on a phone the pill is lifted above whichever is up.
+  const panelLift = usePanelLift(narrow && !agentInSheet && chatActivity !== null, ".workbench .lab-card, .workbench .lab-sheet", `${labOpen}:${lab.phase.kind}:${proposalsShown}:${reviewShown}:${newBoardPanel}`);
+  const agentWork = chatActivity === null || (chatOpen && !keyOverChat) ? null : (
+    <div className="chat-background-work" aria-label="Active agent request" style={panelLift === null || agentInSheet ? undefined : { insetBlockEnd: `${panelLift}px` }}>
+      <button type="button" className="button" onClick={openChat}>Show agent work</button>
+      <ChatStopButton onStop={chatActivity.stop} />
+    </div>
+  );
   const chips = chatSelection?.positions.length ?? 0;
   // The chat: the command bar at the stage's foot on a wide screen (23#chrome-recedes, P3), the bottom sheet on a narrow one. It stays
   // mounted while closed, so a reply that is streaming survives closing the bar.
@@ -2101,6 +2115,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onRestore={(id) => void restoreArchived(id)}
                 onDelete={(config) => setConfigDialog({ kind: "delete", config: { id: config.id, name: config.name } })}
                 onImport={chrome.onImport}
+                failure={configs.failure}
+                onReadAgain={configs.reload}
+                token={token}
               />
             }
             marker={<ReviewMarker review={boardReview} open={reviewShown} onToggle={() => {
@@ -2111,7 +2128,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer ?? (proposalsOpen ? null : waitingFailed && unexpectedWayOut(waitingCode, true)?.retry === false ? (
+            notice={offer ?? (proposalsOpen ? null : waitingFailure !== null && proposalsReadWay(waitingFailure) === "gone" ? (
+              // The config itself is gone: its proposals can't be read again, and a restart isn't the way on (D-534).
+              <span className="nb-waiting-failed" role="alert">keyloom no longer has this config. {chrome.onHome === undefined ? <RestartKeyloom token={token} /> : <button type="button" className="sheet-action" onClick={chrome.onHome}>Show your other layouts</button>}</span>
+            ) : waitingFailure !== null && proposalsReadWay(waitingFailure) === "restart" ? (
               <span className="nb-waiting-failed" role="alert">Couldn&apos;t read proposals. <RestartKeyloom token={token} /></span>
             ) : waitingFailed ? (
               // A read that failed is not "nothing waiting": the slot says so and reads again (R5-11).
@@ -2304,7 +2324,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           ) : null}
         </section>
         <SidePanel
-          mode={keyOverChat ? "key" : !narrow && (mode === "key" || mode === "chat") ? "summary" : mode}
+          mode={sidePanelMode}
+          barAside={agentInSheet ? agentWork : null}
           size={sheet}
           viewportHeight={viewportHeight}
           onSize={setSheet}
@@ -2459,7 +2480,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               proposals={waiting}
               pinnedId={pinnedProposal?.changeSetId ?? null}
               onPin={pinProposal}
-              proposalsFailed={waitingFailed}
+              proposalsFailure={waitingFailure}
               // Nothing to apply until the read answers, so an Apply whose outcome was unknown can't be repeated early (#288 review).
               onReadProposals={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}
               onApply={async (card) => {
@@ -2493,7 +2514,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           <div className={narrow ? "lab-sheet nb-sheet" : "nb-column"}>
             <OpenProposals
               proposals={waiting}
-              readFailed={waitingFailed}
+              readFailure={waitingFailure}
               onReadAgain={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}
               layout={layout}
               board={board}
@@ -2534,12 +2555,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       </div>
       {repairNotice === null ? null : <p role="status">{repairNotice}</p>}
       <Shortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      {chatActivity === null || (chatOpen && !keyOverChat) ? null : (
-        <div className="chat-background-work" aria-label="Active agent request">
-          <button type="button" className="button" onClick={openChat}>Show agent work</button>
-          <ChatStopButton onStop={chatActivity.stop} />
-        </div>
-      )}
+      {agentInSheet ? null : agentWork}
       {configDialog?.kind === "new" ? (
         <NewConfigDialog
           token={token}

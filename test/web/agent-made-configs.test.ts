@@ -109,16 +109,16 @@ describe("the config card", () => {
   test("says so, with no button, for a config that is gone, archived or unreadable", () => {
     expect(configCardView({ state: "gone" }, "x", null, "c1")).toMatchObject({ note: "This config has since been deleted.", action: null });
     expect(configCardView(ready({ archivedAt: 5 }), "x", null, "c1")).toMatchObject({ action: null, note: expect.stringContaining("Archived") });
-    const failed = configCardView({ state: "error" }, "x", null, "c1");
+    const failed = configCardView({ state: "error", failure: { message: "Can't reach keyloom.", code: "unreachable" } }, "x", null, "c1");
     expect(failed.action).toBeNull();
-    expect(failed.note).toBe("Couldn't load this config right now.");
+    expect(failed.note).toBe("keyloom couldn't read this config right now.");
     expect(failed.note).not.toMatch(/menu/i);
     expect(configCardView({ state: "loading" }, "x", null, "c1").action).toBeNull();
   });
 
   test("a handoff card omits the outside-chat count while legacy cards keep it", () => {
     const made = presentation([op("op_1", "put_config", "succeeded", config("c1"))]);
-    const cards = { data: new Map([["c1", ready({}, 0)]]), currentId: "c1", origin: null, onOpen: () => {}, onReview: () => {} };
+    const cards = { data: new Map([["c1", ready({}, 0)]]), currentId: "c1", origin: null, onOpen: () => {}, onReview: () => {}, onReadAgain: () => {}, token: "t" };
     const render = (value: ChatPresentation) => renderToStaticMarkup(createElement(ConfigCardList, { presentation: value, cards }));
     expect(render(made)).toContain("No proposals waiting");
     expect(render({ ...made, handoff: { layoutId: "c1", conversationId: "target-chat", runId: "target-run", requestId: "target-request" } })).not.toContain("No proposals waiting");

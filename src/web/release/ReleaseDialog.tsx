@@ -13,6 +13,7 @@ import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, pla
 import { headline } from "../../layout/history-summary.ts";
 import { BUILD_FILE_GONE, SYNC_BUILD_GONE_CODE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import { FailureNote, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { failsAgain, wayOutFor } from "../shell/unexpected.ts";
@@ -137,7 +138,9 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
-  const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision, !release.engineRestart.again) : null;
+  // On Linux, an engine keyloom can't restart gets the line that does (R11-10). The page runs on the computer keyloom serves.
+  const host = { linux: typeof navigator !== "undefined" && /linux/i.test(navigator.platform) && !/android/i.test(navigator.userAgent), engine: docker.readiness?.ok === true ? docker.readiness.engine : null };
+  const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision, !release.engineRestart.again, host) : null;
   // A failed read of the latest version keeps "Show the latest version" with its reason.
   const showLatest = (failed: string) =>
     onShowLatest().then(() => setGoBackRefused(null), () => setGoBackRefused({ text: failed, next: "reload", buildId: lastBuildId, retry: false }));
@@ -332,6 +335,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       <p>{failure.text}</p>
                     </div>
                     <p>{failure.next}</p>
+                    {failure.command === null ? null : <CopyCommand command={failure.command} />}
                     {/* A Mac app or Colima that a failed restart left down: the Docker callout's own button starts it (R7-03). */}
                     {failure.button === null && release.engineRestart.problem !== null && dockerNow.kind !== "none" ? (
                       <DockerCallout view={dockerNow} docker={docker} install={release.dockerInstall} />

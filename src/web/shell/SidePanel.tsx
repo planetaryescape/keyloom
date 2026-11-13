@@ -18,6 +18,8 @@ interface Props {
   size: SheetSize;
   viewportHeight: number;
   onSize: (size: SheetSize) => void;
+  /** Shown in the sheet's bar beside the grabber on a narrow screen, such as the agent's work while it runs (R11-11). */
+  barAside?: ReactNode;
 }
 
 const NAMES: Record<SheetSize, string> = { peek: "peeking", half: "half height", full: "full height" };
@@ -26,7 +28,7 @@ const NAMES: Record<SheetSize, string> = { peek: "peeking", half: "half height",
 // opening a panel never changes the stage beside it. The chat stays mounted while hidden, so a
 // reply that is streaming or a draft that was typed survives a look at a key. On a narrow screen the
 // same panel is a bottom sheet: the grabber and the two buttons in its bar (hidden on a wide screen) set its height.
-export function SidePanel({ mode, summary, key_, chat, repeat, history, combo, library, settings, size, viewportHeight, onSize }: Props) {
+export function SidePanel({ mode, summary, key_, chat, repeat, history, combo, library, settings, size, viewportHeight, onSize, barAside = null }: Props) {
   const drag = useRef<{ startY: number; startHeight: number; pointer: number } | null>(null);
   const side = useRef<HTMLElement>(null);
   const [dragHeight, setDragHeight] = useState<number | null>(null);
@@ -83,6 +85,7 @@ export function SidePanel({ mode, summary, key_, chat, repeat, history, combo, l
         >
           <span aria-hidden="true" />
         </div>
+        {barAside}
         <button type="button" className="icon-button" aria-label="Make the panel shorter" disabled={size === "peek"} onClick={() => onSize(shorter(size))}>
           <ChevronDown size={18} aria-hidden="true" />
         </button>

@@ -321,8 +321,24 @@ describe("a build the engine's own state stopped", () => {
   });
   test("a stuck container names the Mac app keyloom restarts", () => {
     const view = buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: "Docker Desktop" }, false);
-    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…" });
+    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…", command: null });
   });
+  // R11-10: on Linux keyloom restarts no engine but Colima, and the step said "Restart it" with nothing to press.
+  test("on Linux, an engine keyloom can't restart is named with the line that restarts it", () => {
+    const service = buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine: "Docker" });
+    if (service.kind !== "restart_engine") throw new Error("expected restart_engine");
+    expect(service.next).toStartWith("Restarting the Docker service clears this.");
+    expect(service.next).not.toContain("Restart it, then");
+    expect(service).toMatchObject({ button: null, command: "sudo systemctl restart docker" });
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine: "Docker Desktop" }))
+      .toMatchObject({ command: "systemctl --user restart docker-desktop", next: expect.stringContaining("Restarting Docker Desktop clears this") });
+    expect(buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine: "Rancher Desktop" }))
+      .toMatchObject({ command: "systemctl --user restart rancher-desktop" });
+    // A Mac, or Colima on Linux, keeps the restart button keyloom runs.
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: "Colima" }, false, false, { linux: true, engine: "Colima" })).toMatchObject({ command: null, button: "Restart Colima and build again" });
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false)).toMatchObject({ command: null });
+  });
+
   test("an engine keyloom can't restart says so and keeps Build again", () => {
     const html = failedStep("stale_mount", { error: stale, restartEngine: null });
     expect(html).toContain("Restarting your Docker engine clears this.");

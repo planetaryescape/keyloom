@@ -82,6 +82,8 @@ test("a failed recheck says nothing was sent in plain words and keeps its code",
   const lost = recheckFailure(new ApiError(0, UNREACHABLE));
   expect(lost.message).toBe(RECHECK_FAILED);
   expect(lost.message).not.toContain("recovery source");
+  // R11-08: the line shows under the request's box, so it points up at it.
+  expect(lost.message).toContain("Your request is kept in the box above.");
   expect(failsAgain(lost)).toBe(false);
   const internal = recheckFailure(new ApiError(500, INTERNAL_WORDS, { code: "internal" }));
   expect(internal.code).toBe("internal");

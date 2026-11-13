@@ -10,7 +10,7 @@ import { CONFIG_GONE } from "../../src/web/history/useVersions.ts";
 import { INTERNAL_WORDS, NOT_FOUND_WORDS, type PageFailure } from "../../src/web/shell/unexpected.ts";
 import { tinyBoard, tinyLayout } from "../helpers/workload.ts";
 
-function panel(ai: BoardReview["ai"], items: BoardReview["items"] = [], proposalsFailed = false) {
+function panel(ai: BoardReview["ai"], items: BoardReview["items"] = [], proposalsFailed = false, proposalsFailure: PageFailure | null = proposalsFailed ? { message: "Can't reach keyloom.", code: "unreachable" } : null) {
   const review: Review = {
     review: { id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "manual", checkedAt: 0, checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai, freshness: { current: true, reason: null }, fixed: [], items },
     stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, loadProblem: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
@@ -18,7 +18,7 @@ function panel(ai: BoardReview["ai"], items: BoardReview["items"] = [], proposal
   };
   return renderToStaticMarkup(createElement(ReviewPanel, {
     token: "synthetic", review, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: proposalsFailed ? [] : null,
-    pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {}, proposalsFailed, onReadProposals() {},
+    pinnedId: null, onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {}, proposalsFailure, onReadProposals() {},
   }));
 }
 
@@ -42,6 +42,13 @@ test("an unread proposals list says so with Try again, and a suggestion says its
   expect(html).toContain("Try again");
   expect(html).toContain("change not read");
   expect(html).not.toContain("invalid for this version");
+});
+
+test("an unread proposals list that fails the same way every time offers Restart keyloom, never Try again (R11-05)", () => {
+  const html = panel({ status: "done", reason: null, model: "synthetic", code: null }, [], true, { message: "keyloom sent an answer this page can't read.", code: "unreadable" });
+  expect(html).toContain("couldn&#x27;t read this config&#x27;s proposals");
+  expect(html).toContain("Restart keyloom");
+  expect(html).not.toContain(">Try again<");
 });
 
 // R5-03, R5-10, R5-17: every failed review request shows its words with the button that moves on, before a first review too.

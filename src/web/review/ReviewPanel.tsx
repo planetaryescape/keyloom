@@ -18,6 +18,7 @@ import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import type { PageFailure } from "../shell/unexpected.ts";
 import { ModelSetup } from "../chat/ModelSetup.tsx";
+import { ProposalsReadProblem } from "../chat/ProposalsReadProblem.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
@@ -154,7 +155,7 @@ const TRIGGER: Record<BoardReview["trigger"], string> = { connect: "when it conn
 
 // The board review in the side column (D-340): Problems, then Suggestions, then Hints, in plain words with keys as caps. Every action is
 // a visible button. A suggestion is a ready proposal: pin it to see it on the board, apply it, or say not this.
-export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose, proposalsFailed = false, onReadProposals }: {
+export function ReviewPanel({ token, review: r, layout, board, rows, boardName, configName, proposals, pinnedId, onPin, onApply, onShowLayer, onPlanRepair, onClose, proposalsFailure = null, onReadProposals }: {
   token: string;
   review: Review;
   layout: Layout;
@@ -172,11 +173,15 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   onShowLayer: (layerId: string) => void;
   onPlanRepair: (item: ReviewItem) => void;
   onClose: () => void;
-  /** The config's proposals could not be read, so suggestions have no change to show or apply until they are read again (R4-08). */
-  proposalsFailed?: boolean;
+  /**
+   * The config's proposals could not be read, so suggestions have no change to show or apply until they are read again (R4-08). Kept with
+   * its code, so a read that fails the same way never keeps a Try again (R11-05).
+   */
+  proposalsFailure?: PageFailure | null;
   /** Reads the proposals again: after a failed read, and after an Apply whose outcome is unknown. */
   onReadProposals?: () => void;
 }) {
+  const proposalsFailed = proposalsFailure !== null;
   const [showHidden, setShowHidden] = useState(false);
   const [details, setDetails] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -411,12 +416,9 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       {head}
       <div className="br-body">
         {r.stale ? <div className="br-actions"><button type="button" className="bar-apply" disabled={r.busy} onClick={() => void r.run(true)}>Run a fresh review</button></div> : null}
-        {proposalsFailed && onReadProposals !== undefined ? (
+        {proposalsFailure !== null && onReadProposals !== undefined ? (
           // The suggestions' changes live in the config's proposals; an unread list is not a missing one (R4-08).
-          <div className="br-apply-failure" role="alert">
-            <p>keyloom couldn&apos;t read this config&apos;s proposals, so suggestions can&apos;t be applied yet.</p>
-            <button type="button" className="sheet-action" onClick={onReadProposals}>Try again</button>
-          </div>
+          <ProposalsReadProblem token={token} failure={proposalsFailure} lead="keyloom couldn't read this config's proposals, so suggestions can't be applied yet." onReadAgain={onReadProposals} className="br-apply-failure" />
         ) : null}
         {!r.stale && nothing && fixedNow.length === 0 ? (
           <p className="br-quiet br-nothing">

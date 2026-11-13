@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { importZmk, importZmkSource, ZmkImportError } from "../../../src/firmware/zmk/import.ts";
+import { importZmk, importZmkSource, ZmkImportError, ZmkKeyCountError } from "../../../src/firmware/zmk/import.ts";
 import { STYLE_FIXTURE, TEMPLATE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
@@ -178,8 +178,10 @@ describe("a Layout Editor style keymap", () => {
 });
 
 describe("what it refuses", () => {
-  test("a layer with the wrong number of bindings names the layer and the counts", async () => {
-    await expect(importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B" }) }, board)).rejects.toThrow("layer base has 2 bindings, but moergo/glove80 has 80");
+  test("a layer with the wrong number of bindings names the board by its name and both counts (R11-09)", async () => {
+    const refused = await importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B" }) }, board).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(ZmkKeyCountError);
+    expect(refused).toMatchObject({ found: 2, message: "This keymap has 2 keys, and the MoErgo Glove80 has 80." });
   });
 
   test("no keymap node, a syntax error and a non-devicetree file are errors a person can act on", async () => {

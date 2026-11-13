@@ -1,15 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchOpenProposals } from "../keyboards/api-keyboards.ts";
+import { pageFailure } from "../shell/unexpected.ts";
 import { fetchAllConfigs } from "./api-configs.ts";
 import type { ConfigCardData } from "./config-card.ts";
+
+/** Each card's data, and a way to read the list again after a failed read. */
+export type ConfigCardsRead = { data: ReadonlyMap<string, ConfigCardData>; reload: () => void };
 
 /**
  * What the config cards in a thread show: each made config's name, board, source and open proposals. One list fetch serves every card,
  * and it runs again when `refreshKey` changes (a rename, an archive or an applied proposal changes what a card says). A config that is
- * not in the list is gone; an unreadable list is an error, never "gone"; unreadable proposals only drop the count.
+ * not in the list is gone; an unreadable list is an error, never "gone"; unreadable proposals only drop the count. An error keeps its code,
+ * and `reload` reads the list again, so the card's Try again works without waiting for the revision to change (R11-07).
  */
-export function useConfigCards(token: string, ids: readonly string[], refreshKey: string): ReadonlyMap<string, ConfigCardData> {
+export function useConfigCards(token: string, ids: readonly string[], refreshKey: string): ConfigCardsRead {
   const [cards, setCards] = useState<ReadonlyMap<string, ConfigCardData>>(new Map());
+  const [attempt, setAttempt] = useState(0);
   const wanted = [...new Set(ids)].sort().join("\n");
   useEffect(() => {
     if (wanted === "") return;
@@ -27,11 +33,18 @@ export function useConfigCards(token: string, ids: readonly string[], refreshKey
         }));
         if (!controller.signal.aborted) setCards((now) => new Map([...now, ...next]));
       },
-      () => {
-        if (!controller.signal.aborted) setCards((now) => new Map([...now, ...list.map((id): [string, ConfigCardData] => [id, now.get(id) ?? { state: "error" }])]));
+      (error: unknown) => {
+        if (controller.signal.aborted) return;
+        // A card that showed its config keeps it; the others say the read failed, with the failure's code for their buttons.
+        const failure = pageFailure(error, "keyloom couldn't read your configs.");
+        setCards((now) => new Map([...now, ...list.map((id): [string, ConfigCardData] => {
+          const shown = now.get(id);
+          return [id, shown === undefined || shown.state === "error" ? { state: "error", failure } : shown];
+        })]));
       },
     );
     return () => controller.abort();
-  }, [token, wanted, refreshKey]);
-  return cards;
+  }, [token, wanted, refreshKey, attempt]);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  return { data: cards, reload };
 }

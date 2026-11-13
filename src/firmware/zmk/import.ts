@@ -17,12 +17,12 @@ import { CONDITIONAL_COMPATIBLE, importConditionalLayer } from "./import-conditi
 import { annotateZmkLayerRefs } from "./layer-refs.ts";
 import { importHoldTap, importMacro, importTapDance, isHoldTap, isMacro, isTapDance } from "./import-behaviors.ts";
 import { readZmkLighting } from "./import-lighting.ts";
-import { ZmkImportError } from "./import-error.ts";
+import { ZmkImportError, ZmkKeyCountError } from "./import-error.ts";
 import { type OptionValue, cellsOf, optionOf, stringOf } from "./props.ts";
 import { slug } from "./slug.ts";
 import { type ZmkSourceFiles, readZmkSource } from "./source.ts";
 
-export { ZmkImportError } from "./import-error.ts";
+export { ZmkImportError, ZmkKeyCountError } from "./import-error.ts";
 
 export type ZmkImportResult = { layout: Layout; report: ImportReport; suggestedName: string };
 
@@ -156,7 +156,9 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
     const calls = cellsOf(n, "bindings").flatMap((c) => parseCalls(c).calls);
     keymapCalls.push(...calls);
     if (calls.length !== board.keyCount) {
-      throw new ZmkImportError(`layer ${n.name} has ${calls.length} bindings, but ${board.id} has ${board.keyCount}`);
+      // Named as the person knows the boards, never by id (R11-09). The first layer stands for the keymap; a later one is named.
+      const which = li === 0 ? "This keymap has" : `Layer ${n.name} of this keymap has`;
+      throw new ZmkKeyCountError(calls.length, `${which} ${calls.length} keys, and the ${board.vendor} ${board.name} has ${board.keyCount}.`);
     }
     for (const p of n.props) {
       if (!["bindings", "sensor-bindings", "display-name", "label"].includes(p.name)) warnings.push(`layer ${n.name}: ${p.name} isn't imported and will be dropped`);

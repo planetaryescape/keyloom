@@ -294,7 +294,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
       )}
       {refused?.refusal.kind === "other_board" ? (
         <OtherBoard filename={refused.file?.name ?? "This file"} refusal={refused.refusal} here={board} busy={busy}
-          onImportAs={(other) => void take(refused.file === null ? null : [refused.file], other)} />
+          onImportAs={(other) => void take(refused.file === null ? null : [refused.file], other)} onStartBlank={() => void startBlank()} blankOff={off("blank")} />
       ) : null}
       {nothingToRead ? (
         <button type="button" className={off("blank") ? "button board-card-reload" : "button button-primary board-card-reload"} disabled={busy || off("blank")} onClick={() => void startBlank()}>
@@ -339,8 +339,10 @@ export function CardProblem({ token, problem, primary = false }: { token: string
 }
 
 /** A keyloom export dropped on another board's card (R6-18): import it as that board's config, or say keyloom doesn't have the board. */
-function OtherBoard({ filename, refusal, here, busy, onImportAs }: {
+function OtherBoard({ filename, refusal, here, busy, onImportAs, onStartBlank, blankOff }: {
   filename: string; refusal: Extract<ImportRefusal, { kind: "other_board" }>; here: BoardChoice; busy: boolean; onImportAs: (board: BoardChoice) => void;
+  /** A keymap for another board's key count may still be wanted on this one, started blank (R11-09). */
+  onStartBlank: () => void; blankOff: boolean;
 }) {
   const other = refusal.board;
   return (
@@ -352,6 +354,9 @@ function OtherBoard({ filename, refusal, here, busy, onImportAs }: {
           <a className="sheet-action" href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener"><BookOpen size={13} aria-hidden="true" />Open the contribution guide</a>
         ) : (
           <button type="button" className="sheet-action" disabled={busy} onClick={() => onImportAs(other)}><FileUp size={13} aria-hidden="true" />Import it as a {other.name} config</button>
+        )}
+        {refusal.keymap !== true ? null : (
+          <button type="button" className="sheet-action" disabled={busy || blankOff} onClick={onStartBlank}><FilePlus2 size={13} aria-hidden="true" />Start blank</button>
         )}
       </div>
     </div>

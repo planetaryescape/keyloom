@@ -106,12 +106,13 @@ export class CredentialError extends Error {
 
 /**
  * A refusal about a keyboard that the page answers with a button (R6-08, R6-18): `keyboard_removed` offers Restore {board}, then the
- * import or the new config again; `layout_for_other_board` offers Import it as a {board} config. `board` is the board the button acts
+ * import or the new config again; `layout_for_other_board` (a keyloom export) and `keymap_for_other_board` (a ZMK keymap with that board's
+ * number of keys, R11-09) offer Import it as a {board} config. `board` is the board the button acts
  * on. The message is the CLI's. Exit 2 like any usage error.
  */
 export class BoardRefusal extends UsageError {
   override name = "BoardRefusal";
-  constructor(readonly code: "keyboard_removed" | "layout_for_other_board", readonly board: string, message: string) {
+  constructor(readonly code: "keyboard_removed" | "layout_for_other_board" | "keymap_for_other_board", readonly board: string, message: string) {
     super(message);
   }
 }

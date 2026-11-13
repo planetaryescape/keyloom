@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, ClipboardCheck, Keyboard } from "lucide-react";
 import type { ChatPresentation } from "../../api/http.ts";
 import { madeConfigs } from "../configs/agent-made-configs.ts";
 import { configCardView, type CardOrigin, type ConfigCardAction, type ConfigCardData } from "../configs/config-card.ts";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 
 /** What a reply's config cards need from the page: the cards' data, which config is on screen, and how to open one. */
 export type ConfigCards = {
@@ -12,6 +13,9 @@ export type ConfigCards = {
   onOpen: (id: string) => void;
   /** Shows this config's waiting proposals beside the board; the config is the one on screen. */
   onReview: () => void;
+  /** Reads the config list again, for a card whose read failed (R11-07). */
+  onReadAgain: () => void;
+  token: string;
 };
 
 /** A card for each config the reply made (put_config, create_config), also on a stopped or failed reply when the config was committed. */
@@ -31,6 +35,11 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
             <p className="ask-question config-card-title"><Keyboard size={14} aria-hidden="true" /><span>{view.title}</span></p>
             {view.facts.length === 0 ? null : <p className="ask-description config-card-facts">{view.facts.join(" · ")}</p>}
             {view.note === null ? null : <p className="ask-description">{view.note}</p>}
+            {data.state !== "error" ? null : (
+              <div className="config-card-actions">
+                <RetryOrRestart token={cards.token} failure={data.failure} onRetry={cards.onReadAgain} className="button config-card-action" />
+              </div>
+            )}
             {view.action === null ? null : (
               <div className="config-card-actions">
                 <CardButton action={view.action} cards={cards} primary />
