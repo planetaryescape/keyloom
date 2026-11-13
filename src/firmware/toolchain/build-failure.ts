@@ -105,10 +105,11 @@ export function tooLargeMessage(boardName: string, overflow: { bytes: number | n
  * driver's `generic` sentence. The middle two carry a code, because they fail the same way every time; a full disk carries `disk_full`.
  */
 export function classifyBuildFailure(output: readonly string[], driver: { boardName: string; docker: string | undefined; compileError: () => string | undefined; generic: string }): BuildFailure {
+  // `docker`: the driver's sentence for a daemon that stopped answering, which is `docker_unavailable`.
   // A full disk fills again on the next build, so it has a code whose button frees space first (R8-04), whatever the driver's hint says.
   if (diskFull(output)) return new BuildFailure(DISK_FULL_MESSAGE, "disk_full");
-  // A stopped daemon may pass.
-  if (driver.docker !== undefined) return new BuildFailure(driver.docker);
+  // A daemon that stopped during the build: the page's Docker callout starts it, and Build again starts it too (R9-11).
+  if (driver.docker !== undefined) return new BuildFailure(driver.docker, "docker_unavailable");
   const overflow = firmwareOverflow(output);
   if (overflow !== null) return new BuildFailure(tooLargeMessage(driver.boardName, overflow), "too_large");
   const compiled = driver.compileError();

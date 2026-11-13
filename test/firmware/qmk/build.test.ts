@@ -116,6 +116,13 @@ describe("buildQmk (fake docker)", () => {
     expect(failure.message).toContain("`docker builder prune`");
   });
 
+  test("a Docker daemon that stopped during the build is docker_unavailable, in words that fit any engine (R9-11)", async () => {
+    const s = await setup();
+    const failure = await failureOf(s.build("daemongone"));
+    expect(failure.code).toBe("docker_unavailable");
+    expect(failure.message).toBe("Docker isn't running. Start it and build again.");
+  });
+
   describe("failures that repeat every time carry their code (R5-02, recorded lines in test/fixtures/build-logs)", () => {
     const logs = join(import.meta.dir, "../../fixtures/build-logs");
     test("an unknown key code is a compile error", async () => {

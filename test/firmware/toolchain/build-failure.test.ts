@@ -46,8 +46,8 @@ test("a full Docker disk is disk_full wherever it shows, and the terminal keeps 
   const full = await log("zmk-docker-disk-full.log");
   const driver = { boardName: "Glove80", docker: "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.", compileError: () => undefined, generic: "x" };
   expect(classifyBuildFailure(full, driver)).toMatchObject({ code: "disk_full", message: expect.stringContaining("`docker builder prune`") });
-  // A stopped daemon, the drivers' other Docker trouble, may pass, so it keeps no code.
-  expect(classifyBuildFailure(["Cannot connect to the Docker daemon"], { ...driver, docker: "Docker isn't running." }).code).toBeNull();
+  // A stopped daemon, the drivers' other Docker trouble, is docker_unavailable, so the page shows its Docker callout (R9-11).
+  expect(classifyBuildFailure(["Cannot connect to the Docker daemon"], { ...driver, docker: "Docker isn't running." }).code).toBe("docker_unavailable");
   expect(probeFailure(1, ["cp: write error: No space left on device"], "/c", "x").code).toBe("disk_full");
 });
 

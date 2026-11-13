@@ -40,7 +40,8 @@ const idFor = (qmkTarget: string): string => qmkTarget.replaceAll("/", "_");
 function hint(lines: readonly string[]): string | undefined {
   const text = lines.join("\n");
   if (diskFull(lines)) return DISK_FULL_MESSAGE;
-  if (/Cannot connect to the Docker daemon/i.test(text)) return "Docker isn't running. Start Docker Desktop and build again.";
+  // Not "Docker Desktop": Colima and other engines run the daemon too (R9-11).
+  if (/Cannot connect to the Docker daemon/i.test(text)) return "Docker isn't running. Start it and build again.";
   return undefined;
 }
 
