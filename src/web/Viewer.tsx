@@ -28,7 +28,7 @@ import { useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
 import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
 import { SetupCard } from "./keyboards/SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
-import { NewBoardKeyboard } from "./keyboards/NewBoardKeyboard.tsx";
+import { NewBoardKeyboard, newBoardHalf } from "./keyboards/NewBoardKeyboard.tsx";
 import { OpenProposals } from "./keyboards/OpenProposals.tsx";
 import { useReview } from "./review/useReview.ts";
 import { ReviewMarker, ReviewPanel, reviewTextWords } from "./review/ReviewPanel.tsx";
@@ -426,6 +426,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // A new keyboard (D-336): the card over the stage, then its board on the stage and its questions in the column beside it.
   const newBoard = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards);
   const newBoardDrawn = (newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put") && newBoard.preview?.board != null ? newBoard.preview.board : null;
+  const newBoardShownHalf = newBoardHalf(phone, newBoardDrawn, undefined, half);
   const newBoardPanel = newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put";
   const putSources = useMemo<PutSource[]>(() => {
     const target = newBoard.step.kind === "put" ? newBoard.step.boardId : null;
@@ -2111,7 +2112,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 ? newBoard.putPreview.placements.flatMap((p) => p.blocked === undefined && p.candidates[0] !== undefined ? [newBoard.step.kind === "put" ? (newBoard.step.choices[String(p.source)] ?? p.candidates[0].target) : p.candidates[0].target] : [])
                 : [])}
               onPickRow={newBoard.setHomeRow}
-              half={shownHalf}
+              half={newBoardShownHalf}
+              onSwipe={newBoardShownHalf === null ? undefined : (direction) => setHalf(direction === "left" ? "right" : "left")}
             />
           ) : (
           <Keyboard
@@ -2173,7 +2175,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           } }} />
           <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={importForBoard} onMade={openMadeConfig} />
           {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
-          {newBoardDrawn !== null && shownHalf !== null ? (
+          {newBoardDrawn !== null && newBoardShownHalf !== null ? (
             <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>
           ) : null}
           {/* A phone has no column: the new keyboard's questions are a sheet at the stage's foot, as the lab's read-out is (D-336). */}

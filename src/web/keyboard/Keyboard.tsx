@@ -5,7 +5,7 @@ import type { KeyDescription } from "../../layout/describe.ts";
 import { Cap } from "./Cap.tsx";
 import { ComboLines, type ComboLine } from "./ComboLines.tsx";
 import { MoveArrows } from "./MoveArrows.tsx";
-import { LEGEND_FLOOR_PX } from "./fit.ts";
+import { LEGEND_FLOOR_PX, tapsFit } from "./fit.ts";
 import { useKeyDrag } from "./useKeyDrag.ts";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { canvasAround } from "./canvas.ts";
@@ -58,8 +58,11 @@ interface KeyboardProps {
   onPress: (index: number, via: "pointer" | "keyboard", extend?: boolean) => void;
   /** The key whose panel is open, drawn with an outline; `selected` still decides the one tab stop. */
   current?: number | null;
-  /** Replaces a key's legend, for the Advanced view's firmware names. */
-  legendOverrides?: readonly ({ tap: string; hold?: string } | undefined)[] | undefined;
+  /**
+   * Replaces a key's legend, for the Advanced view's firmware names. `short` is the tap every key shows instead when any override's tap
+   * would be cut at the drawn size, such as a new board's finger letters on a phone.
+   */
+  legendOverrides?: readonly ({ tap: string; hold?: string; short?: string } | undefined)[] | undefined;
   /** Key position -> the hex its LED shows on this layer (D-192). */
   ledColors?: ReadonlyMap<number, string> | undefined;
   /** The key whose draft is not applied yet, drawn with a pending mark. */
@@ -83,6 +86,8 @@ interface KeyboardProps {
   half?: "left" | "right" | null;
   /** A horizontal swipe on the board, for the phone's half switcher. */
   onSwipe?: (direction: "left" | "right") => void;
+  /** The smallest key size the board fits down to before it scrolls; the pointer's own minimum when absent (useFitUnit). */
+  fitMin?: number;
   /** Lines between the keys of combos, with their outputs (16#combos-are-made-from-a-selection). */
   comboLines?: readonly ComboLine[];
   /** The combo being pointed at, and the keys that makes light up. */
@@ -171,6 +176,7 @@ export function Keyboard({
   handle,
   half = null,
   onSwipe,
+  fitMin,
   comboLines = [],
   comboHovered = null,
   comboLit,
@@ -211,7 +217,7 @@ export function Keyboard({
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
   const canvas = canvasAround(shownKeys, parts);
-  const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
+  const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height }, fitMin);
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
   // Never below a fingertip's 44 px for a parting (or below the unit the window already gave): smaller keys take the 10 px floor, and
@@ -241,6 +247,13 @@ export function Keyboard({
     const word = fontsReady ? measureText(WIDEST_WORD, font) : null;
     return frontMode(unit, both === null || word === null ? null : { both, word }, GAP, legendFloor);
   }, [unit, legendFloor, fontsReady]);
+  // A legend is never cut by its cap (18#legends-stay-readable): when one override's tap doesn't fit, every key takes its short form.
+  const shortTaps = keys.flatMap((key, index) => {
+    const override = legendOverrides?.[index];
+    if (override?.short === undefined || (visible !== null && !visible.has(index))) return [];
+    return [{ text: override.tap, width: tapWidth(key, canvas) }];
+  });
+  const short = shortTaps.length > 0 && !tapsFit(shortTaps, { unit, floor: legendFloor });
   // Shift-, Cmd- or Ctrl-click adds a key to the selection. The focus that the press causes must not move the open panel to that key first.
   const extendNext = useRef(false);
   // A phone shows one hand, so a combo is drawn only when all its keys are on it.
@@ -353,7 +366,7 @@ export function Keyboard({
               data-rotary={shapes?.[String(index)]?.kind === "rotary-encoder" || undefined}
               tone={description.kind}
               {...(keycaps?.[String(index)] === undefined ? {} : { keycap: keycaps[String(index)] as KeycapColour })}
-              legend={legendOverrides?.[index] ?? description.legend}
+              legend={overrideLegend(legendOverrides?.[index], short) ?? description.legend}
               breakable={legendOverrides?.[index] !== undefined}
               {...(ledColors?.has(index) ? { led: ledColors.get(index) as string } : {})}
               {...(reach?.has(index) ? { reach: reach.get(index) ?? null } : {})}
@@ -445,6 +458,19 @@ function statusLedHand(x: number, keys: readonly GeometryKey[], hands: { left: r
 // the front word with them. Its print gets the widest upright box of PRINT_DEPTH units that fits inside the turned cap instead. A
 // square cap keeps its own box: its corners stay close enough (the Glove80's thumbs).
 const PRINT_DEPTH = 0.6;
+/** A key's override as its cap prints it: the short form when the board uses short forms (see `short` in Keyboard). */
+function overrideLegend(override: { tap: string; hold?: string; short?: string } | undefined, short: boolean): { tap: string; hold?: string } | undefined {
+  if (override === undefined) return undefined;
+  if (short && override.short !== undefined) return { tap: override.short };
+  return override.hold === undefined ? { tap: override.tap } : { tap: override.tap, hold: override.hold };
+}
+
+/** The width in key units a key's tap is printed across: the cap's, or a steeply turned key's upright print box (Cap's `printBox`). */
+export function tapWidth(key: GeometryKey, canvas: Bounds): number {
+  const rect = keyRect(key, canvas);
+  return Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? (uprightBox(rect).printBox?.w ?? key.w) : key.w;
+}
+
 function uprightBox(rect: KeyRect): { printBox?: { w: number; h: number } } {
   const w = rect.width - GAP;
   const h = rect.height - GAP;

@@ -10,14 +10,17 @@ import { activitiesFor, importRefusal, otherBoardWords, restoreFor, retryFor, ty
 import { createConfig } from "../configs/api-configs.ts";
 import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
-import { acceptsFile, firstFreeName, guideFor, importCommand, offersStartBlank } from "./export-steps.ts";
+import { acceptsFile, firstFreeName, guideFor, importCommand, importIntro, offersStartBlank } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import type { UnexpectedCode } from "../shell/unexpected.ts";
+import { unexpectedCodeOf } from "../keyboards/unexpected-code.ts";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import type { ReviewActivity } from "../../api/review.ts";
 import "../review/review.css";
 import "./import.css";
 
-type Boards = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; boards: BoardChoice[] };
+type Boards = { status: "loading" } | { status: "error"; message: string; code: UnexpectedCode | undefined } | { status: "ready"; boards: BoardChoice[] };
 
 interface Props {
   token: string;
@@ -50,7 +53,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
     fetchBoards(token, controller.signal).then(
       (list) => setBoards({ status: "ready", boards: list }),
       (error: unknown) => {
-        if (!controller.signal.aborted) setBoards({ status: "error", message: error instanceof Error ? error.message : "Couldn't load the boards." });
+        if (!controller.signal.aborted) setBoards({ status: "error", message: error instanceof Error ? error.message : "Couldn't load the boards.", code: unexpectedCodeOf(error) });
       },
     );
     return () => controller.abort();
@@ -66,7 +69,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
       )}
       <header className="import-intro">
         <h2 id="import-title">{first ? "Bring in your first layout" : "Import a layout"}</h2>
-        <p>Export your layout from your keyboard's own editor and drop the file on its card. Every layer shows up here, and nothing reaches the keyboard until you apply a change.</p>
+        {boards.status === "ready" ? <p>{importIntro(shown)}</p> : null}
       </header>
       {/* Tests replay a firmware build, so they are offered only beside a QMK or ZMK card; the MacBook's kanata has none (R6-25). */}
       {shown.some((board) => board.firmware !== "kanata") ? (
@@ -78,11 +81,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
       {boards.status === "loading" ? (
         <p className="loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the boards…</p>
       ) : boards.status === "error" ? (
-        <div className="import-error" role="alert">
-          <TriangleAlert size={18} aria-hidden="true" />
-          <p>{boards.message}</p>
-          <button type="button" className="button" onClick={() => setAttempt((n) => n + 1)}><RefreshCw size={14} aria-hidden="true" />Try again</button>
-        </div>
+        <BoardsFailed token={token} message={boards.message} code={boards.code} onRetry={() => setAttempt((n) => n + 1)} />
       ) : (
         <>
           <ul className="board-cards" aria-label="Supported keyboards">
@@ -100,6 +99,19 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
         </>
       )}
     </section>
+  );
+}
+
+/** The board list couldn't be read: why, and Try again, or Restart keyloom for a failure no screen planned for (R8-03). */
+export function BoardsFailed({ token, message, code, onRetry }: { token: string; message: string; code: UnexpectedCode | undefined; onRetry: () => void }) {
+  return (
+    <div className="import-error" role="alert">
+      <TriangleAlert size={18} aria-hidden="true" />
+      <p>{message}</p>
+      {code === undefined
+        ? <button type="button" className="button" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+        : <UnexpectedWayOut token={token} code={code} onRetry={onRetry} />}
+    </div>
   );
 }
 

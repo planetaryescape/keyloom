@@ -1,17 +1,18 @@
-import { ArrowLeft, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search, Usb } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { BoardChoice } from "../../api/http.ts";
+import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import { CollectionResponseSchema, type CollectionKeyboard } from "../../api/keyboards.ts";
 import { request } from "../api-write.ts";
 import type { SyncApi } from "../sync/useSync.ts";
 import { ImportScreen } from "../import/ImportScreen.tsx";
-import { useNewKeyboard } from "./useNewKeyboard.ts";
+import { keyboardKey, useNewKeyboard } from "./useNewKeyboard.ts";
 import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SearchFailed } from "./SearchFailed.tsx";
 import { SetupCard } from "./SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./NewBoardPanel.tsx";
-import { NewBoardKeyboard } from "./NewBoardKeyboard.tsx";
+import { NewBoardKeyboard, newBoardHalf } from "./NewBoardKeyboard.tsx";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { isOnePiece } from "../../boards/one-piece.ts";
@@ -20,17 +21,31 @@ import { catalogueNote, type BoardsRead } from "./catalogue-words.ts";
 import { welcomeLead } from "./onboarding-words.ts";
 import "./collection.css";
 
-export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryBoards, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
+export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
   token: string; choices: readonly BoardChoice[];
   /** Where the read of `choices` stands (R6-04): the list says it is reading, or that it couldn't, with Try again. */
   boardsRead?: BoardsRead; onRetryBoards?: () => void;
+  /** A keyboard was just added: `choices` is read again, so one left with Later is in the list below (R8-06). */
+  onBoardAdded?: () => void;
+  /** A keyboard whose Set up was pressed in Your keyboards: its setup card opens, and `onSetupOpened` says so (R8-06). */
+  setup?: { id: string; name: string } | null; onSetupOpened?: () => void;
   sync: SyncApi; sources: readonly PutSource[];
   onMade: (id: string, proposals?: boolean) => void; onManage: (removed?: boolean) => void; onBack?: (() => void) | undefined; collectionVersion?: number;
 }) {
-  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards);
-  const [query, setQuery] = useState("");
+  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded);
+  const chooseKnown = flow.chooseKnown;
   // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
   const [importing, setImporting] = useState<{ board: string | null } | null>(null);
+  useEffect(() => {
+    if (setup === null) return;
+    chooseKnown(setup);
+    // The import screen covers the setup card, so Set up pressed while it shows would seem to do nothing (PR #307 review).
+    setImporting(null);
+    onSetupOpened?.();
+    // Opened once per Set up: the callbacks are rebuilt each render and say nothing new.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup]);
+  const [query, setQuery] = useState("");
   const [half, setHalf] = useState<"left" | "right">("left");
   const [firmwareSearch, setFirmwareSearch] = useState(false);
   const [collection, setCollection] = useState<CollectionKeyboard[] | null>(null);
@@ -63,6 +78,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     rows: Object.entries(known.rows).map(([name, positions]) => ({ name, positions })),
   } : null);
   const display = flow.preview?.board ? undefined : known?.display;
+  const shownHalf = newBoardHalf(phone, drawn, display, half);
   const split = drawn !== null && !isOnePiece({ hands: drawn.hands, display }, drawn.keys);
   const placed = new Set(flow.putPreview?.placements.flatMap((placement) => {
     if (flow.step.kind !== "put" || placement.blocked !== undefined || !placement.candidates[0]) return [];
@@ -75,11 +91,13 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen)}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
       <section className="onboarding-stage" aria-label="Keyboard setup">
-        {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={phone && split ? half : null} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
+        {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={shownHalf} onSwipe={shownHalf === null ? undefined : (direction) => setHalf(direction === "left" ? "right" : "left")} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
         <NewKeyboardCard flow={flow} />
         <SetupCard flow={flow} boards={choices} hasConfigs={sources.length > 0} onImport={(board) => setImporting({ board })} onMade={onMade} />
         {flow.step.kind === "idle" ? <div className="onboarding-choices">
           <label className="keyboard-picker-search"><Search size={16} /><input type="search" aria-label="Find a keyboard to add" placeholder="Keyboard or maker" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+          {/* A plugged-in keyboard put off with Not now stays one press away, as the editor's chip keeps it (R8-15). */}
+          <PluggedIn waiting={flow.waiting} onReopen={flow.reopen} />
           <div className="onboarding-catalogue">
             {note === "boards_failed" ? <p role="alert">keyloom couldn't read its keyboard list. {onRetryBoards === undefined ? null : <button type="button" className="sheet-action" onClick={onRetryBoards}><RefreshCw size={13} aria-hidden="true" />Try again</button>}</p>
               : note === "boards_loading" ? <p role="status">Reading keyloom's keyboard list…</p>
@@ -103,6 +121,20 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     {/* Words for someone who isn't a developer (R1-30): the app prepares the folder; the guide is for whoever takes it further. */}
     <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>
   </div>;
+}
+
+/** A plugged-in keyboard keyloom hasn't met, put off with Not now: one press opens its card again (R8-15). */
+export function PluggedIn({ waiting, onReopen }: { waiting: readonly DetectedKeyboard[]; onReopen: (keyboard: DetectedKeyboard) => void }) {
+  if (waiting.length === 0) return null;
+  return (
+    <p className="onboarding-waiting">
+      {waiting.map((keyboard) => (
+        <button key={keyboardKey(keyboard)} type="button" className="sheet-action" onClick={() => onReopen(keyboard)}>
+          <Usb size={13} aria-hidden="true" />Set up the keyboard you plugged in{keyboard.device.product === "" ? "" : ` (${keyboard.device.product})`}
+        </button>
+      ))}
+    </p>
+  );
 }
 
 /** The QMK and ZMK results under the search, or why there are none yet (R4-12). */
