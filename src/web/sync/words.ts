@@ -215,7 +215,7 @@ const OPEN_STATUS = { id: "open_status", label: "Open keyboard status" } as cons
 const APPLY_NOW: SyncAction = { id: "sync_now", label: "Apply now" };
 
 /** What to say about a refused config, where to go, and what kanata or keyloom said (for Details). */
-export function kanataRefusal(board: BoardSync): { text: string; setup: boolean; reason: string | null } {
+function kanataRefusal(board: BoardSync): { text: string; setup: boolean; reason: string | null } {
   const code = board.last?.errorCode;
   const reason = board.last?.error ? plain(board.last.error) : null;
   if (code === "kanata_unwritable") return { text: `${KANATA_UNWRITABLE} Undo this change to go back to a layout kanata takes.`, setup: false, reason };
