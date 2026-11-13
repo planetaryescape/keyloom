@@ -70,6 +70,10 @@ describe("buildZmk (fake docker)", () => {
     const dockerfile = await Bun.file(join(s.dir, "image", "Dockerfile")).text();
     expect(dockerfile).toContain("FROM nixpkgs/nix:nixos-23.11@sha256:");
     expect(dockerfile).toContain(`ARG ZMK_REF=${ZMK_SHA}`);
+    expect(dockerfile).not.toContain("nix-env -iA cachix");
+    expect(dockerfile).not.toContain("https://cachix.org/api/v1/install");
+    expect(dockerfile).toContain("extra-substituters = https://moergo-glove80-zmk-dev.cachix.org");
+    expect(dockerfile).toContain("extra-trusted-public-keys = moergo-glove80-zmk-dev.cachix.org-1:D8fhPJ1c3gkuckuyBLRtGYarCVptIDn4g5k8u91NbyM=");
 
     const again = await setup();
     await again.build("ok");
