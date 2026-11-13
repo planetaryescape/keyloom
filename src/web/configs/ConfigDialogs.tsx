@@ -183,7 +183,7 @@ export function RenameDialog({ token, current, onRename, onClose }: { token?: st
       <label className="config-label" htmlFor="config-rename">Name</label>
       <input id="config-rename" className="config-input" value={name} data-autofocus aria-describedby="config-rename-waits" onChange={(e) => setName(e.target.value)} />
       <p id="config-rename-waits" className="config-waits">{waits}</p>
-      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" primary={stuck} />}
     </ConfigDialog>
   );
 }
@@ -322,7 +322,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
       </fieldset>
       <p id="config-name-waits" className="config-waits">{waits}</p>
       {removed ? <RestoreKeyboard restore={() => restoreKeyboard(token, boardId)} boardName={boardName} doing="make this config" onRestored={go} /> : null}
-      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" primary={stuck && start !== "file"} />}
     </ConfigDialog>
   );
 }
@@ -364,7 +364,7 @@ export function DeleteConfigDialog({ token, name, onDelete, onClose }: { token?:
       <p className="config-dialog-lead">Its layers, history and versions go with it. Unlike archiving, this can't be undone.</p>
       <label className="config-label" htmlFor="config-delete">Type {name} to delete it</label>
       <input id="config-delete" className="config-input" value={typed} data-autofocus autoComplete="off" spellCheck={false} onChange={(e) => setTyped(e.target.value)} />
-      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" primary={stuck} />}
     </ConfigDialog>
   );
 }
