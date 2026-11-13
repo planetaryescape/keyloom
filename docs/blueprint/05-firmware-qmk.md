@@ -68,9 +68,11 @@ Generation rules that decide how the firmware behaves:
 - **Hold-tap profiles** equal to the layout-wide settings add nothing to the firmware. A profile that differs becomes `get_tapping_term`, `get_quick_tap_term`, `get_permissive_hold` or `get_hold_on_other_key_press`, matched by keycode, with the layout-wide value as the default.
 - **Combos** put the base layer's keycodes at the combo's positions. A layer-scoped combo gets `combo_should_trigger`; a combo with its own timeout gets `get_combo_term`. `COMBO_ENABLE` in `rules.mk` is corrected (by appending, since `make` takes the last assignment) when it disagrees with whether combos exist.
 - **Macros** keep their `ST_MACRO_n` names; a macro made in keyloom takes the lowest free number.
-- **Settings.** A flag is `#define KEY`; a flag that is off is left undefined. Strings keep their quotes in the IR, so they are written back as they were read.
+- **Settings.** A flag is `#define KEY`; a flag that is off is left undefined. Imported strings keep their source text. A setting edit cannot introduce a string expression or source in its name (D-660). The generator also rejects setting text that escapes its single `config.h` definition.
 
 ## Build runs QMK's Docker script from the pinned fork
+
+Board `keymapsDir` values must be relative paths without traversal. Before host cleanup or source writes, keyloom rejects symlinks within the workspace and checks every generated filename (D-661). This also covers emulation source and stale QMK artifact cleanup. The checks protect host writes between builds. They do not claim isolation from a process that changes directories during a write.
 
 The build checkout lives at `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander/`. It's `zsa/qmk_firmware` at the pinned SHA, with submodules. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
 

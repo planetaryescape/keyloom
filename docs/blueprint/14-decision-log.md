@@ -11,6 +11,28 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 firmware build input boundaries
+
+### D-660: Setting edits cannot introduce opaque firmware source. Clarifies D-024.
+
+A new or changed firmware setting accepts a number or a switch and an identifier name. Imported expression values remain unchanged, can be removed, or can become typed values. A change cannot add or replace an expression string through `setFirmwareSetting`. QMK generation also rejects newlines, NUL bytes, trailing line continuations and source in setting names. Direct generation still preserves imported single-line expressions. This does not turn an imported custom program into trusted code.
+
+Regression: `test/validation/firmware-setting-source.test.ts`. The CLI expression-display fixture now imports its expression instead of adding new source through a change.
+
+### D-661: Host source writes and cleanup stay inside their build workspace.
+
+A QMK board's `keymapsDir` cannot be absolute or contain traversal. Host writes reject symlink components beneath the workspace root. Generated filenames receive the same checks, and cleaning generated source requires the workspace root. QMK builds and emulation use this boundary before host writes. Stale QMK artifact removal checks its paths too. A symlink used to name the workspace itself remains supported, including macOS temporary-directory aliases.
+
+The filesystem check uses `lstat` because lexical path containment alone follows a symlink outside the workspace. It does not establish protection from concurrent hostile directory replacement. Trusted-source isolation is a separate fix, tracked in `docs/issues/build-checkout-source-integrity.md`.
+
+Regression: `test/firmware/qmk/write-source.test.ts`, plus the fake QMK build and import round-trip tests.
+
+### D-662: Configure the Glove80 binary cache without executing a downloaded installer.
+
+Nix receives the MoErgo cache URL and public signing key directly in `nix.conf`. The key was read from `https://app.cachix.org/api/v1/cache/moergo-glove80-zmk-dev` on 13 November 2026. The image no longer installs Cachix from a mutable Nix expression. The pinned base, firmware source and signature requirement remain. The Dockerfile hash changes the image tag, so an existing image built with the installer is not reused for this candidate.
+
+Regression: the missing-image journey in `test/firmware/zmk/build.test.ts` checks the emitted Dockerfile. A network-disabled, read-only container configuration probe confirms Nix accepts the cache and key while `require-sigs` stays true. This probe does not establish a successful new image or firmware build.
+
 ## 2026-11-13 desktop sidecar integrity
 
 ### D-569: Verify the sidecar checksum before replacing the executable.
