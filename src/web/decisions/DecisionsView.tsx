@@ -40,7 +40,7 @@ export function DecisionsView({ token, state, layout, onBack, onReload, onHighli
       ) : state.status === "error" ? (
         <div className="chat-inline-error" role="alert">
           <p>{state.message}</p>
-          <RetryOrRestart token={token} failure={state} onRetry={onReload} />
+          <div className="unexpected-actions"><RetryOrRestart token={token} failure={state} onRetry={onReload} /></div>
         </div>
       ) : (
         <List token={token} items={state.items} layout={layout} onHighlight={onHighlight} onEdit={onEdit} onRetire={onRetire} onOpenConversation={onOpenConversation} />
@@ -183,7 +183,7 @@ function Decision({
         // The button that failed stays, so it is the Try again; an answer that fails the same way every time also gets Restart keyloom (R8-03).
         <div className="decision-problem" role="alert">
           <p>{problem.message}</p>
-          <UnexpectedWayOut token={token} failure={problem} />
+          <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={problem} /></div>
         </div>
       )}
     </article>

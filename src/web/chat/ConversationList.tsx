@@ -47,7 +47,7 @@ export function ConversationList({ token, history, currentId, onBack, onReload, 
         // The row stays pressable, so it is the Try again; an answer that fails the same way every time also gets Restart keyloom (R8-03).
         <div className="chat-inline-error" role="alert">
           <p>{failure.message}</p>
-          <UnexpectedWayOut token={token} failure={failure} />
+          <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={failure} /></div>
         </div>
       )}
       {history.status === "loading" || history.status === "idle" ? (
@@ -55,7 +55,7 @@ export function ConversationList({ token, history, currentId, onBack, onReload, 
       ) : history.status === "error" ? (
         <div className="chat-inline-error" role="alert">
           <p>{history.message}</p>
-          <RetryOrRestart token={token} failure={history} onRetry={onReload} />
+          <div className="unexpected-actions"><RetryOrRestart token={token} failure={history} onRetry={onReload} /></div>
         </div>
       ) : history.items.length === 0 ? (
         <p className="muted">No earlier conversations about this layout yet.</p>
