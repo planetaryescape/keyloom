@@ -179,12 +179,17 @@ export function useRelease(token: string, layoutRef: string): Release {
   // A read that fails says so in the dialog's callout, whose Try again reads it again (R6-21).
   const refreshBuild = useCallback(() => {
     if (buildId === undefined) return;
+    // A build, flash or shown build started meanwhile moves the generation: this read then says nothing about what is on screen, and a
+    // "gone" from it would hide the newer build (PR #315 CodeRabbit). It doesn't move the generation itself, so it cancels no other read.
+    const read = showRead.current;
     fetchBuild(token, buildId, new AbortController().signal)
       .then((next) => {
+        if (read !== showRead.current) return;
         setBuild(next);
         setFailure((now) => (now?.read === true ? null : now));
       })
       .catch((e: unknown) => {
+        if (read !== showRead.current) return;
         // The code stays, so an answer that fails the same way offers Restart keyloom, not a Try again that can't pass (R10-07).
         setLast({ kind: "read" });
         setFailure({ ...buildReadFailure(codeOf(e), genericOf(e)), read: true });
