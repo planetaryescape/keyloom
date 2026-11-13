@@ -11,10 +11,11 @@ import { DockerCallout } from "./DockerCallout.tsx";
 import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
-import { BUILD_FILE_GONE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
+import { BUILD_FILE_GONE, SYNC_BUILD_GONE_CODE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
-import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { FailureNote, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { failsAgain, wayOutFor } from "../shell/unexpected.ts";
 import "./release.css";
 
 interface Props {
@@ -61,7 +62,7 @@ function Step({ number, title, state, aside, children }: { number: number; title
 }
 
 /** What macOS refused, with the button that opens the pane where it is allowed (D-501). */
-function PermissionFix({ code, release }: { code: Parameters<typeof permissionFix>[0]; release: Release }) {
+function PermissionFix({ token, code, release }: { token: string; code: Parameters<typeof permissionFix>[0]; release: Release }) {
   const fix = permissionFix(code);
   if (fix === null) return null;
   return (
@@ -71,7 +72,7 @@ function PermissionFix({ code, release }: { code: Parameters<typeof permissionFi
         <Settings size={14} aria-hidden="true" />
         {fix.button}
       </button>
-      {release.settingsProblem === null ? null : <span className="blocked-reason" role="alert">{release.settingsProblem}</span>}
+      {release.settingsProblem === null ? null : <FailureNote token={token} failure={release.settingsProblem} className="blocked-reason" />}
     </div>
   );
 }
@@ -122,7 +123,10 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
   // the Build firmware step again, with a line that says so (R3-10).
   const shownBuild = lastBuild !== null && lastBuild.revisionId === head.id ? lastBuild : null;
   const buildStopped = shownBuild?.status === "failed" && shownBuild.errorCode === "cancelled";
-  const build = buildStopped ? null : shownBuild;
+  // A read that found the build gone (`sync_build_gone`) leaves the old build in the hook: the step shows Build firmware, as its words say,
+  // and no flash of a build keyloom no longer has (PR #315 review).
+  const buildGone = release.errorCode === SYNC_BUILD_GONE_CODE;
+  const build = buildStopped || buildGone ? null : shownBuild;
   const flash = build !== null && lastFlash !== null && lastFlash.buildId === build.id ? lastFlash : null;
   const earlier = lastBuild !== null && shownBuild === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
@@ -444,8 +448,10 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       Ask keyloom about this build
                     </button>
                   )}
-                  {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
-                  {(failure?.kind === "folder_not_shared" || failure?.kind === "disk_full") && release.settingsProblem !== null ? <p className="blocked-reason" role="alert">{release.settingsProblem}</p> : null}
+                  {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? (
+                    release.engineRestart.failure === undefined ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : <FailureNote token={token} failure={release.engineRestart.failure} className="blocked-reason" />
+                  ) : null}
+                  {(failure?.kind === "folder_not_shared" || failure?.kind === "disk_full") && release.settingsProblem !== null ? <FailureNote token={token} failure={release.settingsProblem} className="blocked-reason" /> : null}
                   {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
                   {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
                   {goBackRefused?.next !== "reload" ? null : (
@@ -490,7 +496,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                     <p className="muted">keyloom is waiting for the keyboard to appear. This continues by itself.</p>
                   </div>
                 </div>
-                <PermissionFix code={flash.instructionCode} release={release} />
+                <PermissionFix token={token} code={flash.instructionCode} release={release} />
                 <Progress label="Waiting for the bootloader" />
                 {/* Offered only before anything is written: once the server says it is writing, Cancel goes (D-501). */}
                 {flash.cancellable === true ? (
@@ -525,7 +531,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                     {flash.note === null ? null : <> {flash.note}</>}
                   </p>
                 </div>
-                {flash.verified || flash.checkable !== true ? null : <CheckAgain release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} />}
+                {flash.verified || flash.checkable !== true ? null : <CheckAgain token={token} release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} />}
                 <details className="log-details">
                   <summary>Flash log</summary>
                   <LogTail label="Flash log" lines={flash.logTail} />
@@ -552,11 +558,11 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                   <CircleAlert size={18} aria-hidden="true" />
                   <FailedText code={flash.errorCode} error={flash.error} />
                 </div>
-                <PermissionFix code={flash.errorCode} release={release} />
+                <PermissionFix token={token} code={flash.errorCode} release={release} />
                 <LogTail label="Flash log, last lines" lines={flash.logTail} />
                 {/* Written but not confirmed: reading the keyboard comes first, and flashing again stays one click away (D-506). */}
                 {flash.checkable === true ? (
-                  <CheckAgain release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} flashAlways />
+                  <CheckAgain token={token} release={release} boardName={boardName} onFlashAgain={() => setConfirming(true)} confirming={confirming} confirmBlock={confirmBlock} flashAlways />
                 ) : confirming ? (
                   confirmBlock
                 ) : (
@@ -574,12 +580,24 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
 /** Check the keyboard again (R1-15): a read of what the keyboard runs, never a build or a flash, then what it found. */
 function FailedText({ code, error }: { code: Flash["errorCode"]; error: string | null }) {
   const text = failedFlashText(code, error);
-  return <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{plain(text.detail)}</p>;
+  return (
+    <div className="failed-text">
+      <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{text.detail === null ? null : plain(text.detail)}</p>
+      {text.more === undefined ? null : (
+        <details className="log-details">
+          <summary>Details</summary>
+          <span>{plain(text.more)}</span>
+        </details>
+      )}
+    </div>
+  );
 }
 
 /** `flashAlways` offers Flash again before any check has answered, for a flash that failed after its write. */
-function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock, flashAlways = false }: { release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode; flashAlways?: boolean }) {
+function CheckAgain({ token, release, boardName, onFlashAgain, confirming, confirmBlock, flashAlways = false }: { token: string; release: Release; boardName: string; onFlashAgain: () => void; confirming: boolean; confirmBlock: ReactNode; flashAlways?: boolean }) {
   const { check } = release;
+  // A check that fails the same way again loses its button; Restart keyloom beside the failure is the way on (R10-07).
+  const stuck = failsAgain(check.problem);
   const outcome = check.found === null || check.found === "this_build" ? null : checkOutcome(check.found, boardName);
   const offerFlash = outcome?.next === "flash" || (flashAlways && outcome === null);
   return (
@@ -593,16 +611,23 @@ function CheckAgain({ release, boardName, onFlashAgain, confirming, confirmBlock
       {check.problem === null ? null : (
         <div className="callout callout-error" role="alert">
           <CircleAlert size={18} aria-hidden="true" />
-          <p>{plain(check.problem)}</p>
+          <p>{plain(check.problem.message)}</p>
+        </div>
+      )}
+      {check.problem === null || wayOutFor(check.problem, true) === null ? null : (
+        <div className="step-actions unexpected-actions">
+          <UnexpectedWayOut token={token} failure={check.problem} primary={stuck} />
         </div>
       )}
       {/* A keyboard that has moved on to a later build has nothing left to check or flash here (D-506). */}
       {outcome !== null && outcome.next === null ? null : offerFlash && confirming ? confirmBlock : (
         <div className="step-actions">
-          <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running || release.starting !== null} onClick={release.checkKeyboard}>
-            {check.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-            {check.running ? "Checking" : "Check the keyboard again"}
-          </button>
+          {stuck ? null : (
+            <button type="button" className={outcome?.next === "flash" ? "button" : "button button-primary"} disabled={check.running || release.starting !== null} onClick={release.checkKeyboard}>
+              {check.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+              {check.running ? "Checking" : "Check the keyboard again"}
+            </button>
+          )}
           {offerFlash ? (
             <button type="button" className={outcome?.next === "flash" ? "button button-primary" : "button"} onClick={onFlashAgain}>
               <Zap size={14} aria-hidden="true" />

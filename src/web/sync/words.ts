@@ -11,9 +11,10 @@ export type SyncTone = "success" | "busy" | "neutral" | "warning" | "error";
 /**
  * What a line's button does. `put_on` opens the put-on confirm (D-300), `open_release` the Build and flash dialog, where Docker's own
  * callout lives, `replace_foreign` the confirm that replaces a kanata config keyloom didn't write (R1-17), and `open_settings` the System
- * Settings pane a flash was refused for (R9-01, D-492).
+ * Settings pane a flash was refused for (R9-01, D-492). `undo_change` undoes the change kanata refused, which is one step from the layout
+ * kanata runs (R10-01); `open_history` opens History, which marks the version on the keyboard, when going back takes more than one step.
  */
-export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign" | "open_settings";
+export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign" | "open_settings" | "undo_change" | "open_history";
 
 /** `buildId`: the sync's failed build, which `open_release` opens the dialog on (R8-01). `pane`: the pane `open_settings` opens. */
 export type SyncAction = { id: SyncActionId; label: string; buildId?: string; pane?: SettingsPaneName };
@@ -200,6 +201,61 @@ const foreignFile = (board: BoardSync): boolean => board.last?.status === "faile
 const FOREIGN_FILE_DETAIL = "Someone else wrote or edited keyloom.kbd, keyloom's config file, so keyloom left it alone. Replace it to put this layout on, and keyloom keeps a copy of that file.";
 const REPLACE_FOREIGN = { id: "replace_foreign", label: "Replace it…" } as const;
 
+/**
+ * kanata didn't take the config keyloom wrote (R10-01). The engine stores it as `failure: "build"`, and kanata kept running the config it
+ * had, so the line never says a firmware build failed and never offers Build and flash (which the MacBook doesn't have). The code says
+ * why, and only a code kanata's own answer earned says "kanata refused" (PR #315 review):
+ * - `kanata_refused`: kanata turned it down, so Apply now fails the same way and going back to a layout kanata runs is the way on;
+ * - `kanata_setup`: kanata turned it down, and the kanata here isn't the one keyloom writes for, which the keyboard's status fixes;
+ * - `kanata_unwritable`: keyloom couldn't write the layout for kanata at all, so going back is the way on;
+ * - `kanata_reload_failed`: the reload failed without kanata turning it down, and keyloom put the previous file back, so Apply now may pass;
+ * - none: a sync recorded before these codes, whose cause the page can't know, so its words claim only what holds for every cause.
+ */
+const kanataRefused = (board: BoardSync): boolean => board.remapper === true && board.last?.status === "failed" && board.last.failure === "build";
+const KANATA_REFUSED = "kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one.";
+const KANATA_SETUP = "The kanata on this Mac isn't the one keyloom writes for, so it didn't take the config keyloom wrote. Your MacBook keyboard still runs the previous one.";
+const KANATA_UNWRITABLE = "keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one.";
+const KANATA_RELOAD_FAILED = "keyloom couldn't finish loading the new config into kanata, so it put the previous config back.";
+const KANATA_NOT_ON = "keyloom couldn't put this config on kanata, so your MacBook keyboard still runs the previous one.";
+const UNDO_CHANGE = { id: "undo_change", label: "Undo this change" } as const;
+const OPEN_HISTORY = { id: "open_history", label: "Open History" } as const;
+const OPEN_STATUS = { id: "open_status", label: "Open keyboard status" } as const;
+const APPLY_NOW: SyncAction = { id: "sync_now", label: "Apply now" };
+
+/**
+ * One undo reaches the layout kanata runs only when the refused change is the head and the head is the one change since kanata's running
+ * revision (the engine's count, `changes`). With more changes, one undo lands on a layout kanata never checked, which may hold the same
+ * problem; with no count (kanata runs setup's config, or a revision off the head's line) there is no layout of this config kanata runs.
+ */
+export function undoReachesKanata(board: BoardSync): boolean {
+  return board.state.kind === "behind" && board.state.changes === 1 && board.last?.revisionId === board.headRevisionId;
+}
+
+/** How to go back, in words that match the button: Undo for one step, otherwise History, which marks the version kanata runs. */
+function wayBack(board: BoardSync): { text: string; action: SyncAction & { id: "undo_change" | "open_history" } } {
+  if (undoReachesKanata(board)) return { text: "Undo this change to go back to the layout kanata runs.", action: UNDO_CHANGE };
+  const marked = board.state.kind === "behind" && board.state.changes !== null;
+  return {
+    text: marked ? `Open History and press Go back to this on the version marked “On your ${board.boardName}”, the one kanata runs.` : "Open History to go back to an earlier version.",
+    action: OPEN_HISTORY,
+  };
+}
+
+/**
+ * What to say about a config kanata didn't take, and what kanata or keyloom said (for Details). `way`: `setup` is fixed in the keyboard's
+ * status, `back` by going back to a layout kanata runs (`back` is that button), and `again` by another Apply.
+ */
+function kanataRefusal(board: BoardSync): { text: string; way: "setup" | "back" | "again"; reason: string | null; back: SyncAction & { id: "undo_change" | "open_history" } } {
+  const code = board.last?.errorCode;
+  const reason = board.last?.error ? plain(board.last.error) : null;
+  const back = wayBack(board);
+  const said = { reason, back: back.action };
+  if (code === "kanata_setup") return { text: KANATA_SETUP, way: "setup", ...said };
+  if (code === "kanata_reload_failed") return { text: KANATA_RELOAD_FAILED, way: "again", ...said };
+  const lead = code === "kanata_unwritable" ? KANATA_UNWRITABLE : code === "kanata_refused" ? KANATA_REFUSED : KANATA_NOT_ON;
+  return { text: `${lead} ${back.text}`, way: "back", ...said };
+}
+
 function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): SyncLine {
   switch (s.kind) {
     case "in_sync":
@@ -213,6 +269,15 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
         return {
           label, short: s.why === "remapping_off" ? "Off" : "Behind", detail: s.why === "remapping_off" ? `Your MacBook keyboard is typing plainly. ${FOREIGN_FILE_DETAIL}` : FOREIGN_FILE_DETAIL,
           ...(board.last?.error ? { more: board.last.error } : {}), tone: s.why === "failed" ? "error" : "neutral", action: REPLACE_FOREIGN,
+        };
+      }
+      if (s.why === "failed" && kanataRefused(board)) {
+        // A setup cause: the popover's checklist, right below this line, has the step that fixes it, and Apply now is for after it.
+        const refused = kanataRefusal(board);
+        const detail = refused.way === "setup" ? `${refused.text} Fix that in the steps below, then Apply now.` : refused.way === "again" ? `${refused.text} Apply now to try again.` : refused.text;
+        return {
+          label, short: "Behind", detail, ...(refused.reason === null ? {} : { more: refused.reason }), tone: "error",
+          ...(refused.way === "setup" ? { action: null, second: APPLY_NOW } : refused.way === "again" ? { action: APPLY_NOW } : { action: refused.back }),
         };
       }
       const detail =
@@ -302,6 +367,15 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
   if (was === "syncing" && now.kind === "behind" && after.remapper === true && foreignFile(after)) {
     return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: REPLACE_FOREIGN };
   }
+  if (was === "syncing" && now.kind === "behind" && now.why === "failed" && kanataRefused(after)) {
+    const refused = kanataRefusal(after);
+    // The toast has no Apply now of its own; the keyboard's status has it, beside the step a setup cause needs.
+    return {
+      kind: "error", message: `Couldn't put the change on your ${after.boardName}`,
+      detail: refused.way === "setup" ? `${refused.text} The keyboard's status says how to fix it.` : refused.way === "again" ? `${refused.text} Apply now in the keyboard's status to try again.` : refused.text,
+      action: refused.way === "back" ? refused.back : OPEN_STATUS,
+    };
+  }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
     if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: openFailedBuild(after) };
     // A stopped build has nothing to show in Build and flash; the pill offers Sync now.
@@ -324,9 +398,10 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
 
 /**
  * `open_status` opens the keyboard's status popover, where kanata's checklist is; `restore_keyboard` puts a removed keyboard back;
- * `restart_keyloom` opens the restart dialog for a failure no screen planned for (R9-05, D-540).
+ * `restart_keyloom` opens the restart dialog for a failure no screen planned for (R9-05, D-540); `undo_change` undoes a change kanata
+ * refused, and `open_history` opens History when going back takes more than one step (R10-01).
  */
-export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard" | "restart_keyloom";
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard" | "restart_keyloom" | "undo_change" | "open_history";
 
 /**
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;

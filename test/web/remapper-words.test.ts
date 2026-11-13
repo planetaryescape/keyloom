@@ -17,14 +17,45 @@ const running = [f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permi
 const fresh = [f("kanata_missing", "fail"), f("driver_missing", "fail"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail")];
 
 describe("setupSteps", () => {
-  test("a fresh Mac: install, driver, permissions, then start, each with its own button", () => {
+  test("a fresh Mac: install, driver, start, then permissions for the copy start makes, each with its own button (R10-03)", () => {
     const steps = setupSteps(status(fresh));
-    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "permissions", "start"]);
+    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "start", "permissions"]);
     expect(steps[0]?.actions).toEqual([{ id: { kind: "install_kanata" }, label: "Install kanata" }]);
     expect(steps[1]?.link?.href).toContain("/tag/v6.2.0");
-    expect(steps[2]?.actions.map((a) => a.label)).toEqual(["Open Input Monitoring settings", "Open Accessibility settings"]);
     // Starting before kanata is installed can't work, so it isn't offered yet.
-    expect(steps[3]).toMatchObject({ detail: "Install kanata first.", actions: [] });
+    expect(steps[2]).toMatchObject({ detail: "Install kanata first.", actions: [] });
+    expect(steps[3]?.actions.map((a) => a.label)).toEqual(["Open Input Monitoring settings", "Open Accessibility settings"]);
+    // The copy to allow doesn't exist until Start has run, so the step says to do it after.
+    expect(steps[3]?.detail).toStartWith("After the Start kanata step above, turn kanata on");
+  });
+
+  test("with kanata running, the permissions step no longer points at Start (R10-03)", () => {
+    const steps = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "ok")]));
+    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "start", "permissions"]);
+    expect(steps[3]?.detail).toStartWith("Turn kanata on under Input Monitoring");
+  });
+
+  test("a Mac with no built-in keyboard says so, with nothing to install or name (R10-14)", () => {
+    const steps = setupSteps(status([f("kanata_version", "ok"), f("keyboard_name", "fail", "this Mac has no built-in keyboard"), f("port_closed", "ok")]));
+    const none = steps.find((s) => s.key === "keyboard-name");
+    expect(none).toMatchObject({ state: "note", title: "This Mac has no built-in keyboard", actions: [], link: { href: expect.stringContaining("CONTRIBUTING.md"), label: "Open the contribution guide" } });
+    expect(none?.detail).not.toContain("kanata --list");
+    expect(attentionSteps(status([f("keyboard_name", "fail"), f("port_closed", "ok")])).map((s) => s.key)).toContain("keyboard-name");
+  });
+
+  // PR #315 review: keyloom offers set-up only for a keyboard it supports, so the note promises no more; and a Mac mini isn't led through
+  // the install, the password dialog and the permissions for a remapper with nothing to remap.
+  test("a Mac with no built-in keyboard shows only the note, not the install, start and permission steps", () => {
+    const stopped = status([f("kanata_missing", "fail"), f("driver_missing", "fail"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail"), f("keyboard_name", "fail")]);
+    const steps = setupSteps(stopped);
+    expect(steps.map((s) => s.key)).toEqual(["keyboard-name"]);
+    expect(steps[0]?.detail).toContain("When you plug in a keyboard keyloom supports");
+    expect(steps[0]?.detail).not.toContain("on USB");
+    expect(steps.flatMap((s) => s.actions)).toEqual([]);
+  });
+
+  test("a kanata missing from PATH while kanata's service runs is still a step, because keyloom checks configs with it (R10-01)", () => {
+    expect(attentionSteps(status([f("kanata_missing", "fail"), f("port_closed", "ok")])).map((s) => s.key)).toContain("kanata");
   });
 
   test("kanata installed and stopped (the exit chord): Start is the button, and it names the password dialog", () => {

@@ -666,7 +666,7 @@ export class SyncEngine {
           say(`applied in ${applied.ms} ms`);
           return finish({ status: "succeeded" });
         }
-        return finish({ status: "failed", failure: remapperFailure(applied.step), error: applied.error });
+        return finish({ status: "failed", failure: remapperFailure(applied.step), error: applied.error, code: applied.code });
       }
 
       const built = await this.deps.build({
@@ -884,7 +884,7 @@ export class SyncEngine {
           progressSync(this.app.db, id, { status: "flashing", step: "writing", builtAt: this.now(), flashStartedAt: this.now() });
           this.publish();
           const applied = await remapper.apply({ layoutId: layout.id, revisionId: layout.headRevisionId, overwriteForeign: true });
-          finishSync(this.app.db, id, applied.ok ? { status: "succeeded" } : { status: "failed", failure: remapperFailure(applied.step), error: applied.error }, this.now());
+          finishSync(this.app.db, id, applied.ok ? { status: "succeeded" } : { status: "failed", failure: remapperFailure(applied.step), error: applied.error, code: applied.code }, this.now());
           // kanata now runs this config, so it is the board's config: a put-on refused as kanata_foreign ends here, and without this the
           // board would keep tracking the config that came off it and refuse a Sync now for this one.
           if (applied.ok) setBoardConfig(this.app.db, layout.boardId, layout.id);

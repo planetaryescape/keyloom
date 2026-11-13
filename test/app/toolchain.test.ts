@@ -23,6 +23,25 @@ describe("readiness", () => {
     expect(readiness).toMatchObject({ ok: true, version: "27.4.0", autoStart: true });
   });
 
+  // R10-06: the prune's way to make room names Docker Desktop's settings only when readiness names Docker Desktop.
+  test("a daemon that is up names the engine behind it, and Docker when it knows none", async () => {
+    const up = async () => ({ ok: true as const, version: "27.4.0" });
+    expect(await dockerReadiness({ status: up, identify: async () => "Docker Desktop", env: {} })).toMatchObject({ ok: true, engine: "Docker Desktop" });
+    expect(await dockerReadiness({ status: up, identify: async () => "Colima", env: {} })).toMatchObject({ engine: "Colima" });
+    expect(await dockerReadiness({ status: up, identify: async () => null, env: {} })).toMatchObject({ engine: "Docker" });
+    expect(await dockerReadiness({ status: up, identify: async () => { throw new Error("docker info failed"); }, env: {} })).toMatchObject({ ok: true, engine: "Docker" });
+  });
+
+  // PR #315 review: an installed app proves nothing about who answers. Naming Docker Desktop for OrbStack's daemon would open and start
+  // an app that doesn't run it.
+  test("a daemon that is up is never named after an engine app that only happens to be installed", async () => {
+    const up = async () => ({ ok: true as const, version: "27.4.0" });
+    let detected = false;
+    const readiness = await dockerReadiness({ status: up, detect: async () => ((detected = true), desktop), identify: async () => null, env: {} });
+    expect(readiness).toMatchObject({ ok: true, engine: "Docker" });
+    expect(detected).toBe(false);
+  });
+
   test("a closed Docker Desktop is a start away, not a dead end", async () => {
     const readiness = await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} });
     expect(readiness).toMatchObject({ ok: false, problem: "daemon-down", engine: "Docker Desktop", canStart: true, autoStart: true, install: null });

@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, noticeOnPage, refusalNotice, settingsOpenFailure, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, noticeOnPage, refusalNotice, settingsOpenFailure, syncLine, syncNotice, undoReachesKanata } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -241,7 +241,7 @@ describe("syncNotice", () => {
 
   // R9-01: the dialog's permission fix, on the pill, its needs-hand line and the toast.
   const FILES_CLI = "Copying to /Volumes/GLV80RHBOOT/CURRENT.UF2 failed: EACCES: permission denied. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
-  const FILES_WORDS = "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed. Allow keyloom to use removable volumes, then sync again.";
+  const FILES_WORDS = "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed. Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) to use removable volumes, then sync again.";
   test("a sync whose drive write macOS refused opens Files and Folders settings, with Sync now second (R9-01)", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: FILES_CLI }, { ...run("failed"), failure: "flash", error: FILES_CLI, errorCode: "permission_files_and_folders" });
     const line = syncLine(failed, "lay_1");
@@ -262,7 +262,7 @@ describe("syncNotice", () => {
     const state: BoardSync["state"] = { kind: "needs_hand", instruction, reason: "keyloom couldn't restart it by itself", instructionCode: "permission_input_monitoring" };
     const waiting = at(state, { ...run("failed"), status: "flashing", step: "needs_hand", finishedAt: null });
     const line = syncLine(waiting, "lay_1");
-    expect(line.detail).toBe(`${instruction} Allow keyloom in Input Monitoring, and the next sync needs no keypress.`);
+    expect(line.detail).toBe(`${instruction} Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) in Input Monitoring, and the next sync needs no keypress.`);
     expect(line.detail).not.toContain("Keyloom");
     expect(line).toMatchObject({ action: { id: "open_settings", label: "Open Input Monitoring settings", pane: "input_monitoring" } });
     // While it still waits, pressing the key is the way on; Sync now comes once the sync has ended.
@@ -272,7 +272,7 @@ describe("syncNotice", () => {
   });
   test("an Input Monitoring refusal that ended the flash says what to allow (R9-01)", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "x" }, { ...run("failed"), failure: "flash", error: "x", errorCode: "permission_input_monitoring" });
-    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "macOS didn't let keyloom restart the keyboard by itself. Allow keyloom in Input Monitoring, and the next sync needs no keypress.", action: { pane: "input_monitoring" } });
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "macOS didn't let keyloom restart the keyboard by itself. Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) in Input Monitoring, and the next sync needs no keypress.", action: { pane: "input_monitoring" } });
   });
   test("a write keyloom couldn't confirm says so first, as the dialog does", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "The keyboard didn't come back." }, { ...run("failed"), failure: "flash", error: "The keyboard didn't come back.", errorCode: "not_confirmed" });
@@ -364,8 +364,83 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "manual" }), mac({ kind: "behind", changes: null, why: "remapping_off", error: null }, { last }));
     expect(notice).toMatchObject({ kind: "error", action: { id: "replace_foreign", label: "Replace it…" } });
     // Any other failed apply keeps Apply now.
-    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata --check refused" }, { last: { ...last, failure: "build", errorCode: null } }), "lay_1");
+    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata isn't answering" }, { last: { ...last, failure: "verify", errorCode: null } }), "lay_1");
     expect(other.action).toEqual({ id: "sync_now", label: "Apply now" });
+  });
+
+  // R10-01: kanata's refusal is stored as failure "build"; it is never a firmware build, Build and flash, or an Apply now that fails again.
+  describe("a config kanata refuses", () => {
+    const cli = "kanata --check refused the new config, so nothing was changed: Error in configuration `unknown key`";
+    const failedLast = (errorCode: string | null) => ({ id: "syn_1", trigger: "auto" as const, status: "failed" as const, step: "done", revisionId: "rev_1", failure: "build", errorCode, error: cli, buildId: null, startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } });
+    const behind = (errorCode: string | null) => mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { last: failedLast(errorCode) });
+    const syncing = mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" });
+
+    test("a plain refusal says kanata kept the previous config, with the reason under Details and Undo this change", () => {
+      for (const [code, lead] of [["kanata_refused", "kanata refused the config keyloom wrote"], [null, "keyloom couldn't put this config on kanata"]] as const) {
+        const line = syncLine(behind(code), "lay_1");
+        expect(line.detail).toBe(`${lead}, so your MacBook keyboard still runs the previous one. Undo this change to go back to the layout kanata runs.`);
+        expect(line).toMatchObject({ tone: "error", action: { id: "undo_change", label: "Undo this change" }, more: "kanata --check refused the new config, so nothing was changed: Error in configuration unknown key" });
+        expect(line.second).toBeUndefined();
+        const notice = syncNotice(syncing, behind(code));
+        expect(notice).toMatchObject({ kind: "error", message: "Couldn't put the change on your MacBook keyboard (ANSI)", action: { id: "undo_change", label: "Undo this change" } });
+        expect(notice?.detail).toStartWith(lead);
+        for (const said of [line.detail, notice?.detail]) {
+          expect(said).not.toContain("build");
+          expect(said).not.toContain("--check");
+        }
+      }
+    });
+
+    // PR #315 review: "kanata refused" only where kanata's own answer turned the config down.
+    test("a sync recorded before the codes, or a reload keyloom couldn't finish, never says kanata refused it", () => {
+      expect(syncLine(behind(null), "lay_1").detail).not.toContain("kanata refused");
+      const failed = syncLine(behind("kanata_reload_failed"), "lay_1");
+      expect(failed).toMatchObject({ detail: "keyloom couldn't finish loading the new config into kanata, so it put the previous config back. Apply now to try again.", action: { id: "sync_now", label: "Apply now" } });
+      const notice = syncNotice(syncing, behind("kanata_reload_failed"));
+      expect(notice?.action).toEqual({ id: "open_status", label: "Open keyboard status" });
+      expect(notice?.detail).toBe("keyloom couldn't finish loading the new config into kanata, so it put the previous config back. Apply now in the keyboard's status to try again.");
+      const setup = syncLine(behind("kanata_setup"), "lay_1");
+      expect(setup.detail).not.toContain("kanata refused");
+    });
+
+    test("a cause in kanata's setup sends the person to the keyboard's status, and Apply now is for after the fix", () => {
+      const line = syncLine(behind("kanata_setup"), "lay_1");
+      expect(line.detail).toContain("isn't the one keyloom writes for");
+      expect(line.action).toBeNull();
+      expect(line.second).toEqual({ id: "sync_now", label: "Apply now" });
+      const notice = syncNotice(syncing, behind("kanata_setup"));
+      expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
+      expect(notice?.detail).toContain("The keyboard's status says how to fix it.");
+    });
+
+    // PR #315 review: one undo reaches kanata's layout only when the refused head is the one change since it; Undo is never promised past that.
+    test("more than one change since kanata's layout, or no count, opens History instead of an Undo that lands on an unchecked layout", () => {
+      const several = mac({ kind: "behind", changes: 3, why: "failed", error: cli }, { last: failedLast("kanata_refused") });
+      const line = syncLine(several, "lay_1");
+      expect(line.action).toEqual({ id: "open_history", label: "Open History" });
+      expect(line.detail).toBe("kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one. Open History and press Go back to this on the version marked “On your MacBook keyboard (ANSI)”, the one kanata runs.");
+      expect(line.detail).not.toContain("Undo");
+      expect(syncNotice(syncing, several)).toMatchObject({ action: { id: "open_history", label: "Open History" } });
+      expect(undoReachesKanata(several)).toBe(false);
+      // The first apply after setup: kanata runs setup's config, so no version of this config is kanata's.
+      const first = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_unwritable") });
+      expect(syncLine(first, "lay_1")).toMatchObject({ action: { id: "open_history", label: "Open History" }, detail: "keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one. Open History to go back to an earlier version." });
+      // One change, but a newer head than the refused one: Undo would undo the newer change.
+      const newer = mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { headRevisionId: "rev_2", last: failedLast(null) });
+      expect(syncLine(newer, "lay_1").action?.id).toBe("open_history");
+      expect(undoReachesKanata(behind(null))).toBe(true);
+    });
+
+    test("a layout keyloom can't write for kanata says so, not that kanata refused it", () => {
+      const line = syncLine(behind("kanata_unwritable"), "lay_1");
+      expect(line.detail).toStartWith("keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one.");
+      expect(line.action).toEqual({ id: "undo_change", label: "Undo this change" });
+    });
+
+    test("a USB keyboard's failed build keeps Build and flash", () => {
+      const usb = board({ kind: "behind", changes: 1, why: "failed", error: "boom" }, { last: { ...failedLast(null), buildId: "bld_1" } });
+      expect(syncLine(usb, "lay_1").action?.id).toBe("open_release");
+    });
   });
 
   test("the auto-apply note names the exit chord and the button, not a command", () => {

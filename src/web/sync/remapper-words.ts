@@ -78,17 +78,22 @@ function installJob(status: RemapperSetupResponse, action: KanataInstallAction, 
   return null;
 }
 
-/** The steps in the order they have to happen: kanata, its driver, macOS's permissions, then starting it. */
+/**
+ * The steps in the order they have to happen: kanata, its driver, starting it, then macOS's permissions for the copy it starts. A Mac with
+ * no built-in keyboard (a Mac mini or a Mac Studio) gets only the note that says so: kanata would have nothing to remap, so installing it,
+ * the password dialog and the permissions would lead nowhere (R10-14, PR #315 review).
+ */
 export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
   const mac = status.platform === "darwin";
   const find = (code: string) => status.findings.find((f) => f.code === code);
+  if (find("keyboard_name")?.status === "fail") return [noBuiltInKeyboard()];
   const steps: SetupStep[] = [];
 
   const kanata = find("kanata_missing") ?? find("kanata_version");
   if (kanata?.code === "kanata_missing") {
     const job = installJob(status, "install", "Install kanata");
     steps.push(step({
-      key: "kanata", state: "todo", title: job?.title ?? "Install kanata",
+      key: "kanata", state: "todo", title: job?.title ?? "Install kanata", whileRunning: true,
       detail: job?.detail ?? (status.canInstall ? "kanata is the remapper keyloom writes your MacBook layout for." : "kanata is the remapper keyloom writes your MacBook layout for. Homebrew isn't on this Mac, so download kanata from its releases page."),
       actions: job?.actions ?? (status.canInstall ? [{ id: { kind: "install_kanata" }, label: "Install kanata" }] : []),
       log: job?.log ?? null, problem: job?.problem ?? null,
@@ -126,14 +131,6 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     }));
   }
 
-  if (find("permissions") !== undefined) {
-    steps.push(step({
-      key: "permissions", state: "todo", title: "Allow kanata in Privacy & Security",
-      detail: `Turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}, which setup puts there. macOS doesn't let keyloom check this.`,
-      actions: mac ? [{ id: { kind: "open_settings", pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { kind: "open_settings", pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
-    }));
-  }
-
   const port = find("port_closed");
   const daemon = find("daemon_missing");
   const ready = kanata?.code !== "kanata_missing";
@@ -165,6 +162,18 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
       actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [],
     }));
   }
+  // The kanata to allow is the copy Set up and start kanata makes, so this step comes after it, and says so while that step is still to do
+  // (R10-03): before it, there is nothing in Privacy & Security to turn on.
+  if (find("permissions") !== undefined) {
+    steps.push(step({
+      key: "permissions", state: "todo", title: "Allow kanata in Privacy & Security",
+      detail: startable
+        ? `After the Start kanata step above, turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}, which that step puts there. macOS doesn't let keyloom check this.`
+        : `Turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}. macOS doesn't let keyloom check this.`,
+      actions: mac ? [{ id: { kind: "open_settings", pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { kind: "open_settings", pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
+    }));
+  }
+
   // The daemon runs keyloom's own copy of kanata (D-498). While kanata is stopped, Start kanata above copies it again, so this step
   // only appears while it runs.
   if (!startable) {
@@ -208,6 +217,19 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push(step({ key: "karabiner-upgrade", state: "note", title: "Don't upgrade Karabiner-Elements", detail: "Version 16 replaces the driver with one kanata can't use yet." }));
   }
   return steps;
+}
+
+/**
+ * No built-in keyboard at all: there is nothing for this board to remap, and no name to add (R10-14). keyloom offers set-up only for a
+ * keyboard it supports that it sees on USB (`SyncEngine.setupBoards`), so the words promise no more than that, and any other keyboard
+ * gets the contribution guide.
+ */
+function noBuiltInKeyboard(): SetupStep {
+  return step({
+    key: "keyboard-name", state: "note", title: "This Mac has no built-in keyboard", whileRunning: true,
+    detail: "The MacBook board remaps a MacBook's own keyboard, so kanata has nothing to remap here and needs no setup. When you plug in a keyboard keyloom supports, such as a Moonlander or a Glove80, keyloom offers to set it up. For any other keyboard, the contribution guide says how to add it to keyloom.",
+    link: { href: CONTRIBUTION_GUIDE, label: "Open the contribution guide" },
+  });
 }
 
 /** The steps that still need doing while kanata runs: an update, setting it up again, or a kanata changed outside Homebrew. */

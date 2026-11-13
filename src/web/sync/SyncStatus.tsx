@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, Settings, ShieldCheck, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, History, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, Settings, ShieldCheck, TriangleAlert, Undo2, Unplug, Zap } from "lucide-react";
 import { useState } from "react";
 import type { BoardSync } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
@@ -32,10 +32,14 @@ interface PillProps {
   onOpenRelease: (buildId?: string) => void;
   /** Opens the put-on confirm for a config (D-300), the same one the config menu uses. */
   onPutOn: (target: { id: string; name: string }) => void;
+  /** Undoes the change kanata refused, one step from the layout kanata runs (R10-01). */
+  onUndo: () => void;
+  /** Opens History, which marks the version kanata runs, when going back takes more than one step (R10-01). */
+  onOpenHistory: () => void;
 }
 
 // One keyboard: a pill with its state, and a menu with the reason, what to do about it, and the auto-sync switch (17).
-function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRelease, onPutOn }: PillProps) {
+function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRelease, onPutOn, onUndo, onOpenHistory }: PillProps) {
   const Icon = icon(board, line);
   const auto = autoSyncLine(board);
   // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
@@ -59,6 +63,8 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
     if (id === "flash_keyloom" || id === "open_release") onOpenRelease(buildId);
     else if (id === "put_on") onPutOn(target);
     else if (id === "replace_foreign") sync.setReplaceAsk(selected ? layoutId : board.layoutId);
+    else if (id === "undo_change") onUndo();
+    else if (id === "open_history") onOpenHistory();
     else void sync.syncNow(selected ? layoutId : board.layoutId);
   };
   const remapperDown = board.remapper === true && board.state.kind === "not_connected";
@@ -150,7 +156,7 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
 }
 
 function ActionItem({ action, primary, onPress }: { action: SyncAction; primary: boolean; onPress: (action: SyncAction) => void }) {
-  const Icon = action.id === "open_release" ? Hammer : action.id === "open_settings" ? Settings : RefreshCw;
+  const Icon = action.id === "open_release" ? Hammer : action.id === "open_settings" ? Settings : action.id === "undo_change" ? Undo2 : action.id === "open_history" ? History : RefreshCw;
   return (
     <button type="button" role="menuitem" className={primary ? "menu-item sync-primary" : "menu-item"} onClick={() => onPress(action)}>
       <Icon size={14} aria-hidden="true" />
@@ -167,6 +173,8 @@ interface Props {
   boardId: string;
   onOpenRelease: (buildId?: string) => void;
   onPutOn: (target: { id: string; name: string }) => void;
+  onUndo: () => void;
+  onOpenHistory: () => void;
 }
 
 /**
@@ -201,7 +209,7 @@ export function openKeyboardStatus(): void {
 
 // One quiet line for the keyboard of the layout on screen (23#chrome-recedes). It opens to say why, what to do, and auto-sync.
 // Other connected keyboards show their light on their silhouette in the board switcher.
-export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease, onPutOn }: Props) {
+export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease, onPutOn, onUndo, onOpenHistory }: Props) {
   const shown = sync.boards.filter((b) => b.boardId === boardId);
   if (shown.length === 0) return null;
   return (
@@ -224,6 +232,8 @@ export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease,
           layoutName={layoutName}
           onOpenRelease={onOpenRelease}
           onPutOn={onPutOn}
+          onUndo={onUndo}
+          onOpenHistory={onOpenHistory}
         />
       ))}
       <ReplaceForeignHost sync={sync} boardId={boardId} />
@@ -245,7 +255,10 @@ export function ReplaceForeignHost({ sync, boardId }: { sync: SyncApi; boardId: 
 function ReplaceForeignDialog({ sync, layoutId, board }: { sync: SyncApi; layoutId: string; board: BoardSync | undefined }) {
   const name = board === undefined ? "this layout" : board.layoutId === layoutId ? `“${board.layoutName}”` : "this layout";
   return (
+    // The token gives a failure no screen planned for Restart keyloom and the log, and turns Replace it off when it would fail the same
+    // way again (R10-05, D-551).
     <ConfirmDialog
+      token={sync.token}
       title="Replace kanata's config?"
       lines={[
         `keyloom loads ${name} into kanata in place of the config it runs now. Your MacBook keyboard types your layout from then on.`,

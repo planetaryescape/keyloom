@@ -2,7 +2,7 @@
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
   type BuildCachePrune, COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus,
-  type EngineFinding, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
+  type EngineFinding, answeringEngine, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
 import { PROFILE, adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
@@ -86,6 +86,8 @@ export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine 
 export type ToolchainOverrides = {
   status?: () => Promise<DockerStatus>;
   detect?: () => Promise<EngineFinding>;
+  /** Names the engine behind a daemon that answers, or null; the real one asks `docker info`, then the context. */
+  identify?: () => Promise<string | null>;
   startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
   /** Quits and reopens a Mac engine app; the real one runs osascript and `open -a`. */
   restartApp?: typeof restartDockerApp;
@@ -124,7 +126,14 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const status = over.status ?? (() => dockerStatus());
   const autoStart = dockerAutoStart(over.env ?? process.env);
   const now = await status();
-  if (now.ok) return { ok: true, version: now.version, engine: "Docker", autoStart };
+  // A Docker that answers names its engine too, so a page can name Docker Desktop's own settings (R10-06), but only from evidence: what
+  // the daemon says it is, or a context that names one engine. An installed app proves nothing about who answers, so an unknown engine
+  // stays "Docker" (PR #315 review). A test that fakes the status without describing the engine doesn't ask this computer.
+  if (now.ok) {
+    const identify = over.identify ?? (over.status === undefined ? () => answeringEngine() : undefined);
+    const named = identify === undefined ? null : await identify().catch(() => null);
+    return { ok: true, version: now.version, engine: named ?? "Docker", autoStart };
+  }
 
   // An install or a missing link needs no engine hunt: there is nothing here to start. A missing link names its app, which a click opens.
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();

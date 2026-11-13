@@ -172,6 +172,8 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
   // The built-in keyboard, which the device filter names exactly.
   const io = await probe.exec(["ioreg", "-r", "-c", "AppleEmbeddedKeyboard", "-l"]);
   if (io.code === 0 && io.out.includes(rev.deviceName)) add({ code: "keyboard_name", name: "built-in keyboard", status: "ok", detail: `"${rev.deviceName}" is present, which is the name keyloom tells kanata to take` });
+  // ioreg exits 0 and prints nothing when nothing matches the class: a Mac mini or a Mac Studio has no built-in keyboard (R10-14).
+  else if (io.code === 0 && io.out.trim() === "") add({ code: "keyboard_name", name: "built-in keyboard", status: "fail", detail: "this Mac has no built-in keyboard", fix: "keyloom's MacBook board remaps a MacBook's own keyboard; a keyboard plugged into this Mac is a board of its own" });
   else if (io.code === 0) add({ code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: `no keyboard named "${rev.deviceName}" was found; run \`kanata --list\` and compare`, fix: "if kanata --list names the built-in keyboard differently, keyloom doesn't know this Mac model yet; it can't remap it until its board names that keyboard" });
   else add({ code: "keyboard_name", name: "built-in keyboard", status: "unknown", detail: "couldn't read the keyboard list" });
 

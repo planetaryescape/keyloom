@@ -60,6 +60,17 @@ export function syncBuildReadFailure(code: string | null, generic = false): { te
 }
 
 /**
+ * What the dialog says when a read of the build on screen failed, such as after a flash tool's install (R10-07). A build that is gone can't
+ * be read again, so the step's Build firmware is the way on. Any other failure keeps its code, and the words name only the button its code
+ * gets: Try again, or Restart keyloom for an answer that fails the same way every time.
+ */
+export function buildReadFailure(code: string | null, generic = false): { text: string; code: string | null; generic?: true } {
+  if (code === "not_found" && !generic) return { text: "This build is no longer there, so keyloom can't read it again. Build the firmware again.", code: SYNC_BUILD_GONE_CODE };
+  const retry = errorWayOut(code, generic) === "try_again" || wayOutFor({ message: "", code: code ?? undefined, generic }, true)?.retry === true;
+  return { text: retry ? "keyloom couldn't read this build again. Try again to read it." : "keyloom couldn't read this build again. Restarting keyloom opens the page that matches it.", code, ...(generic ? { generic: true as const } : {}) };
+}
+
+/**
  * The System Settings pane a permission code opens, the button that opens it, and what to say beside it. `failed` leads a failed
  * flash's message in plain words; the server's sentence follows it, because on a split board it also says how recovery went.
  */
@@ -68,21 +79,27 @@ export type PermissionFix = { pane: SettingsPaneName; button: string; text: stri
   sync: string;
 };
 
+/**
+ * What macOS lists in Privacy & Security: the app keyloom runs in, which is keyloom's desktop app or, for `keyloom serve`, the terminal
+ * it was started from (R10-10). The flasher says "the app running keyloom" for the same reason.
+ */
+const RUNNING_KEYLOOM = "the app running keyloom (the keyloom app, or your terminal when keyloom runs in one)";
+
 export function permissionFix(code: FlashErrorCode | null | undefined): PermissionFix | null {
   switch (code) {
     case "permission_files_and_folders":
       return {
         pane: "files_and_folders", button: "Open Files and Folders settings",
-        text: "Allow keyloom to use removable volumes, then flash again.",
+        text: `Allow ${RUNNING_KEYLOOM} to use removable volumes, then flash again.`,
         failed: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.",
-        sync: "Allow keyloom to use removable volumes, then sync again.",
+        sync: `Allow ${RUNNING_KEYLOOM} to use removable volumes, then sync again.`,
       };
     case "permission_input_monitoring":
       return {
         pane: "input_monitoring", button: "Open Input Monitoring settings",
-        text: "Allow keyloom in Input Monitoring, and the next flash needs no keypress.",
+        text: `Allow ${RUNNING_KEYLOOM} in Input Monitoring, and the next flash needs no keypress.`,
         failed: "macOS didn't let keyloom restart the keyboard by itself.",
-        sync: "Allow keyloom in Input Monitoring, and the next sync needs no keypress.",
+        sync: `Allow ${RUNNING_KEYLOOM} in Input Monitoring, and the next sync needs no keypress.`,
       };
     default:
       return null;
@@ -92,12 +109,15 @@ export function permissionFix(code: FlashErrorCode | null | undefined): Permissi
 /**
  * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is dropped only for a write that
  * timed out, whose sentence names a CLI flag (R8-11). A write
- * that finished but couldn't be confirmed says so first, because the keyboard may well run the new build.
+ * that finished but couldn't be confirmed says so first, because the keyboard may well run the new build. A permission's sentence names the
+ * System Settings path the button below opens, so it goes under Details (`more`), where it still says which half wasn't flashed (R10-10).
  */
-export function failedFlashText(code: FlashErrorCode | null | undefined, error: string | null): { lead: string | null; detail: string } {
+export function failedFlashText(code: FlashErrorCode | null | undefined, error: string | null): { lead: string | null; detail: string | null; more?: string } {
   // The server's sentence names a CLI flag for an earlier build; the page's way on is the step's own Try again (R8-11).
   if (code === "write_timeout") return { lead: "Flashing didn't finish within 3 minutes, so keyloom stopped it.", detail: "The keyboard may be left in its bootloader, where it doesn't type. Try again to put this build on it." };
-  const lead = code === "not_confirmed" ? "keyloom wrote the firmware, but couldn't confirm the keyboard runs it." : (permissionFix(code)?.failed ?? null);
+  const permission = permissionFix(code);
+  if (permission !== null) return { lead: permission.failed, detail: null, ...(error === null ? {} : { more: error }) };
+  const lead = code === "not_confirmed" ? "keyloom wrote the firmware, but couldn't confirm the keyboard runs it." : null;
   return { lead, detail: error ?? "Flashing failed." };
 }
 

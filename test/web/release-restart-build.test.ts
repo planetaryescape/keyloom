@@ -225,6 +225,17 @@ describe("restartThenBuild", () => {
     // The request may have stopped the engine before it failed, so Docker is read again (PR #303 CodeRabbit).
     expect(lost.failed()).toBe(1);
   });
+
+  // R10-07: the request's code stays, so the dialog shows Restart keyloom beside it, and a restart that fails the same way goes.
+  test("a restart request that fails no way the page planned for keeps its code; an unreadable one isn't offered again", async () => {
+    const unreadable = harness({ results: [Object.assign(new Error("keyloom sent an answer this page can't read"), { code: "unreadable" })] });
+    await unreadable.run;
+    expect(unreadable.shown.at(-1)).toEqual({ ...IDLE, problem: "keyloom sent an answer this page can't read", failure: { message: "keyloom sent an answer this page can't read", code: "unreadable" }, again: false });
+    const internal = harness({ results: [Object.assign(new Error("keyloom hit a problem"), { code: "internal" })] });
+    await internal.run;
+    // An exception can pass on a second try, so the restart stays.
+    expect(internal.shown.at(-1)).toMatchObject({ failure: { code: "internal" }, again: true });
+  });
 });
 
 describe("restartLogStep (R7-04)", () => {

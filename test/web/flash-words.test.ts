@@ -2,7 +2,7 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { BUILD_FILE_GONE, LAYOUT_GONE, afterApply, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote, startFailure } from "../../src/web/release/flash-words.ts";
+import { BUILD_FILE_GONE, LAYOUT_GONE, afterApply, buildReadFailure, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote, startFailure } from "../../src/web/release/flash-words.ts";
 import { NOT_FOUND_WORDS } from "../../src/web/shell/unexpected.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
@@ -23,18 +23,26 @@ describe("permissionFix", () => {
     expect(permissionFix(undefined)).toBeNull();
   });
 
-  test("never names the terminal or a command", () => {
+  test("never names a command or a settings path", () => {
     for (const code of ["permission_files_and_folders", "permission_input_monitoring"] as const) {
-      expect(permissionFix(code)?.text).not.toMatch(/terminal|sudo|`|System Settings >/i);
+      expect(permissionFix(code)?.text).not.toMatch(/sudo|`|System Settings >/i);
       expect(permissionFix(code)?.failed).not.toMatch(/terminal|sudo|`|System Settings >/i);
+    }
+  });
+
+  // macOS lists the app keyloom runs in: keyloom's own app, or the terminal `keyloom serve` was started from (R10-10).
+  test("names what macOS lists, which is the terminal when keyloom runs in one", () => {
+    for (const code of ["permission_files_and_folders", "permission_input_monitoring"] as const) {
+      const fix = permissionFix(code)!;
+      for (const words of [fix.text, fix.sync]) expect(words).toContain("the app running keyloom (the keyloom app, or your terminal when keyloom runs in one)");
     }
   });
 });
 
 describe("failedFlashText", () => {
-  test("a permission failure leads with plain words and keeps the server's sentence, which says how a split board's recovery went", () => {
-    const error = "Copying to the left half failed: EACCES. The left half was not flashed. keyloom put build AAAAAAAAAAAA back on the right half.";
-    expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: error });
+  test("a permission failure leads with plain words and keeps the server's sentence under Details, beside the button that opens the pane (R10-10)", () => {
+    const error = "Copying to the left half failed: EACCES. The left half was not flashed. keyloom put build AAAAAAAAAAAA back on the right half. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
+    expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: null, more: error });
   });
 
   test("a write that finished but couldn't be confirmed says the firmware was written, then the server's reason", () => {
@@ -210,5 +218,16 @@ describe("cancelNote", () => {
   test("a Cancel accepted while the flash still waits says keyloom is stopping it, and that a keyboard in its bootloader is written first", () => {
     expect(cancelNote({ status: "waiting_for_bootloader" })).toContain("Stopping the flash");
     expect(cancelNote({ status: "failed" })).toBeNull();
+  });
+});
+
+// R10-07: a failed read of the build on screen keeps its code, and its words name only the button that code gets.
+describe("buildReadFailure", () => {
+  test("a lost connection or an exception says Try again; an answer that fails the same way says Restart; a gone build says build again", () => {
+    expect(buildReadFailure("unreachable")).toEqual({ text: "keyloom couldn't read this build again. Try again to read it.", code: "unreachable" });
+    expect(buildReadFailure("internal").text).toContain("Try again");
+    expect(buildReadFailure("unreadable")).toEqual({ text: "keyloom couldn't read this build again. Restarting keyloom opens the page that matches it.", code: "unreadable" });
+    expect(buildReadFailure("not_found", true)).toMatchObject({ code: "not_found", generic: true, text: expect.stringContaining("Restarting keyloom") });
+    expect(buildReadFailure("not_found")).toMatchObject({ code: "sync_build_gone", text: expect.stringContaining("Build the firmware again") });
   });
 });

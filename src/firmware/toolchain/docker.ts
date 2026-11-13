@@ -200,8 +200,10 @@ function installSentence(platform: NodeJS.Platform = process.platform, has: (com
 // once the app has been opened, which is what the Open button for `cli-missing` is for.
 // `bundleId` is what AppleScript quits by, so a renamed app or a second copy can't be confused with it; each is the id its Homebrew cask's
 // `uninstall quit:` names (homebrew-cask Casks/{d/docker-desktop,o/orbstack,r/rancher,p/podman-desktop}.rb, checked 2026-11-11).
-const ENGINE_APPS: ReadonlyArray<{ name: string; app: string; bundleId: string; contexts: readonly string[]; hosts: RegExp; clis: readonly string[] }> = [
-  { name: "Docker Desktop", app: "Docker.app", bundleId: "com.docker.docker", contexts: ["desktop-linux"], hosts: /\/\.docker\/run\/docker\.sock$|^unix:\/\/\/var\/run\/docker\.sock$|Docker\.app/, clis: ["/Applications/Docker.app/Contents/Resources/bin/docker", join(homedir(), ".docker/bin/docker")] },
+// `hosts` are sockets only that app makes. `sharedHosts` are ones any engine may claim (Colima and OrbStack can link /var/run/docker.sock
+// too), so they only guess what to start; they never name an engine that answers (PR #315 review).
+const ENGINE_APPS: ReadonlyArray<{ name: string; app: string; bundleId: string; contexts: readonly string[]; hosts: RegExp; sharedHosts?: RegExp; clis: readonly string[] }> = [
+  { name: "Docker Desktop", app: "Docker.app", bundleId: "com.docker.docker", contexts: ["desktop-linux"], hosts: /\/\.docker\/run\/docker\.sock$|Docker\.app/, sharedHosts: /^unix:\/\/\/var\/run\/docker\.sock$/, clis: ["/Applications/Docker.app/Contents/Resources/bin/docker", join(homedir(), ".docker/bin/docker")] },
   { name: "OrbStack", app: "OrbStack.app", bundleId: "dev.kdrag0n.MacVirt", contexts: ["orbstack"], hosts: /\/\.orbstack\//, clis: ["/Applications/OrbStack.app/Contents/MacOS/bin/docker", join(homedir(), ".orbstack/bin/docker")] },
   { name: "Rancher Desktop", app: "Rancher Desktop.app", bundleId: "io.rancherdesktop.app", contexts: ["rancher-desktop"], hosts: /\/\.rd\//, clis: ["/Applications/Rancher Desktop.app/Contents/Resources/resources/darwin/bin/docker", join(homedir(), ".rd/bin/docker")] },
   { name: "Podman Desktop", app: "Podman Desktop.app", bundleId: "io.podmandesktop.PodmanDesktop", contexts: ["podman", "podman-desktop"], hosts: /podman\.sock$/, clis: [] },
@@ -349,7 +351,7 @@ async function knownEngine(context: DockerContext | null, platform: NodeJS.Platf
   if (lima !== undefined && has("limactl")) return { name: "Lima", command: ["limactl", "start", lima] };
 
   const byName = ENGINE_APPS.find((app) => app.contexts.includes(name));
-  const byHost = ENGINE_APPS.find((app) => app.hosts.test(host) && (installed(app.app) || app.name === "Docker Desktop"));
+  const byHost = ENGINE_APPS.find((app) => (app.hosts.test(host) || app.sharedHosts?.test(host) === true) && (installed(app.app) || app.name === "Docker Desktop"));
   const app = byName ?? byHost;
   if (app !== undefined && installed(app.app)) return { name: app.name, command: ["open", "-a", app.name] };
   if (app?.name === "Podman Desktop" && has("podman")) return { name: "Podman", command: ["podman", "machine", "start"] };
@@ -394,6 +396,57 @@ export async function findDockerEngine(over: EngineLookup = {}): Promise<EngineF
     };
   }
   return { kind: "none" };
+}
+
+/** What `docker info` says about the daemon that answered: its operating system and its host's name. */
+export type DaemonInfo = { os: string; name: string };
+
+async function readDaemonInfo(): Promise<DaemonInfo | null> {
+  const r = await capture(["docker", "info", "--format", "{{.OperatingSystem}}\t{{.Name}}"], { timeoutMs: 5_000 });
+  if (r.exitCode !== 0) return null;
+  const [os = "", name = ""] = r.stdout.trim().split("\t");
+  return { os: os.trim(), name: name.trim() };
+}
+
+/**
+ * The engine a daemon names itself as. Docker Desktop and OrbStack report their own name as the operating system; Colima's VM is named
+ * `colima`, or `colima-<profile>`, and Rancher Desktop's `lima-rancher-desktop`. Anything else (a Linux distribution, a remote host) names
+ * no engine.
+ */
+export function engineOfDaemon(info: DaemonInfo): string | null {
+  if (/^docker desktop$/i.test(info.os)) return "Docker Desktop";
+  if (/^orbstack$/i.test(info.os)) return "OrbStack";
+  if (/^colima(-.+)?$/.test(info.name)) return "Colima";
+  if (/(^|-)rancher-desktop$/.test(info.name)) return "Rancher Desktop";
+  return null;
+}
+
+/** The engine a context names exactly: its own context name, or a socket only that engine makes. Never the shared /var/run/docker.sock. */
+export function engineOfContext(context: DockerContext): string | null {
+  const host = context.host ?? "";
+  if (/^colima(-.+)?$/.test(context.name) || /\/\.colima\/[^/]+\/docker\.sock$/.test(host)) return "Colima";
+  return ENGINE_APPS.find((app) => app.contexts.includes(context.name) || (host !== "" && app.hosts.test(host)))?.name ?? null;
+}
+
+export type AnsweringEngineLookup = {
+  /** `docker info`'s answer; injected so a test never runs docker. */
+  info?: () => Promise<DaemonInfo | null>;
+  /** The CLI's context; injected so a test never runs docker. */
+  context?: () => Promise<DockerContext | null>;
+  has?: (command: string) => boolean;
+};
+
+/**
+ * The engine behind a daemon that answers, named only from evidence (R10-06, PR #315 review): what the daemon says it is, then a context
+ * that names one engine exactly. Null otherwise, never the first engine app installed here: a Mac can have Docker Desktop installed while
+ * Colima or OrbStack runs the daemon, and naming the wrong one opens and starts an app that doesn't run it.
+ */
+export async function answeringEngine(over: AnsweringEngineLookup = {}): Promise<string | null> {
+  const info = await (over.info ?? readDaemonInfo)().catch(() => null);
+  const named = info === null ? null : engineOfDaemon(info);
+  if (named !== null) return named;
+  const context = await (over.context ?? (() => readContext(over.has ?? hasCommand)))().catch(() => null);
+  return context === null ? null : engineOfContext(context);
 }
 
 export type StartDockerOptions = {

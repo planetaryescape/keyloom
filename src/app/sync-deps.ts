@@ -8,7 +8,7 @@ import type { App } from "./context.ts";
 import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash } from "./firmware.ts";
 import { FlashToolMissingError } from "./firmware-errors.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
-import { applyToRemapper, disableRemapperFor, probeRemapper } from "./remapper.ts";
+import { type RemapperRefusalCode, applyToRemapper, disableRemapperFor, probeRemapper } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
 import { type DetectedKeyboard, detectKeyboards } from "./keyboard-detect.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
@@ -19,7 +19,7 @@ export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note:
 
 export type RemapperDeps = {
   /** Writes, checks, reloads and verifies one revision on a software remapper. Never throws. */
-  apply(a: { layoutId: string; revisionId: string; /** Replace a keyloom.kbd keyloom didn't write, keeping a copy (R1-17). */ overwriteForeign?: boolean }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string }>;
+  apply(a: { layoutId: string; revisionId: string; /** Replace a keyloom.kbd keyloom didn't write, keeping a copy (R1-17). */ overwriteForeign?: boolean }): Promise<{ ok: true; ms: number } | { ok: false; step: string; error: string; /** Why kanata didn't take it, for the page's way on (R10-01). */ code?: RemapperRefusalCode }>;
   /** Loads the identity map. Never throws. */
   disable(boardId: string): Promise<{ ok: true } | { ok: false; error: string }>;
   /**
@@ -63,7 +63,7 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
       async apply(a) {
         try {
           const r = await applyToRemapper(app, a.layoutId, a.revisionId, opts.handsFree?.remapper ?? {}, a.overwriteForeign ? { overwriteForeign: true } : {});
-          return r.ok ? { ok: true, ms: r.ms } : { ok: false, step: r.step, error: r.error };
+          return r.ok ? { ok: true, ms: r.ms } : { ok: false, step: r.step, error: r.error, ...(r.code === undefined ? {} : { code: r.code }) };
         } catch (err) {
           return { ok: false, step: "apply", error: message(err) };
         }

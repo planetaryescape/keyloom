@@ -1,7 +1,7 @@
 // The flash step when a Flash button would fail: the tool it runs is missing (D-489), or keyloom can't flash this
 // board at all, so the person gets the file and the board's own steps instead (D-490).
 import { CircleAlert, Download, ExternalLink, FolderOpen, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
-import { InstallCancel, InstallStopped } from "./InstallCancel.tsx";
+import { InstallCancel, InstallLost, InstallStopped } from "./InstallCancel.tsx";
 import { LogTail } from "./LogTail.tsx";
 import type { FileProblem } from "./flash-words.ts";
 import { type FlashStepView, plain } from "./release-words.ts";
@@ -28,6 +28,7 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
           <LogTail label="Install log" lines={state.logTail} />
           <InstallCancel phase={state.phase} onCancel={install.cancel} />
           {problem}
+          <InstallLost install={install} />
         </div>
       </div>
     );

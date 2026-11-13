@@ -113,6 +113,7 @@ import { Toasts, useToasts } from "./shell/Toasts.tsx";
 import { NARROW, PHONE, useMediaQuery } from "./shell/useMediaQuery.ts";
 import type { SyncApi } from "./sync/useSync.ts";
 import { type RefusalHandlers, refusalProblem, useSyncToasts } from "./sync/useSyncToasts.ts";
+import { undoReachesKanata } from "./sync/words.ts";
 import { keyIn, keyOn } from "../validation/words.ts";
 
 interface ViewerProps {
@@ -254,6 +255,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: (buildId?: string) => onOpenRelease(undefined, buildId),
     replace_foreign: () => sync.setReplaceAsk(summary.id),
+    undo_change: () => undoRefused(),
+    open_history: () => setHistoryOpen(true),
     // The exit chord is kanata's, and the MacBook is the one board that runs it.
     check_exit_chord: () => {
       const remapper = sync.boards.find((b) => b.remapper === true);
@@ -1704,6 +1707,14 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
   }
 
+  // A change kanata refused (R10-01): the words offer Undo only when one step reaches the layout kanata runs (`undoReachesKanata`). The
+  // head's own step does that whichever way it goes: a refused undo is gone back from by its redo. History, which marks the version on
+  // the keyboard, stays the fallback for a head the page can't step (one the server says can't be undone, or a head newer than the toast).
+  function undoRefused() {
+    if (boardSync !== undefined && undoReachesKanata(boardSync) && boardSync.headRevisionId === revision.id && revision.undoable) stepRevision(revision.origin === "undo" ? "redo" : "undo");
+    else setHistoryOpen(true);
+  }
+
   // The toolbar's two buttons call the same route; the shortcut says why when the one it means is off.
   function stepRevision(direction: "undo" | "redo") {
     const allowed = direction === "undo" ? revision.origin !== "undo" && revision.undoable : revision.origin === "undo" && revision.undoable;
@@ -2022,7 +2033,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ReplaceForeignHost sync={sync} boardId={summary.boardId} />
             </>
           ) : (
-            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={(buildId) => onOpenRelease(undefined, buildId)} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
+            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={(buildId) => onOpenRelease(undefined, buildId)} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} onUndo={undoRefused} onOpenHistory={() => setHistoryOpen(true)} />
           )
         }
         ask={{ open: chatOpen, onToggle: toggleChat }}

@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerEngine, type DockerStatus, adoptBundledDockerCli, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerEngine, type DockerStatus, adoptBundledDockerCli, answeringEngine, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -466,5 +466,39 @@ describe("restarting a Mac app that refuses this account (R2-07)", () => {
     const result = await restartDockerApp(orbstack, { status: async () => refused, start: async () => ({ ok: true }), sleep: async () => {} });
     expect(result).toMatchObject({ ok: false });
     if (!result.ok) expect(result.reason).toContain("refusing");
+  });
+});
+
+// PR #315 review: a daemon that answers is named only from evidence, never from the engine apps installed here.
+describe("the engine behind a daemon that answers", () => {
+  const info = (os: string, name: string) => async () => ({ os, name });
+  test("the daemon names itself", async () => {
+    expect(await answeringEngine({ info: info("Docker Desktop", "docker-desktop"), context: at("default", "unix:///var/run/docker.sock") })).toBe("Docker Desktop");
+    expect(await answeringEngine({ info: info("OrbStack", "orbstack"), context: at("default", "unix:///var/run/docker.sock") })).toBe("OrbStack");
+    expect(await answeringEngine({ info: info("Ubuntu 24.04.1 LTS", "colima"), context: at("default", "unix:///var/run/docker.sock") })).toBe("Colima");
+    expect(await answeringEngine({ info: info("Ubuntu 24.04.1 LTS", "colima-work"), context: at("default", null) })).toBe("Colima");
+    expect(await answeringEngine({ info: info("Alpine Linux v3.20", "lima-rancher-desktop"), context: at("default", null) })).toBe("Rancher Desktop");
+  });
+
+  test("a daemon that doesn't name itself is named by a context that names one engine exactly", async () => {
+    const plain = info("Ubuntu 24.04.1 LTS", "builder");
+    expect(await answeringEngine({ info: plain, context: at("desktop-linux", "unix:///Users/x/.docker/run/docker.sock") })).toBe("Docker Desktop");
+    expect(await answeringEngine({ info: plain, context: at("orbstack", "unix:///Users/x/.orbstack/run/docker.sock") })).toBe("OrbStack");
+    expect(await answeringEngine({ info: plain, context: at("colima-work", "unix:///Users/x/.colima/work/docker.sock") })).toBe("Colima");
+    expect(await answeringEngine({ info: async () => null, context: at("default", "unix:///Users/x/.docker/run/docker.sock") })).toBe("Docker Desktop");
+  });
+
+  test("the shared /var/run socket, an unknown context or nothing readable stays unnamed", async () => {
+    const plain = info("Ubuntu 24.04.1 LTS", "builder");
+    // OrbStack or Colima can own /var/run/docker.sock while Docker Desktop is installed: that socket names no engine.
+    expect(await answeringEngine({ info: plain, context: at("default", "unix:///var/run/docker.sock") })).toBeNull();
+    expect(await answeringEngine({ info: plain, context: at("work", "unix:///Users/x/sock/docker.sock") })).toBeNull();
+    expect(await answeringEngine({ info: async () => { throw new Error("docker info failed"); }, context: async () => { throw new Error("no context"); } })).toBeNull();
+    expect(await answeringEngine({ info: async () => null, context: async () => null })).toBeNull();
+  });
+
+  test("starting a stopped daemon still reads the shared socket as Docker Desktop's when it is installed", async () => {
+    const found = await findDockerEngine({ platform: "darwin", installed: (app) => app === "Docker.app", has: () => false, context: at("default", "unix:///var/run/docker.sock") });
+    expect(found).toEqual({ kind: "engine", engine: { name: "Docker Desktop", command: ["open", "-a", "Docker Desktop"] } });
   });
 });

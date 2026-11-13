@@ -35,7 +35,8 @@ export const DockerInstallSchema = z.object({
 export type DockerInstall = z.infer<typeof DockerInstallSchema>;
 
 export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
-  // `engine` is what runs the daemon here, such as "Docker Desktop"; `autoStart` is whether keyloom may start it itself.
+  // `engine` is the engine keyloom found behind the answering daemon, such as "Docker Desktop" or "Colima", or "Docker" when it found
+  // none it knows (a remote context, say). `autoStart` is whether keyloom may start it itself.
   z.object({ ok: z.literal(true), version: z.string().min(1), engine: z.string().min(1), autoStart: z.boolean() }),
   z.object({
     ok: z.literal(false), problem: DockerProblemSchema, reason: z.string().min(1),

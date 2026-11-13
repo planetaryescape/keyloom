@@ -81,6 +81,24 @@ describe("apply on a kanata board", () => {
     expect(await readRunningKanata(deps.endpoint)).toMatchObject({ revisionId: "rev_ONE" });
   });
 
+  // PR #315 review: only kanata's own answer marks a failure as its refusal, which the page calls "kanata refused".
+  test("a check or reload kanata turns down is marked as its refusal; a stopped kanata is not", async () => {
+    const { paths, deps } = setup();
+    await applyKanata(deps, source("rev_ONE"), "rev_ONE");
+    const good = readFileSync(paths.kbd, "utf8");
+    expect(await applyKanata({ ...deps, check: async () => ({ ok: false, output: "Error: unknown key" }) }, source("rev_TWO"), "rev_TWO")).toMatchObject({ step: "check", refused: true });
+    fake!.rejectNextReload();
+    expect(await applyKanata(deps, source("rev_TWO"), "rev_TWO")).toMatchObject({ step: "reload", refused: true });
+    fake!.errorNextReload();
+    const errored = await applyKanata(deps, source("rev_TWO"), "rev_TWO");
+    expect(errored).toMatchObject({ ok: false, step: "reload", written: false, refused: true });
+    expect(readFileSync(paths.kbd, "utf8")).toBe(good);
+    fake!.stop();
+    const stopped = await applyKanata(deps, source("rev_THREE"), "rev_THREE");
+    expect(stopped).toMatchObject({ ok: false, step: "not_connected" });
+    expect("refused" in stopped).toBe(false);
+  });
+
   test("a reload that answers ok but leaves old layers is caught by the read-back", async () => {
     const { deps } = setup();
     await applyKanata(deps, source("rev_ONE", identityLayout(macbook())), "rev_ONE");
