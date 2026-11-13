@@ -1,5 +1,7 @@
 // What a build adds for hands-free flashing (D-095): the recipe, the serial-number conf, the module beside the checkout, and the
 // flags and Nix expression that put it into the firmware. Docker is a fake; the real builds are in the rung's evidence.
+import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
+import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
 import { describe, expect, test } from "bun:test";
 import { zipSync } from "fflate";
 import { readFileSync, readdirSync } from "node:fs";
@@ -185,6 +187,7 @@ describe("west builds with the module (Corne)", () => {
     const uf2 = join(dir, "one.uf2");
     await Bun.write(uf2, uf2Image(0xada52840, 4));
     const bin = fakeBinDir({
+      git: FAKE_WEST_GIT,
       docker: `echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/work}"; prev="$a"; done
@@ -193,7 +196,10 @@ case " $* " in *" test -f config/west.yml "*) exit 0;; esac
 for t in left right; do mkdir -p "$vol/build/$t/zephyr"; cp "$FAKE_UF2" "$vol/build/$t/zephyr/zmk.uf2"; done; exit 0`,
     });
     const imported = await importZmkSource(`${ROOT}/test/fixtures/zmk/corne`, CORNE.definition);
-    const build = zmkRevision(CORNE.definition).build;
+    const revision = zmkRevision(CORNE.definition);
+    const build = revision.build;
+    if (build.kind !== "zmk-west-docker") throw new Error("expected west recipe");
+    await seedWestSources(join(dir, "work"), westProjects(revision.source.repo, revision.source.sha, build), build.image);
     const source = generateZmkSource({
       layout: imported.layout, board: CORNE.definition, geometry: CORNE.geometry, revisionId: "rev_x", keymapName: build.kind === "zmk-west-docker" ? build.keymapName : "corne",
       handsFree: { buildId: BUILD, config: handsFreeOf(CORNE) },

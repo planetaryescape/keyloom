@@ -1,6 +1,6 @@
 // Hold-tap profiles, macros and combos -> devicetree nodes (06). Each function returns lines with no
 // indentation; the caller indents them to where they sit.
-import type { Combo, ConditionalLayer, HoldTapProfile, Macro, SlotAction, TapDance } from "../../layout/schema.ts";
+import { ConditionalLayerSchema, type Combo, type ConditionalLayer, type HoldTapProfile, type Macro, type SlotAction, type TapDance } from "../../layout/schema.ts";
 import { comboNodeName } from "../../layout/firmware-names.ts";
 import { textKeys } from "../../layout/text-keys.ts";
 import type { OptionValue } from "./props.ts";
@@ -152,6 +152,7 @@ export function renderCombo(c: Combo, ctx: EmitContext): string[] {
 
 /** One `zmk,conditional-layers` child: `then-layer` is on while every `if-layers` layer is (D-387). Layers are written by their current index. */
 export function renderConditionalLayer(c: ConditionalLayer, ctx: EmitContext): string[] {
+  if (!ConditionalLayerSchema.shape.id.safeParse(c.id).success) throw new GenerateError("conditional layer id must start with a letter or underscore and contain only letters, digits, underscores and hyphens");
   const index = (id: string): number => {
     const i = ctx.layerIndex.get(id);
     if (i === undefined) throw new GenerateError(`conditional layer "${c.id}" names layer "${id}", which doesn't exist`);

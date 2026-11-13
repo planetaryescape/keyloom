@@ -15,7 +15,7 @@ export const QmkDockerBuildSchema = z.strictObject({
   /** The `LAYOUT_*` macro keymaps[] is written with. Geometry is read from the layout of the same name. */
   layoutMacro: z.string().min(1),
   /** Where `<name>/keymap.c` goes, relative to the checkout. */
-  keymapsDir: z.string().min(1),
+  keymapsDir: z.string().min(1).refine((path) => !/^[A-Za-z]:/.test(path) && !/[\\\0]/.test(path) && path.split("/").every((part) => part !== "" && part !== "." && part !== ".."), "must be a relative path without traversal"),
   /** Submodules the build needs; the others are skipped to keep the checkout small (S5). */
   submodules: z.array(z.string().min(1)),
   /** Written to keymap.json when the layout carries none of its own. */

@@ -78,7 +78,7 @@ echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/config}"; prev="$a"; done
 ${fakeSha256Probe("/config")}
-case " $* " in *" --entrypoint sh "*) [ -f "$vol/config/default.nix" ] || exit 86; rm -f "$vol/glove80.uf2"; exit 0;; esac
+case " $* " in *" --entrypoint sh "*) [ "$FAKE_MOUNT" = missing ] && exit 86; [ -f "$vol/config/default.nix" ] || exit 86; rm -f "$vol/glove80.uf2"; exit 0;; esac
 case "$FAKE_MODE" in
   ok) cp "$FAKE_UF2" "$vol/glove80.uf2"; echo "building zmk_glove80_lh.drv"; exit 0;;
   nobin) echo "nix-build finished"; exit 0;;
@@ -94,6 +94,7 @@ exit 9
 // An app, a data directory, a PATH of fake docker and git, and a directory standing in for /Volumes: the
 // firmware use cases and the CLI run a Glove80 import, build and flash against it without touching anything real.
 import { join as joinPath } from "node:path";
+import { trustedCheckoutDir } from "../../src/firmware/toolchain/checkout.ts";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { closeApp, importLayout, openApp } from "../../src/app/index.ts";
@@ -109,16 +110,19 @@ export async function zmkEnv(opts: { keymap?: string } = {}) {
   const uf2 = joinPath(root, "glove80.uf2");
   await Bun.write(uf2, combinedUf2());
   const board = showBoard("moergo/glove80");
-  const template = (board.definition.revisions[0]?.build as unknown as { template: { sha: string } }).template;
+  const build = board.definition.revisions[0]?.build;
+  if (build?.kind !== "zmk-moergo-template") throw new Error("expected Glove80 template recipe");
+  const template = build.template;
   const vars = {
     XDG_CACHE_HOME: cache, FAKE_MODE: "ok", FAKE_DOCKER_LOG: joinPath(root, "docker.calls"), FAKE_UF2: uf2, FAKE_IMAGE_MARK: joinPath(root, "image.mark"),
     FAKE_GIT_HEAD: template.sha,
   };
-  // The pinned checkout "exists": a .git folder for the state check and config/default.nix for the mount probe.
+  // Seed the trusted download. The writable workspace is recreated from it for each build.
   const dir = await withPath(bin, async () => checkoutDirFor(board), vars);
-  mkdirSync(joinPath(dir, ".git"), { recursive: true });
-  mkdirSync(joinPath(dir, "config"), { recursive: true });
-  await Bun.write(joinPath(dir, "config", "default.nix"), "{}\n");
+  const trusted = trustedCheckoutDir({ dir, repo: template.repo, sha: template.sha, submodules: [] });
+  mkdirSync(joinPath(trusted, ".git"), { recursive: true });
+  mkdirSync(joinPath(trusted, "config"), { recursive: true });
+  await Bun.write(joinPath(trusted, "config", "default.nix"), "{}\n");
   const app = openApp({ dataDir });
   const imported = await importLayout(app, { board: "moergo/glove80", source: opts.keymap ?? TEMPLATE_FIXTURE });
   const run = <T>(fn: () => Promise<T>, extra: Record<string, string> = {}) => withPath(bin, fn, { ...vars, ...extra });
@@ -128,13 +132,13 @@ export async function zmkEnv(opts: { keymap?: string } = {}) {
 /**
  * A fake bootloader for `volumes`: each boot drive that gets a .uf2 written to it unmounts, as a real one does. With `onDemand`
  * only the first drive appears by itself; the test calls `mount(label)` for the others, as a person puts the next half into its
- * bootloader once keyloom has asked, so no fixed delay has to outlast a slow runner.
+ * bootloader once keyloom has asked. `onDemand: "all"` waits for each half's prompt.
  */
-export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean } = {}) {
+export function fakeBootloaders(volumes: string, labels: readonly string[], opts: { mountAfterMs?: number[]; onDemand?: boolean | "all" } = {}) {
   const written: string[] = [];
   const mount = (label: string) => mkdirSync(joinPath(volumes, label), { recursive: true });
   labels.forEach((label, i) => {
-    if (!opts.onDemand || i === 0) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
+    if (!opts.onDemand || (opts.onDemand === true && i === 0)) setTimeout(() => mount(label), opts.mountAfterMs?.[i] ?? 50 + i * 400);
   });
   const timer = setInterval(() => {
     for (const label of labels) {

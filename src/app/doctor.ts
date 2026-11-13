@@ -10,7 +10,7 @@ import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { imageTag } from "../firmware/zmk/image.ts";
-import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
+import { type CheckoutSpec, checkoutState, trustedCheckoutDir } from "../firmware/toolchain/checkout.ts";
 import { LOW_DISK_BYTES, dockerFreeSpace } from "../firmware/toolchain/docker.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
 import { findTool } from "../firmware/toolchain/kept-tools.ts";
@@ -249,14 +249,15 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     ),
   ];
   for (const { board, spec } of specs) {
+    const sourceDir = trustedCheckoutDir(spec);
     const name = `checkout ${board}`;
     try {
       const state = await checkoutState(spec);
-      if (!state.present) checks.push({ name, ok: true, detail: `${spec.dir} doesn't exist yet; the first build creates it` });
-      else if (!state.pinned) checks.push({ name, ok: false, detail: `${spec.dir} is at ${state.head}, not the pinned ${spec.sha}; delete it and keyloom recreates it` });
-      else if (state.drifted.length > 0) checks.push({ name, ok: false, detail: `submodules ${state.drifted.join(", ")} are not at the pinned commits; delete ${spec.dir}` });
+      if (!state.present) checks.push({ name, ok: true, detail: `${sourceDir} doesn't exist yet; the first build creates it` });
+      else if (!state.pinned) checks.push({ name, ok: false, detail: `${sourceDir} is at ${state.head}, not the pinned ${spec.sha}; delete it and keyloom recreates it` });
+      else if (state.drifted.length > 0) checks.push({ name, ok: false, detail: `submodules ${state.drifted.join(", ")} are not at the pinned commits; delete ${sourceDir}` });
       else if (state.uninitialised.length > 0) checks.push({ name, ok: true, warn: true, detail: `pinned at ${spec.sha.slice(0, 9)}; submodules ${state.uninitialised.join(", ")} will be fetched by the next build` });
-      else checks.push({ name, ok: true, detail: `pinned at ${spec.sha.slice(0, 9)} (${spec.dir})` });
+      else checks.push({ name, ok: true, detail: `pinned at ${spec.sha.slice(0, 9)} (${sourceDir})` });
     } catch (err) {
       checks.push({ name, ok: false, detail: (err as Error).message });
     }

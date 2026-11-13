@@ -136,3 +136,21 @@ describe("reorder and delete", () => {
     expect(r.errors).toEqual([]);
   });
 });
+
+
+test("conditional IDs cannot introduce preprocessor directives or devicetree syntax", () => {
+  for (const id of ["probe\n#undef A\n#define A B\n", "probe {", "probe;", "probe\\", "probe\0"]) {
+    const result = evaluate(tinyBoard, doc([]), [op({ id, ifLayerIds: ["lower", "raise"], thenLayerId: "adjust" })]).result;
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("schema");
+  }
+});
+
+
+test("existing safe conditional IDs keep their identity, including underscores and uppercase", () => {
+  for (const id of ["tri", "tri-layer", "tri_layer", "TriLayer", "_tri"]) {
+    const result = evaluate(tinyBoard, doc([]), [op({ id, ifLayerIds: ["lower", "raise"], thenLayerId: "adjust" })]);
+    expect(result.result.ok).toBe(true);
+    expect(result.after?.conditionalLayers[0]?.id).toBe(id);
+  }
+});

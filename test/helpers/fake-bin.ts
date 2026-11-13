@@ -108,7 +108,16 @@ esac`;
 export const FAKE_DOCKER = `
 case "$1" in
   version) [ "$FAKE_MODE" = nodaemon ] && exit 1; echo 28.0.0; exit 0;;
+  info) printf 'Docker Desktop\\tdocker-desktop\\n'; exit 0;;
+  context)
+    case "$2" in show) echo default;; inspect) echo unix:///var/run/docker.sock;; *) exit 9;; esac
+    exit 0;;
+  image) [ "$2" = inspect ] && exit 0; exit 9;;
   rm) echo "$@" >> "$FAKE_DOCKER_LOG"; exit 0;;
+esac
+case " $* " in *" --entrypoint df "*)
+  printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\nfixture 31457280 10485760 20971520 34%% /\\n'
+  exit 0;;
 esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""

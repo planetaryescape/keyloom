@@ -1,10 +1,9 @@
-// Pinned firmware checkouts (01#firmware-toolchains): the repo at an exact SHA, with only the
-// submodules a build needs. keyloom clones on first use, verifies HEAD against the pin on every
-// use, and refuses to build from a checkout that doesn't match.
-import { existsSync } from "node:fs";
-import { mkdir, rename, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+// Trusted firmware downloads stay outside writable build mounts (D-580).
+import { constants, existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { type LogSink, capture, run } from "./run.ts";
+import { withWorkspace } from "./workspace.ts";
 
 export type CheckoutSpec = {
   dir: string;
@@ -24,7 +23,7 @@ export type CheckoutState =
 
 const git = (dir: string, ...args: string[]) => ["git", "-C", dir, ...args];
 
-export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> {
+async function sourceState(spec: CheckoutSpec): Promise<CheckoutState> {
   if (!existsSync(`${spec.dir}/.git`)) return { present: false };
   const head = await capture(git(spec.dir, "rev-parse", "HEAD"), { timeoutMs: 15_000 });
   if (head.exitCode !== 0) throw new CheckoutError(`${spec.dir} is not a usable git checkout: ${head.stderr.trim()}`);
@@ -51,6 +50,7 @@ async function step(cmd: string[], what: string, hooks: Hooks, cwd?: string): Pr
     ...(hooks.log ? { log: hooks.log } : {}),
     ...(hooks.signal ? { signal: hooks.signal } : {}),
     timeoutMs: hooks.timeoutMs ?? 30 * 60_000,
+    processGroup: true,
     // git prints progress on stderr; it is useful in the log and in a progress view.
     onLine: (line) => {
       tail.push(line);
@@ -61,49 +61,76 @@ async function step(cmd: string[], what: string, hooks: Hooks, cwd?: string): Pr
   if (r.exitCode !== 0) throw new CheckoutError(`${what} failed (${r.timedOut ? "timed out" : `exit ${r.exitCode ?? r.signalCode}`}): ${tail.slice(-3).join(" | ")}`);
 }
 
-/**
- * Makes `spec.dir` a checkout of `spec.sha` with its submodules, creating it if it isn't there.
- * A first clone happens in a sibling directory and is renamed into place, so an interrupted one
- * leaves nothing that looks like a checkout.
- */
-export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<void> {
-  const say = (line: string) => {
-    hooks.log?.line(line);
-    hooks.onLine?.(line);
-  };
-  let state = await checkoutState(spec);
-  if (!state.present) {
-    if (existsSync(spec.dir)) throw new CheckoutError(`${spec.dir} exists but is not a git checkout; move it away so keyloom can create one`);
-    say(`keyloom: creating ${spec.dir} from ${spec.repo} at ${spec.sha}`);
-    const tmp = `${spec.dir}.partial-${process.pid}`;
-    await rm(tmp, { recursive: true, force: true });
-    await mkdir(dirname(spec.dir), { recursive: true });
-    try {
-      await step(["git", "init", "--quiet", tmp], "git init", hooks);
-      await step(git(tmp, "remote", "add", "origin", spec.repo), "git remote add", hooks);
-      // Fetching one commit by SHA keeps history out; GitHub allows it.
-      await step(git(tmp, "fetch", "--depth", "1", "--progress", "origin", spec.sha), `fetching ${spec.sha}`, hooks);
-      await step(git(tmp, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", spec.sha), "git checkout", hooks);
-      await rename(tmp, spec.dir);
-    } catch (err) {
-      await rm(tmp, { recursive: true, force: true });
-      throw err;
-    }
-    state = await checkoutState(spec);
-  }
+function requirePinned(spec: CheckoutSpec, state: CheckoutState): void {
   if (!state.present) throw new CheckoutError(`${spec.dir} was not created`);
-  if (!state.pinned) {
-    throw new CheckoutError(
-      `${spec.dir} is at ${state.head}, but the board pins ${spec.sha}. keyloom won't build from a checkout that doesn't match; delete the directory and it will be recreated.`,
-    );
+  if (!state.pinned) throw new CheckoutError(`${spec.dir} is at ${state.head}, but the board pins ${spec.sha}. Delete the source cache and build again.`);
+  if (state.uninitialised.length > 0 || state.drifted.length > 0) {
+    throw new CheckoutError(`submodules are not at the pinned commits in ${spec.dir}: ${[...state.uninitialised, ...state.drifted].join(", ")}. Delete the source cache and build again.`);
   }
-  if (state.drifted.length > 0) throw new CheckoutError(`submodules ${state.drifted.join(", ")} in ${spec.dir} are not at the commits the pin records; delete the directory and it will be recreated`);
-  if (state.uninitialised.length > 0) {
-    say(`keyloom: fetching submodules ${state.uninitialised.join(", ")}`);
-    await step(git(spec.dir, "submodule", "update", "--init", "--depth", "1", "--progress", "--", ...state.uninitialised), "git submodule update", hooks);
-    const after = await checkoutState(spec);
-    if (after.present && (after.uninitialised.length > 0 || after.drifted.length > 0)) {
-      throw new CheckoutError(`submodules are still not at the pinned commits after update: ${[...after.uninitialised, ...after.drifted].join(", ")}`);
+}
+
+/** Publish only complete source snapshots. Interrupted downloads never become reusable inputs. */
+async function ensureSource(spec: CheckoutSpec, hooks: Hooks): Promise<void> {
+  const state = await sourceState(spec);
+  if (state.present) {
+    requirePinned(spec, state);
+    return;
+  }
+  if (existsSync(spec.dir)) throw new CheckoutError(`${spec.dir} exists but is not a git checkout; move it away so keyloom can create one`);
+  const message = `keyloom: creating ${spec.dir} from ${spec.repo} at ${spec.sha}`;
+  hooks.log?.line(message);
+  hooks.onLine?.(message);
+  await mkdir(dirname(spec.dir), { recursive: true });
+  const tmp = await mkdtemp(`${spec.dir}.partial-`);
+  try {
+    await step(["git", "init", "--quiet", tmp], "git init", hooks);
+    await step(git(tmp, "remote", "add", "origin", spec.repo), "git remote add", hooks);
+    await step(git(tmp, "fetch", "--depth", "1", "--progress", "origin", spec.sha), `fetching ${spec.sha}`, hooks);
+    await step(git(tmp, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", spec.sha), "git checkout", hooks);
+    if (spec.submodules.length > 0) {
+      await step(git(tmp, "submodule", "update", "--init", "--depth", "1", "--progress", "--", ...spec.submodules), "git submodule update", hooks);
     }
+    const staged = { ...spec, dir: tmp };
+    requirePinned(staged, await sourceState(staged));
+    await rename(tmp, spec.dir);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
   }
+}
+
+/** Never read Git configuration from a directory a build or emulator could write. */
+export function trustedCheckoutDir(spec: CheckoutSpec): string {
+  const identity = new Bun.CryptoHasher("sha256").update(JSON.stringify([spec.repo, spec.sha, [...spec.submodules].sort()])).digest("hex");
+  return join(`${spec.dir}.sources-v1`, identity);
+}
+
+export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> {
+  return sourceState({ ...spec, dir: trustedCheckoutDir(spec) });
+}
+
+/**
+ * Keep downloads warm outside the writable mount. Recreate source and outputs for every run,
+ * including after interruption. No file from a previous container becomes a trusted input.
+ * The caller holds spec.dir's lock until the container exits.
+ */
+export async function withCheckout<T>(spec: CheckoutSpec, hooks: Hooks, build: (dir: string) => Promise<T>): Promise<T> {
+  const trusted = await ensureTrustedCheckout(spec, hooks);
+  return withWorkspace(spec.dir, async (dir) => {
+    await cp(trusted, dir, {
+      recursive: true,
+      // Reflinks keep copies cheap where supported. Hard links would expose the trusted source.
+      mode: constants.COPYFILE_FICLONE,
+      filter: (path) => basename(path) !== ".git",
+      verbatimSymlinks: true,
+    });
+    if (hooks.signal?.aborted) throw new CheckoutError("The checkout preparation was cancelled.");
+    return build(dir);
+  });
+}
+
+/** Callers can mount this path read-only. Never mount it writable or expose its parent. */
+export async function ensureTrustedCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<string> {
+  const trusted = trustedCheckoutDir(spec);
+  await ensureSource({ ...spec, dir: trusted }, hooks);
+  return trusted;
 }

@@ -10,6 +10,7 @@
 import "./no-real-flash.ts";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { trustedCheckoutDir } from "../../src/firmware/toolchain/checkout.ts";
 import { checkoutDirFor } from "../../src/app/firmware.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { detectKeyboards, getBuild, getLayout, listConfigs, listLayouts, openApp } from "../../src/app/index.ts";
@@ -63,7 +64,10 @@ await Bun.write(w("reva.bin"), dfuImage("0483:df11", 300));
 await Bun.write(w("revb.bin"), dfuImage("3297:2003", 300));
 await Bun.write(w("firmware.elf"), fakeElf(["__wrap_raw_hid_receive", "__wrap_action_exec", "raw_hid_receive"]));
 await Bun.write(w("glove80.uf2"), combinedUf2());
-for (const dir of [checkoutDirFor(moonlanderBoard), checkoutDirFor(glove)]) {
+for (const board of [moonlanderBoard, glove]) {
+  const rev = board.definition.revisions[0]!;
+  const source = rev.build.kind === "zmk-moergo-template" ? rev.build.template : rev.source;
+  const dir = trustedCheckoutDir({ dir: checkoutDirFor(board), ...source, submodules: rev.build.kind === "qmk-docker" ? rev.build.submodules : [] });
   mkdirSync(join(dir, ".git"), { recursive: true });
   mkdirSync(join(dir, "config"), { recursive: true });
   writeFileSync(join(dir, "Makefile"), "all:\n");

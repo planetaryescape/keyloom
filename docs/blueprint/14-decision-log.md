@@ -11,6 +11,117 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 Each container gets a unique workspace path
+
+### D-582: Never bind a later run to a host path an older container used. Replaces D-580 and D-581's stable workspace path.
+
+A real Colima probe proved that an old bind mount follows a host directory replaced at the same path.
+The old container read the new source and changed it. A lock cannot stop a container whose owner died.
+
+Each build and emulator now uses a new sibling path, `<board>.run-<random>`. The source cache remains outside every writable mount.
+QMK and Glove80 copy trusted source into that run. West mounts locked source read-only beside fresh writable config and output.
+The lock stays held through container exit, artifact validation, and snapshot publication.
+All existing QMK path and symlink guards use the new run root.
+
+After the callback ends, the run becomes the stable base's untrusted debug snapshot.
+That snapshot is never an input to Git, the doctor, source preparation, or another build.
+Even a container that can change that snapshot cannot reach a later run's separate sibling path.
+Failed runs retain debug files too. The next run still starts from trusted source and empty output.
+
+Docker file sharing must cover the parent build-cache folder, which contains both trusted sources and run folders.
+The folder-sharing recovery action now names that parent. Firmware formats and freshness checks stay unchanged.
+
+Verification: unique-workspace tests cover fresh paths and failed-run retries. The real Docker regression retains an old writable bind while two later runs use separate paths.
+
+## 2026-11-13 West builds use resolved inputs and read-only source
+
+### D-581: Replace recursive west imports with a reviewed dependency lock. Extends D-036, D-040 and D-580.
+
+`src/firmware/zmk/west-inputs.json` locks all 39 active projects for ZMK `edf5c0814fd3ea202e43aad2d68fd32e882a518c`.
+Zephyr is `dacab4875df72109b96cc8977547a0dc04875bcd`. The lock preserves ZMK's nanopb override, project paths, groups, and west commands.
+West's own manifest resolver produced the flattened project list from the pinned upstream manifests.
+The board's pinned hardware and RGB modules join that list without importing their config manifests, as before.
+A new ZMK commit requires a reviewed lock. An unknown source commit fails before any build rather than resolving mutable dependencies.
+
+Builds and emulation mount each trusted project read-only. Git metadata stays read-only too, because west uses it to locate projects.
+The writable workspace contains generated config and output. Each run recreates it without opening its old Git or west metadata.
+No build-time `west update` remains. CMake receives the pinned `ZEPHYR_BASE` and exact `Zephyr_DIR` directly. Package registration is omitted because this Zephyr version writes into its source directory during `west zephyr-export`. Repository URLs, every resolved commit, and the image digest form the source-cache identity.
+The emulator's result key also includes the full resolved manifest, including hardware and RGB modules.
+
+Reason: C2 reproduced the mutable `v3.5.0+zmk-fixes` import under an otherwise pinned ZMK commit.
+The read-only mounts also prevent a prior west build or emulator from changing later source inputs.
+See [the input-lock evidence](../research/west-input-lock.md) for provenance and compatibility checks.
+
+## 2026-11-13 Firmware workspaces cannot change later builds
+
+### D-580: Keep trusted Git downloads outside writable build and emulation mounts. Replaces D-081's shared checkout reuse.
+
+The writable workspace is disposable. Host Git only reads the separate source cache, keyed by repository URL, full commit SHA, and requested submodules.
+Each run copies pinned source and its requested submodules into a fresh workspace, without Git metadata or earlier output.
+Copies use filesystem reflinks where available. They never use hard links.
+A source snapshot publishes only after every requested submodule succeeds. An interrupted copy cannot replace the workspace. A later run retries from trusted source.
+The caller holds the workspace lock through the run. Downloads remain available for later builds.
+
+Reason: A2/C1 reproduced changed Makefiles, changed submodule files, and host command execution through writable Git configuration.
+Checking HEAD or running Git status inside the old workspace cannot establish trust.
+The doctor reads the trusted cache too. Old writable checkout metadata is never opened by host Git.
+
+Verification: `test/firmware/toolchain/checkout.test.ts` covers contaminated source, submodule files, Git configuration, stale output, and warm downloads.
+The QMK, Glove80, and emulation checks cover callers. West workspace preparation is a separate follow-up.
+No keyboard was flashed. Persistent compiler output requires a separate trust design before reuse.
+
+## 2026-11-13 generated names and import limits
+
+### D-663: Conditional-layer IDs cannot introduce devicetree source.
+
+A conditional ID starts with a letter or underscore and contains only letters, digits, underscores and hyphens. Validation rejects other forms before proposal storage. The ZMK generator checks the same schema before writing a conditional node. Existing safe IDs keep their identity, including uppercase letters and underscores. Imported conditions made by the slugger still round-trip.
+
+Regression: `test/agent/conditional-layers.test.ts`, `test/validation/conditional-layers.test.ts` and `test/firmware/zmk/conditional-layers.test.ts`. A synthetic directive sequence is rejected before a proposal or revision is saved. No real firmware or hardware check is claimed.
+
+### D-664: Inspect ZIP metadata before inflating source files.
+
+QMK ZIP imports have an 8 MiB compressed limit, at most 1,024 entries, an 8 MiB per-source-file limit and a 32 MiB aggregate declared-source limit. These limits apply to CLI imports too. The importer inspects the archive directory without inflation, then inflates only the first keymap folder and its direct source neighbors. An oversized entry or total fails the import instead of silently dropping part of the input.
+
+The archive library supplies the directory metadata. keyloom does not add a ZIP parser. The existing ordinary Oryx ZIP round trip stays covered. `test/firmware/qmk/source-limits.test.ts` checks selected-folder behavior and each limit with bounded synthetic inputs.
+
+### D-665: Tool validation rejects oversized collections before element work and bounds returned errors.
+
+Zod 4.6.7 replaces the vulnerable 4.6.5 lock, including the MCP SDK's nested copy, for GHSA-mrhx-c7xc-m3w5. The override keeps all copies on the patched version. Tool errors retain at most eight issues and 200 characters per issue, plus the omitted count. Valid inputs still reach the tool unchanged.
+
+`test/agent/tool-input-limits.test.ts` verifies that 5,000 entries do not reach per-element validation when the array limit is 100. It also checks bounded error output, useful paths and no tool effect on rejection. This is a bounded allocation and error-amplification fix, not a claim that the review demonstrated memory exhaustion. Other dependency advisories remain separate findings until reachability and compatibility checks settle them.
+
+## 2026-11-13 firmware build input boundaries
+
+### D-660: Setting edits cannot introduce opaque firmware source. Clarifies D-024.
+
+A new or changed firmware setting accepts a number or a switch and an identifier name. Imported expression values remain unchanged, can be removed, or can become typed values. A change cannot add or replace an expression string through `setFirmwareSetting`. QMK generation also rejects newlines, NUL bytes, trailing line continuations and source in setting names. Direct generation still preserves imported single-line expressions. This does not turn an imported custom program into trusted code.
+
+Regression: `test/validation/firmware-setting-source.test.ts`. The CLI expression-display fixture now imports its expression instead of adding new source through a change.
+
+### D-661: Host source writes and cleanup stay inside their build workspace.
+
+A QMK board's `keymapsDir` cannot be absolute or contain traversal. Host writes reject symlink components beneath the workspace root. Generated filenames receive the same checks, and cleaning generated source requires the workspace root. QMK builds and emulation use this boundary before host writes. Stale QMK artifact removal checks its paths too. A symlink used to name the workspace itself remains supported, including macOS temporary-directory aliases.
+
+The filesystem check uses `lstat` because lexical path containment alone follows a symlink outside the workspace. It does not establish protection from concurrent hostile directory replacement. Trusted-source isolation is a separate fix, tracked in `docs/issues/build-checkout-source-integrity.md`.
+
+Regression: `test/firmware/qmk/write-source.test.ts`, plus the fake QMK build and import round-trip tests.
+
+### D-662: Configure the Glove80 binary cache without executing a downloaded installer.
+
+Nix receives the MoErgo cache URL and public signing key directly in `nix.conf`. The key was read from `https://app.cachix.org/api/v1/cache/moergo-glove80-zmk-dev` on 13 November 2026. The image no longer installs Cachix from a mutable Nix expression. The pinned base, firmware source and signature requirement remain. The Dockerfile hash changes the image tag, so an existing image built with the installer is not reused for this candidate.
+
+Regression: the missing-image journey in `test/firmware/zmk/build.test.ts` checks the emitted Dockerfile. A network-disabled, read-only container configuration probe confirms Nix accepts the cache and key while `require-sigs` stays true. A new image and compiled scratch CLI firmware build passed at `a2d0bd9b`, producing both Glove80 half families. The [issue record](../issues/glove80-mutable-cachix-installer.md) keeps the artifact hash and limits. No keyboard was flashed.
+
+## 2026-11-13 desktop sidecar integrity
+
+### D-569: Verify the sidecar checksum before replacing the executable.
+
+The desktop fetch script checks staged bytes against one exact architecture-specific entry in `SHA256SUMS`. Downloads fetch the manifest from the same release path. Local builds require the builder's manifest beside the supplied binary. The release workflow downloads both files before calling the script.
+
+Only matching bytes replace the sidecar through an atomic rename. Download or verification failures preserve the previous executable and remove staged files. This extends the CLI installer's integrity check to desktop packaging. It does not establish publisher identity or notarization. The [standalone CLI signature issue](../issues/standalone-macos-cli-signature.md) remains separate.
+
+`test/scripts/fetch-sidecar.test.ts` checks both Mac architectures, explicit and latest release paths, local files, corrupt bytes, missing or duplicate entries, failed downloads, and cleanup. The tests use synthetic payloads and fake download commands. No signed app build or installed update is established by these checks.
+
 ## 2026-11-13 one-shot modifiers in the editor
 
 ### D-568: Edit one-shot modifiers through the existing native writer and validated change path.

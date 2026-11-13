@@ -13,7 +13,7 @@ import { withLock } from "../toolchain/lock.ts";
 import { run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import { hint } from "./build.ts";
-import { westManifest } from "./build-west.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
 import { readZmkLighting } from "./import-lighting.ts";
 import { nativeFiles } from "./emulate-keymap.ts";
 import { parseRunLog } from "./emulate-log.ts";
@@ -45,15 +45,13 @@ const toStdin = (files: { keymap: string; conf: string }): string =>
   `${Buffer.from(files.keymap).toString("base64")}\n${Buffer.from(files.conf).toString("base64")}\n`;
 
 /** The shell run inside ZMK's own image: the real build's workspace, a build of its own beside it, then the binary. */
-export function westEmulateScript(sha: string): string {
+export function westEmulateScript(): string {
   return [
     "set -e",
     ...READ_CONFIG,
     "[ -d .west ] || west init -l config",
-    // The workspace is the one the real build keeps; only a missing or moved firmware tree needs west's download.
-    `[ "$(git -C zmk rev-parse HEAD 2>/dev/null)" = ${sha} ] || west update --fetch-opt=--filter=tree:0`,
-    "west zephyr-export > /dev/null",
-    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR}`,
+    "export ZEPHYR_BASE=/work/zephyr",
+    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache`,
     `echo ${RUN_MARKER}`,
     `${BUILD_DIR}/zephyr/zmk.exe -no-rt`,
     "",
@@ -118,8 +116,10 @@ export const emulateZmk: Emulator = async (input) => {
   };
   // What the build depends on: the firmware, the image it builds in, the emulator's own scripts and the native keymap and settings (events included).
   const toolchain = rev.build.kind === "zmk-west-docker" ? rev.build.image : imageTag(rev.source.sha);
+  const projects = rev.build.kind === "zmk-west-docker" ? westProjects(rev.source.repo, rev.source.sha, rev.build) : [];
+  const manifest = lockedWestManifest(projects);
   const key = new Bun.CryptoHasher("sha256")
-    .update([rev.source.sha, toolchain, westEmulateScript(rev.source.sha), MOERGO_INNER_SCRIPT, files.keymap, files.conf].join("\n--\n"))
+    .update([rev.source.sha, toolchain, manifest, westEmulateScript(), MOERGO_INNER_SCRIPT, files.keymap, files.conf].join("\n--\n"))
     .digest("hex")
     .slice(0, 24);
   const runsDir = join(input.workDir, "runs");
@@ -161,18 +161,22 @@ export const emulateZmk: Emulator = async (input) => {
     if (rev.build.kind === "zmk-west-docker") {
       const build = rev.build;
       await withLock(`${input.checkoutDir}.lock`, async () => {
-        const config = join(input.checkoutDir, "config");
-        await mkdir(config, { recursive: true });
-        await writeIfChanged(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha));
-        const uid = process.getuid?.() ?? 1000;
-        const gid = process.getgid?.() ?? 1000;
-        // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
-        const cmd = [
-          "docker", "run", "-i", "--rm", "--name", input.containerName, "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, "-e", "HOME=/tmp",
-          "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*", build.image, "sh", "-c", westEmulateScript(rev.source.sha),
-        ];
-        say(`keyloom: emulating ${input.board.name} on ZMK ${rev.source.ref} (${rev.source.sha.slice(0, 9)}) in ${build.image.split("@")[0]}`);
-        await execute(cmd);
+        const request = input;
+        return withWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) }, async (checkoutDir, sourceMounts) => {
+          const input = { ...request, checkoutDir };
+          const config = join(input.checkoutDir, "config");
+          await mkdir(config, { recursive: true });
+          await writeIfChanged(join(config, "west.yml"), manifest);
+          const uid = process.getuid?.() ?? 1000;
+          const gid = process.getgid?.() ?? 1000;
+          // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
+          const cmd = [
+            "docker", "run", "-i", "--rm", "--name", input.containerName, "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
+            "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*", build.image, "sh", "-c", westEmulateScript(),
+          ];
+          say(`keyloom: emulating ${input.board.name} on ZMK ${rev.source.ref} (${rev.source.sha.slice(0, 9)}) in ${build.image.split("@")[0]}`);
+          await execute(cmd);
+        });
       }, { timeoutMs: EMULATE_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) });
     } else {
       await withLock(`${input.workDir}.lock`, async () => {

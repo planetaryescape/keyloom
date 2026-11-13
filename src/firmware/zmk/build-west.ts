@@ -1,8 +1,8 @@
 // Generated keymap -> one UF2 per half, with `west build` in ZMK's own Docker image, from upstream
 // ZMK (or any fork) pinned in board.json (06#build-runs-the-moergo-template-in-docker has the MoErgo
 // route). The work folder holds a user config (`config/west.yml`, the keymap and conf) and the
-// firmware tree west fetches beside it; it persists, so only the first build downloads Zephyr.
-import { mkdir, readdir, rm } from "node:fs/promises";
+// source trees mounted read-only beside it. Downloads persist outside writable mounts.
+import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { zipSync } from "fflate";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
@@ -17,10 +17,11 @@ import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from 
 import { moduleReport } from "./handsfree.ts";
 import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
 
-/** The user config's manifest: ZMK at the pinned SHA, with its own `app/west.yml` for Zephyr and the modules. */
+/** Flattened, immutable dependencies plus the board's pinned modules. */
 export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"], rgbMatrix?: ZmkWestDockerBuild["rgbMatrix"]): string {
-  return `manifest:\n  projects:\n    - name: zmk\n      url: ${repo}\n      revision: ${sha}\n      import: app/west.yml${boardModule ? `\n    - name: board-module\n      url: ${boardModule.repo}\n      revision: ${boardModule.sha}` : ""}${rgbMatrix ? `\n    - name: zmk-rgb-matrix\n      url: ${rgbMatrix.module.repo}\n      revision: ${rgbMatrix.module.sha}` : ""}\n  self:\n    path: config\n`;
+  return lockedWestManifest(westProjects(repo, sha, { ...(boardModule ? { boardModule } : {}), ...(rgbMatrix ? { rgbMatrix } : {}) }));
 }
 
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
@@ -39,13 +40,8 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "export CMAKE_BUILD_PARALLEL_LEVEL=5",
     "rm -rf build",
     "[ -d .west ] || west init -l config",
-    // A build stopped during `west update` leaves git's lock files behind, and every later update then fails on them.
-    // keyloom holds this checkout's lock for the whole build and has removed any container an earlier keyloom left in it, so
-    // no git is running here and any lock is stale.
-    `west list -f '{abspath}' 2>/dev/null | while read -r p; do find "$p/.git" -name '*.lock' -print -delete 2>/dev/null | sed 's/^/keyloom: removed a stale git lock /' || true; done`,
-    "west update --fetch-opt=--filter=tree:0",
-    "west zephyr-export",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
+    "export ZEPHYR_BASE=/work/zephyr",
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }
@@ -63,28 +59,8 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
   return withLock(
     `${input.checkoutDir}.lock`,
     async () => {
-      const config = join(input.checkoutDir, "config");
-      await mkdir(config, { recursive: true });
-      // A keymap or conf left from another layout must not be built.
-      for (const f of await readdir(config)) if (/\.(keymap|conf)$/.test(f)) await rm(join(config, f));
-      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
-      for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
-      // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
-      const named = build.targets.filter((t) => t.productName !== undefined);
-      for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
-      const handsFree = rev.flash.handsFree !== undefined;
-      if (handsFree) await writeModule(input.checkoutDir);
-
-      const uid = process.getuid?.() ?? 1000;
-      const gid = process.getgid?.() ?? 1000;
-      // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
-      const base = [
-        "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, "-e", "HOME=/tmp",
-        "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*",
-      ];
       // `--rm` is the docker client's job, so a keyloom killed mid-build can leave its container running in this checkout.
-      // This build holds the checkout's lock, so such a container is orphaned; stop it before the script clears git's locks.
-      // Without that answer the locks could belong to a live git, so the build stops rather than guess.
+      // This build holds the workspace lock. Stop orphan containers before replacing writable output.
       const checkMs = input.containerCheckTimeoutMs ?? 60_000;
       const orphans = await capture(["docker", "ps", "-aq", "--filter", `label=${CHECKOUT_LABEL}=${input.checkoutDir}`], { timeoutMs: checkMs });
       // A command stopped at its timeout can still exit 0, so its listing may be incomplete.
@@ -100,31 +76,53 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
         }
       }
 
-      // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
-      // Docker Desktop instead refuses the mount in its own words, before the container starts.
-      const probeOutput: string[] = [];
-      const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000, onLine: (line) => probeOutput.push(line) });
-      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+      const projects = westProjects(rev.source.repo, rev.source.sha, build);
+      const request = input;
+      return withWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) }, async (checkoutDir, sourceMounts) => {
+        const input = { ...request, checkoutDir };
+        const config = join(input.checkoutDir, "config");
+        await mkdir(config, { recursive: true });
+        await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
+        for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
+        // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
+        const named = build.targets.filter((t) => t.productName !== undefined);
+        for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
+        const handsFree = rev.flash.handsFree !== undefined;
+        if (handsFree) await writeModule(input.checkoutDir);
 
-      await awaitMountedFiles({
-        image: build.image,
-        mountArgs: base.slice(3),
-        hostRoot: input.checkoutDir,
-        containerRoot: "/work",
-        files: [
-          join(config, "west.yml"),
-          ...input.source.files.map((f) => join(config, f.path)),
-          ...named.map((t) => join(config, targetConfFile(t.id))),
-          ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
-        ],
-        log: input.log,
-        ...(input.signal ? { signal: input.signal } : {}),
+        const uid = process.getuid?.() ?? 1000;
+        const gid = process.getgid?.() ?? 1000;
+        // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
+        const base = [
+          "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
+          "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*",
+        ];
+
+        // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
+        // Docker Desktop instead refuses the mount in its own words, before the container starts.
+        const probeOutput: string[] = [];
+        const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000, onLine: (line) => probeOutput.push(line) });
+        if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share ${dirname(request.checkoutDir)} with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+
+        await awaitMountedFiles({
+          image: build.image,
+          mountArgs: base.slice(3),
+          hostRoot: input.checkoutDir,
+          containerRoot: "/work",
+          files: [
+            join(config, "west.yml"),
+            ...input.source.files.map((f) => join(config, f.path)),
+            ...named.map((t) => join(config, targetConfFile(t.id))),
+            ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
+          ],
+          log: input.log,
+          ...(input.signal ? { signal: input.signal } : {}),
       });
 
       const output: string[] = [];
-      say(`keyloom: building ${build.targets.map((t) => (t.shield ?? t.board ?? build.board)).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads Zephyr and takes a while`);
+      say(`keyloom: building ${build.targets.map((t) => (t.shield ?? t.board ?? build.board)).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads the pinned dependencies`);
       const result = await run({
-        cmd: [...base.slice(0, 3), "--name", input.containerName, "--label", `${CHECKOUT_LABEL}=${input.checkoutDir}`, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
+        cmd: [...base.slice(0, 3), "--name", input.containerName, "--label", `${CHECKOUT_LABEL}=${request.checkoutDir}`, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
         log: input.log,
         timeoutMs: input.timeoutMs ?? BUILD_TIMEOUT_MS,
         ...(input.signal ? { signal: input.signal } : {}),
@@ -174,6 +172,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       await Bun.write(input.artifactPath, zip);
       say(`keyloom: wrote ${input.artifactPath} (${build.targets.map((t) => `${t.id}.uf2`).join(", ")})`);
       return { artifactPath: input.artifactPath, bytes: zip.length, durationMs: Date.now() - started };
+      });
     },
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );

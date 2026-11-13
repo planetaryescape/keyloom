@@ -68,11 +68,17 @@ Generation rules that decide how the firmware behaves:
 - **Hold-tap profiles** equal to the layout-wide settings add nothing to the firmware. A profile that differs becomes `get_tapping_term`, `get_quick_tap_term`, `get_permissive_hold` or `get_hold_on_other_key_press`, matched by keycode, with the layout-wide value as the default.
 - **Combos** put the base layer's keycodes at the combo's positions. A layer-scoped combo gets `combo_should_trigger`; a combo with its own timeout gets `get_combo_term`. `COMBO_ENABLE` in `rules.mk` is corrected (by appending, since `make` takes the last assignment) when it disagrees with whether combos exist.
 - **Macros** keep their `ST_MACRO_n` names; a macro made in keyloom takes the lowest free number.
-- **Settings.** A flag is `#define KEY`; a flag that is off is left undefined. Strings keep their quotes in the IR, so they are written back as they were read.
+- **Settings.** A flag is `#define KEY`; a flag that is off is left undefined. Imported strings keep their source text. A setting edit cannot introduce a string expression or source in its name (D-660). The generator also rejects setting text that escapes its single `config.h` definition.
+
+ZIP imports inspect metadata before inflation. The compressed limit is 8 MiB, the entry limit is 1,024, each source file is at most 8 MiB, and declared source totals at most 32 MiB. Only the selected keymap folder and its direct source neighbors are inflated. A limit violation fails the import (D-664). Ordinary Oryx ZIP imports and the limits are checked by `test/firmware/qmk/import.test.ts` and `test/firmware/qmk/source-limits.test.ts`.
 
 ## Build runs QMK's Docker script from the pinned fork
 
-The build checkout lives at `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander/`. It's `zsa/qmk_firmware` at the pinned SHA, with submodules. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
+Status, 2026-11-13: D-580 separates trusted downloads from disposable build and emulation workspaces. D-582 gives each run a unique mount path.
+
+Each writable run uses `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander.run-<random>/`. After the run, `zsa-moonlander/` keeps an untrusted debug snapshot. That snapshot never supplies a later build. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. The identity hashes the repository URL, full commit SHA, and requested submodules. Each run copies pinned source and requested submodules into the workspace, without Git metadata or previous output. Downloads remain warm. Host Git never reads a writable workspace or debug snapshot. Share the parent `keyloom/build/` folder with Docker so it can see each new run and the trusted sources. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
+Board `keymapsDir` values must be relative paths without traversal. Before host cleanup or source writes, keyloom rejects symlinks within the workspace and checks every generated filename (D-661). This also covers emulation source and stale QMK artifact cleanup. The checks protect host writes between builds. They do not claim isolation from a process that changes directories during a write.
+
 
 ```
 docker run --rm --user "$(id -u):$(id -g)" -w /qmk_firmware -v <checkout>:/qmk_firmware \

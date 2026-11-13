@@ -97,3 +97,10 @@ describe("importing conditional_layers from the Glove80 template with one added"
     expect(keymapOf(layout)).not.toContain("conditional_layers");
   });
 });
+
+
+test("direct generation refuses an unsafe conditional ID", async () => {
+  const { layout } = await importZmk(withConditions(TRI), def);
+  const conditionalLayers = layout.conditionalLayers.map((c) => ({ ...c, id: "probe\n#undef A\n#define A B\n" }));
+  expect(() => gen({ ...layout, conditionalLayers })).toThrow("conditional layer id");
+});

@@ -313,6 +313,13 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   for (const layer of after.layers) for (const sensor of layer.sensorBindings ?? []) {
     if (sensor.kind === "native" && !importedSensors.has(sensor.source) && !["&trans", "&none"].includes(sensor.source)) out.push(issue("native_edit", `encoder turn on ${layer.id}: ${sensor.source} was not imported`, "Use clockwise and counterclockwise actions instead of inventing a sensor behaviour."));
   }
+  const previousSettings = new Map(before.settings.map((s) => [`${s.firmware}:${s.key}`, s.value]));
+  for (const setting of after.settings) {
+    if (setting.firmware !== after.firmware || previousSettings.get(`${setting.firmware}:${setting.key}`) === setting.value) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(setting.key) || typeof setting.value === "string") {
+      out.push(issue("native_edit", `setting ${JSON.stringify(setting.key)} introduces firmware source keyloom did not import`, "Use a number or a switch for a firmware setting. Imported source stays unchanged."));
+    }
+  }
   if (!deepEqual(before.passthrough, after.passthrough)) out.push(issue("native_edit", "a change touched a passthrough block; keyloom keeps those verbatim", "This change touches custom code that keyloom keeps exactly as it is."));
   return out;
 }

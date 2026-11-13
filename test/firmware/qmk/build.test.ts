@@ -13,7 +13,7 @@ import { LogSink } from "../../../src/firmware/toolchain/run.ts";
 import { FAKE_DOCKER, dfuImage, fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { waitFor } from "../../helpers/fake-sync.ts";
 import { fakeElf } from "../../helpers/fake-elf.ts";
-import { gitEnv, originRepo } from "../../helpers/git-fixture.ts";
+import { git, gitEnv, originRepo } from "../../helpers/git-fixture.ts";
 import { FIXTURE_DIR, moonlander } from "../../helpers/board.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
@@ -58,12 +58,30 @@ describe("buildQmk (fake docker)", () => {
     expect(make).toContain("--rm");
     expect(make).toContain(`--user ${process.getuid?.()}:${process.getgid?.()}`);
     expect(make).toContain("-w /qmk_firmware");
-    expect(make).toContain(`-v ${join(s.dir, "checkout")}:/qmk_firmware`);
+    expect(make).toContain(`-v ${join(s.dir, "checkout")}.run-`);
     expect(make).toContain("-e SKIP_GIT=1 -e MAKEFLAGS=-j4");
     expect(make).toContain("ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a make zsa/moonlander/revb:keyloom");
     expect(make).not.toContain(" -it");
     expect(make).not.toContain(" -t ");
     expect(s.lines.some((l) => l.includes("DFU 3297:2003"))).toBe(true);
+  });
+
+  test("the next build discards source and Git configuration written through the prior mount", async () => {
+    const s = await setup();
+    try {
+      await s.build("ok");
+      const workspace = join(s.dir, "checkout");
+      const marker = join(s.dir, "host-executed");
+      git(workspace, "init", "--quiet");
+      git(workspace, "config", "core.fsmonitor", `touch '${marker}'; printf '\\0'`);
+      await Bun.write(join(workspace, "Makefile"), "contaminated Makefile");
+      await Bun.write(join(workspace, "untracked.h"), "contaminated header");
+      expect((await s.build("ok")).bytes).toBe(216);
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(join(workspace, ".git"))).toBe(false);
+      expect(existsSync(join(workspace, "untracked.h"))).toBe(false);
+      expect(await Bun.file(join(workspace, "Makefile")).text()).toBe("all:\n");
+    } finally { s.log.close(); }
   });
 
   test("hashes the keymap files inside the container before make, and builds once the container sees what the host wrote", async () => {
@@ -72,7 +90,7 @@ describe("buildQmk (fake docker)", () => {
     const calls = (await Bun.file(s.dockerLog).text()).split("\n");
     const hashes = calls.filter((l) => l.includes("--entrypoint sha256sum"));
     expect(hashes).toHaveLength(3);
-    expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}:/qmk_firmware`);
+    expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}.run-`);
     expect(hashes[0]).toContain("/qmk_firmware/keyboards/zsa/moonlander/keymaps/keyloom/keymap.c");
     expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" make ")));
   });

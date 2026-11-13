@@ -4,7 +4,7 @@ import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure, DISK_FULL_MESSAGE, diskFull, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
-import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
+import { type CheckoutSpec, withCheckout } from "../toolchain/checkout.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { writeFresh } from "../toolchain/write-fresh.ts";
@@ -62,10 +62,11 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
   const spec: CheckoutSpec = { dir: input.checkoutDir, repo: template.repo, sha: template.sha, submodules: [] };
   const hooks = { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) };
 
+  const request = input;
   return withLock(
     `${input.checkoutDir}.lock`,
-    async () => {
-      await ensureCheckout(spec, hooks);
+    () => withCheckout(spec, hooks, async (checkoutDir) => {
+      const input = { ...request, checkoutDir };
       let image: string;
       try {
         image = (await ensureImage(rev.source.sha, input.imageContextDir, hooks)).tag;
@@ -91,7 +92,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
         timeoutMs: 5 * 60_000,
         onLine: (line) => probeOutput.push(line),
       });
-      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share ${dirname(request.checkoutDir)} with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
 
       const handsFree = rev.flash.handsFree;
       // After the probe, which is about the template's own default.nix: this replaces it.
@@ -157,7 +158,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       const info = inspectUf2(bytes);
       say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${"problem" in info ? "" : `, ${describeUf2(info)}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
-    },
+    }),
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }

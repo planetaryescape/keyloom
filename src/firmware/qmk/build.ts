@@ -3,8 +3,9 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure, DISK_FULL_MESSAGE, diskFull, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
-import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
+import { type CheckoutSpec, withCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
+import { workspacePath } from "../toolchain/workspace-path.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { awaitMountedFiles } from "../toolchain/mounted-files.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
@@ -55,20 +56,21 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
   const spec: CheckoutSpec = { dir: input.checkoutDir, repo: rev.source.repo, sha: rev.source.sha, submodules: rev.build.submodules };
   const output: string[] = [];
 
+  const request = input;
   return withLock(
     `${input.checkoutDir}.lock`,
-    async () => {
-      await ensureCheckout(spec, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) });
+    () => withCheckout(spec, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) }, async (checkoutDir) => {
+      const input = { ...request, checkoutDir };
 
-      const keymapDir = join(input.checkoutDir, rev.build.keymapsDir, input.source.keymapName);
-      await writeSource(keymapDir, input.source, { clean: true });
+      const keymapDir = await workspacePath(input.checkoutDir, `${rev.build.keymapsDir}/${input.source.keymapName}`);
+      await writeSource(keymapDir, input.source, { clean: true, root: input.checkoutDir });
       const id = `${idFor(rev.qmkTarget)}_${input.source.keymapName}`;
       // A stale .bin from an earlier layout must not be able to pass for this build. Stale objects are
       // removed inside the container below instead: deleting them from the host left Colima's sshfs
       // mount with a cached view of the old directory, so QMK's mkdir -p skipped `src/` and the next
       // build failed writing into it (seen 2026-10-15, second reva build in a row).
-      for (const ext of ["bin", "elf", "hex", "uf2"]) await rm(join(input.checkoutDir, ".build", `${id}.${ext}`), { force: true });
-      for (const ext of ["bin", "hex", "uf2"]) await rm(join(input.checkoutDir, `${id}.${ext}`), { force: true });
+      for (const ext of ["bin", "elf", "hex", "uf2"]) await rm(await workspacePath(input.checkoutDir, `.build/${id}.${ext}`), { force: true });
+      for (const ext of ["bin", "hex", "uf2"]) await rm(await workspacePath(input.checkoutDir, `${id}.${ext}`), { force: true });
 
       const uid = process.getuid?.() ?? 1000;
       const gid = process.getgid?.() ?? 1000;
@@ -86,7 +88,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
         onLine: (line) => probeOutput.push(line),
       });
       if (visible.exitCode !== 0) {
-        throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`);
+        throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Allow ${dirname(request.checkoutDir)} under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`);
       }
       await awaitMountedFiles({
         image: rev.build.image,
@@ -152,7 +154,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       await copyFile(file.name as string, input.artifactPath);
       say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${rev.flash.kind === "zapp" ? `, DFU ${rev.flash.bootloader}` : `, ${kind}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
-    },
+    }),
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }
