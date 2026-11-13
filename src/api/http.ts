@@ -207,6 +207,9 @@ export const BuildSchema = z.object({
   errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared", "disk_full"]).nullable(),
   // For compile_error and too_large: the newest earlier revision in this one's history that built, or null. Absent on older senders.
   lastBuilt: z.object({ revisionId: z.string().min(1), summary: z.string() }).nullable().optional(),
+  // The board revision it was built for, such as "revb", so Build again from a build the page didn't start (a sync's) builds for the same
+  // one (PR #306 CodeRabbit). Absent on older senders.
+  boardRevision: z.string().min(1).optional(),
   // For stale_mount and stuck_container: the engine keyloom can restart (Colima or a Mac app), or null. Absent on older senders.
   restartEngine: z.string().min(1).nullable().optional(),
   // For folder_not_shared: the folder Docker couldn't see, and the engine that shares folders (null when unknown). Absent on older senders.

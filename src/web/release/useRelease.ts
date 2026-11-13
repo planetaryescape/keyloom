@@ -186,6 +186,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   const buildNow = useCallback(
     (revisionId: string) => {
       buildRequests.current += 1;
+      showRead.current += 1;
       setStarting("build");
       setError(null);
       setLast({ kind: "build", revisionId });
@@ -206,6 +207,7 @@ export function useRelease(token: string, layoutRef: string): Release {
 
   const flashNow = useCallback(() => {
     if (build === null) return;
+    showRead.current += 1;
     setStarting("flash");
     setError(null);
     setLast({ kind: "flash" });
@@ -225,18 +227,27 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token, build, refreshBuild]);
 
   // The build and flash on screen, read by showBuild when its answer comes, so it never replaces a newer one.
-  const onScreen = useRef<{ build: Build | null; flashActive: boolean }>({ build: null, flashActive: false });
-  onScreen.current = { build, flashActive };
+  // A build or flash the person starts ends any read still out, so its answer can't replace what they started (PR #306 CodeRabbit).
+  const onScreen = useRef<{ build: Build | null; flashActive: boolean; starting: boolean }>({ build: null, flashActive: false, starting: false });
+  useEffect(() => {
+    onScreen.current = { build, flashActive, starting: starting !== null };
+  }, [build, flashActive, starting]);
+  const showRead = useRef(0);
   const showBuild = useCallback((id: string) => {
-    if (!mayShowBuild(onScreen.current, { id })) return;
+    if (onScreen.current.starting || !mayShowBuild(onScreen.current, { id })) return;
+    const read = ++showRead.current;
     fetchBuild(token, id, new AbortController().signal)
       .then((next) => {
-        if (!mayShowBuild(onScreen.current, next)) return;
+        if (read !== showRead.current || onScreen.current.starting || !mayShowBuild(onScreen.current, next)) return;
         setBuild(next);
+        // Build again builds for the board revision this one was for, with no keyboard to ask (PR #306 CodeRabbit).
+        if (next.boardRevision !== undefined) setBoardRevision(next.boardRevision);
         setFlash(null);
         setError((was) => (was === SYNC_BUILD_READ_FAILED ? null : was));
       })
       .catch((e: unknown) => {
+        // A read that something newer replaced says nothing about what is on screen.
+        if (read !== showRead.current) return;
         setLast({ kind: "show", buildId: id });
         setError(SYNC_BUILD_READ_FAILED, codeOf(e));
       });

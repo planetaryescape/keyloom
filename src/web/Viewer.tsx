@@ -1917,7 +1917,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onApplied={onApplied}
                 onTuned={onTuned}
                 onStale={onStale}
-                onShowLatest={() => showLatest(STALE_UNDO)}
+                onShowLatest={() => {
+                  // The read can remount the card on a newer revision; the draft is parked first so it stays on its key (PR #306 CodeRabbit).
+                  keepOpenDraft();
+                  showLatest(STALE_UNDO);
+                }}
                 onShowLayer={(id) => {
                   if (!draft.dirty) setLayerId(id);
                 }}

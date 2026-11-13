@@ -191,6 +191,12 @@ describe("the dialog's error", () => {
     // Flashing the same build again fails the same way, so its button waits for the new build.
     expect(html).not.toContain("Flash to keyboard");
     expect(html).toContain("Available once you build again.");
+    // An earlier flash of the same build that failed keeps no Try again that would flash the missing file (PR #306 CodeRabbit).
+    const earlier = { id: "fl_1", buildId: "bld", status: "failed", error: "zapp exited with code 1", startedAt: 0, finishedAt: 1, instruction: null, note: null, verified: false, logTail: [], errorCode: null };
+    const again = failedStep(null, { status: "succeeded", error: null }, { error: "gone", errorCode: "build_file_gone", flash: earlier as never });
+    expect(again).toContain("Available once you build again.");
+    expect(again).not.toContain("zapp exited");
+    expect(again).not.toContain(">Try again<");
   });
 });
 

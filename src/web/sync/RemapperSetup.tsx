@@ -62,19 +62,21 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const run = async (id: SetupActionId) => {
     setBusy(actionKey(id));
     setProblem(null);
-    let opened = false;
+    // Opening a pane changes nothing keyloom can read yet; the change is made there, so the list is read when the person comes back
+    // (R8-17). The listener is armed before the pane opens, so a quick return isn't missed (PR #306 CodeRabbit). Everything else is
+    // checked again at once.
+    const onReturn = recheckAfter(id) === "on_return";
+    if (onReturn) setAwaitingReturn(true);
     try {
       const r = await act(id);
       if (!r.ok) setProblem(setupFailure(r.code, r.reason));
-      opened = r.ok;
+      if (!r.ok && onReturn) setAwaitingReturn(false);
     } catch (error) {
       setProblem({ text: error instanceof Error ? error.message : "That didn't work.", link: null });
+      if (onReturn) setAwaitingReturn(false);
     } finally {
       setBusy(null);
-      // Opening a pane changes nothing keyloom can read yet; the change is made there, so the list is read when the person comes back
-      // (R8-17). Everything else is checked again at once.
-      if (recheckAfter(id) === "now") await check();
-      else if (opened) setAwaitingReturn(true);
+      if (!onReturn) await check();
     }
   };
   useEffect(() => {

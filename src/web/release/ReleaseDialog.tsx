@@ -445,9 +445,12 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
           </Step>
 
           <Step number={2} title={`Flash ${boardName}`} state={flashState} {...(flash === null ? {} : { aside: elapsedOf(flash, now) })}>
-            {flash === null ? (
+            {/* A file that is gone fails every flash of it, including a Try again on an earlier flash's result (PR #306 CodeRabbit). */}
+            {fileGone ? (
+              <p className="muted">Available once you build again.</p>
+            ) : flash === null ? (
               !canFlash ? (
-                <p className="muted">{fileGone ? "Available once you build again." : "Available once the build succeeds."}</p>
+                <p className="muted">Available once the build succeeds.</p>
               ) : flashPlan?.kind === "manual" ? (
                 <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} onBuildAgain={() => release.buildNow(head.id)} problem={release.fileProblem} />
               ) : flashPlan?.kind === "needs-tool" ? (
