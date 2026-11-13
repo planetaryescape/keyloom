@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.80.2](https://github.com/planetaryescape/keyloom/compare/v0.80.1...v0.80.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* keep compact key labels and picker previews readable ([6e47877](https://github.com/planetaryescape/keyloom/commit/6e478777f400ca776700a7f02131ec99a51d859c))
+* keep compact key labels and picker previews readable ([b9bc361](https://github.com/planetaryescape/keyloom/commit/b9bc36132916d8fd2486b0c5f23eee67359197d0))
+* keep source details clear of key prints and search ([13c04a9](https://github.com/planetaryescape/keyloom/commit/13c04a933f8c11b17845de7d3f135fae6f317e52))
+
 ## [0.80.1](https://github.com/planetaryescape/keyloom/compare/v0.80.0...v0.80.1) (2026-11-13)
 
 
