@@ -47,3 +47,9 @@ The follow-up at release `v0.80.1` (`8fcb1829`) reproduced eight clipped Advance
 `test/web/board-cap-fit.fixture.html` exercises the real cap and bundled font with nine names, an unbounded plain label, live resizing and accessible source checks. Repeat the real editor flow above on both phone halves and a desktop. Check the full-name tooltip and open the key card from a compact print.
 
 Opening a picker now expands the existing phone sheet to full height. Its body starts at the compact preview and search receives focus without scrolling. Type a search, move through results with arrows, and close with Escape. The preview and search must both remain visible. D-604 records this behavior.
+
+## Tall taps and long source notes keep controls clear
+
+PR review at `b9bc3613` reproduced a 2px overlap between the Moonlander's `KC_GRAVE` print and its `LT(1)` front row. The board's fit check now measures that overlap in the print's local coordinates. The regression includes a tall two-line tap with a front row. A separate check resizes the rendered cap without changing its props, so it exercises `ResizeObserver` directly.
+
+A synthetic 1,017-character native source also pushed focused search below the visible card. The picker now follows the compact preview before source notes. An oversized full-name caption becomes a Full firmware name disclosure while the picker is open. Closing the picker restores the full caption (D-605). Reproduce with a synthetic native binding in the scratch editor. Open its tap picker, confirm that the key and focused search remain visible, then expand the disclosure to read its full source.

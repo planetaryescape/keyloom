@@ -684,6 +684,8 @@ export function KeyPanel(props: Props) {
           ) : null}
         </div>
 
+        {openSlotPicker()}
+
         {/* Empty slots get named buttons: the cap's corners are too small for words, and hidden corners went unfound (BK, 2026-10-16). */}
         {picker === null && (doubleRegion?.text === null || thenHoldRegion?.text === null) ? (
           <div className="card-slots" role="group" aria-label="Add to this key">
@@ -753,7 +755,6 @@ export function KeyPanel(props: Props) {
           </div>
         ) : null}
 
-        {openSlotPicker()}
         {advanced && modTarget !== null ? <ModifierToggles legend={`${modTarget.label}, by side`} mods={modTarget.mods} onToggle={modTarget.toggle} /> : null}
 
         {isDance(draft) && waitOpen ? (

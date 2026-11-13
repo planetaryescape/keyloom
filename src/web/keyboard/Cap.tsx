@@ -100,7 +100,8 @@ function Print({ legend, compactTap, unit, width, floorPx, reach, breakable, sym
       setCompactFits(compact !== null && face !== null && compact.scrollWidth <= face.clientWidth + 1 && compact.offsetHeight <= face.clientHeight + 1);
       setDetail(
         (tap !== null && face !== null && (tap.scrollWidth > face.clientWidth + 1 || tap.offsetHeight > face.clientHeight + 1)) ||
-        (front !== null && front.scrollWidth > front.clientWidth + 1),
+        (front !== null && front.scrollWidth > front.clientWidth + 1) ||
+        (tap !== null && face !== null && front !== null && face.offsetTop + tap.offsetTop + tap.offsetHeight > front.offsetTop + 1),
       );
     };
     check();

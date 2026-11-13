@@ -3385,3 +3385,7 @@ The board measures firmware text against its actual face, including height. If t
 ### D-604: Opening a key picker on a phone expands the existing sheet and keeps the preview visible. (2026-11-13)
 
 The picker opens with the card body at its top. Search keeps keyboard focus without scrolling. The phone sheet uses its existing full height so the compact key and search fit together. The sheet's resize controls still work. Scrolling the entire picker into view hid the key behind the card heading, so that behavior is replaced.
+
+### D-605: An open picker keeps long source details behind a disclosure. Extends D-602 and D-604. (2026-11-13)
+
+The picker follows the compact preview before source notes and other details. A full-name caption that cannot fit on the cap becomes an explicit Full firmware name disclosure while the picker is open. Closing the picker restores the full caption. The source remains unchanged and available through that disclosure and the tap's accessible name. This keeps focused search visible even when a native binding has an unbounded source block.

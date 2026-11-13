@@ -109,7 +109,7 @@ Source update, 2026-11-13: the key card fits long labels and reserves space for 
 - **Text on rotated thumb keys stays upright,** as it is now.
 - **Full names are one hover away,** in the cap's tooltip and in the panel.
 - Advanced board prints that cannot fit use the plain tap legend, or an explicit detail marker if needed. Tooltips, accessible descriptions and the key card keep the full firmware name (D-603).
-- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600). A name that still cannot fit appears in full below the key, whose face keeps its plain legend (D-602).
+- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600). A name that still cannot fit appears in full below the key, whose face keeps its plain legend (D-602). While its picker is open, an explicit Full firmware name disclosure keeps that source available without pushing search out of view (D-605).
 
 ## Visual system
 

@@ -208,6 +208,12 @@
   text-align: center;
 }
 
+.hero-source > summary {
+  width: fit-content;
+  margin-inline: auto;
+  cursor: pointer;
+}
+
 .hero-tap .hero-fit-probe {
   position: absolute;
   top: 0;
