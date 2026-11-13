@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.79.1](https://github.com/planetaryescape/keyloom/compare/v0.79.0...v0.79.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* close round 12's dead ends (Download Zapp after a failed Homebrew install, and six polish items) ([fc35f16](https://github.com/planetaryescape/keyloom/commit/fc35f16e478de4cf92f223983292fc92a9842246))
+* offer Download Zapp after a failed Homebrew install, and close round 12's other dead ends ([f1b5dac](https://github.com/planetaryescape/keyloom/commit/f1b5dace2cfbd054996ada2c73f7ff2bd0a64cae))
+* say where a Zapp from its page goes after a failed install, and never tell anyone to overwrite Homebrew's kanata ([ead2e63](https://github.com/planetaryescape/keyloom/commit/ead2e6380cd586ab3ff7a427616a8703f604d8ab))
+
 ## [0.79.0](https://github.com/planetaryescape/keyloom/compare/v0.78.2...v0.79.0) (2026-11-13)
 
 
