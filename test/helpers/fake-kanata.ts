@@ -12,6 +12,8 @@ export type FakeKanata = {
   rejectNextReload(): void;
   /** Make the next ReloadFile answer with the old config's layers (a reload that did not take). */
   ignoreNextReload(): void;
+  /** The next reload is answered with kanata's `Error` message, as kanata does for a request it can't carry out. */
+  errorNextReload(): void;
   stop(): void;
 };
 
@@ -27,6 +29,7 @@ export function startFakeKanata(opts: { initialFile?: string; port?: number } = 
   let state = { layers: ["base"], fakeKeys: [] as string[] };
   let reject = false;
   let ignore = false;
+  let error = false;
   const commands: Array<Record<string, unknown>> = [];
   if (opts.initialFile) {
     file = opts.initialFile;
@@ -48,7 +51,10 @@ export function startFakeKanata(opts: { initialFile?: string; port?: number } = 
           const reply = (m: unknown) => s.write(`${JSON.stringify(m)}\n`);
           if (cmd.ReloadFile) {
             const path = String(cmd.ReloadFile.path);
-            if (reject) {
+            if (error) {
+              error = false;
+              reply({ Error: { msg: "reload failed" } });
+            } else if (reject) {
               reject = false;
               reply({ ReloadResult: { ok: false } });
             } else if (ignore) {
@@ -77,6 +83,7 @@ export function startFakeKanata(opts: { initialFile?: string; port?: number } = 
     commands,
     rejectNextReload: () => { reject = true; },
     ignoreNextReload: () => { ignore = true; },
+    errorNextReload: () => { error = true; },
     stop: () => server.stop(true),
   };
 }

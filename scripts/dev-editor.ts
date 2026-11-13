@@ -21,8 +21,9 @@
 // KEYLOOM_FAKE_SYNC=files_and_folders|files_split|input_monitoring|tool_missing gives the Moonlander a pill that syncs for 3 s (KEYLOOM_FAKE_SYNC_MS) from when a page first follows it, then ends
 // as a sync whose flash macOS refused (R9-01: behind, a split board's needs-hand, the Moonlander's reset wait) or whose flash tool is missing
 // (R9-10, pair it with KEYLOOM_FAKE_FLASH=no-zapp); =kanata_keyboard shows kanata's checklist with a keyboard keyloom doesn't know by name
-// (R9-12). =kanata_refused|kanata_setup|kanata_unwritable end the MacBook's apply as a config kanata refused, one kanata refused because
-// it is older than keyloom writes for, or one keyloom couldn't write (R10-01); =kanata_first_run is the checklist before Set up and start
+// (R9-12). =kanata_refused|kanata_setup|kanata_unwritable|kanata_reload_failed end the MacBook's apply as a config kanata refused, one kanata refused because
+// it is older than keyloom writes for, one keyloom couldn't write, or a reload keyloom couldn't finish (R10-01), one change past kanata's layout, or
+// KEYLOOM_FAKE_SYNC_CHANGES (a number, or "null" for none counted) past it, which offers History, not Undo; =kanata_first_run is the checklist before Set up and start
 // kanata (R10-03); =kanata_no_builtin is a Mac with no built-in keyboard (R10-14); =kanata_foreign offers Replace it, which
 // KEYLOOM_FAKE_REPLACE=internal fails with a server exception (R10-05). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
 // Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine a ready Docker reports
@@ -267,7 +268,7 @@ if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw 
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
-const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_first_run", "kanata_no_builtin", "kanata_foreign"] as const;
+const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign"] as const;
 // The checklist's findings for each kanata mode (D-493): a keyboard keyloom doesn't know by name (R9-12), a kanata older than keyloom writes
 // for (R10-01), a first run before Set up and start kanata (R10-03), and a Mac with no built-in keyboard (R10-14).
 const kanataFindings = (): RemapperSetupResponse["findings"] => {
@@ -331,6 +332,7 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
     kanata_refused: "kanata --check refused the new config, so nothing was changed: Error in configuration: unknown key `lrld-num`",
     kanata_setup: "kanata --check refused the new config, so nothing was changed: Error in configuration: unknown action `tap-hold-release-keys`",
     kanata_unwritable: "this layout can't be written for kanata: key 12 on layer Base: tap dance \"td1\" doesn't exist",
+    kanata_reload_failed: "keyloom's reload request failed before kanata answered",
   };
   const status = async (): Promise<BoardSync[]> => {
     const running = Date.now() - startedAt < Number(process.env.KEYLOOM_FAKE_SYNC_MS ?? 3000);
@@ -344,10 +346,12 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
     if (mode === "kanata_keyboard" || mode === "kanata_no_builtin") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
     if (mode === "kanata_first_run") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
     if (mode === "kanata_foreign") return [{ ...mac, state: { kind: "not_keyloom", detail: "kanata runs /Users/you/kanata.kbd" }, last: null }];
-    if (mode === "kanata_refused" || mode === "kanata_setup" || mode === "kanata_unwritable") {
+    if (mode === "kanata_refused" || mode === "kanata_setup" || mode === "kanata_unwritable" || mode === "kanata_reload_failed") {
       const code = mode;
       if (running) return [{ ...mac, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: { ...last("build", "", null), buildId: null } }];
-      return [{ ...mac, state: { kind: "behind", changes: 1, why: "failed", error: kanataSentence[code] }, last: { ...last("build", kanataSentence[code], code), buildId: null } }];
+      const counted = process.env.KEYLOOM_FAKE_SYNC_CHANGES;
+      const changes = counted === undefined ? 1 : counted === "null" ? null : Number(counted);
+      return [{ ...mac, state: { kind: "behind", changes, why: "failed", error: kanataSentence[code] }, last: { ...last("build", kanataSentence[code], code), buildId: null } }];
     }
     if (running) return [{ ...base, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: last("flash", "", null) }];
     switch (mode) {

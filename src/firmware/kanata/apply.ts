@@ -3,7 +3,7 @@
 // good is ever lost: the candidate is checked under another name first, a failed reload puts the previous file back, and
 // kanata itself keeps its old config when a file doesn't parse.
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { type KanataEndpoint, KanataConnectionError, fakeKeyNames, layerNames, reloadFile } from "./client.ts";
+import { type KanataEndpoint, KanataConnectionError, KanataProtocolError, fakeKeyNames, layerNames, reloadFile } from "./client.ts";
 import { type KanataSource, KBD_FILE, SAFE_FILE, SAFE_REVISION, SETUP_REVISION } from "./generate.ts";
 import { markerName, readHeader } from "./header.ts";
 import type { RemapperPaths } from "./paths.ts";
@@ -20,7 +20,11 @@ export type ApplyStep = "write" | "check" | "not_keyloom" | "not_connected" | "r
 
 export type ApplyResult =
   | { ok: true; ms: number; revisionId: string }
-  | { ok: false; step: ApplyStep; error: string; /** The file on disk now holds the new revision, though nothing confirmed kanata runs it. */ written: boolean };
+  | {
+    ok: false; step: ApplyStep; error: string; /** The file on disk now holds the new revision, though nothing confirmed kanata runs it. */ written: boolean;
+    /** kanata itself turned the config down: its check failed, or its reload answered no or with an error. Absent for any other failure. */
+    refused?: true;
+  };
 
 /** Writes `text` so a reader sees the old file or the new one and never half of one. The temporary name is this call's own, so two applies never share it. */
 async function writeAtomic(path: string, text: string): Promise<void> {
@@ -92,7 +96,7 @@ export async function applyKanata(deps: ApplyDeps, source: KanataSource, revisio
     const checked = await deps.check(candidate);
     if (!checked.ok) {
       await rm(candidate, { force: true });
-      return { ok: false, step: "check", written: false, error: `kanata --check refused the new config, so nothing was changed: ${checked.output.split("\n").slice(-6).join(" ")}` };
+      return { ok: false, step: "check", written: false, refused: true, error: `kanata --check refused the new config, so nothing was changed: ${checked.output.split("\n").slice(-6).join(" ")}` };
     }
     // Only a config that passed the check replaces the foreign file, so the copy is made here and not before: a refused replace changes nothing.
     if (foreign && before !== undefined) {
@@ -118,14 +122,15 @@ export async function applyKanata(deps: ApplyDeps, source: KanataSource, revisio
     const reloaded = await reloadFile(deps.endpoint, paths.kbd);
     if (!reloaded.ok) {
       await restore();
-      return { ok: false, step: "reload", written: false, error: "kanata refused to load the new config and is still running the previous one, which keyloom put back on disk" };
+      return { ok: false, step: "reload", written: false, refused: true, error: "kanata refused to load the new config and is still running the previous one, which keyloom put back on disk" };
     }
   } catch (err) {
     if (err instanceof KanataConnectionError) {
       return { ok: false, step: "not_connected", written: true, error: `the new config is on disk, but kanata isn't running or isn't listening on port ${deps.endpoint.port}: ${err.message}` };
     }
     await restore();
-    return { ok: false, step: "reload", written: false, error: (err as Error).message };
+    // kanata answering with an error is its refusal; anything else is keyloom's own failure, which the page doesn't call a refusal.
+    return { ok: false, step: "reload", written: false, error: (err as Error).message, ...(err instanceof KanataProtocolError ? { refused: true as const } : {}) };
   }
 
   try {

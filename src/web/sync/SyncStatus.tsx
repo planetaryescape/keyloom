@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, Settings, ShieldCheck, TriangleAlert, Undo2, Unplug, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, History, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, Settings, ShieldCheck, TriangleAlert, Undo2, Unplug, Zap } from "lucide-react";
 import { useState } from "react";
 import type { BoardSync } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
@@ -32,12 +32,14 @@ interface PillProps {
   onOpenRelease: (buildId?: string) => void;
   /** Opens the put-on confirm for a config (D-300), the same one the config menu uses. */
   onPutOn: (target: { id: string; name: string }) => void;
-  /** Undoes the change kanata refused, or opens History when the page can't (R10-01). */
+  /** Undoes the change kanata refused, one step from the layout kanata runs (R10-01). */
   onUndo: () => void;
+  /** Opens History, which marks the version kanata runs, when going back takes more than one step (R10-01). */
+  onOpenHistory: () => void;
 }
 
 // One keyboard: a pill with its state, and a menu with the reason, what to do about it, and the auto-sync switch (17).
-function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRelease, onPutOn, onUndo }: PillProps) {
+function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRelease, onPutOn, onUndo, onOpenHistory }: PillProps) {
   const Icon = icon(board, line);
   const auto = autoSyncLine(board);
   // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
@@ -62,6 +64,7 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
     else if (id === "put_on") onPutOn(target);
     else if (id === "replace_foreign") sync.setReplaceAsk(selected ? layoutId : board.layoutId);
     else if (id === "undo_change") onUndo();
+    else if (id === "open_history") onOpenHistory();
     else void sync.syncNow(selected ? layoutId : board.layoutId);
   };
   const remapperDown = board.remapper === true && board.state.kind === "not_connected";
@@ -153,7 +156,7 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
 }
 
 function ActionItem({ action, primary, onPress }: { action: SyncAction; primary: boolean; onPress: (action: SyncAction) => void }) {
-  const Icon = action.id === "open_release" ? Hammer : action.id === "open_settings" ? Settings : action.id === "undo_change" ? Undo2 : RefreshCw;
+  const Icon = action.id === "open_release" ? Hammer : action.id === "open_settings" ? Settings : action.id === "undo_change" ? Undo2 : action.id === "open_history" ? History : RefreshCw;
   return (
     <button type="button" role="menuitem" className={primary ? "menu-item sync-primary" : "menu-item"} onClick={() => onPress(action)}>
       <Icon size={14} aria-hidden="true" />
@@ -171,6 +174,7 @@ interface Props {
   onOpenRelease: (buildId?: string) => void;
   onPutOn: (target: { id: string; name: string }) => void;
   onUndo: () => void;
+  onOpenHistory: () => void;
 }
 
 /**
@@ -205,7 +209,7 @@ export function openKeyboardStatus(): void {
 
 // One quiet line for the keyboard of the layout on screen (23#chrome-recedes). It opens to say why, what to do, and auto-sync.
 // Other connected keyboards show their light on their silhouette in the board switcher.
-export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease, onPutOn, onUndo }: Props) {
+export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease, onPutOn, onUndo, onOpenHistory }: Props) {
   const shown = sync.boards.filter((b) => b.boardId === boardId);
   if (shown.length === 0) return null;
   return (
@@ -229,6 +233,7 @@ export function SyncStatus({ sync, layoutId, layoutName, boardId, onOpenRelease,
           onOpenRelease={onOpenRelease}
           onPutOn={onPutOn}
           onUndo={onUndo}
+          onOpenHistory={onOpenHistory}
         />
       ))}
       <ReplaceForeignHost sync={sync} boardId={boardId} />

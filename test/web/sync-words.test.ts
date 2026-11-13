@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, noticeOnPage, refusalNotice, settingsOpenFailure, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, noticeOnPage, refusalNotice, settingsOpenFailure, syncLine, syncNotice, undoReachesKanata } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -376,19 +376,31 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     const syncing = mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" });
 
     test("a plain refusal says kanata kept the previous config, with the reason under Details and Undo this change", () => {
-      for (const code of ["kanata_refused", null]) {
+      for (const [code, lead] of [["kanata_refused", "kanata refused the config keyloom wrote"], [null, "keyloom couldn't put this config on kanata"]] as const) {
         const line = syncLine(behind(code), "lay_1");
-        expect(line.detail).toBe("kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one. Undo this change to go back to a layout kanata takes.");
+        expect(line.detail).toBe(`${lead}, so your MacBook keyboard still runs the previous one. Undo this change to go back to the layout kanata runs.`);
         expect(line).toMatchObject({ tone: "error", action: { id: "undo_change", label: "Undo this change" }, more: "kanata --check refused the new config, so nothing was changed: Error in configuration unknown key" });
         expect(line.second).toBeUndefined();
         const notice = syncNotice(syncing, behind(code));
         expect(notice).toMatchObject({ kind: "error", message: "Couldn't put the change on your MacBook keyboard (ANSI)", action: { id: "undo_change", label: "Undo this change" } });
-        expect(notice?.detail).toStartWith("kanata refused the config keyloom wrote");
+        expect(notice?.detail).toStartWith(lead);
         for (const said of [line.detail, notice?.detail]) {
           expect(said).not.toContain("build");
           expect(said).not.toContain("--check");
         }
       }
+    });
+
+    // PR #315 review: "kanata refused" only where kanata's own answer turned the config down.
+    test("a sync recorded before the codes, or a reload keyloom couldn't finish, never says kanata refused it", () => {
+      expect(syncLine(behind(null), "lay_1").detail).not.toContain("kanata refused");
+      const failed = syncLine(behind("kanata_reload_failed"), "lay_1");
+      expect(failed).toMatchObject({ detail: "keyloom couldn't finish loading the new config into kanata, so it put the previous config back. Apply now to try again.", action: { id: "sync_now", label: "Apply now" } });
+      const notice = syncNotice(syncing, behind("kanata_reload_failed"));
+      expect(notice?.action).toEqual({ id: "open_status", label: "Open keyboard status" });
+      expect(notice?.detail).toBe("keyloom couldn't finish loading the new config into kanata, so it put the previous config back. Apply now in the keyboard's status to try again.");
+      const setup = syncLine(behind("kanata_setup"), "lay_1");
+      expect(setup.detail).not.toContain("kanata refused");
     });
 
     test("a cause in kanata's setup sends the person to the keyboard's status, and Apply now is for after the fix", () => {
@@ -399,6 +411,24 @@ describe("a software remapper (the MacBook's keyboard)", () => {
       const notice = syncNotice(syncing, behind("kanata_setup"));
       expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
       expect(notice?.detail).toContain("The keyboard's status says how to fix it.");
+    });
+
+    // PR #315 review: one undo reaches kanata's layout only when the refused head is the one change since it; Undo is never promised past that.
+    test("more than one change since kanata's layout, or no count, opens History instead of an Undo that lands on an unchecked layout", () => {
+      const several = mac({ kind: "behind", changes: 3, why: "failed", error: cli }, { last: failedLast("kanata_refused") });
+      const line = syncLine(several, "lay_1");
+      expect(line.action).toEqual({ id: "open_history", label: "Open History" });
+      expect(line.detail).toBe("kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one. Open History and press Go back to this on the version marked “On your MacBook keyboard (ANSI)”, the one kanata runs.");
+      expect(line.detail).not.toContain("Undo");
+      expect(syncNotice(syncing, several)).toMatchObject({ action: { id: "open_history", label: "Open History" } });
+      expect(undoReachesKanata(several)).toBe(false);
+      // The first apply after setup: kanata runs setup's config, so no version of this config is kanata's.
+      const first = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_unwritable") });
+      expect(syncLine(first, "lay_1")).toMatchObject({ action: { id: "open_history", label: "Open History" }, detail: "keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one. Open History to go back to an earlier version." });
+      // One change, but a newer head than the refused one: Undo would undo the newer change.
+      const newer = mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { headRevisionId: "rev_2", last: failedLast(null) });
+      expect(syncLine(newer, "lay_1").action?.id).toBe("open_history");
+      expect(undoReachesKanata(behind(null))).toBe(true);
     });
 
     test("a layout keyloom can't write for kanata says so, not that kanata refused it", () => {

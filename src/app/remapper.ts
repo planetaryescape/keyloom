@@ -64,9 +64,10 @@ export function remapperEnv(boardId: string, over: RemapperOverrides = {}): Rema
  * Why a config didn't go on, as a code the page offers a way on for (R10-01). `kanata_setup`: kanata refused it, and the doctor finds the
  * kanata on this Mac isn't the one keyloom writes for (missing, another version, or changed since setup), which the keyboard's status
  * fixes. `kanata_refused`: kanata refused it for another reason, so going back to a layout kanata took is the way on.
- * `kanata_unwritable`: keyloom couldn't write this layout for kanata at all.
+ * `kanata_unwritable`: keyloom couldn't write this layout for kanata at all. `kanata_reload_failed`: the reload failed without kanata
+ * turning the config down (keyloom's own failure), so keyloom put the previous file back and another Apply may pass.
  */
-export type RemapperRefusalCode = "kanata_setup" | "kanata_refused" | "kanata_unwritable";
+export type RemapperRefusalCode = "kanata_setup" | "kanata_refused" | "kanata_unwritable" | "kanata_reload_failed";
 
 type Generated = ApplyResult | { ok: false; step: "generate"; error: string; written: false };
 export type RemapperApplyOutcome = Exclude<Generated, { ok: false }> | (Extract<Generated, { ok: false }> & { code?: RemapperRefusalCode });
@@ -99,6 +100,8 @@ export async function applyToRemapper(app: App, layoutRef: string, revisionId: s
   }
   const applied = await applyKanata(env.deps, source, view.revision.id, opts);
   if (applied.ok || (applied.step !== "check" && applied.step !== "reload")) return applied;
+  // Only a config kanata itself turned down is a refusal (PR #315 review).
+  if (applied.refused !== true) return { ...applied, code: "kanata_reload_failed" };
   return { ...applied, code: await refusalCause(view.layout.boardId, over) };
 }
 
