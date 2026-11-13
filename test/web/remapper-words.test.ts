@@ -332,3 +332,20 @@ describe("a built-in keyboard keyloom doesn't know by name", () => {
     expect(setupSteps(status([...running, f("keyboard_name", "unknown")])).some((s) => s.key === "keyboard-name")).toBe(false);
   });
 });
+
+test("every button that sets kanata up waits for the driver step, with the reason beside it (PR #319 CodeRabbit)", () => {
+  const noDriver = [f("kanata_version", "ok"), f("driver_mismatch", "fail"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "ok")];
+  const cases = [
+    // A kanata the person installed outside Homebrew: Set up with this kanata.
+    attentionSteps(status([...noDriver, f("kanata_replaced", "warn")], { kanata: k({ version: "1.12.0", path: "/usr/local/bin/kanata", copyVersion: "1.11.0" }) })),
+    // A running service on an updated or old kanata: Set up and start kanata.
+    attentionSteps(status([...noDriver, f("kanata_updated", "warn")], { kanata: k({ version: "1.12.0", path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) })),
+    attentionSteps(status([...noDriver, f("daemon_outdated", "warn")])),
+  ];
+  for (const steps of cases) {
+    const starts = steps.flatMap((s) => s.actions).filter((a) => a.id.kind === "start_kanata");
+    expect(starts.length).toBeGreaterThan(0);
+    for (const a of starts) expect(a.off).toBe(true);
+    expect(steps.some((s) => s.detail?.includes("Install the driver above first.") === true)).toBe(true);
+  }
+});

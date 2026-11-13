@@ -212,7 +212,7 @@ export function App({ token }: { token: string }) {
   }
   if (layouts.length === 0 || adding || importHold) {
     return wrap(
-      <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: openImport }}>
+      <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); setImportHold(false); }, onImport: openImport }}>
         <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} boardsFailure={boardsFailure} onRetryBoards={readBoardsAgain} onBoardAdded={readBoardsAgain}
           setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}

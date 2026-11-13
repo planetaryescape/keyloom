@@ -22,8 +22,9 @@ const LOG_TAIL_BYTES = 16_384;
 const FAIL_FN = `fail() { /usr/bin/printf "keyloom setup stopped (%s): %s\\n" "$1" "$2" >&2; exit 1; };`;
 
 /**
- * Restarts kanata's LaunchDaemon: `launchctl kickstart -k`, which stops and starts a loaded service, or a `bootstrap` when launchd no
- * longer has it loaded. Root starts what the plist names, so the script first checks that both files are the ones setup made and only root
+ * Restarts kanata's LaunchDaemon from the plist on disk: `launchctl bootout`, then `bootstrap` from the plist the checks below read, as the
+ * install script does. Not `kickstart -k`, which restarts whatever definition launchd already has loaded and never reads the plist: a job
+ * loaded before D-498 (a setup that stopped before its own bootout) would run Homebrew's kanata as root (PR #319 CodeRabbit). Root starts what the plist names, so the script first checks that both files are the ones setup made and only root
  * can change: the plist root's and mode 644, naming keyloom's own copy of kanata; that copy root's and mode 755, in a folder root's and
  * mode 755 (D-498). A daemon set up before that copy existed runs a kanata the person can replace, and is refused: setting up again fixes it.
  */
@@ -37,7 +38,8 @@ export function kanataRestartScript(tools: ServiceScriptTools = ROOT_TOOLS): str
     FAIL_FN,
     `${is(plist, "644")} || ${fail("service_missing", "kanata has no background service that only macOS can change, so keyloom restarted nothing. Set kanata up again.")};`,
     `${is(dir, "755", false)} && ${is(kanata, "755")} && /usr/bin/grep -qF ${shellQuote(`<string>${tools.kanata}</string>`)} ${plist} || ${fail("service_outdated", "The background service does not run the copy of kanata that only macOS can change, so keyloom restarted nothing. Set kanata up again.")};`,
-    `${launchctl} kickstart -k system/${DAEMON_LABEL} 2>/dev/null || ${launchctl} bootstrap system ${plist} || ${fail("root_start_failed", "macOS did not restart the kanata background service (launchctl kickstart failed).")}`,
+    `${launchctl} bootout system/${DAEMON_LABEL} 2>/dev/null;`,
+    `${launchctl} bootstrap system ${plist} || { /bin/sleep 1; ${launchctl} bootstrap system ${plist}; } || ${fail("root_start_failed", "macOS did not restart the kanata background service (launchctl bootstrap failed).")}`,
   ].join(" ");
 }
 

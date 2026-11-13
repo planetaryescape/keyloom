@@ -18,9 +18,19 @@ function recorder(answer: { code: number; out: string } = { code: 0, out: "" }) 
   return { calls, run };
 }
 
-const deps = (run: Runner, over: Partial<SetupDeps> = {}): SetupDeps => ({
-  run, stream: async () => ({ code: 0, aborted: false }), platform: "darwin", brew: () => undefined, kanata: () => "/opt/homebrew/bin/kanata", sleep: async () => {}, ...over,
-});
+/** A clock the fake sleep moves, so the restart's wait runs in no real time. */
+function fakeClock() {
+  let t = 0;
+  return { now: () => t, sleep: async (ms: number) => { t += ms; }, spend: (ms: number) => { t += ms; }, get elapsed() { return t; } };
+}
+
+const deps = (run: Runner, over: Partial<SetupDeps> = {}): SetupDeps => {
+  const clock = fakeClock();
+  return {
+    run, stream: async () => ({ code: 0, aborted: false }), platform: "darwin", brew: () => undefined, kanata: () => "/opt/homebrew/bin/kanata",
+    sleep: clock.sleep, now: clock.now, ...over,
+  };
+};
 
 /** The root script inside an admin command, with AppleScript's quoting and `env -i … /bin/sh -c`'s taken off. */
 function rootScriptOf(cmd: readonly string[]): string {
@@ -34,7 +44,8 @@ function rootScriptOf(cmd: readonly string[]): string {
 describe("the scripts' text", () => {
   test("the restart script is fixed: the service's own paths and label, macOS's tools by absolute path, no sudo, nothing of the person's", () => {
     const script = kanataRestartScript();
-    expect(script).toContain(`'/bin/launchctl' kickstart -k system/${DAEMON_LABEL}`);
+    expect(script).toContain(`'/bin/launchctl' bootout system/${DAEMON_LABEL}`);
+    expect(script).not.toContain("kickstart");
     expect(script).toContain(`'/bin/launchctl' bootstrap system '${DAEMON_PLIST_PATH}'`);
     expect(script).toContain(`<string>${ROOT_KANATA_PATH}</string>`);
     expect(script).not.toContain("sudo");
@@ -70,7 +81,7 @@ describe.skipIf(process.platform !== "darwin")("the scripts, run as this account
   const uid = process.getuid?.() ?? 0;
 
   /** A service as setup leaves it: the plist naming the copy, the copy, and their folder, with setup's modes; a stand-in launchctl. */
-  function service(opts: { plistNames?: string; kickstart?: number; bootstrap?: number } = {}) {
+  function service(opts: { plistNames?: string; bootout?: number; bootstrap?: number } = {}) {
     const root = tempDir();
     const dir = join(root, "keyloom");
     mkdirSync(dir);
@@ -83,7 +94,7 @@ describe.skipIf(process.platform !== "darwin")("the scripts, run as this account
     chmodSync(plist, 0o644);
     const calls = join(root, "launchctl.calls");
     const launchctl = join(root, "launchctl");
-    writeFileSync(launchctl, `#!/bin/sh\necho "$@" >> '${calls}'\ncase "$1" in kickstart) exit ${opts.kickstart ?? 0};; bootstrap) exit ${opts.bootstrap ?? 0};; esac\n`);
+    writeFileSync(launchctl, `#!/bin/sh\necho "$@" >> '${calls}'\ncase "$1" in bootout) exit ${opts.bootout ?? 0};; bootstrap) exit ${opts.bootstrap ?? 0};; esac\n`);
     chmodSync(launchctl, 0o755);
     const log = join(root, "kanata.log");
     const tools: ServiceScriptTools = { plist, kanata, kanataDir: dir, log, launchctl, root: uid };
@@ -98,20 +109,21 @@ describe.skipIf(process.platform !== "darwin")("the scripts, run as this account
     return { code: await proc.exited, out, err };
   }
 
-  test("a service as setup left it is kickstarted, and nothing else runs", async () => {
+  test("a service as setup left it is booted out and bootstrapped again from the plist the checks read, so launchd runs that definition", async () => {
     const s = service();
     expect((await run(kanataRestartScript(s.tools))).code).toBe(0);
-    expect(s.calledWith()).toEqual([`kickstart -k system/${DAEMON_LABEL}`]);
+    expect(s.calledWith()).toEqual([`bootout system/${DAEMON_LABEL}`, `bootstrap system ${s.plist}`]);
   });
 
-  test("a service launchd doesn't have loaded is bootstrapped from its plist; a bootstrap that fails says so", async () => {
-    const s = service({ kickstart: 113 });
+  test("a service launchd doesn't have loaded is bootstrapped from its plist; a bootstrap that fails twice says so", async () => {
+    const s = service({ bootout: 113 });
     expect((await run(kanataRestartScript(s.tools))).code).toBe(0);
-    expect(s.calledWith()).toEqual([`kickstart -k system/${DAEMON_LABEL}`, `bootstrap system ${s.plist}`]);
-    const broken = service({ kickstart: 113, bootstrap: 5 });
+    expect(s.calledWith()).toEqual([`bootout system/${DAEMON_LABEL}`, `bootstrap system ${s.plist}`]);
+    const broken = service({ bootout: 113, bootstrap: 5 });
     const r = await run(kanataRestartScript(broken.tools));
     expect(r.code).toBe(1);
     expect(rootScriptFailure(r.err)?.code).toBe("root_start_failed");
+    expect(broken.calledWith()).toEqual([`bootout system/${DAEMON_LABEL}`, `bootstrap system ${broken.plist}`, `bootstrap system ${broken.plist}`]);
   });
 
   test("a plist that names another kanata, or a copy anyone else can change, restarts nothing", async () => {
@@ -193,6 +205,19 @@ describe("restartKanataService", () => {
     expect(result).toEqual({ ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." });
     // It asks for the whole wait, not once.
     expect(asked).toBeGreaterThan(10);
+  });
+
+  test("a kanata that takes the connection but never says hello can't stretch the wait: each ask gets only the time that is left (PR #319 CodeRabbit)", async () => {
+    const r = recorder();
+    const clock = fakeClock();
+    const given: number[] = [];
+    // Each ask uses its whole timeout, as a hello that never comes does.
+    const answers = async (_board: string, timeoutMs: number) => (given.push(timeoutMs), clock.spend(timeoutMs), false);
+    const result = await restartKanataService(MAC, deps(r.run, { answers, now: clock.now, sleep: clock.sleep }));
+    expect(result).toMatchObject({ ok: false, code: "still_not_answering" });
+    // About the 8 s wait, never the minute that 3 s probes between 500 ms sleeps used to take.
+    expect(clock.elapsed).toBeLessThanOrEqual(8_000 + 1_000);
+    expect(Math.max(...given)).toBeLessThanOrEqual(1_000);
   });
 
   test("a closed dialog, a refusal from the script, and any other failure keep their codes; nothing waits after them", async () => {

@@ -163,10 +163,11 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
     const what = `${path ?? "The kanata keyloom finds"} is ${version === null ? "a version keyloom couldn't read" : `version ${version}`}, and kanata's background service runs ${copyVersion === null ? "a version keyloom couldn't read" : `version ${copyVersion}`}. Homebrew didn't make this change, so keyloom won't copy it with your password.`;
     steps.push(step({
       key: "replaced", state: "todo", title: job?.title ?? title, whileRunning: true,
-      detail: job?.detail ?? `${what} ${fromBrew ? "Reinstall kanata to put Homebrew's own kanata back." : "If you installed this kanata yourself, set up with it. macOS asks for your password."}`,
+      detail: job?.detail ?? `${what} ${fromBrew ? "Reinstall kanata to put Homebrew's own kanata back." : `If you installed this kanata yourself, set up with it. macOS asks for your password.${driverReady ? "" : " Install the driver above first."}`}`,
+      // Setting up starts kanata, which needs the driver, so the button waits for it like Set up and start kanata (PR #319 CodeRabbit).
       actions: job?.actions ?? (fromBrew
         ? status.canInstall ? [{ id: { kind: "reinstall_kanata" }, label: "Reinstall kanata" }] : []
-        : mac ? [{ id: { kind: "start_kanata" }, label: "Set up with this kanata" }] : []),
+        : mac ? [{ id: { kind: "start_kanata" }, label: "Set up with this kanata", off: !driverReady }] : []),
       log: job?.log ?? null, problem: job?.problem ?? null,
       link: fromBrew && !status.canInstall ? { href: KANATA_RELEASES, label: "Download kanata" } : null,
     }));
@@ -215,17 +216,18 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
   if (!startable) {
     const updated = find("kanata_updated");
     const outdated = find("daemon_outdated");
-    const again: Array<{ id: SetupActionId; label: string }> = mac ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [];
+    const again: SetupAction[] = mac ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: !driverReady }] : [];
+    const needsDriver = driverReady ? "" : " Install the driver above first.";
     if (updated?.status === "warn") {
       const { path, version } = status.kanata;
       steps.push(step({
         key: "copy", state: "todo", title: "kanata was updated. Set it up again", whileRunning: true, actions: again,
-        detail: `Homebrew updated kanata${version === null ? "" : ` to ${version}`}${path === null ? "" : `, at ${path}`}. kanata's background service still runs the kanata from before. Setting up again copies the new one, and macOS asks for your password.`,
+        detail: `Homebrew updated kanata${version === null ? "" : ` to ${version}`}${path === null ? "" : `, at ${path}`}. kanata's background service still runs the kanata from before. Setting up again copies the new one, and macOS asks for your password.${needsDriver}`,
       }));
     } else if (outdated?.status === "warn") {
       steps.push(step({
         key: "copy", state: "todo", title: "Set kanata up again", whileRunning: true, actions: again,
-        detail: `kanata's background service runs kanata from a folder apps running as you can change. Setting up again runs keyloom's own copy, in ${KANATA_COPY_DIR}, which only macOS can change. macOS asks for your password.`,
+        detail: `kanata's background service runs kanata from a folder apps running as you can change. Setting up again runs keyloom's own copy, in ${KANATA_COPY_DIR}, which only macOS can change. macOS asks for your password.${needsDriver}`,
       }));
     }
   }

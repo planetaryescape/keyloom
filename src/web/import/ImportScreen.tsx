@@ -51,6 +51,14 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
   const shown = boards.status === "ready" ? cardsFor(boards.boards, showAll ? null : only) : [];
   const [attempt, setAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
+  // Several cards can hold the screen at once (one uploading, one showing its note): the screen is held while any of them holds it, so one
+  // card letting go never releases another's (PR #319 CodeRabbit).
+  const holders = useRef(new Set<string>());
+  const holdFor = (id: string) => (on: boolean) => {
+    if (on) holders.current.add(id);
+    else holders.current.delete(id);
+    onHold?.(holders.current.size > 0);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,7 +100,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
           <ul className="board-cards" aria-label="Supported keyboards">
             {shown.map((board) => (
               <li key={board.id}>
-                <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} onHold={onHold} />
+                <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} onHold={onHold === undefined ? undefined : holdFor(board.id)} />
               </li>
             ))}
           </ul>
@@ -164,7 +172,15 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
   const hold = (on: boolean) => { holding.current = on; onHold?.(on); };
   const holdRef = useRef(onHold);
   holdRef.current = onHold;
-  useEffect(() => () => { if (holding.current) holdRef.current?.(false); }, []);
+  // Whether the card is still on screen: an upload or a read that ends after Back must not take the screen again (PR #319 CodeRabbit).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (holding.current) holdRef.current?.(false);
+    };
+  }, []);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const command = importCommand(board, activitiesFor(board, activities));
@@ -190,7 +206,8 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
       const result = await uploadLayout(token, as.id, file, activitiesFor(as, activities));
       const note = importedNote(result);
       held = note !== null;
-      if (note !== null) setImported({ result, note });
+      if (!mounted.current) held = false;
+      else if (note !== null) setImported({ result, note });
       else onImported(result);
     } catch (error) {
       if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
@@ -220,6 +237,8 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     } finally {
       setBusy(false);
     }
+    // Back while keyloom read Karabiner's settings: the card is gone, so nothing is imported and nothing takes the screen.
+    if (!mounted.current) return;
     await take([file], board, "mac");
   }
 

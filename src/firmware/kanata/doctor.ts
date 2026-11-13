@@ -244,7 +244,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
     port = await probe.hello({ port: input.port ?? rev.tcpPort });
     add({ code: "port_closed", name: "kanata TCP port", status: "ok", detail: `kanata ${port.version} is answering on 127.0.0.1:${input.port ?? rev.tcpPort}` });
   } catch (err) {
-    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${input.port ?? rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl kickstart -k system/${DAEMON_LABEL}; read kanata's log with sudo tail ${DAEMON_LOG_PATH}` : "install the LaunchDaemon first" });
+    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${input.port ?? rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl bootout system/${DAEMON_LABEL}; sudo launchctl bootstrap system ${DAEMON_PLIST_PATH}; read kanata's log with sudo tail ${DAEMON_LOG_PATH}` : "install the LaunchDaemon first" });
   }
 
   const file = await probe.readText(paths.kbd);

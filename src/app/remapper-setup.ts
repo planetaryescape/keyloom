@@ -185,8 +185,10 @@ export type SetupDeps = {
   brew: () => string | undefined;
   kanata: () => string | undefined;
   remapper?: RemapperOverrides;
-  /** Whether kanata answers on its port, after Restart kanata's service; a test describes it instead of asking a real kanata. */
-  answers?: (boardId: string) => Promise<boolean>;
+  /** Whether kanata answers on its port within `timeoutMs`, after Restart kanata's service; a test describes it instead of asking a real kanata. */
+  answers?: (boardId: string, timeoutMs: number) => Promise<boolean>;
+  /** The clock Restart kanata's service measures its wait with; a test passes one that its fake sleep moves. */
+  now?: () => number;
   /** How Restart kanata's service waits between asks; a test passes one that doesn't. */
   sleep?: (ms: number) => Promise<void>;
   /** Where and how Get kanata downloads (D-560); tests pass a fake fetcher and a scratch folder. */
@@ -356,10 +358,13 @@ export const LOG_PROMPT = "keyloom wants to show the last lines of kanata's log,
 // kanata waits about two seconds after it starts before it takes the keyboard (S30 step 5); this leaves room for that and a slow start.
 const RESTART_WAIT_MS = 8000;
 const RESTART_ASK_EVERY_MS = 500;
+// Each ask waits at most this long for kanata's hello, and at least long enough for a local answer.
+const PROBE_MAX_MS = 1000;
+const PROBE_MIN_MS = 200;
 
 /**
  * Restart kanata's service (R11-02, D-559): for a service that is installed but where kanata doesn't answer, such as after the first start,
- * before macOS allowed kanata. One fixed root script, through macOS's password dialog: `launchctl kickstart -k`, after checking the service
+ * before macOS allowed kanata. One fixed root script, through macOS's password dialog: `launchctl bootout` and `bootstrap` from the plist, after checking the service
  * runs keyloom's root-owned copy of kanata (daemon-service.ts). Then it waits for kanata to answer, so the checklist never says it worked
  * while kanata still doesn't answer.
  */
@@ -369,12 +374,17 @@ export async function restartKanataService(boardId: string, deps: SetupDeps): Pr
   if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so kanata's service wasn't restarted.", "macOS couldn't restart kanata's service");
   // One hello on kanata's port per ask: an answer is all the wait needs, not the layer names a full read fetches.
   const endpoint = remapperEnv(boardId, deps.remapper ?? {}).deps.endpoint;
-  const answers = deps.answers ?? (async () => (await hello(endpoint), true));
+  const answers = deps.answers ?? (async (_board: string, timeoutMs: number) => (await hello(endpoint, timeoutMs), true));
   const sleep = deps.sleep ?? Bun.sleep;
-  for (let waited = 0; ; waited += RESTART_ASK_EVERY_MS) {
-    if (await answers(boardId).catch(() => false)) return { ok: true };
-    if (waited >= RESTART_WAIT_MS) break;
-    await sleep(RESTART_ASK_EVERY_MS);
+  const now = deps.now ?? Date.now;
+  // One deadline for the asks and the waits between them: a kanata that takes the connection but never says hello costs a probe's own
+  // timeout, so each probe gets only what is left, and the whole wait stays near RESTART_WAIT_MS (PR #319 CodeRabbit).
+  const deadline = now() + RESTART_WAIT_MS;
+  for (;;) {
+    const left = deadline - now();
+    if (await answers(boardId, Math.max(PROBE_MIN_MS, Math.min(PROBE_MAX_MS, left))).catch(() => false)) return { ok: true };
+    if (deadline - now() <= 0) break;
+    await sleep(Math.min(RESTART_ASK_EVERY_MS, Math.max(0, deadline - now())));
   }
   return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
 }
