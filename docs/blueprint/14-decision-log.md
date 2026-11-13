@@ -11,6 +11,26 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 generated names and import limits
+
+### D-663: Conditional-layer IDs cannot introduce devicetree source.
+
+A conditional ID starts with a letter or underscore and contains only letters, digits, underscores and hyphens. Validation rejects other forms before proposal storage. The ZMK generator checks the same schema before writing a conditional node. Existing safe IDs keep their identity, including uppercase letters and underscores. Imported conditions made by the slugger still round-trip.
+
+Regression: `test/agent/conditional-layers.test.ts`, `test/validation/conditional-layers.test.ts` and `test/firmware/zmk/conditional-layers.test.ts`. A synthetic directive sequence is rejected before a proposal or revision is saved. No real firmware or hardware check is claimed.
+
+### D-664: Inspect ZIP metadata before inflating source files.
+
+QMK ZIP imports have an 8 MiB compressed limit, at most 1,024 entries, an 8 MiB per-source-file limit and a 32 MiB aggregate declared-source limit. These limits apply to CLI imports too. The importer inspects the archive directory without inflation, then inflates only the first keymap folder and its direct source neighbors. An oversized entry or total fails the import instead of silently dropping part of the input.
+
+The archive library supplies the directory metadata. keyloom does not add a ZIP parser. The existing ordinary Oryx ZIP round trip stays covered. `test/firmware/qmk/source-limits.test.ts` checks selected-folder behavior and each limit with bounded synthetic inputs.
+
+### D-665: Tool validation rejects oversized collections before element work and bounds returned errors.
+
+Zod 4.6.7 replaces the vulnerable 4.6.5 lock, including the MCP SDK's nested copy, for GHSA-mrhx-c7xc-m3w5. The override keeps all copies on the patched version. Tool errors retain at most eight issues and 200 characters per issue, plus the omitted count. Valid inputs still reach the tool unchanged.
+
+`test/agent/tool-input-limits.test.ts` verifies that 5,000 entries do not reach per-element validation when the array limit is 100. It also checks bounded error output, useful paths and no tool effect on rejection. This is a bounded allocation and error-amplification fix, not a claim that the review demonstrated memory exhaustion. Other dependency advisories remain separate findings until reachability and compatibility checks settle them.
+
 ## 2026-11-13 firmware build input boundaries
 
 ### D-660: Setting edits cannot introduce opaque firmware source. Clarifies D-024.

@@ -70,6 +70,8 @@ Generation rules that decide how the firmware behaves:
 - **Macros** keep their `ST_MACRO_n` names; a macro made in keyloom takes the lowest free number.
 - **Settings.** A flag is `#define KEY`; a flag that is off is left undefined. Imported strings keep their source text. A setting edit cannot introduce a string expression or source in its name (D-660). The generator also rejects setting text that escapes its single `config.h` definition.
 
+ZIP imports inspect metadata before inflation. The compressed limit is 8 MiB, the entry limit is 1,024, each source file is at most 8 MiB, and declared source totals at most 32 MiB. Only the selected keymap folder and its direct source neighbors are inflated. A limit violation fails the import (D-664). Ordinary Oryx ZIP imports and the limits are checked by `test/firmware/qmk/import.test.ts` and `test/firmware/qmk/source-limits.test.ts`.
+
 ## Build runs QMK's Docker script from the pinned fork
 
 Board `keymapsDir` values must be relative paths without traversal. Before host cleanup or source writes, keyloom rejects symlinks within the workspace and checks every generated filename (D-661). This also covers emulation source and stale QMK artifact cleanup. The checks protect host writes between builds. They do not claim isolation from a process that changes directories during a write.

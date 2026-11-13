@@ -102,3 +102,6 @@ The validator is where keyloom's correctness lives, so it gets the heaviest test
 - Table tests for every error and warning code, against small synthetic boards.
 - Property tests (`fast-check`). For random valid layouts and random op lists, either `validate` fails or the applied document parses, every layer is reachable, and no function is lost without a `dropFunction` op.
 - Fixtures from BK's real Moonlander and Glove80 imports, with the Option–Option and Command–Shift proposals as golden cases (D-025).
+
+
+Conditional-layer IDs must start with a letter or underscore and contain only letters, digits, underscores and hyphens (D-663). This check runs before the proposal is saved. ZMK generation checks it again before writing a node name. The agent regression in `test/agent/conditional-layers.test.ts` checks that a directive-bearing ID leaves proposals and the layout unchanged.
