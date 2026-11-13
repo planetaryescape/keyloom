@@ -42,7 +42,7 @@ export type Install = {
   /** Reads the install at once, after it was lost; absent on hand-built ones. */
   checkAgain?: () => void;
   start: () => void;
-  /** Starts keyloom's own download of the tool's pinned release, after a failed Homebrew install (R12-01); absent on hand-built ones. */
+  /** Starts keyloom's own download of the tool's pinned release, beside Homebrew (R12-01, R13-02); absent on hand-built ones. */
   download?: () => void;
   /** Stops the running install; it ends `cancelled` once Homebrew has exited. */
   cancel: () => void;

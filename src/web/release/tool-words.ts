@@ -19,11 +19,20 @@ export function zappPlacement(linux: boolean): string {
   return linux ? `${path} Also add ZSA's udev rules from the same page, so Zapp can reach the keyboard without root.` : path;
 }
 
+/**
+ * Whether the missing step offers keyloom's own download beside Install with Homebrew (R13-02). Always where there is a release file for
+ * this computer, with Homebrew first: a cancelled install, or a reload after a failed one, leaves no failure to hang the offer on, and the
+ * person shouldn't have to run Homebrew again and wait for it to fail to get it back.
+ */
+export const missingDownload = (view: NeedsTool): boolean => toolWay(view) === "brew" && view.downloadable;
+
 /** `linux`: the page runs on a Linux computer (linuxBrowser), where Zapp needs its udev rules. */
 export function toolMissingLead(view: NeedsTool, boardName: string, linux = false): string {
   const lead = `keyloom flashes your ${boardName} with ${view.name}, and this computer doesn't have it yet.`;
   switch (toolWay(view)) {
-    case "brew": return `${lead} keyloom can install it with Homebrew.`;
+    case "brew": return missingDownload(view)
+      ? `${lead} keyloom can install it with Homebrew, or download it from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.`
+      : `${lead} keyloom can install it with Homebrew.`;
     case "download": return `${lead} Homebrew isn't here, so keyloom downloads ${view.name} from its official release on GitHub, checks it against the checksum keyloom carries, and keeps it in keyloom's own folder.`;
     case "page": return view.tool === "zapp" ? `${lead} Get it from its page. ${zappPlacement(linux)} Then check again.` : `${lead} Install it, then check again.`;
   }
