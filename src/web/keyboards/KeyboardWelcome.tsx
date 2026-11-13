@@ -6,7 +6,7 @@ import { CollectionResponseSchema, type CollectionKeyboard } from "../../api/key
 import { request } from "../api-write.ts";
 import type { SyncApi } from "../sync/useSync.ts";
 import { ImportScreen } from "../import/ImportScreen.tsx";
-import { keyboardKey, useNewKeyboard } from "./useNewKeyboard.ts";
+import { type CardMemory, keyboardKey, useNewKeyboard } from "./useNewKeyboard.ts";
 import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SearchFailed } from "./SearchFailed.tsx";
@@ -24,7 +24,7 @@ import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import "./collection.css";
 
-export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
+export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0, cardMemory }: {
   token: string; choices: readonly BoardChoice[];
   /** Where the read of `choices` stands (R6-04): the list says it is reading, or that it couldn't, with Try again. */
   boardsRead?: BoardsRead; onRetryBoards?: () => void;
@@ -36,8 +36,10 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFa
   setup?: { id: string; name: string } | null; onSetupOpened?: () => void;
   sync: SyncApi; sources: readonly PutSource[];
   onMade: (id: string, proposals?: boolean) => void; onManage: (removed?: boolean) => void; onBack?: (() => void) | undefined; collectionVersion?: number;
+  /** App's memory of the cards already shown or put off, so the editor doesn't open them again (R10-08). */
+  cardMemory?: CardMemory | undefined;
 }) {
-  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded);
+  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded, { memory: cardMemory });
   const chooseKnown = flow.chooseKnown;
   // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
   const [importing, setImporting] = useState<{ board: string | null } | null>(null);

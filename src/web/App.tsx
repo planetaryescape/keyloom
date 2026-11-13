@@ -19,6 +19,7 @@ import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
 import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
+import { type CardMemory, useCardMemory } from "./keyboards/useNewKeyboard.ts";
 import type { BoardsRead } from "./keyboards/catalogue-words.ts";
 import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened, undoChange } from "./api-write.ts";
@@ -98,6 +99,9 @@ export function App({ token }: { token: string }) {
   const [boardsAttempt, setBoardsAttempt] = useState(0);
   // A keyboard with no config whose Set up was pressed in Your keyboards (R8-06): the welcome opens its setup card once.
   const [setupBoard, setSetupBoard] = useState<{ id: string; name: string } | null>(null);
+  // Which plugged-in keyboards' cards opened or were put off with Not now, for the whole page: the editor remounts on every config switch
+  // and would open them again (R10-08).
+  const cardMemory = useCardMemory();
   const readBoardsAgain = () => setBoardsAttempt((n) => n + 1);
   useEffect(() => {
     const controller = new AbortController();
@@ -211,7 +215,7 @@ export function App({ token }: { token: string }) {
           setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
-          onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
+          onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} cardMemory={cardMemory} />
       </Shell>
     );
   }
@@ -332,6 +336,7 @@ export function App({ token }: { token: string }) {
       detail={current.detail}
       menu={menu}
       boardChoices={boardChoices}
+      cardMemory={cardMemory}
       sync={sync}
       onHome={returnToWall}
       onChanged={refresh}
@@ -364,6 +369,7 @@ function LayoutPage({
   detail,
   menu,
   boardChoices,
+  cardMemory,
   sync,
   onHome,
   onChanged,
@@ -377,6 +383,7 @@ function LayoutPage({
   detail: LayoutDetail;
   menu: HeaderMenu;
   boardChoices: readonly BoardChoice[];
+  cardMemory: CardMemory;
   sync: SyncApi;
   onHome?: () => void;
   onChanged: () => Promise<void>;
@@ -422,7 +429,7 @@ function LayoutPage({
           repairDraft={repairDraft}
           onRepairDraft={onRepairDraft}
           buildQuestion={asked}
-          chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry }}
+          chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry, cardMemory }}
         />
       )}
       {dialog}

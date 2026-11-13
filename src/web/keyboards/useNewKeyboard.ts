@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -113,10 +113,39 @@ export function cardToOpen(offered: readonly DetectedKeyboard[], setupWaiting: r
 export const shownAfterClose = (step: NewBoardStep, shown: ReadonlySet<string>): ReadonlySet<string> =>
   step.kind === "put" && !shown.has(step.boardId) ? new Set([...shown, step.boardId]) : shown;
 
-/** `onAdded`: a board was just added, so whatever lists keyloom's boards reads them again, or it is missing until a reload (R8-06). */
-export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = [], onAdded?: () => void) {
-  const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
+/**
+ * What the plugged-in keyboards' cards remember (R10-08): the keyboards and boards put off with Not now (`dismissed`), and those whose card
+ * already opened by itself (`shown`). App keeps one for the whole page, because a config switch remounts the editor, and a memory of its
+ * own would open a card the person had already closed.
+ */
+export interface CardMemory {
+  dismissed: ReadonlySet<string>;
+  setDismissed: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  shown: MutableRefObject<ReadonlySet<string>>;
+}
+
+export function useCardMemory(): CardMemory {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const shown = useRef<ReadonlySet<string>>(new Set());
+  return { dismissed, setDismissed, shown };
+}
+
+/**
+ * Any dialog is open on the page, from this screen or another (Your keyboards, Build and flash). A card doesn't open by itself under one,
+ * where its backdrop would hide it (R10-08).
+ */
+const dialogOpen = (): boolean => typeof document !== "undefined" && document.querySelector("dialog[open]") !== null;
+
+/**
+ * `onAdded`: a board was just added, so whatever lists keyloom's boards reads them again, or it is missing until a reload (R8-06).
+ * `memory`: App's card memory, shared by every screen that mounts this (R10-08); without it the hook keeps its own. `hold`: a card must not
+ * open by itself now, such as while the board review is open. It opens once the hold ends.
+ */
+export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = [], onAdded?: () => void,
+  { memory, hold = false }: { memory?: CardMemory | undefined; hold?: boolean } = {}) {
+  const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
+  const ownMemory = useCardMemory();
+  const { dismissed, setDismissed, shown } = memory ?? ownMemory;
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [putPreview, setPutPreview] = useState<PutPreviewResponse | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -154,15 +183,15 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
   const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
 
-  // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch.
-  const shown = useRef<ReadonlySet<string>>(new Set());
+  // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch. The effect runs on
+  // every render (`offered` is a new list each time), so a card held back opens on the first render after the hold or the dialog ends.
   useEffect(() => {
-    if (step.kind !== "idle") return;
+    if (step.kind !== "idle" || hold || dialogOpen()) return;
     const open = cardToOpen(offered, setupWaiting, shown.current);
     if (open === null) return;
     shown.current = new Set([...shown.current, open.shown]);
     setStep(open.step);
-  }, [offered, setupWaiting, step.kind]);
+  }, [offered, setupWaiting, step.kind, hold, shown]);
 
   // The card's keyboard was unplugged: the card goes with it, unless BK is already past choosing.
   useEffect(() => {
