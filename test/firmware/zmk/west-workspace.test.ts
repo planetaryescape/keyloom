@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { prepareWestWorkspace, lockedWestManifest, westInputsKey, westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
+import { withWestWorkspace, lockedWestManifest, westInputsKey, westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
 import inputs from "../../../src/firmware/zmk/west-inputs.json" with { type: "json" };
 import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
 import { tempDir } from "../../helpers/tmp.ts";
+
+const prepareWestWorkspace = (workspace: string, projects: Parameters<typeof withWestWorkspace>[1], image: string) =>
+  withWestWorkspace(workspace, projects, image, {}, async () => undefined);
 
 const repo = "https://github.com/zmkfirmware/zmk";
 
@@ -34,7 +37,10 @@ test("workspace metadata and output never survive reuse, and every source mount 
   await seedWestSources(workspace, projects, "image");
   const bin = fakeBinDir({ git: FAKE_WEST_GIT });
   await withPath(bin, async () => {
-    const mounts = await prepareWestWorkspace(workspace, projects, "image");
+    const mounts = await withWestWorkspace(workspace, projects, "image", {}, async (dir, mounts) => {
+      expect(dir).not.toBe(workspace);
+      return mounts;
+    });
     expect(mounts.filter((m) => m === "--mount")).toHaveLength(projects.length);
     for (const mount of mounts.filter((m) => m !== "--mount")) {
       expect(mount).toEndWith(",readonly");

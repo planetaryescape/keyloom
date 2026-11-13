@@ -58,7 +58,8 @@ describe("buildZmk (fake docker)", () => {
 
     const calls = (await Bun.file(s.dockerLog).text()).split("\n");
     const run = calls.find((l) => l.includes(" --name keyloom-test "));
-    expect(run).toBe(`run --rm --name keyloom-test -v ${join(s.dir, "checkout")}:/config -e UID=${process.getuid?.()} -e GID=${process.getgid?.()} ${imageTag(ZMK_SHA)}`);
+    expect(run).toContain(`run --rm --name keyloom-test -v ${join(s.dir, "checkout")}.run-`);
+    expect(run).toContain(`:/config -e UID=${process.getuid?.()} -e GID=${process.getgid?.()} ${imageTag(ZMK_SHA)}`);
     expect(s.lines.some((l) => l.includes("2 images: family 0x9807b007"))).toBe(true);
   });
 

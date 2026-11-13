@@ -17,7 +17,7 @@ import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from 
 import { moduleReport } from "./handsfree.ts";
 import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
-import { lockedWestManifest, prepareWestWorkspace, westProjects } from "./west-workspace.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
 
 /** Flattened, immutable dependencies plus the board's pinned modules. */
 export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"], rgbMatrix?: ZmkWestDockerBuild["rgbMatrix"]): string {
@@ -77,50 +77,52 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       }
 
       const projects = westProjects(rev.source.repo, rev.source.sha, build);
-      const sourceMounts = await prepareWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) });
-      const config = join(input.checkoutDir, "config");
-      await mkdir(config, { recursive: true });
-      await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
-      for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
-      // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
-      const named = build.targets.filter((t) => t.productName !== undefined);
-      for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
-      const handsFree = rev.flash.handsFree !== undefined;
-      if (handsFree) await writeModule(input.checkoutDir);
+      const request = input;
+      return withWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) }, async (checkoutDir, sourceMounts) => {
+        const input = { ...request, checkoutDir };
+        const config = join(input.checkoutDir, "config");
+        await mkdir(config, { recursive: true });
+        await writeFresh(join(config, "west.yml"), westManifest(rev.source.repo, rev.source.sha, build.boardModule, build.rgbMatrix));
+        for (const f of input.source.files) await writeFresh(join(config, f.path), f.content);
+        // A half that names itself gets its own conf: the keymap's conf is shared by both builds.
+        const named = build.targets.filter((t) => t.productName !== undefined);
+        for (const t of named) await writeFresh(join(config, targetConfFile(t.id)), `# Written by keyloom: this half's USB product name.\nCONFIG_USB_DEVICE_PRODUCT="${t.productName}"\n`);
+        const handsFree = rev.flash.handsFree !== undefined;
+        if (handsFree) await writeModule(input.checkoutDir);
 
-      const uid = process.getuid?.() ?? 1000;
-      const gid = process.getgid?.() ?? 1000;
-      // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
-      const base = [
-        "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
-        "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*",
-      ];
+        const uid = process.getuid?.() ?? 1000;
+        const gid = process.getgid?.() ?? 1000;
+        // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
+        const base = [
+          "docker", "run", "--rm", "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
+          "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*",
+        ];
 
-      // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
-      // Docker Desktop instead refuses the mount in its own words, before the container starts.
-      const probeOutput: string[] = [];
-      const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000, onLine: (line) => probeOutput.push(line) });
-      if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share that folder with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
+        // Docker mounts an empty folder for a path it isn't allowed to share; this fails early with a message that points the right way.
+        // Docker Desktop instead refuses the mount in its own words, before the container starts.
+        const probeOutput: string[] = [];
+        const visible = await run({ cmd: [...base, build.image, "sh", "-c", `test -f config/west.yml || exit ${NOT_SHARED_EXIT}`], log: input.log, timeoutMs: 5 * 60_000, onLine: (line) => probeOutput.push(line) });
+        if (visible.exitCode !== 0) throw probeFailure(visible.exitCode, probeOutput, input.checkoutDir, `Docker can't see ${input.checkoutDir}. Share ${dirname(request.checkoutDir)} with Docker, or set XDG_CACHE_HOME to a folder it can see (Colima shares only your home directory).`);
 
-      await awaitMountedFiles({
-        image: build.image,
-        mountArgs: base.slice(3),
-        hostRoot: input.checkoutDir,
-        containerRoot: "/work",
-        files: [
-          join(config, "west.yml"),
-          ...input.source.files.map((f) => join(config, f.path)),
-          ...named.map((t) => join(config, targetConfFile(t.id))),
-          ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
-        ],
-        log: input.log,
-        ...(input.signal ? { signal: input.signal } : {}),
+        await awaitMountedFiles({
+          image: build.image,
+          mountArgs: base.slice(3),
+          hostRoot: input.checkoutDir,
+          containerRoot: "/work",
+          files: [
+            join(config, "west.yml"),
+            ...input.source.files.map((f) => join(config, f.path)),
+            ...named.map((t) => join(config, targetConfFile(t.id))),
+            ...(handsFree ? Object.keys(MODULE_FILES).map((f) => join(input.checkoutDir, MODULE_DIR, f)) : []),
+          ],
+          log: input.log,
+          ...(input.signal ? { signal: input.signal } : {}),
       });
 
       const output: string[] = [];
       say(`keyloom: building ${build.targets.map((t) => (t.shield ?? t.board ?? build.board)).join(" and ")} for ${build.board} from ${rev.source.repo} ${rev.source.ref} (${rev.source.sha.slice(0, 9)}); the first build downloads the pinned dependencies`);
       const result = await run({
-        cmd: [...base.slice(0, 3), "--name", input.containerName, "--label", `${CHECKOUT_LABEL}=${input.checkoutDir}`, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
+        cmd: [...base.slice(0, 3), "--name", input.containerName, "--label", `${CHECKOUT_LABEL}=${request.checkoutDir}`, ...base.slice(3), build.image, "sh", "-c", westScript(build, handsFree)],
         log: input.log,
         timeoutMs: input.timeoutMs ?? BUILD_TIMEOUT_MS,
         ...(input.signal ? { signal: input.signal } : {}),
@@ -170,6 +172,7 @@ export async function buildZmkWest(input: ZmkBuildInput): Promise<ZmkBuildResult
       await Bun.write(input.artifactPath, zip);
       say(`keyloom: wrote ${input.artifactPath} (${build.targets.map((t) => `${t.id}.uf2`).join(", ")})`);
       return { artifactPath: input.artifactPath, bytes: zip.length, durationMs: Date.now() - started };
+      });
     },
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );

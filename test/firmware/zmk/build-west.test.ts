@@ -41,7 +41,7 @@ esac
 exit 9
 `;
 
-async function setup() {
+async function setup(checkMs = 5_000) {
   const board = await loadBoardDir(await templateCopy("zmk", (b) => { b.revisions[0].source.sha = inputs.zmkSha; }));
   const dir = tempDir();
   const uf2 = join(dir, "one.uf2");
@@ -63,7 +63,7 @@ async function setup() {
       () =>
         buildZmkWest({
           board: board.definition, source, checkoutDir: join(dir, "work"), imageContextDir: join(dir, "image"), artifactPath: join(dir, "out", "bld.zip"),
-          log, containerName: "keyloom-test", onLine: (l) => lines.push(l), containerCheckTimeoutMs: 300,
+          log, containerName: "keyloom-test", onLine: (l) => lines.push(l), containerCheckTimeoutMs: checkMs,
         }),
       { FAKE_MODE: mode, FAKE_DOCKER_LOG: dockerLog, FAKE_UF2: uf2, ...extra },
     );
@@ -130,7 +130,7 @@ describe("buildZmkWest (fake docker)", () => {
     const text = await Bun.file(s.dockerLog).text();
     const run = text.slice(text.indexOf("run --rm --name keyloom-test"));
     expect(run).toContain(`--user ${process.getuid?.()}:${process.getgid?.()}`);
-    expect(run).toContain(`-v ${join(s.dir, "work")}:/work`);
+    expect(run).toContain(`-v ${join(s.dir, "work")}.run-`);
     expect(run).toContain("zmkfirmware/zmk-build-arm@sha256:");
     expect(run).toContain("west build -p always -s zmk/app -d build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/work/config");
     expect(run).toContain("-DSHIELD=board_right");
@@ -160,12 +160,12 @@ describe("buildZmkWest (fake docker)", () => {
     await expect(stuck.build("ok", { FAKE_ORPHANS: "0123abcd", FAKE_RM_FAIL: "1" })).rejects.toThrow("couldn't remove the build container an earlier keyloom left");
     expect(await Bun.file(stuck.dockerLog).text()).not.toContain(" --name keyloom-test ");
     // A command stopped at its timeout that still exits 0 is not an answer either.
-    const slowList = await setup();
+    const slowList = await setup(300);
     await expect(slowList.build("ok", { FAKE_PS_HANG: "1" })).rejects.toThrow("docker ps timed out");
-    expect(await Bun.file(slowList.dockerLog).text()).not.toContain(" --name keyloom-test ");
-    const slowRemove = await setup();
+    expect(await Bun.file(slowList.dockerLog).exists() ? await Bun.file(slowList.dockerLog).text() : "").not.toContain(" --name keyloom-test ");
+    const slowRemove = await setup(300);
     await expect(slowRemove.build("ok", { FAKE_ORPHANS: "0123abcd", FAKE_RM_HANG: "1" })).rejects.toThrow("docker rm timed out");
-    expect(await Bun.file(slowRemove.dockerLog).text()).not.toContain(" --name keyloom-test ");
+    expect(await Bun.file(slowRemove.dockerLog).exists() ? await Bun.file(slowRemove.dockerLog).text() : "").not.toContain(" --name keyloom-test ");
   });
 
   test("hashes west.yml and the config files inside the container before west runs, and waits out a stale view", async () => {

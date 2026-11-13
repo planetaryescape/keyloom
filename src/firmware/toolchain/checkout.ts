@@ -3,6 +3,7 @@ import { constants, existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { type LogSink, capture, run } from "./run.ts";
+import { withWorkspace } from "./workspace.ts";
 
 export type CheckoutSpec = {
   dir: string;
@@ -112,11 +113,10 @@ export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> 
  * including after interruption. No file from a previous container becomes a trusted input.
  * The caller holds spec.dir's lock until the container exits.
  */
-export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<void> {
+export async function withCheckout<T>(spec: CheckoutSpec, hooks: Hooks, build: (dir: string) => Promise<T>): Promise<T> {
   const trusted = await ensureTrustedCheckout(spec, hooks);
-  const staging = await mkdtemp(`${spec.dir}.stage-`);
-  try {
-    await cp(trusted, staging, {
+  return withWorkspace(spec.dir, async (dir) => {
+    await cp(trusted, dir, {
       recursive: true,
       // Reflinks keep copies cheap where supported. Hard links would expose the trusted source.
       mode: constants.COPYFILE_FICLONE,
@@ -124,12 +124,8 @@ export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Pro
       verbatimSymlinks: true,
     });
     if (hooks.signal?.aborted) throw new CheckoutError("The checkout preparation was cancelled.");
-    // Do not run Git against the old workspace, including caches from earlier keyloom releases.
-    await rm(spec.dir, { recursive: true, force: true });
-    await rename(staging, spec.dir);
-  } finally {
-    await rm(staging, { recursive: true, force: true });
-  }
+    return build(dir);
+  });
 }
 
 /** Callers can mount this path read-only. Never mount it writable or expose its parent. */

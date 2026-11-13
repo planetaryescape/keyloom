@@ -11,6 +11,28 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 Each container gets a unique workspace path
+
+### D-582: Never bind a later run to a host path an older container used. Replaces D-580 and D-581's stable workspace path.
+
+A real Colima probe proved that an old bind mount follows a host directory replaced at the same path.
+The old container read the new source and changed it. A lock cannot stop a container whose owner died.
+
+Each build and emulator now uses a new sibling path, `<board>.run-<random>`. The source cache remains outside every writable mount.
+QMK and Glove80 copy trusted source into that run. West mounts locked source read-only beside fresh writable config and output.
+The lock stays held through container exit, artifact validation, and snapshot publication.
+All existing QMK path and symlink guards use the new run root.
+
+After the callback ends, the run becomes the stable base's untrusted debug snapshot.
+That snapshot is never an input to Git, the doctor, source preparation, or another build.
+Even a container that can change that snapshot cannot reach a later run's separate sibling path.
+Failed runs retain debug files too. The next run still starts from trusted source and empty output.
+
+Docker file sharing must cover the parent build-cache folder, which contains both trusted sources and run folders.
+The folder-sharing recovery action now names that parent. Firmware formats and freshness checks stay unchanged.
+
+Verification: unique-workspace tests cover fresh paths and failed-run retries. The real Docker regression retains an old writable bind while two later runs use separate paths.
+
 ## 2026-11-13 West builds use resolved inputs and read-only source
 
 ### D-581: Replace recursive west imports with a reviewed dependency lock. Extends D-036, D-040 and D-580.

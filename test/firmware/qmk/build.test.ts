@@ -58,7 +58,7 @@ describe("buildQmk (fake docker)", () => {
     expect(make).toContain("--rm");
     expect(make).toContain(`--user ${process.getuid?.()}:${process.getgid?.()}`);
     expect(make).toContain("-w /qmk_firmware");
-    expect(make).toContain(`-v ${join(s.dir, "checkout")}:/qmk_firmware`);
+    expect(make).toContain(`-v ${join(s.dir, "checkout")}.run-`);
     expect(make).toContain("-e SKIP_GIT=1 -e MAKEFLAGS=-j4");
     expect(make).toContain("ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a make zsa/moonlander/revb:keyloom");
     expect(make).not.toContain(" -it");
@@ -90,7 +90,7 @@ describe("buildQmk (fake docker)", () => {
     const calls = (await Bun.file(s.dockerLog).text()).split("\n");
     const hashes = calls.filter((l) => l.includes("--entrypoint sha256sum"));
     expect(hashes).toHaveLength(3);
-    expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}:/qmk_firmware`);
+    expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}.run-`);
     expect(hashes[0]).toContain("/qmk_firmware/keyboards/zsa/moonlander/keymaps/keyloom/keymap.c");
     expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" make ")));
   });

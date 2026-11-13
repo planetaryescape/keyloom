@@ -4,7 +4,7 @@ Status update, 2026-11-13 round 11 (D-563): a keymap with another board's number
 
 Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-471); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
 
-Status, 2026-11-13: D-580 keeps Glove80 template downloads outside writable mounts. Each build gets a fresh copy without Git metadata or prior output. Downloads remain warm. D-581 locks all transitive west inputs and mounts their source read-only for builds and emulation.
+Status, 2026-11-13: D-580 keeps Glove80 template downloads outside writable mounts. Each build gets a fresh copy without Git metadata or prior output. Downloads remain warm. D-581 locks all transitive west inputs and mounts their source read-only for builds and emulation. D-582 gives each run a unique sibling path. The stable base is an untrusted debug snapshot, never a later input.
 
 ## Per-layer encoder turns
 

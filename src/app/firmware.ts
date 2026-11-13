@@ -2,7 +2,7 @@ import { requirePlatformSupport } from "../firmware/toolchain/platform-support.t
 // Use cases for firmware: generate, build and flash (01#modules). A build or flash returns its row
 // at once and finishes in the background; callers poll getBuild / getFlash, which is what the web
 // app does. The CLI waits with buildAndWait / flashAndWait.
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { writeSource } from "../firmware/qmk/write-source.ts";
 import { BuildFailure, type BuildErrorCode, DETERMINISTIC_BUILD_CODES, ENGINE_RESTART_BUILD_CODES, isBuildErrorCode } from "../firmware/toolchain/build-failure.ts";
@@ -201,7 +201,7 @@ async function toBuildView(app: App, row: BuildRow): Promise<BuildView> {
     lastBuilt: row.status === "failed" && errorCode !== null && DETERMINISTIC_BUILD_CODES.has(errorCode) ? lastBuiltBefore(app, row) : null,
     // Asked only for these failures, so a poll of a running or finished build never looks for the engine.
     restartEngine: row.status === "failed" && errorCode !== null && ENGINE_RESTART_BUILD_CODES.has(errorCode) ? ((await forcedRestartEngine())?.name ?? null) : null,
-    folderNotShared: row.status === "failed" && errorCode === "folder_not_shared" && board ? { folder: checkoutDirFor(board), engine: (await forcedRestartEngine())?.name ?? null } : null,
+    folderNotShared: row.status === "failed" && errorCode === "folder_not_shared" && board ? { folder: dirname(checkoutDirFor(board)), engine: (await forcedRestartEngine())?.name ?? null } : null,
     flashPlan: board ? flashPlanFor(board, row.boardRevision) : { manual: null, tool: null, canReveal: process.platform === "darwin" },
     startedAt: row.startedAt, finishedAt: row.finishedAt, logTail: await tailOf(logPath),
     artifactPath: row.artifactPath === null ? null : absolute(app, row.artifactPath), logPath,

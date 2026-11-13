@@ -1,10 +1,13 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { CheckoutError, checkoutState, ensureCheckout, trustedCheckoutDir } from "../../../src/firmware/toolchain/checkout.ts";
+import { CheckoutError, checkoutState, withCheckout, trustedCheckoutDir } from "../../../src/firmware/toolchain/checkout.ts";
 import { git, gitEnv, originRepo } from "../../helpers/git-fixture.ts";
 import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
+
+const ensureCheckout = (spec: Parameters<typeof withCheckout>[0], hooks: Parameters<typeof withCheckout>[1] = {}) =>
+  withCheckout(spec, hooks, async () => undefined);
 
 // These tests spawn git clones and submodule fetches; loaded full runs have exceeded Bun's 5 s default.
 setDefaultTimeout(30_000);

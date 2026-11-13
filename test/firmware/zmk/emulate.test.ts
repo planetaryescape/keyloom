@@ -147,7 +147,7 @@ describe("emulateZmk for the Corne (ZMK's west image)", () => {
       { at: 40, kind: "consumer", usages: [] },
     ]);
     const [call] = await e.calls();
-    expect(call).toContain(`-v ${join(e.dir, "checkout")}:/work`);
+    expect(call).toContain(`-v ${join(e.dir, "checkout")}.run-`);
     expect(call).toContain("zmkfirmware/zmk-build-arm@sha256:");
     expect(call).toContain("west build -s zmk/app -d /tmp/emu-build -b native_posix_64");
     expect(await Bun.file(join(e.dir, "checkout", "config", "west.yml")).text()).toContain("edf5c0814fd3ea202e43aad2d68fd32e882a518c");

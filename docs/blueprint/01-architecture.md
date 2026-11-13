@@ -73,7 +73,7 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 
 Builds need Docker. That's a deliberate requirement (Q12). Both firmwares document Docker builds, and it keeps ARM toolchains, Python and Nix off BK's machine.
 
-- **Firmware inputs** use trusted Git caches beside the writable workspaces in `$XDG_CACHE_HOME/keyloom/build/` (D-580, D-581). QMK and Glove80 copy complete pinned snapshots without Git metadata into disposable workspaces. West mounts every locked project read-only. Host Git never opens old writable workspace metadata. Downloads remain warm, while each run discards earlier output. `keyloom doctor` checks the trusted snapshots.
+- **Firmware inputs** use trusted Git caches beside the writable workspaces in `$XDG_CACHE_HOME/keyloom/build/` (D-580, D-581). QMK and Glove80 copy complete pinned snapshots without Git metadata into disposable workspaces. West mounts every locked project read-only. Host Git never opens old writable workspace metadata. Downloads remain warm. Every run mounts a unique sibling path (D-582). The stable base keeps only an untrusted debug snapshot and never supplies later input. `keyloom doctor` checks the trusted snapshots.
 - **Runner:** `src/firmware/toolchain/run.ts` spawns subprocesses with `Bun.spawn`. It streams stdout and stderr to the log file and to progress events, and applies a timeout of 20 minutes for builds and 3 minutes per flash step.
 - **Flash tools:** `zapp` (Homebrew) for the Moonlander. For the Glove80, file copy to the boot volume. `keyloom doctor` checks both.
 

@@ -13,7 +13,7 @@ import { withLock } from "../toolchain/lock.ts";
 import { run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import { hint } from "./build.ts";
-import { lockedWestManifest, prepareWestWorkspace, westProjects } from "./west-workspace.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
 import { readZmkLighting } from "./import-lighting.ts";
 import { nativeFiles } from "./emulate-keymap.ts";
 import { parseRunLog } from "./emulate-log.ts";
@@ -161,19 +161,22 @@ export const emulateZmk: Emulator = async (input) => {
     if (rev.build.kind === "zmk-west-docker") {
       const build = rev.build;
       await withLock(`${input.checkoutDir}.lock`, async () => {
-        const sourceMounts = await prepareWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) });
-        const config = join(input.checkoutDir, "config");
-        await mkdir(config, { recursive: true });
-        await writeIfChanged(join(config, "west.yml"), manifest);
-        const uid = process.getuid?.() ?? 1000;
-        const gid = process.getgid?.() ?? 1000;
-        // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
-        const cmd = [
-          "docker", "run", "-i", "--rm", "--name", input.containerName, "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
-          "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*", build.image, "sh", "-c", westEmulateScript(),
-        ];
-        say(`keyloom: emulating ${input.board.name} on ZMK ${rev.source.ref} (${rev.source.sha.slice(0, 9)}) in ${build.image.split("@")[0]}`);
-        await execute(cmd);
+        const request = input;
+        return withWestWorkspace(input.checkoutDir, projects, build.image, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) }, async (checkoutDir, sourceMounts) => {
+          const input = { ...request, checkoutDir };
+          const config = join(input.checkoutDir, "config");
+          await mkdir(config, { recursive: true });
+          await writeIfChanged(join(config, "west.yml"), manifest);
+          const uid = process.getuid?.() ?? 1000;
+          const gid = process.getgid?.() ?? 1000;
+          // git refuses a folder it thinks belongs to someone else, which is what a mounted volume looks like inside the container.
+          const cmd = [
+            "docker", "run", "-i", "--rm", "--name", input.containerName, "--user", `${uid}:${gid}`, "-w", "/work", "-v", `${input.checkoutDir}:/work`, ...sourceMounts, "-e", "HOME=/tmp",
+            "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*", build.image, "sh", "-c", westEmulateScript(),
+          ];
+          say(`keyloom: emulating ${input.board.name} on ZMK ${rev.source.ref} (${rev.source.sha.slice(0, 9)}) in ${build.image.split("@")[0]}`);
+          await execute(cmd);
+        });
       }, { timeoutMs: EMULATE_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`) });
     } else {
       await withLock(`${input.workDir}.lock`, async () => {

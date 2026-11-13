@@ -1,10 +1,10 @@
 // The lock replaces imported west manifests. Builds never resolve a mutable ref (D-581).
-import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { ZmkWestDockerBuild } from "../../boards/recipes.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { ensureTrustedCheckout } from "../toolchain/checkout.ts";
 import type { LogSink } from "../toolchain/run.ts";
+import { withWorkspace } from "../toolchain/workspace.ts";
 import inputs from "./west-inputs.json" with { type: "json" };
 
 export type WestProject = {
@@ -38,12 +38,13 @@ export function westSourceSpec(workspace: string, project: WestProject, identity
 }
 
 /** The caller holds the workspace lock and stops orphan containers before replacing output. */
-export async function prepareWestWorkspace(
+export async function withWestWorkspace<T>(
   workspace: string,
   projects: readonly WestProject[],
   image: string,
-  hooks: { log?: LogSink; onLine?: (line: string) => void; signal?: AbortSignal } = {},
-): Promise<string[]> {
+  hooks: { log?: LogSink; onLine?: (line: string) => void; signal?: AbortSignal },
+  build: (dir: string, mounts: string[]) => Promise<T>,
+): Promise<T> {
   const identity = westInputsKey(projects, image);
   const mounts: string[] = [];
   for (const project of projects) {
@@ -51,8 +52,6 @@ export async function prepareWestWorkspace(
     mounts.push("--mount", `type=bind,src=${source},dst=/work/${project.path ?? project.name},readonly`);
   }
   if (hooks.signal?.aborted) throw new BuildFailure("The build was cancelled.");
-  // Old .west and .git files are untrusted too. Never run host Git or west against them.
-  await rm(workspace, { recursive: true, force: true });
-  await mkdir(workspace, { recursive: true });
-  return mounts;
+  // Old .west and .git files are untrusted too. The stable snapshot never becomes an input.
+  return withWorkspace(workspace, (dir) => build(dir, mounts));
 }

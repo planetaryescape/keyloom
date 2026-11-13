@@ -2,8 +2,9 @@
 import { expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { prepareWestWorkspace } from "../../../src/firmware/zmk/west-workspace.ts";
+import { withWestWorkspace } from "../../../src/firmware/zmk/west-workspace.ts";
 import { capture } from "../../../src/firmware/toolchain/run.ts";
+import { withWorkspace } from "../../../src/firmware/toolchain/workspace.ts";
 import { originRepo } from "../../helpers/git-fixture.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
@@ -13,7 +14,7 @@ test.skipIf(process.env.KEYLOOM_DOCKER_TESTS !== "1")("a container cannot alter 
   // Colima shares the home directory. The caller sets TMPDIR to scratch space there.
   const workspace = join(tempDir(), "work");
   const origin = originRepo();
-  const mounts = await prepareWestWorkspace(workspace, [{ name: "zmk", url: origin.url, revision: origin.sha }], image);
+  await withWestWorkspace(workspace, [{ name: "zmk", url: origin.url, revision: origin.sha }], image, {}, async (workspace, mounts) => {
   await mkdir(join(workspace, "config"));
   const result = await capture([
     "docker", "run", "--rm", "-v", `${workspace}:/work`, ...mounts, image, "sh", "-c",
@@ -22,4 +23,29 @@ test.skipIf(process.env.KEYLOOM_DOCKER_TESTS !== "1")("a container cannot alter 
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toContain("Read-only file system");
   expect(await Bun.file(join(workspace, "config", "output")).text()).toBe("output");
+  });
+}, 90_000);
+
+test.skipIf(process.env.KEYLOOM_DOCKER_TESTS !== "1")("an orphan using the stable bind cannot change a later run's inputs", async () => {
+  const base = join(tempDir(), "work");
+  await mkdir(base);
+  await Bun.write(join(base, "source"), "old source");
+  const name = `keyloom-workspace-probe-${process.pid}-${Date.now()}`;
+  const started = await capture(["docker", "run", "--rm", "-d", "--name", name, "-v", `${base}:/work`, image, "sh", "-c", "sleep 60"], { timeoutMs: 15_000 });
+  try {
+    expect(started.exitCode).toBe(0);
+    const paths: string[] = [];
+    for (const source of ["first approved source", "second approved source"]) {
+      await withWorkspace(base, async (dir) => {
+        paths.push(dir);
+        await Bun.write(join(dir, "source"), source);
+        const write = await capture(["docker", "exec", name, "sh", "-c", "printf orphan-write > /work/source"], { timeoutMs: 15_000 });
+        expect(write.exitCode).toBe(0);
+        expect(await Bun.file(join(dir, "source")).text()).toBe(source);
+      });
+    }
+    expect(paths[0]).not.toBe(paths[1]);
+  } finally {
+    await capture(["docker", "rm", "-f", name], { timeoutMs: 15_000 });
+  }
 }, 90_000);
