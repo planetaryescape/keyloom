@@ -18,6 +18,9 @@ export type SourceFiles = {
 
 const WANTED = new Set(["keymap.c", "config.h", "rules.mk", "keymap.json"]);
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_ZIP_BYTES = 8 * 1024 * 1024;
+const MAX_ZIP_ENTRIES = 1024;
+const MAX_SOURCE_BYTES = 4 * MAX_FILE_BYTES;
 
 function nameFrom(folder: string, fallback: string): string {
   const m = /^[a-z0-9]+_[a-z0-9]+_(.+)_source$/i.exec(folder);
@@ -40,18 +43,32 @@ function build(name: string, files: Map<string, string>): SourceFiles {
 }
 
 async function readZip(path: string): Promise<SourceFiles> {
-  const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
-  // Only keymap.c and its neighbours are inflated; the zip also carries two firmware binaries.
+  const bytes = new Uint8Array(await Bun.file(path).slice(0, MAX_ZIP_BYTES + 1).arrayBuffer());
+  if (bytes.length > MAX_ZIP_BYTES) throw new ImportError(`${path} is larger than ${MAX_ZIP_BYTES} bytes`);
+  // Inspect the directory without inflating. A compressed upload limit alone does not bound its output.
   let entries: Record<string, Uint8Array>;
+  let keymapEntry: string | undefined;
+  let count = 0;
+  let total = 0;
   try {
+    unzipSync(bytes, { filter: (f) => {
+      if (++count > MAX_ZIP_ENTRIES) throw new ImportError(`zip has more than ${MAX_ZIP_ENTRIES} entries`);
+      if (!WANTED.has(f.name.split("/").pop() ?? "")) return false;
+      if (f.originalSize > MAX_FILE_BYTES) throw new ImportError(`${f.name} is larger than ${MAX_FILE_BYTES} bytes`);
+      total += f.originalSize;
+      if (total > MAX_SOURCE_BYTES) throw new ImportError(`zip source exceeds ${MAX_SOURCE_BYTES} decompressed bytes`);
+      if (f.name.split("/").pop() === "keymap.c" && keymapEntry === undefined) keymapEntry = f.name;
+      return false;
+    } });
+    if (keymapEntry === undefined) throw new ImportError(`${basename(path)} has no keymap.c; is it Oryx's source download?`);
+    const selected = keymapEntry.slice(0, -"keymap.c".length);
     entries = unzipSync(bytes, {
-      filter: (f) => WANTED.has(f.name.split("/").pop() ?? "") && f.originalSize <= MAX_FILE_BYTES,
+      filter: (f) => f.name.startsWith(selected) && WANTED.has(f.name.slice(selected.length)),
     });
   } catch (err) {
-    throw new ImportError(`${path} is not a readable zip: ${(err as Error).message}`);
+    throw new ImportError(`${path} is not a readable zip: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const keymapEntry = Object.keys(entries).find((n) => n.endsWith("keymap.c"));
-  if (!keymapEntry) throw new ImportError(`${basename(path)} has no keymap.c; is it Oryx's source download?`);
+  if (keymapEntry === undefined) throw new ImportError(`${basename(path)} has no keymap.c; is it Oryx's source download?`);
   const dir = keymapEntry.slice(0, keymapEntry.length - "keymap.c".length);
   const files = new Map<string, string>();
   for (const [name, data] of Object.entries(entries)) {
@@ -94,5 +111,6 @@ export async function readOryxSource(path: string): Promise<SourceFiles> {
     const json = await Bun.file(path).text();
     return build(keymapName(json) ?? basename(path, ".json"), new Map([["keymap.json", json]]));
   }
+  if (info.size > MAX_ZIP_BYTES) throw new ImportError(`${path} is larger than ${MAX_ZIP_BYTES} bytes`);
   return readZip(path);
 }
