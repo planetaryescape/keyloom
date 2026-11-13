@@ -241,7 +241,7 @@ describe("syncNotice", () => {
 
   // R9-01: the dialog's permission fix, on the pill, its needs-hand line and the toast.
   const FILES_CLI = "Copying to /Volumes/GLV80RHBOOT/CURRENT.UF2 failed: EACCES: permission denied. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
-  const FILES_WORDS = "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed. Allow keyloom to use removable volumes, then sync again.";
+  const FILES_WORDS = "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed. Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) to use removable volumes, then sync again.";
   test("a sync whose drive write macOS refused opens Files and Folders settings, with Sync now second (R9-01)", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: FILES_CLI }, { ...run("failed"), failure: "flash", error: FILES_CLI, errorCode: "permission_files_and_folders" });
     const line = syncLine(failed, "lay_1");
@@ -262,7 +262,7 @@ describe("syncNotice", () => {
     const state: BoardSync["state"] = { kind: "needs_hand", instruction, reason: "keyloom couldn't restart it by itself", instructionCode: "permission_input_monitoring" };
     const waiting = at(state, { ...run("failed"), status: "flashing", step: "needs_hand", finishedAt: null });
     const line = syncLine(waiting, "lay_1");
-    expect(line.detail).toBe(`${instruction} Allow keyloom in Input Monitoring, and the next sync needs no keypress.`);
+    expect(line.detail).toBe(`${instruction} Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) in Input Monitoring, and the next sync needs no keypress.`);
     expect(line.detail).not.toContain("Keyloom");
     expect(line).toMatchObject({ action: { id: "open_settings", label: "Open Input Monitoring settings", pane: "input_monitoring" } });
     // While it still waits, pressing the key is the way on; Sync now comes once the sync has ended.
@@ -272,7 +272,7 @@ describe("syncNotice", () => {
   });
   test("an Input Monitoring refusal that ended the flash says what to allow (R9-01)", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "x" }, { ...run("failed"), failure: "flash", error: "x", errorCode: "permission_input_monitoring" });
-    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "macOS didn't let keyloom restart the keyboard by itself. Allow keyloom in Input Monitoring, and the next sync needs no keypress.", action: { pane: "input_monitoring" } });
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "macOS didn't let keyloom restart the keyboard by itself. Allow the app running keyloom (the keyloom app, or your terminal when keyloom runs in one) in Input Monitoring, and the next sync needs no keypress.", action: { pane: "input_monitoring" } });
   });
   test("a write keyloom couldn't confirm says so first, as the dialog does", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "The keyboard didn't come back." }, { ...run("failed"), failure: "flash", error: "The keyboard didn't come back.", errorCode: "not_confirmed" });

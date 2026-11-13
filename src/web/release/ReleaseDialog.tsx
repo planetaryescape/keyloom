@@ -574,7 +574,17 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
 /** Check the keyboard again (R1-15): a read of what the keyboard runs, never a build or a flash, then what it found. */
 function FailedText({ code, error }: { code: Flash["errorCode"]; error: string | null }) {
   const text = failedFlashText(code, error);
-  return <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{plain(text.detail)}</p>;
+  return (
+    <div className="failed-text">
+      <p>{text.lead === null ? null : <><strong>{text.lead}</strong>{" "}</>}{text.detail === null ? null : plain(text.detail)}</p>
+      {text.more === undefined ? null : (
+        <details className="log-details">
+          <summary>Details</summary>
+          <span>{plain(text.more)}</span>
+        </details>
+      )}
+    </div>
+  );
 }
 
 /** `flashAlways` offers Flash again before any check has answered, for a flash that failed after its write. */

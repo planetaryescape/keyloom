@@ -23,18 +23,26 @@ describe("permissionFix", () => {
     expect(permissionFix(undefined)).toBeNull();
   });
 
-  test("never names the terminal or a command", () => {
+  test("never names a command or a settings path", () => {
     for (const code of ["permission_files_and_folders", "permission_input_monitoring"] as const) {
-      expect(permissionFix(code)?.text).not.toMatch(/terminal|sudo|`|System Settings >/i);
+      expect(permissionFix(code)?.text).not.toMatch(/sudo|`|System Settings >/i);
       expect(permissionFix(code)?.failed).not.toMatch(/terminal|sudo|`|System Settings >/i);
+    }
+  });
+
+  // macOS lists the app keyloom runs in: keyloom's own app, or the terminal `keyloom serve` was started from (R10-10).
+  test("names what macOS lists, which is the terminal when keyloom runs in one", () => {
+    for (const code of ["permission_files_and_folders", "permission_input_monitoring"] as const) {
+      const fix = permissionFix(code)!;
+      for (const words of [fix.text, fix.sync]) expect(words).toContain("the app running keyloom (the keyloom app, or your terminal when keyloom runs in one)");
     }
   });
 });
 
 describe("failedFlashText", () => {
-  test("a permission failure leads with plain words and keeps the server's sentence, which says how a split board's recovery went", () => {
-    const error = "Copying to the left half failed: EACCES. The left half was not flashed. keyloom put build AAAAAAAAAAAA back on the right half.";
-    expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: error });
+  test("a permission failure leads with plain words and keeps the server's sentence under Details, beside the button that opens the pane (R10-10)", () => {
+    const error = "Copying to the left half failed: EACCES. The left half was not flashed. keyloom put build AAAAAAAAAAAA back on the right half. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
+    expect(failedFlashText("permission_files_and_folders", error)).toEqual({ lead: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.", detail: null, more: error });
   });
 
   test("a write that finished but couldn't be confirmed says the firmware was written, then the server's reason", () => {
