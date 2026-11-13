@@ -13,6 +13,14 @@ import { lastSyncOfBoard } from "../../src/persistence/syncs.ts";
 import { macbook, at } from "../helpers/macbook.ts";
 import { MAC, remapperWorld } from "../helpers/remapper-world.ts";
 import { waitFor } from "../helpers/fake-sync.ts";
+import type { DoctorProbe } from "../../src/firmware/kanata/doctor.ts";
+import { kanataRevision } from "../../src/firmware/kanata/board-config.ts";
+
+/** A machine with nothing on it, for the doctor; each test names what differs. */
+const machine = (): DoctorProbe => ({
+  kanataBin: () => undefined, kanataVersion: async () => undefined, exec: async () => ({ code: 1, out: "" }), exists: () => false,
+  readText: async () => undefined, hello: async () => { throw new Error("connection refused"); },
+});
 
 // waitFor can run up to 15 s on a slow runner (fake-sync.ts); bun's 5 s default would cut it off first.
 setDefaultTimeout(20_000);
@@ -71,6 +79,33 @@ describe("the MacBook's sync state", () => {
     await e.tick();
     expect(kind(e)).toEqual({ kind: "in_sync" });
     expect(lastSyncOfBoard(world.app.db, MAC)?.status).toBe("failed");
+  });
+
+  // R10-01: a config kanata refuses is stored as failure "build" with a code the page answers. The sync itself is unchanged.
+  test("a config kanata refuses keeps a code: kanata_setup when the doctor finds another kanata, kanata_refused otherwise", async () => {
+    const world = make({ proven: true });
+    const refuse = async () => ({ ok: false, output: "Error in configuration: unknown key" });
+    const refused = await applyToRemapper(world.app, world.layoutId, undefined, { ...world.over, check: refuse });
+    expect(refused).toMatchObject({ ok: false, step: "check", code: "kanata_refused" });
+    // The same refusal on a Mac whose kanata isn't the version keyloom writes for is a setup cause, read from the doctor's probe.
+    const older = { ...machine(), kanataBin: () => "/opt/homebrew/bin/kanata", kanataVersion: async () => "1.10.0" };
+    expect(await applyToRemapper(world.app, world.layoutId, undefined, { ...world.over, check: refuse, probe: older })).toMatchObject({ ok: false, step: "check", code: "kanata_setup" });
+    const missing = { ...machine(), kanataBin: () => undefined };
+    expect(await applyToRemapper(world.app, world.layoutId, undefined, { ...world.over, check: refuse, probe: missing })).toMatchObject({ code: "kanata_setup" });
+    // A kanata the doctor finds as keyloom writes for is a plain refusal.
+    const current = { ...machine(), kanataBin: () => "/opt/homebrew/bin/kanata", kanataVersion: async () => kanataRevision(macbook()).kanataVersion };
+    expect(await applyToRemapper(world.app, world.layoutId, undefined, { ...world.over, check: refuse, probe: current })).toMatchObject({ code: "kanata_refused" });
+
+    // The engine stores the code with the sync, and the run view carries it; the failure and the error are what they were.
+    world.deps.remapper!.apply = async () => ({ ok: false, step: "check", error: "kanata --check refused the new config, so nothing was changed: x", code: "kanata_setup" });
+    const e = world.engine();
+    await e.start();
+    const run = await e.syncNow(world.layoutId);
+    if (run.kind !== "started") throw new Error("sync did not start");
+    expect(await run.done).toMatchObject({ status: "failed", failure: "build", error: "kanata --check refused the new config, so nothing was changed: x" });
+    const view = e.views().find((v) => v.boardId === MAC)!;
+    expect(view.state).toMatchObject({ kind: "behind", why: "failed" });
+    expect(view.last).toMatchObject({ failure: "build", errorCode: "kanata_setup", buildId: null });
   });
 
   test("an edit makes it behind by one change, and the next sync catches up", async () => {

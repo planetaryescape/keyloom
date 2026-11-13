@@ -364,8 +364,53 @@ describe("a software remapper (the MacBook's keyboard)", () => {
     const notice = syncNotice(mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "manual" }), mac({ kind: "behind", changes: null, why: "remapping_off", error: null }, { last }));
     expect(notice).toMatchObject({ kind: "error", action: { id: "replace_foreign", label: "Replace it…" } });
     // Any other failed apply keeps Apply now.
-    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata --check refused" }, { last: { ...last, failure: "build", errorCode: null } }), "lay_1");
+    const other = syncLine(mac({ kind: "behind", changes: 1, why: "failed", error: "kanata isn't answering" }, { last: { ...last, failure: "verify", errorCode: null } }), "lay_1");
     expect(other.action).toEqual({ id: "sync_now", label: "Apply now" });
+  });
+
+  // R10-01: kanata's refusal is stored as failure "build"; it is never a firmware build, Build and flash, or an Apply now that fails again.
+  describe("a config kanata refuses", () => {
+    const cli = "kanata --check refused the new config, so nothing was changed: Error in configuration `unknown key`";
+    const failedLast = (errorCode: string | null) => ({ id: "syn_1", trigger: "auto" as const, status: "failed" as const, step: "done", revisionId: "rev_1", failure: "build", errorCode, error: cli, buildId: null, startedAt: 1, finishedAt: 2, timings: { waitMs: null, buildMs: null, flashMs: null, totalMs: null } });
+    const behind = (errorCode: string | null) => mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { last: failedLast(errorCode) });
+    const syncing = mac({ kind: "syncing", step: "writing", syncId: "s", startedAt: 1, trigger: "auto" });
+
+    test("a plain refusal says kanata kept the previous config, with the reason under Details and Undo this change", () => {
+      for (const code of ["kanata_refused", null]) {
+        const line = syncLine(behind(code), "lay_1");
+        expect(line.detail).toBe("kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one. Undo this change to go back to a layout kanata takes.");
+        expect(line).toMatchObject({ tone: "error", action: { id: "undo_change", label: "Undo this change" }, more: "kanata --check refused the new config, so nothing was changed: Error in configuration unknown key" });
+        expect(line.second).toBeUndefined();
+        const notice = syncNotice(syncing, behind(code));
+        expect(notice).toMatchObject({ kind: "error", message: "Couldn't put the change on your MacBook keyboard (ANSI)", action: { id: "undo_change", label: "Undo this change" } });
+        expect(notice?.detail).toStartWith("kanata refused the config keyloom wrote");
+        for (const said of [line.detail, notice?.detail]) {
+          expect(said).not.toContain("build");
+          expect(said).not.toContain("--check");
+        }
+      }
+    });
+
+    test("a cause in kanata's setup sends the person to the keyboard's status, and Apply now is for after the fix", () => {
+      const line = syncLine(behind("kanata_setup"), "lay_1");
+      expect(line.detail).toContain("isn't the one keyloom writes for");
+      expect(line.action).toBeNull();
+      expect(line.second).toEqual({ id: "sync_now", label: "Apply now" });
+      const notice = syncNotice(syncing, behind("kanata_setup"));
+      expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
+      expect(notice?.detail).toContain("The keyboard's status says how to fix it.");
+    });
+
+    test("a layout keyloom can't write for kanata says so, not that kanata refused it", () => {
+      const line = syncLine(behind("kanata_unwritable"), "lay_1");
+      expect(line.detail).toStartWith("keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one.");
+      expect(line.action).toEqual({ id: "undo_change", label: "Undo this change" });
+    });
+
+    test("a USB keyboard's failed build keeps Build and flash", () => {
+      const usb = board({ kind: "behind", changes: 1, why: "failed", error: "boom" }, { last: { ...failedLast(null), buildId: "bld_1" } });
+      expect(syncLine(usb, "lay_1").action?.id).toBe("open_release");
+    });
   });
 
   test("the auto-apply note names the exit chord and the button, not a command", () => {

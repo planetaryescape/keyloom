@@ -124,6 +124,17 @@ describe("keyloom remap", () => {
     expect(f.find((x) => x.name === "built-in keyboard")?.status).toBe("ok");
   });
 
+  // R10-14: ioreg exits 0 with nothing printed when no built-in keyboard matches the class, as on a Mac mini.
+  test("the doctor tells a Mac with no built-in keyboard from one whose keyboard has another name", async () => {
+    const world = (w = remapperWorld());
+    const keyboard = async (out: string) => {
+      const probe: DoctorProbe = { ...machine({ ioreg: { code: 0, out } }), kanataBin: () => "/k", kanataVersion: async () => "1.12.0" };
+      return (JSON.parse((await cli(world, ["remap", "doctor", "--format", "json"], probe)).out).findings as Array<{ name: string; status: string; detail: string }>).find((x) => x.name === "built-in keyboard");
+    };
+    expect(await keyboard("\n")).toMatchObject({ status: "fail", detail: "this Mac has no built-in keyboard" });
+    expect(await keyboard('"Product" = "Apple Internal Keyboard"')).toMatchObject({ status: "warn" });
+  });
+
   test("a driver of the wrong protocol is a failure that names both protocols", async () => {
     const world = (w = remapperWorld());
     const probe: DoctorProbe = { ...machine({ pkgutil: { code: 0, out: "version: 8.5.0\n" } }), kanataBin: () => "/k", kanataVersion: async () => "1.12.0" };

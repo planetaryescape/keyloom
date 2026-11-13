@@ -9,7 +9,7 @@ import { type ApplyDeps, type ApplyOptions, type ApplyResult, type DisableResult
 import { CMD_PROBE_CONFIG, cmdCheckResult, findKanata, kanataCheck } from "../firmware/kanata/binary.ts";
 import { type KanataBoardRevision, kanataRevision } from "../firmware/kanata/board-config.ts";
 import type { KanataEndpoint } from "../firmware/kanata/client.ts";
-import { type DoctorProbe, type DoctorReport, runRemapperDoctor } from "../firmware/kanata/doctor.ts";
+import { type DoctorProbe, type DoctorReport, type FindingCode, runRemapperDoctor } from "../firmware/kanata/doctor.ts";
 import { GenerateError, SAFE_FILE, SETUP_REVISION, generateKanataSource } from "../firmware/kanata/generate.ts";
 import { type RemapperPaths, remapperPaths } from "../firmware/kanata/paths.ts";
 import { identityLayout } from "../firmware/kanata/identity.ts";
@@ -60,7 +60,31 @@ export function remapperEnv(boardId: string, over: RemapperOverrides = {}): Rema
   return { board, rev, paths, deps: { paths, endpoint, check } };
 }
 
-export type RemapperApplyOutcome = ApplyResult | { ok: false; step: "generate"; error: string; written: false };
+/**
+ * Why a config didn't go on, as a code the page offers a way on for (R10-01). `kanata_setup`: kanata refused it, and the doctor finds the
+ * kanata on this Mac isn't the one keyloom writes for (missing, another version, or changed since setup), which the keyboard's status
+ * fixes. `kanata_refused`: kanata refused it for another reason, so going back to a layout kanata took is the way on.
+ * `kanata_unwritable`: keyloom couldn't write this layout for kanata at all.
+ */
+export type RemapperRefusalCode = "kanata_setup" | "kanata_refused" | "kanata_unwritable";
+
+type Generated = ApplyResult | { ok: false; step: "generate"; error: string; written: false };
+export type RemapperApplyOutcome = Exclude<Generated, { ok: false }> | (Extract<Generated, { ok: false }> & { code?: RemapperRefusalCode });
+
+// The doctor's findings that mean the kanata here isn't the one keyloom writes for; each is a step the keyboard's status shows.
+const SETUP_FINDINGS: ReadonlySet<FindingCode> = new Set(["kanata_missing", "kanata_version", "kanata_updated", "kanata_replaced"]);
+
+/** Whether a refusal comes from kanata's setup, read from the same doctor the keyboard's status shows. Never throws. */
+async function refusalCause(boardId: string, over: RemapperOverrides): Promise<"kanata_setup" | "kanata_refused"> {
+  // A test that fakes kanata's check without describing the machine must not read the real one.
+  if (over.check !== undefined && over.probe === undefined) return "kanata_refused";
+  try {
+    const report = await remapperDoctor(boardId, over, { rootCommand: false });
+    return report.findings.some((f) => SETUP_FINDINGS.has(f.code) && (f.status === "warn" || f.status === "fail")) ? "kanata_setup" : "kanata_refused";
+  } catch {
+    return "kanata_refused";
+  }
+}
 
 /** Generates the file for one revision of a layout and applies it. Never throws for a problem with the layout or kanata. */
 export async function applyToRemapper(app: App, layoutRef: string, revisionId: string | undefined, over: RemapperOverrides = {}, opts: ApplyOptions = {}): Promise<RemapperApplyOutcome> {
@@ -70,10 +94,12 @@ export async function applyToRemapper(app: App, layoutRef: string, revisionId: s
   try {
     source = generateKanataSource({ layout: view.document, board: view.board.definition, layoutId: view.layout.id, revisionId: view.revision.id });
   } catch (err) {
-    if (err instanceof GenerateError) return { ok: false, step: "generate", error: `this layout can't be written for kanata: ${err.message}`, written: false };
+    if (err instanceof GenerateError) return { ok: false, step: "generate", error: `this layout can't be written for kanata: ${err.message}`, written: false, code: "kanata_unwritable" };
     throw err;
   }
-  return applyKanata(env.deps, source, view.revision.id, opts);
+  const applied = await applyKanata(env.deps, source, view.revision.id, opts);
+  if (applied.ok || (applied.step !== "check" && applied.step !== "reload")) return applied;
+  return { ...applied, code: await refusalCause(view.layout.boardId, over) };
 }
 
 /** What kanata is running on this board's machine right now. */

@@ -250,6 +250,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: (buildId?: string) => onOpenRelease(undefined, buildId),
     replace_foreign: () => sync.setReplaceAsk(summary.id),
+    undo_change: () => undoRefused(),
     // The exit chord is kanata's, and the MacBook is the one board that runs it.
     check_exit_chord: () => {
       const remapper = sync.boards.find((b) => b.remapper === true);
@@ -1708,6 +1709,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
   }
 
+  // A change kanata refused (R10-01): Undo when the head on screen is that change, or History, which marks the version on the keyboard,
+  // when it isn't (an undo, a first version, or a newer change since).
+  function undoRefused() {
+    if (revision.origin !== "undo" && revision.undoable && boardSync?.last?.revisionId === revision.id) stepRevision("undo");
+    else setHistoryOpen(true);
+  }
+
   // The toolbar's two buttons call the same route; the shortcut says why when the one it means is off.
   function stepRevision(direction: "undo" | "redo") {
     const allowed = direction === "undo" ? revision.origin !== "undo" && revision.undoable : revision.origin === "undo" && revision.undoable;
@@ -2025,7 +2033,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ReplaceForeignHost sync={sync} boardId={summary.boardId} />
             </>
           ) : (
-            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={(buildId) => onOpenRelease(undefined, buildId)} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
+            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={(buildId) => onOpenRelease(undefined, buildId)} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} onUndo={undoRefused} />
           )
         }
         ask={{ open: chatOpen, onToggle: toggleChat }}

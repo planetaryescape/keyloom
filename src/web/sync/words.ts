@@ -11,9 +11,10 @@ export type SyncTone = "success" | "busy" | "neutral" | "warning" | "error";
 /**
  * What a line's button does. `put_on` opens the put-on confirm (D-300), `open_release` the Build and flash dialog, where Docker's own
  * callout lives, `replace_foreign` the confirm that replaces a kanata config keyloom didn't write (R1-17), and `open_settings` the System
- * Settings pane a flash was refused for (R9-01, D-492).
+ * Settings pane a flash was refused for (R9-01, D-492). `undo_change` undoes the change kanata refused, or opens History when the page
+ * can't undo it (R10-01).
  */
-export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign" | "open_settings";
+export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign" | "open_settings" | "undo_change";
 
 /** `buildId`: the sync's failed build, which `open_release` opens the dialog on (R8-01). `pane`: the pane `open_settings` opens. */
 export type SyncAction = { id: SyncActionId; label: string; buildId?: string; pane?: SettingsPaneName };
@@ -200,6 +201,28 @@ const foreignFile = (board: BoardSync): boolean => board.last?.status === "faile
 const FOREIGN_FILE_DETAIL = "Someone else wrote or edited keyloom.kbd, keyloom's config file, so keyloom left it alone. Replace it to put this layout on, and keyloom keeps a copy of that file.";
 const REPLACE_FOREIGN = { id: "replace_foreign", label: "Replace it…" } as const;
 
+/**
+ * kanata didn't take the config keyloom wrote (R10-01). The engine stores it as `failure: "build"`, and kanata kept running the config it
+ * had, so the line never says a firmware build failed, never offers Build and flash (which the MacBook doesn't have), and never offers
+ * Apply now, which fails the same way. A cause in kanata's setup is fixed in the keyboard's status; any other refusal is answered by
+ * going back to a layout kanata took. An older server sends no code, which reads as a plain refusal.
+ */
+const kanataRefused = (board: BoardSync): boolean => board.remapper === true && board.last?.status === "failed" && board.last.failure === "build";
+const KANATA_REFUSED = "kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one.";
+const KANATA_UNWRITABLE = "keyloom can't write this layout for kanata, so your MacBook keyboard still runs the previous one.";
+const UNDO_CHANGE = { id: "undo_change", label: "Undo this change" } as const;
+const OPEN_STATUS = { id: "open_status", label: "Open keyboard status" } as const;
+const APPLY_NOW: SyncAction = { id: "sync_now", label: "Apply now" };
+
+/** What to say about a refused config, where to go, and what kanata or keyloom said (for Details). */
+export function kanataRefusal(board: BoardSync): { text: string; setup: boolean; reason: string | null } {
+  const code = board.last?.errorCode;
+  const reason = board.last?.error ? plain(board.last.error) : null;
+  if (code === "kanata_unwritable") return { text: `${KANATA_UNWRITABLE} Undo this change to go back to a layout kanata takes.`, setup: false, reason };
+  if (code === "kanata_setup") return { text: `${KANATA_REFUSED} The kanata on this Mac isn't the one keyloom writes for. Fix that in the steps below, then Apply now.`, setup: true, reason };
+  return { text: `${KANATA_REFUSED} Undo this change to go back to a layout kanata takes.`, setup: false, reason };
+}
+
 function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): SyncLine {
   switch (s.kind) {
     case "in_sync":
@@ -213,6 +236,14 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
         return {
           label, short: s.why === "remapping_off" ? "Off" : "Behind", detail: s.why === "remapping_off" ? `Your MacBook keyboard is typing plainly. ${FOREIGN_FILE_DETAIL}` : FOREIGN_FILE_DETAIL,
           ...(board.last?.error ? { more: board.last.error } : {}), tone: s.why === "failed" ? "error" : "neutral", action: REPLACE_FOREIGN,
+        };
+      }
+      if (s.why === "failed" && kanataRefused(board)) {
+        // A setup cause: the popover's checklist, right below this line, has the step that fixes it, and Apply now is for after it.
+        const refused = kanataRefusal(board);
+        return {
+          label, short: "Behind", detail: refused.text, ...(refused.reason === null ? {} : { more: refused.reason }), tone: "error",
+          ...(refused.setup ? { action: null, second: APPLY_NOW } : { action: UNDO_CHANGE }),
         };
       }
       const detail =
@@ -302,6 +333,14 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
   if (was === "syncing" && now.kind === "behind" && after.remapper === true && foreignFile(after)) {
     return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: REPLACE_FOREIGN };
   }
+  if (was === "syncing" && now.kind === "behind" && now.why === "failed" && kanataRefused(after)) {
+    const refused = kanataRefusal(after);
+    return {
+      kind: "error", message: `Couldn't put the change on your ${after.boardName}`,
+      detail: refused.setup ? `${KANATA_REFUSED} The kanata on this Mac isn't the one keyloom writes for. The keyboard's status says how to fix it.` : refused.text,
+      action: refused.setup ? OPEN_STATUS : UNDO_CHANGE,
+    };
+  }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
     if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: openFailedBuild(after) };
     // A stopped build has nothing to show in Build and flash; the pill offers Sync now.
@@ -324,9 +363,10 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
 
 /**
  * `open_status` opens the keyboard's status popover, where kanata's checklist is; `restore_keyboard` puts a removed keyboard back;
- * `restart_keyloom` opens the restart dialog for a failure no screen planned for (R9-05, D-540).
+ * `restart_keyloom` opens the restart dialog for a failure no screen planned for (R9-05, D-540); `undo_change` undoes a change kanata
+ * refused (R10-01).
  */
-export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard" | "restart_keyloom";
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard" | "restart_keyloom" | "undo_change";
 
 /**
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
