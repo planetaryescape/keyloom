@@ -1,6 +1,6 @@
 # Glove80 image executes a mutable installer expression
 
-Status: Candidate fix in PR #327. The scoped review passed at `146d29a9`. A new image and scratch firmware build passed at `a2d0bd9b`. Final integration, merge and release remain pending.
+Status: Fixed by merge commit `700cf2345b24bbdeaaae2e477512859868f560c0`, pending release. A new image and scratch firmware build passed at `a2d0bd9b`.
 
 Security review: SEC-A4, 13 November 2026. Reproduced at `8d09a1f58dab8ddfdb6e58457d0f988a440a62f9`. Relevant source is unchanged at `054d416922af8c65f70a6e993a0a1ae6da45667d`.
 
