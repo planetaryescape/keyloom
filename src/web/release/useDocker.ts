@@ -18,10 +18,10 @@ export type Docker = {
   /** The server's code for `problem`, such as `cancelled` for a password dialog the person closed (D-533). */
   problemCode: DockerStartCode | null;
   /**
-   * Fix Colima's files found a file with a second name, and no fix has completed since, so the page holds back Colima's `chown -R`
-   * command. Kept apart from `problemCode`, which the next press replaces (PR #300 CodeRabbit).
+   * The file with a second name that Fix Colima's files found, while no fix has completed since, so the page holds back Colima's `chown -R`
+   * command and names the file. Kept apart from `problemCode`, which the next press replaces (PR #300 CodeRabbit).
    */
-  linkedFile: boolean;
+  linkedFile: string | null;
   /** What this page last asked for, so a restart that failed isn't offered as the way on again (R3-04). */
   lastAction: DockerAction | null;
   /** Starts the engine; for `cli-missing` the server opens the app instead (R2-07). */
@@ -43,7 +43,7 @@ export function useDocker(token: string): Docker {
   const [problem, setProblem] = useState<string | null>(null);
   const [problemCode, setProblemCode] = useState<Docker["problemCode"]>(null);
   const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
-  const [linkedFile, setLinkedFile] = useState(false);
+  const [linkedFile, setLinkedFile] = useState<string | null>(null);
   const [asks, setAsks] = useState(0);
 
   useEffect(() => {

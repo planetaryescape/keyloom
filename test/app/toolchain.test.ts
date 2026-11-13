@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { COLIMA_LINKED_FILE_HELD, dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
+import { COLIMA_SCAN_INCOMPLETE_HELD, colimaLinkedFileHeld, dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
@@ -164,13 +164,17 @@ describe("a daemon that refuses this account (D-497)", () => {
   });
 
   test("doctor says why Colima's command is held back for a linked file, not what the missing command does (#300 third review)", () => {
-    const held = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, linkedFile: true });
-    expect(held).toBe(`Docker is running, but this account can't open its socket. ${COLIMA_LINKED_FILE_HELD}`);
+    const held = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, linkedFile: "/Users/someone/.colima/x" });
+    expect(held).toBe(`Docker is running, but this account can't open its socket. ${colimaLinkedFileHeld("/Users/someone/.colima/x")}`);
     expect(held).not.toContain("This stops that copy");
+    // A look that didn't finish holds the command back too, and says so (D-533).
+    const unread = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, scanIncomplete: true });
+    expect(unread).toBe(`Docker is running, but this account can't open its socket. ${COLIMA_SCAN_INCOMPLETE_HELD}`);
+    expect(unread).not.toContain("chown");
   });
 
   test("Colima, which has no app to reopen, gets the commands that give its socket back, for its own profile", async () => {
-    const colima = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "restart"] } }), env: {}, platform: "darwin" });
+    const colima = await dockerReadiness({ status: refused, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "restart"] } }), env: {}, platform: "darwin", colimaLinkedScan: async () => ({ kind: "none" }) });
     expect(colima).toMatchObject({
       ok: false, problem: "no-access", engine: "Colima", canStart: false,
       access: { command: 'sudo env HOME="$HOME" colima stop; sudo chown -R "$USER" ~/.colima && colima start' },

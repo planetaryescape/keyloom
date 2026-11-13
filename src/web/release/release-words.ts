@@ -53,11 +53,11 @@ export const plain = (text: string): string => text.replace(/`/g, "");
 
 /**
  * `lastAction` is what this page last asked for: a start, a restart (of the Mac app, or of Colima), or Fix Colima's files. `problemCode` is
- * the server's code for `problem`. `linkedFile` is set while a linked file found by Fix Colima's files may still be there (`linkedFileAfter`).
+ * the server's code for `problem`. `linkedFile` names the linked file Fix Colima's files found, while it may still be there (`linkedFileAfter`).
  */
 export function dockerView(
   readiness: DockerReadinessResponse | null, starting: boolean, problem: string | null, install: InstallState | null,
-  lastAction: "start" | "restart" | "fix-files" | null = null, problemCode: string | null = null, linkedFile = false,
+  lastAction: "start" | "restart" | "fix-files" | null = null, problemCode: string | null = null, linkedFile: string | null = null,
 ): DockerView {
   const down = readiness !== null && !readiness.ok ? readiness : null;
   if (install?.status === "running") return { kind: "installing", phase: install.phase ?? "installing", logTail: install.logTail };
@@ -82,8 +82,8 @@ export function dockerView(
   if (problem !== null && readiness?.ok !== true) {
     // While Docker still refuses, the fix's outcome stays beside it; once Docker needs something else, that readiness decides below.
     if (lastAction === "fix-files" && down?.problem === "no-access" && down.access !== null) {
-      const noCommand = linkedFile || down.access.linkedFile === true || problemCode === "linked_file";
-      return noAccess(down.access, fixOutcome(problem, problemCode, noCommand), noCommand);
+      const held = commandHeld(down.access, linkedFile);
+      return noAccess(down.access, fixOutcome(problem, problemCode, held), held !== null || problemCode === "linked_file");
     }
     if (restartApp !== null) return { kind: "start-failed", reason: plain(problem), retry: "restart", restartEngine: null, helpUrl: null };
     // A Colima that wouldn't start fails the same way again, so its way on is a restart from scratch; after that, its own guide (R3-04).
@@ -105,8 +105,8 @@ export function dockerView(
   if (down.problem === "cli-missing" && down.engine !== null) return { kind: "cli-missing", app: down.engine };
   if (down.problem === "no-access" && down.access !== null) {
     // The server holds the command back too, so a reload or another page says the same (PR #300 CodeRabbit).
-    const held = linkedFile || down.access.linkedFile === true;
-    return noAccess(down.access, { offered: true, note: held ? LINKED_FILE_HELD : null }, held);
+    const held = commandHeld(down.access, linkedFile);
+    return noAccess(down.access, { offered: true, note: held }, held !== null);
   }
   if (down.engine === null) return { kind: "other", reason: plain(down.reason), problem: down.problem };
   return { kind: "down", engine: down.engine, canStart: down.canStart, afterInstall: afterInstall(install), restartEngine };
@@ -114,7 +114,22 @@ export function dockerView(
 
 type Access = NonNullable<Extract<DockerReadinessResponse, { ok: false }>["access"]>;
 
-const LINKED_FILE_HELD = "A file in Colima's folder also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.";
+// The server's words for a held command (`toolchain.ts`, which the page can't import); a test keeps them equal.
+export const linkedFileHeld = (file: string): string =>
+  `A file in Colima's folder, ${file}, also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.`;
+export const SCAN_INCOMPLETE_HELD = "keyloom couldn't look through all of Colima's folder for a file that also has a name somewhere else, so it doesn't offer Colima's command, which would change such a file's owner too. Fix Colima's files checks every file itself and changes nothing if it finds one.";
+
+/**
+ * Why Colima's command is held back, or null when it isn't: a linked file this page's fix found, or one the server knows of, or a look
+ * that didn't finish. The command shows only after a look that read all of ~/.colima and found none (D-533).
+ */
+function commandHeld(access: Access, linkedFile: string | null): string | null {
+  const file = linkedFile ?? access.linkedFile ?? null;
+  if (file !== null) return linkedFileHeld(file);
+  return access.scanIncomplete === true ? SCAN_INCOMPLETE_HELD : null;
+}
+
+const withHeld = (note: string, held: string | null): string => (held === null ? note : `${note} ${held}`);
 
 function noAccess(access: Access, fix: { offered: boolean; note: string | null }, noCommand = false): Extract<DockerView, { kind: "no-access" }> {
   return { kind: "no-access", command: noCommand ? null : access.command, note: access.note, restartApp: access.restartApp, fix: access.fixFiles === true ? fix : null };
@@ -123,32 +138,34 @@ function noAccess(access: Access, fix: { offered: boolean; note: string | null }
 /**
  * How Fix Colima's files ended, in the page's words for the codes it acts on. A closed password dialog or a running build keeps the
  * button: the next press can work. Any other failure is shown and the button goes, because pressing it again would fail the same way;
- * the command to copy and Check again stay (D-533). With no command to copy (`noCommand`, after a linked file), the button stays, because
- * it is then the only way on, and it checks for the linked file again.
+ * the command to copy and Check again stay (D-533). With the command held back (`held` says why, after a linked file or a look that didn't
+ * finish), the button stays, because it is then the only way on and it checks for linked files itself, and the reason stays beside the
+ * latest outcome (PR #300 CodeRabbit).
  */
-function fixOutcome(problem: string, code: string | null, noCommand: boolean): { offered: boolean; note: string } {
+function fixOutcome(problem: string, code: string | null, held: string | null): { offered: boolean; note: string } {
   const reason = plain(problem).replace(/\.?$/, ".");
-  if (code === "cancelled") return { offered: true, note: "You closed the password dialog, so nothing changed." };
-  if (code === "build_running") return { offered: true, note: "A build or flash is running, and stopping Colima now would stop it. Fix Colima's files once it has finished." };
+  if (code === "cancelled") return { offered: true, note: withHeld("You closed the password dialog, so nothing changed.", held) };
+  if (code === "build_running") return { offered: true, note: withHeld("A build or flash is running, and stopping Colima now would stop it. Fix Colima's files once it has finished.", held) };
   // The file may belong to macOS, so the way on is to look at it first; the button checks again once it is dealt with.
   if (code === "linked_file") return { offered: true, note: `${reason} A file with two names can be one of macOS's own, so check what it is before anything changes its owner.` };
   // keyloom won't run Colima as root to stop that copy (D-533); Colima's command does, as the person's own step.
   if (code === "vm_running") {
-    return noCommand
-      ? { offered: true, note: `${reason} Stop that copy of Colima, then press Fix Colima's files again.` }
+    return held !== null
+      ? { offered: true, note: withHeld(`${reason} Stop that copy of Colima, then press Fix Colima's files again.`, held) }
       : { offered: false, note: `${reason} The command below stops that copy, gives the files back and starts Colima as you.` };
   }
-  return { offered: noCommand, note: plain(problem) };
+  return { offered: held !== null, note: withHeld(plain(problem), held) };
 }
 
 /**
- * Whether the page still holds back Colima's command after a fix ended (PR #300 CodeRabbit). A linked file sets it, and only a fix that
- * completed clears it: a cancel or a refusal that came after says nothing about the file, so its code can't bring the command back.
+ * The linked file the page still holds Colima's command back for after a fix ended, or null (PR #300 CodeRabbit). A linked file sets it,
+ * and only a fix that completed clears it: a cancel or a refusal that came after says nothing about the file, so its code can't bring the
+ * command back.
  */
-export function linkedFileAfter(before: boolean, action: "start" | "restart" | "fix-files", result: DockerStartResponse): boolean {
+export function linkedFileAfter(before: string | null, action: "start" | "restart" | "fix-files", result: DockerStartResponse): string | null {
   if (action !== "fix-files") return before;
-  if (result.ok) return false;
-  return before || result.code === "linked_file";
+  if (result.ok) return null;
+  return result.code === "linked_file" ? result.file ?? before ?? "~/.colima" : before;
 }
 
 /** How this page's own install ended, when Docker is there but stopped: its first start failed, or the person stopped it. */

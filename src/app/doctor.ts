@@ -25,7 +25,7 @@ import { attachedKeyboards, attachedZmkHalves, rawHidFinding } from "./keyboard.
 import { keyedProviders } from "./chat-model.ts";
 import { type CredentialOutcome, type KeyedProvider, verifyCredential } from "./credential-check.ts";
 import { credentials } from "./credentials.ts";
-import { COLIMA_LINKED_FILE_HELD, type DockerAccessFix, dockerReadiness } from "./toolchain.ts";
+import { COLIMA_SCAN_INCOMPLETE_HELD, type DockerAccessFix, colimaLinkedFileHeld, dockerReadiness } from "./toolchain.ts";
 
 /** `warn` marks a check that passed but needs attention; it doesn't fail `doctor`. */
 export type DoctorCheck = { name: string; ok: boolean; detail: string; warn?: boolean; deviceHelper?: HelperDiagnostic };
@@ -140,13 +140,13 @@ function unavailableOnWindows(name: string): DoctorCheck {
 }
 
 /**
- * `no-access` in the engine's own terms (#274): Colima's sudo copy, the Linux group, or the Mac app to restart. A command held back for a
- * linked file says why in place of its note, which describes the command (#300 third review).
+ * `no-access` in the engine's own terms (#274): Colima's sudo copy, the Linux group, or the Mac app to restart. A command held back, for a
+ * linked file or a look that didn't finish, says why in place of its note, which describes the command (#300 third review, D-533).
  */
 export function dockerAccessDetail(access: DockerAccessFix): string {
   const how = access.command === null ? "" : ` Run \`${access.command}\`.`;
   const restart = access.restartApp === null ? "" : ` \`keyloom doctor --restart-docker\` does that for you.`;
-  const note = access.linkedFile === true ? COLIMA_LINKED_FILE_HELD : access.note;
+  const note = access.linkedFile !== undefined ? colimaLinkedFileHeld(access.linkedFile) : access.scanIncomplete === true ? COLIMA_SCAN_INCOMPLETE_HELD : access.note;
   return `Docker is running, but this account can't open its socket.${how} ${note}${restart}`;
 }
 

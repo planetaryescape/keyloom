@@ -21,22 +21,53 @@ export type ColimaFilesPlan = {
   profile: string | null;
 };
 
-/** Why the root script stopped. It prints `keyloom colima fix stopped (<code>): <reason>` to stderr before it exits 1. */
+/**
+ * Why the root script stopped. It prints `keyloom colima fix stopped (<code>): <detail>` before it exits 1, and that record is all it
+ * prints: every other tool's errors go nowhere, because they can quote a file name, and a file name can hold a line break and a forged
+ * record (PR #300 CodeRabbit). The detail is the script's own fixed words, or, for `colima_linked_file`, the file's name as hex.
+ */
 export const COLIMA_FIX_FAILURE_CODES = ["colima_dir_missing", "colima_vm_running", "colima_linked_file", "colima_chown_failed"] as const;
 export type ColimaFixFailureCode = (typeof COLIMA_FIX_FAILURE_CODES)[number];
 
-/** The last failure line the root script printed, or null when it printed none. osascript wraps stderr in its "execution error" line. */
-export function colimaFixFailure(out: string): { code: ColimaFixFailureCode; reason: string } | null {
-  let found: { code: ColimaFixFailureCode; reason: string } | null = null;
-  for (const m of out.matchAll(/keyloom colima fix stopped \((\w+)\): (.+?)(?: \(\d+\))?$/gm)) {
+/** Said when another account's Colima VM runs from ~/.colima: by the check before the dialog, and by the root script's own. */
+export const COLIMA_VM_RUNNING = "A copy of Colima started as an administrator is still running, and keyloom won't run Colima as one to stop it, so nothing changed.";
+
+/** Each stop's words, kept here, so the page's sentence never comes from text the script printed. */
+const COLIMA_FIX_REASONS: Record<ColimaFixFailureCode, string> = {
+  colima_dir_missing: "Colima's folder isn't a folder keyloom can change, or it changed while keyloom worked, so nothing changed.",
+  colima_vm_running: COLIMA_VM_RUNNING,
+  colima_linked_file: "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back",
+  colima_chown_failed: "macOS didn't let keyloom give all of Colima's files back to you.",
+};
+
+/**
+ * The failure record the root script printed, or null when it printed none. osascript wraps stderr in its "execution error" line. The
+ * reason is keyloom's own sentence for the code; for a linked file, `file` is its full path, decoded from hex and shown with any control
+ * character escaped. `colimaHome` is the folder the script ran in, which the file's name is relative to.
+ */
+export function colimaFixFailure(out: string, colimaHome = "~/.colima"): { code: ColimaFixFailureCode; reason: string; file?: string } | null {
+  let found: { code: ColimaFixFailureCode; reason: string; file?: string } | null = null;
+  for (const m of out.matchAll(/keyloom colima fix stopped \((\w+)\): ([^\r\n]*)/g)) {
     const code = COLIMA_FIX_FAILURE_CODES.find((c) => c === m[1]);
-    if (code !== undefined && m[2] !== undefined) found = { code, reason: m[2].trim() };
+    if (code === undefined) continue;
+    if (code !== "colima_linked_file") {
+      found = { code, reason: COLIMA_FIX_REASONS[code] };
+      continue;
+    }
+    const hex = /^([0-9a-f]{2})+/.exec(m[2] ?? "")?.[0];
+    const file = printable(`${colimaHome}/${hex === undefined ? "" : Buffer.from(hex, "hex").toString("utf8")}`);
+    found = { code, reason: `${COLIMA_FIX_REASONS[code]}: ${file}`, file };
   }
   return found;
 }
 
-/** Said when another account's Colima VM runs from ~/.colima: by the check before the dialog, and by the root script's own. */
-export const COLIMA_VM_RUNNING = "A copy of Colima started as an administrator is still running, and keyloom won't run Colima as one to stop it, so nothing changed.";
+/** A path as text that can't start a new line or move the cursor: each control character is written as its escape. */
+export function printable(path: string): string {
+  return path.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => {
+    const code = c.charCodeAt(0);
+    return code === 0x0a ? "\\n" : code === 0x0d ? "\\r" : code === 0x09 ? "\\t" : `\\u${code.toString(16).padStart(4, "0")}`;
+  });
+}
 
 // Colima's own profile names: letters, digits, dot, dash and underscore. Anything else never reaches the script.
 const PROFILE = /^[A-Za-z0-9._-]+$/;
@@ -137,6 +168,24 @@ export function parseAccountHome(line: string, uid: number): string | null {
 
 /** The plan for this Colima, or the sentence that says why keyloom can't fix it from here. Checked again inside the root script. */
 export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string; code?: "colima_vm_running" } {
+  const target = colimaFilesTarget(engine, deps);
+  if (!target.ok) return target;
+  // The root script's own check, made here without root, so a password isn't asked for a fix that would stop at it (PR #300
+  // CodeRabbit). The script still checks, because what runs can change while the dialog is open. A pid file keyloom can't read, or
+  // one without a number, is passed over here as there.
+  for (const pid of deps.hostAgentPids(target.plan.colimaHome)) {
+    if (!/^\d+$/.test(pid)) continue;
+    const proc = deps.processOf(Number(pid));
+    if (proc !== null && proc.uid !== deps.uid && proc.comm.endsWith("limactl")) return { ok: false, reason: COLIMA_VM_RUNNING, code: "colima_vm_running" };
+  }
+  return target;
+}
+
+/**
+ * The folder and account the fix is for, checked: the plan without its check for a running VM. The look for a linked file uses this
+ * alone, because a VM that blocks the fix doesn't stop the command to copy from changing a linked file (PR #300 CodeRabbit).
+ */
+function colimaFilesTarget(engine: DockerEngine, deps: PlanDeps): { ok: true; plan: ColimaFilesPlan } | { ok: false; reason: string } {
   if (engine.command[0] !== "colima") return { ok: false, reason: `${engine.name} isn't Colima, so keyloom can't fix its files.` };
   const at = engine.command.indexOf("--profile");
   const profile = at < 0 ? null : engine.command[at + 1] ?? null;
@@ -152,14 +201,6 @@ export function colimaFilesPlan(engine: DockerEngine, deps: PlanDeps): { ok: tru
   const kind = deps.kind(colimaHome);
   if (kind !== "dir") {
     return { ok: false, reason: kind === "symlink" ? "~/.colima is a link to another folder, so keyloom won't change its files as an administrator." : "keyloom can't find Colima's folder, ~/.colima, so there are no files to give back." };
-  }
-  // The root script's own check, made here without root, so a password isn't asked for a fix that would stop at it (PR #300
-  // CodeRabbit). The script still checks, because what runs can change while the dialog is open. A pid file keyloom can't read, or
-  // one without a number, is passed over here as there.
-  for (const pid of deps.hostAgentPids(colimaHome)) {
-    if (!/^\d+$/.test(pid)) continue;
-    const proc = deps.processOf(Number(pid));
-    if (proc !== null && proc.uid !== deps.uid && proc.comm.endsWith("limactl")) return { ok: false, reason: COLIMA_VM_RUNNING, code: "colima_vm_running" };
   }
   return { ok: true, plan: { colimaHome, uid: deps.uid, profile } };
 }
@@ -205,6 +246,8 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
   const root = String(tools.root ?? 0);
   if (!/^\d+$/.test(root)) throw new Error("root's uid must be a number");
   const find = "/usr/bin/find -P . -xdev";
+  // Each find's last word: no step, and nothing a step starts, holds the record channel (fd 3) open after the script ends.
+  const closed = "3>&-";
   // `.`, the folder a step runs from, is one the person can't rename or link in: root's, with no group or other write and no ACL
   // (`ls -lde` prints one line more for each ACL entry; the pattern matches `stat`'s symbolic mode). `.` is the folder find is in, which no
   // name change can move, and the check is in the same shell as the change, so nothing can change `.` between. `$s` keeps its ID.
@@ -239,7 +282,9 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
     `exec ${chown} -h ${uid} "./$1"`,
   ].join("; ");
   return [
-    "fail() { echo \"keyloom colima fix stopped ($1): $2\" >&2; exit 1; }",
+    // The failure record is all the script prints: other tools' errors can quote a file name, which can hold a forged record.
+    "exec 3>&2 2>/dev/null",
+    "fail() { printf 'keyloom colima fix stopped (%s): %s\\n' \"$1\" \"$2\" >&3; exit 1; }",
     "PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH",
     `dir=${shellQuote(plan.colimaHome)}`,
     `if [ -L "$dir" ] || [ ! -d "$dir" ]; then fail colima_dir_missing "Colima's folder isn't a folder keyloom can change, so nothing changed."; fi`,
@@ -251,35 +296,48 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
     `  owner=$(/bin/ps -o uid= -p "$pid" | /usr/bin/tr -d ' '); [ -n "$owner" ] && [ "$owner" != ${uid} ] || continue`,
     `  case $(/bin/ps -o comm= -p "$pid") in *limactl) fail colima_vm_running "${COLIMA_VM_RUNNING}";; esac`,
     `done`,
-    `linked=$(${find} ! -type d -links +1 ! -user ${uid} -print | /usr/bin/head -n 1)`,
-    `if [ -n "$linked" ]; then fail colima_linked_file "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: $dir/\${linked#./}"; fi`,
+    // The name goes out as hex, so no name, line breaks and all, can read as a record of its own.
+    `linked=$(${find} ! -type d -links +1 ! -user ${uid} -print -quit ${closed})`,
+    `if [ -n "$linked" ]; then fail colima_linked_file "$(/usr/bin/printf %s "\${linked#./}" | /usr/bin/od -An -v -tx1 | /usr/bin/tr -d ' \\n')"; fi`,
     // Each token is " dev:inode:mode ", so a lookup can't match part of another; nothing but digits and colons comes from stat.
     // %Mp%Lp is the whole mode, setuid, setgid and sticky bits included, which a bare `chmod 777` would clear.
-    `KEYLOOM_MODES=" $(${find} -type d -perm +022 -exec /usr/bin/stat -f ' %d:%i:%Mp%Lp ' {} +) "`,
+    `KEYLOOM_MODES=" $(${find} -type d -perm +022 -exec /usr/bin/stat -f ' %d:%i:%Mp%Lp ' {} + ${closed}) "`,
     // Step 1. A folder's ID is recorded once it is root's; a folder root can't fully take is pruned, so nothing below it is touched.
-    `KEYLOOM_LOCKED=" $(${find} -type d \\( -execdir /bin/sh -c ${shellQuote(lock)} sh {} \\; -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\)) "`,
+    `KEYLOOM_LOCKED=" $(${find} -type d \\( -execdir /bin/sh -c ${shellQuote(lock)} sh {} \\; -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\) ${closed}) "`,
     `export KEYLOOM_MODES KEYLOOM_LOCKED`,
     `gave=yes`,
     // Step 2. The first file whose folder fails the check, or whose change fails, ends it: -quit stops find, so nothing more changes.
-    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) case $(${find} ! -type d -links 1 ! -user ${uid} \\( -execdir /bin/sh -c ${shellQuote(give)} sh {} \\; -o -exec /usr/bin/printf ' failed ' \\; -quit \\)) in *failed*) gave=no;; esac;; esac`,
-    `back=$(${find} -depth -type d ! -execdir /bin/sh -c ${shellQuote(giveBack)} sh {} \\; -exec /usr/bin/printf ' failed ' \\;)`,
+    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) case $(${find} ! -type d -links 1 ! -user ${uid} \\( -execdir /bin/sh -c ${shellQuote(give)} sh {} \\; -o -exec /usr/bin/printf ' failed ' \\; -quit \\) ${closed}) in *failed*) gave=no;; esac;; esac`,
+    `back=$(${find} -depth -type d ! -execdir /bin/sh -c ${shellQuote(giveBack)} sh {} \\; -exec /usr/bin/printf ' failed ' \\; ${closed})`,
     `[ "$gave" = yes ] && [ -z "$back" ] || fail colima_chown_failed "macOS didn't let keyloom give all of Colima's files back to you."`,
   ].join("\n");
 }
 
 /**
- * Whether ~/.colima holds a file that isn't the person's and has a second name, looked for as the person, without root (PR #300
- * CodeRabbit): Colima's command to copy runs `chown -R`, which would change that file wherever its other name is. A folder the person
- * can't read hides what is in it, so false means "none seen", not "none". Under `bun test` it reports none and reads nothing, so no
- * test reads the machine's own ~/.colima; `deps` lets a test point it at a temporary one.
+ * What the person's own look in ~/.colima found: a file that isn't the person's and has a second name, a look that read every folder and
+ * found none, or a look that didn't finish. Colima's command to copy runs `chown -R`, which would change that file wherever its other name
+ * is, so the page shows the command only after `none` (D-533).
  */
-export async function colimaLinkedFileSeen(engine: DockerEngine, deps: () => PlanDeps = realPlanDeps): Promise<boolean> {
-  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") return false;
-  const planned = colimaFilesPlan(engine, deps());
-  if (!planned.ok) return false;
-  const { colimaHome, uid } = planned.plan;
-  const r = await capture(["/usr/bin/find", "-P", colimaHome, "-xdev", "!", "-type", "d", "-links", "+1", "!", "-user", String(uid), "-print", "-quit"], { timeoutMs: 10_000 });
-  return r.stdout.trim() !== "";
+export type ColimaLinkedScan = { kind: "found"; file: string } | { kind: "none" } | { kind: "incomplete" };
+
+/**
+ * Looks for a linked file as the person, without root (PR #300 CodeRabbit). It checks the same folder and account as the fix, but not for
+ * a running VM: that blocks the fix, not the command to copy. A folder the person can't read makes `find` print an error and exit non-zero,
+ * and then the look is `incomplete`, not `none`. Under `bun test` it reads nothing and says so; `deps` lets a test point it at a
+ * temporary folder.
+ */
+export async function colimaLinkedFileSeen(engine: DockerEngine, deps: () => PlanDeps = realPlanDeps): Promise<ColimaLinkedScan> {
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") return { kind: "incomplete" };
+  const target = colimaFilesTarget(engine, deps());
+  if (!target.ok) return { kind: "incomplete" };
+  const { colimaHome, uid } = target.plan;
+  try {
+    const r = await capture(["/usr/bin/find", "-P", colimaHome, "-xdev", "!", "-type", "d", "-links", "+1", "!", "-user", String(uid), "-print", "-quit"], { timeoutMs: 10_000 });
+    if (r.stdout !== "") return { kind: "found", file: printable(r.stdout) };
+    return r.exitCode === 0 && !r.timedOut && r.stderr.trim() === "" ? { kind: "none" } : { kind: "incomplete" };
+  } catch {
+    return { kind: "incomplete" };
+  }
 }
 
 /** The password dialog stays open until the person answers it; a dialog nobody answers mustn't hold Docker's lock for good. */
@@ -296,14 +354,15 @@ export const adminRunner: Runner = async (cmd) => {
   return { code: r.exitCode ?? 1, out: `${r.stdout}\n${r.stderr}` };
 };
 
-export type ColimaRootResult = { ok: true } | { ok: false; code: "cancelled" | ColimaFixFailureCode | "failed"; reason: string };
+/** `file` names the linked file, for `colima_linked_file`. */
+export type ColimaRootResult = { ok: true } | { ok: false; code: "cancelled" | ColimaFixFailureCode | "failed"; reason: string; file?: string };
 
 /** Asks for the administrator password and runs the root half. */
 export async function runColimaRootSteps(plan: ColimaFilesPlan, run: Runner): Promise<ColimaRootResult> {
   const r = await run(adminCommand(colimaFilesScript(plan), COLIMA_FILES_PROMPT));
   if (r.code === 0) return { ok: true };
   // The script's own stop first: its reason can name a file, and a file name can hold anything, "-128" included (#300 review).
-  const failure = colimaFixFailure(r.out);
+  const failure = colimaFixFailure(r.out, plan.colimaHome);
   if (failure !== null) return { ok: false, ...failure };
   // osascript reports a closed password dialog as error -128, at the end of its "execution error: User canceled. (-128)" line. The
   // number, not the words, because macOS words that line in the person's language.

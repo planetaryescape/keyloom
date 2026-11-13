@@ -44,8 +44,12 @@ export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
     // How to get this account access when the problem is `no-access`: a command to copy (Linux) or null, and a note; null otherwise.
     // `restartApp` is the Mac app keyloom can quit and reopen to give the socket back (R2-07), or null.
     // `fixFiles`: keyloom can run Colima's command itself (POST /api/system/docker/fix-colima-files, D-533). Optional for older servers.
-    // `linkedFile`: a file in ~/.colima has a second name, so `command`, whose `chown -R` would change it, is null (PR #300 CodeRabbit).
-    access: z.object({ command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable(), fixFiles: z.boolean().optional(), linkedFile: z.boolean().optional() }).nullable(),
+    // `linkedFile`: the full path of a file in ~/.colima with a second name, so `command`, whose `chown -R` would change it, is null (PR #300
+    // CodeRabbit). `scanIncomplete`: keyloom's look for such a file didn't finish, so `command` is null too (D-533).
+    access: z.object({
+      command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable(), fixFiles: z.boolean().optional(),
+      linkedFile: z.string().min(1).optional(), scanIncomplete: z.boolean().optional(),
+    }).nullable(),
     // The engine keyloom can stop and start from scratch (POST /api/system/docker/restart) when a start fails: Colima (R3-04). Optional
     // so an older server's answer still reads.
     restartEngine: z.string().min(1).nullable().optional(),
@@ -66,8 +70,11 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
   // `cancelled`: the person closed Fix Colima's files' password dialog (D-533), so nothing changed and the button stays. `linked_file`: a
   // file in ~/.colima has a second name elsewhere, so nothing changed owner, and the page doesn't offer the `chown -R` command either.
   // `vm_running`: another account's Colima VM runs from ~/.colima, usually one started with sudo, so nothing changed; most often found
-  // before the password dialog opens.
-  z.object({ ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(), code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file", "vm_running"]).optional() }),
+  // before the password dialog opens. `file`: the linked file's full path, with `linked_file`.
+  z.object({
+    ok: z.literal(false), reason: z.string().min(1), engine: z.string().nullable(),
+    code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file", "vm_running"]).optional(), file: z.string().min(1).optional(),
+  }),
 ]);
 
 export const DockerRestartRequestSchema = z.union([
