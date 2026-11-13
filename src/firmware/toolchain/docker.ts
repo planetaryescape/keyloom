@@ -65,7 +65,8 @@ export async function dockerFreeSpace(images: readonly string[], timeoutMs = 30_
 }
 
 /** What freeing Docker's build cache did: `freed` is Docker's own total ("1.2GB", "0B"), or null when it printed none (R8-04). */
-export type BuildCachePrune = { ok: true; freed: string | null } | { ok: false; reason: string };
+/** `docker_unavailable`: the daemon didn't answer, so nothing was freed and Build again, which starts Docker, is the way on (R9-07). */
+export type BuildCachePrune = { ok: true; freed: string | null } | { ok: false; reason: string; code?: "docker_unavailable" };
 
 /**
  * Frees Docker's build cache with `docker builder prune -f`. That is BuildKit's cache only: no image, container or volume is removed, so
@@ -75,9 +76,18 @@ export async function pruneBuildCache(timeoutMs = 5 * 60_000): Promise<BuildCach
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to prune Docker's build cache in a test");
   const r = await capture(["docker", "builder", "prune", "-f"], { timeoutMs });
   if (r.exitCode === 0) return { ok: true, freed: pruneTotal(r.stdout) };
-  const why = lastLine(r) || (r.timedOut ? "it didn't finish in time" : `it exited with code ${r.exitCode}`);
-  return { ok: false, reason: `Docker couldn't free its build cache: ${why.replace(/\.$/, "")}.` };
+  return pruneFailure(r);
 }
+
+/** A prune that exited non-zero. A daemon that doesn't answer is its own code, because starting Docker is the fix, not making room. */
+export function pruneFailure(r: { stdout: string; stderr: string; exitCode: number | null; timedOut?: boolean }): Extract<BuildCachePrune, { ok: false }> {
+  const why = lastLine(r) || (r.timedOut === true ? "it didn't finish in time" : `it exited with code ${r.exitCode}`);
+  const reason = `Docker couldn't free its build cache: ${why.replace(/\.$/, "")}.`;
+  return DAEMON_DOWN.test(`${r.stderr}\n${r.stdout}`) ? { ok: false, reason, code: "docker_unavailable" } : { ok: false, reason };
+}
+
+/** What the docker client prints when no daemon answers its socket. */
+const DAEMON_DOWN = /Cannot connect to the Docker daemon|Is the docker daemon running/i;
 
 /** The total `docker builder prune` prints: "Total:\t1.2GB" from BuildKit, or "Total reclaimed space: 1.2GB" from older clients. */
 export function pruneTotal(output: string): string | null {

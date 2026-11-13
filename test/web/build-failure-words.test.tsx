@@ -132,6 +132,44 @@ describe("the failed build step", () => {
   });
 });
 
+// R9-07: what the prune ended in names the engine's own settings, and a request that failed keeps its code.
+describe("Free Docker's build cache: the outcomes", () => {
+  const error = "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.";
+  test("an empty cache on Docker Desktop offers Open Docker Desktop, where the disk limit is", () => {
+    const desktop = cachePruneOutcome({ ok: true, freed: "0B" }, "Docker Desktop");
+    expect(desktop.again).toBe(false);
+    expect(desktop.openApp).toBe("docker_desktop");
+    expect(desktop.text).toContain("Docker Desktop's Settings, under Resources");
+    const html = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: desktop } });
+    expect(html).toContain("Open Docker Desktop");
+    expect(html).toContain(">Build again<");
+    // Colima's limit is set when it starts, which keyloom doesn't do for the person; the words stay general and no app button shows.
+    const colima = cachePruneOutcome({ ok: true, freed: "0B" }, "Colima");
+    expect(colima.openApp).toBeUndefined();
+    expect(failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: colima } })).not.toContain("Open Docker Desktop");
+    expect(cachePruneOutcome({ ok: false, reason: "Docker couldn't free its build cache: x." }, "Docker Desktop").openApp).toBe("docker_desktop");
+  });
+  test("a request that failed with an exception keeps the prune button and offers the log, not \"make room another way\"", () => {
+    const internal = cachePruneOutcome({ ok: false, failure: { message: "keyloom hit a problem it didn't expect. The details are in keyloom's log.", code: "internal" } });
+    expect(internal).toMatchObject({ again: true, text: "keyloom hit a problem it didn't expect. The details are in keyloom's log." });
+    expect(internal.text).not.toContain("Make room");
+    const html = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: internal } });
+    expect(html).toContain("Free Docker&#x27;s build cache");
+    // Show keyloom's log renders once it has read where the log is, which a static render doesn't reach; UnexpectedWayOut adds it for `internal`.
+    expect(html).toContain("Restart keyloom");
+  });
+  test("an answer this page can't read drops the prune button for Restart keyloom", () => {
+    const unreadable = cachePruneOutcome({ ok: false, failure: { message: "keyloom sent an answer this page can't read.", code: "unreadable" } });
+    expect(unreadable.again).toBe(false);
+    const html = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: unreadable } });
+    expect(html).not.toContain("Free Docker&#x27;s build cache<");
+    expect(html).toContain("Restart keyloom");
+  });
+  test("a route's own refusal is said in its words with the ways to make room", () => {
+    expect(cachePruneOutcome({ ok: false, failure: { message: "This keyloom can't free Docker's build cache.", code: "prune_unavailable" } })).toMatchObject({ again: false, text: expect.stringContaining("Make room in Docker's disk another way") });
+  });
+});
+
 // R8-04: a full Docker disk fills again on the next build, so the step frees Docker's build cache first, then builds again.
 describe("a build that ran out of Docker's disk", () => {
   const error = "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.";
@@ -161,6 +199,8 @@ describe("a build that ran out of Docker's disk", () => {
     expect(cachePruneOutcome({ ok: false, unreachable: true })).toEqual({ again: true, text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again." });
     // Docker's own failure would fail again, so the button goes and Build again stays.
     expect(cachePruneOutcome({ ok: false, reason: "Docker couldn't free its build cache: `daemon` error" })).toMatchObject({ again: false, text: expect.not.stringContaining("`") });
+    // R9-07: a stopped daemon only needs starting, and Build again starts it.
+    expect(cachePruneOutcome({ ok: false, code: "docker_unavailable", reason: "Docker couldn't free its build cache: Cannot connect to the Docker daemon." })).toEqual({ again: false, text: "Docker isn't running, so its build cache wasn't freed. Build again starts Docker." });
     const refused = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: cachePruneOutcome({ ok: false, code: "build_running", reason: "A build runs." }) } });
     expect(refused).toContain("Free Docker&#x27;s build cache");
     expect(refused).toContain("A build runs.");

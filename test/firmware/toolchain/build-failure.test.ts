@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, firmwareOverflow, probeFailure, tooLargeMessage } from "../../../src/firmware/toolchain/build-failure.ts";
-import { pruneTotal } from "../../../src/firmware/toolchain/docker.ts";
+import { pruneFailure, pruneTotal } from "../../../src/firmware/toolchain/docker.ts";
 import { generatedSourceError } from "../../../src/firmware/qmk/locate-error.ts";
 
 const log = async (name: string) => (await Bun.file(join(import.meta.dir, "../../fixtures/build-logs", name)).text()).split("\n");
@@ -65,4 +65,12 @@ test("Docker Desktop's refused mount is folder_not_shared, and the CLI's words n
   expect(failure.code).toBe("folder_not_shared");
   expect(failure.message).toBe("Docker Desktop doesn't share /c. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.");
   expect(probeFailure(125, ["docker: Error response from daemon: mounts denied: /c"], "/c", "x").code).toBe("folder_not_shared");
+});
+
+test("a prune Docker's daemon didn't answer is docker_unavailable, so the page says Build again starts it (R9-07)", () => {
+  const down = pruneFailure({ stdout: "", stderr: "Cannot connect to the Docker daemon at unix:///Users/x/.colima/default/docker.sock. Is the docker daemon running?\n", exitCode: 1 });
+  expect(down).toMatchObject({ ok: false, code: "docker_unavailable" });
+  expect(down.reason).toStartWith("Docker couldn't free its build cache: ");
+  expect(pruneFailure({ stdout: "", stderr: "Error response from daemon: something else", exitCode: 1 })).toEqual({ ok: false, reason: "Docker couldn't free its build cache: Error response from daemon: something else." });
+  expect(pruneFailure({ stdout: "", stderr: "", exitCode: null, timedOut: true }).reason).toBe("Docker couldn't free its build cache: it didn't finish in time.");
 });

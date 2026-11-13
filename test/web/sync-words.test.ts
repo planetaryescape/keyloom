@@ -422,7 +422,7 @@ describe("refusalNotice", () => {
   });
 
   test("a failure no screen planned for offers Restart keyloom; a route's own refusal doesn't (R9-05)", () => {
-    const restart = { id: "restart_keyloom", label: "Restart keyloom" };
+    const restart = { id: "restart_keyloom" as const, label: "Restart keyloom" };
     expect(refusalNotice("internal", "keyloom hit a problem it didn't expect. The details are in keyloom's log.").action).toEqual(restart);
     expect(refusalNotice("unreadable", "x").action).toEqual(restart);
     expect(refusalNotice("not_found", "x", true).action).toEqual(restart);
