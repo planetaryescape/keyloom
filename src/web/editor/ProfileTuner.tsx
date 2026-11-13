@@ -10,7 +10,9 @@ import {
   OPTIONS, optionsFromValues, tuningOps, tuningSummary, usersOf, valuesFromProfile, type HoldTap, type Scope, type Values,
 } from "./tuning.ts";
 import { useOpsCheck } from "./useCheck.ts";
+import { ApplyProblem, applyProblem, applyStopped } from "./ApplyProblem.tsx";
 import { Validation } from "./Validation.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
 import "./editor.css";
 
 interface Props {
@@ -41,7 +43,8 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
   const [scope, setScope] = useState<Scope>(shared.length > 1 ? "key" : "profile");
   const [reason, setReason] = useState("");
   const [applying, setApplying] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // A failed Apply keeps its code, so the card offers Restart keyloom and turns Apply off where pressing it fails the same way (R10-07).
+  const [problem, setProblem] = useState<PageFailure | null>(null);
 
   const built = useMemo(() => optionsFromValues(profile, values, layout), [profile, values, layout]);
   const ops = useMemo(
@@ -50,7 +53,7 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
   );
   const check = useOpsCheck({ token, layoutRef, revisionId, ops });
   const result = check.state.status === "done" ? check.state.result : null;
-  const canApply = ops !== null && result !== null && result.ok && !applying;
+  const canApply = ops !== null && result !== null && result.ok && !applying && !applyStopped(problem);
   const specs = OPTIONS[profile.firmware];
   // The key by what it prints, never its number (D-279).
   const keyWords = keyIn(layout, slot).replace(/ on .*$/, "");
@@ -65,11 +68,11 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
       await onApplied(summary);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) onStale();
-      else if (error instanceof ApiError) {
-        if (error.validation !== undefined) check.show(error.validation);
+      else {
+        if (error instanceof ApiError && error.validation !== undefined) check.show(error.validation);
         // The server's message quotes the validator's own text; the problems are listed in words above.
-        setProblem(error.validation === undefined ? error.message : "This change has problems, listed above. Nothing was saved.");
-      } else setProblem("The change could not be applied.");
+        setProblem(applyProblem(error, "This change has problems, listed above. Nothing was saved."));
+      }
     } finally {
       setApplying(false);
     }
@@ -153,7 +156,9 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
       </fieldset>
 
       <footer className="tuner-foot">
-        <p className="muted" aria-live="polite">{problem ?? (ops === null ? "Nothing is saved until you apply." : tuningSummary(layout, slot, profile, built.ok ? built.options : profile.options, scope))}</p>
+        {problem !== null ? <ApplyProblem token={token} failure={problem} className="apply-problem" /> : (
+          <p className="muted" aria-live="polite">{ops === null ? "Nothing is saved until you apply." : tuningSummary(layout, slot, profile, built.ok ? built.options : profile.options, scope)}</p>
+        )}
         <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>
           {applying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
           {applying ? "Applying" : "Apply change"}

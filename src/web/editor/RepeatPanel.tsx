@@ -3,10 +3,9 @@ import { useMemo, useState } from "react";
 import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
-import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
-import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { bindingSummary } from "./draft.ts";
-import { LayoutGoneWayOut, useLayoutGoneWords } from "./LayoutGone.tsx";
+import { ApplyProblem, applyStopped } from "./ApplyProblem.tsx";
 import { planRepeat, repeatMeaning, repeatSummary, type LastChange } from "./repeat-plan.ts";
 import { useCheckOps } from "./useCheckOps.ts";
 import { Validation } from "./Validation.tsx";
@@ -36,14 +35,12 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
   // The failure keeps its code (R9-05): Apply is its Try again, and an answer that fails the same way every time turns Apply off, with
   // Restart keyloom and the log beside the sentence.
   const [applyError, setApplyError] = useState<PageFailure | null>(null);
-  const goneWords = useLayoutGoneWords();
   const layerName = layout.layers.find((l) => l.id === layerId)?.name ?? layerId;
 
   const result = state.status === "done" ? state.result : null;
   const warnings = result?.warnings.length ?? 0;
-  // The route's own not_found: the layout was deleted in another window, so no Apply can land (PR #310 CodeRabbit, as checkFailed does).
-  const layoutGone = applyError?.code === "not_found" && applyError.generic !== true;
-  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !failsAgain(applyError) && !layoutGone;
+  // The route's own not_found is a layout deleted in another window, so no Apply can land (PR #310 CodeRabbit, as checkFailed does).
+  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !applyStopped(applyError);
   const idleNote = plan.transform === null ? "The last change didn't change anything, so there is nothing to repeat." : "Every selected key already matches, or can't take this change.";
 
   async function apply() {
@@ -108,12 +105,7 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
 
       <footer className="editor-foot">
         <div className="editor-foot-note" aria-live="polite">
-          {layoutGone ? (
-            <div className="blocked" role="alert">
-              <p>{goneWords}</p>
-              <div className="unexpected-actions"><LayoutGoneWayOut token={token} /></div>
-            </div>
-          ) : applyError !== null ? <FailureNote token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
+          {applyError !== null ? <ApplyProblem token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
         </div>
         <button type="button" className="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>

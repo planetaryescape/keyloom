@@ -8,7 +8,9 @@ import type { LayerLighting, Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { useOpsCheck } from "../editor/useCheck.ts";
+import { ApplyProblem, applyProblem, applyStopped } from "../editor/ApplyProblem.tsx";
 import { Validation } from "../editor/Validation.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
 import type { Pinned } from "../keyboard/colourway.ts";
 import { ColourwaySetting } from "./ColourwaySetting.tsx";
 import { LightingSection } from "./LightingSection.tsx";
@@ -51,7 +53,8 @@ export function SettingsPane(props: Props) {
   const [filter, setFilter] = useState("");
   const [staged, setStaged] = useState<ReadonlyMap<string, number | boolean>>(new Map());
   const [applying, setApplying] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // A failed Apply keeps its code, so the pane offers Restart keyloom and turns Apply off where pressing it fails the same way (R10-07).
+  const [problem, setProblem] = useState<PageFailure | null>(null);
 
   const specs = useMemo(() => optionsFor(board), [board]);
   // A forced setting shows what the firmware gets, even when an earlier staged edit disagrees (a Caps Word key added after staging).
@@ -66,7 +69,7 @@ export function SettingsPane(props: Props) {
   const summary = [...(change === null ? [] : [change.summary.replace(/^Settings: /, "")]), ...lightingWords(layout, lighting)].join("; ");
   const check = useOpsCheck({ token, layoutRef, revisionId, ops });
   const result = check.state.status === "done" ? check.state.result : null;
-  const canApply = ops !== null && result !== null && result.ok && !applying;
+  const canApply = ops !== null && result !== null && result.ok && !applying && !applyStopped(problem);
 
   const needle = filter.trim().toLowerCase();
   const matches = (spec: OptionSpec) => needle === "" || `${spec.label} ${spec.words} ${spec.group} ${advanced ? spec.key : ""}`.toLowerCase().includes(needle);
@@ -103,10 +106,10 @@ export function SettingsPane(props: Props) {
       await onApplied(`Settings: ${summary}`);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) onStale();
-      else if (error instanceof ApiError) {
-        if (error.validation !== undefined) check.show(error.validation);
-        setProblem(error.validation === undefined ? error.message : "This change has problems, listed below. Nothing was saved.");
-      } else setProblem("The change could not be applied.");
+      else {
+        if (error instanceof ApiError && error.validation !== undefined) check.show(error.validation);
+        setProblem(applyProblem(error, "This change has problems, listed below. Nothing was saved."));
+      }
     } finally {
       setApplying(false);
     }
@@ -169,7 +172,7 @@ export function SettingsPane(props: Props) {
       {/* Apply appears only once something changed, and says the change in words (23#shared-patterns). */}
       {ops === null ? null : (
         <footer className="settings-foot">
-          <p className="settings-summary" aria-live="polite">{problem ?? summary}</p>
+          {problem === null ? <p className="settings-summary" aria-live="polite">{summary}</p> : <ApplyProblem token={token} failure={problem} className="apply-problem" />}
           <Validation token={token} layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} />
           <div className="settings-actions">
             <button type="button" className="sheet-action" disabled={applying} onClick={reset}>Undo these</button>
