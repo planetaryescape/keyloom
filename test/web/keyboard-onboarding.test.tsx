@@ -111,7 +111,24 @@ describe("R7-13: the MacBook's onboarding words", () => {
     expect(welcomeLead("kanata")).not.toMatch(/Connect|flash/);
     expect(welcomeLead("kanata")).toContain("kanata");
     expect(welcomeLead(null)).not.toContain("flash");
-    expect(welcomeLead("zmk")).toBe("Connect a keyboard or choose it below. Setup never flashes it.");
+    expect(welcomeLead("zmk")).toBe("Setup never flashes your keyboard.");
+  });
+
+  // R10-04: while a keyboard is being set up the list isn't shown, so the lead never says "choose it below".
+  test("the lead points at the list only while the list shows", () => {
+    expect(welcomeLead(null, true)).toBe("Connect a keyboard or choose it below. Setup never changes a keyboard.");
+    // A keyboard keyloom hasn't met is on its card: nothing is below to choose.
+    expect(welcomeLead(null, false)).toBe("Setup never flashes your keyboard.");
+    expect(welcomeLead("qmk", false)).not.toContain("below");
+    expect(welcomeLead("kanata", false)).toContain("kanata");
+  });
+
+  test("the setup card never tells a person whose own layout runs on the keyboard that nothing of theirs is on it", () => {
+    for (const b of [moonlander, corne, keebart, macbook]) {
+      const html = renderToStaticMarkup(<SetupCard flow={flow({ step: { kind: "setup", keyboard: null, boardId: b.id, boardName: b.name } })} boards={[b]} hasConfigs={false} onImport={() => {}} onMade={() => {}} />);
+      expect(html).toContain("keyloom has no config for it yet.");
+      expect(html).not.toContain("nothing of yours");
+    }
   });
 
   test("the setup card's lead and footer are true for kanata", () => {
