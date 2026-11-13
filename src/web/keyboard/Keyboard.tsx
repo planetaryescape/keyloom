@@ -368,6 +368,7 @@ export function Keyboard({
               {...(keycaps?.[String(index)] === undefined ? {} : { keycap: keycaps[String(index)] as KeycapColour })}
               legend={overrideLegend(legendOverrides?.[index], short) ?? description.legend}
               breakable={legendOverrides?.[index] !== undefined}
+              compactTap={description.legend.tap}
               {...(ledColors?.has(index) ? { led: ledColors.get(index) as string } : {})}
               {...(reach?.has(index) ? { reach: reach.get(index) ?? null } : {})}
               outgoing={outgoing?.[index] ?? null}

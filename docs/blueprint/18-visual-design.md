@@ -108,7 +108,8 @@ Source update, 2026-11-13: the key card fits long labels and reserves space for 
   - Unicode glyphs come from one glyph set, with a setting for "macOS", "Windows" or "words", as keymap-editor's glyph setting does.
 - **Text on rotated thumb keys stays upright,** as it is now.
 - **Full names are one hover away,** in the cap's tooltip and in the panel.
-- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600). A name that still cannot fit appears in full below the key, whose face keeps its plain legend (D-602).
+- Advanced board prints that cannot fit use the plain tap legend, or an explicit detail marker if needed. Tooltips, accessible descriptions and the key card keep the full firmware name (D-603).
+- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600). A name that still cannot fit appears in full below the key, whose face keeps its plain legend (D-602). While its picker is open, an explicit Full firmware name disclosure keeps that source available without pushing search out of view (D-605).
 
 ## Visual system
 
@@ -168,6 +169,7 @@ BK called both of these an AI smell on 2026-10-18. `test/web/no-ai-patterns.test
 - **At 600 px or less,** a split board shows one half at a time, with a Left and Right switcher and a swipe.
   - Caps stay at 44 px or more on a board the person edits. A board drawn only to be looked at, such as the new-keyboard steps', fits the width down to 16 px, so the whole half shows. A finger word too long for a key that small is never cut: every key shows its first letter, and the step says what the letters mean (D-545).
   - The key panel opens as a sheet covering less than half the screen, and scrolls the key into view above it.
+- Opening a key picker expands the existing phone sheet to full height and keeps the compact preview above search (D-604).
 - The header collapses to the layout menu and the sync state. Layer tabs scroll sideways.
 
 ## Keyboard use

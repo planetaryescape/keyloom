@@ -274,6 +274,38 @@
   /* A legend wraps only at its own seams (Cap.tsx puts a break opportunity there), never mid-word (D-187). */
 }
 
+/* Advanced names keep their full source in the tooltip and key card. A plain tap replaces a print that cannot fit. */
+.cap-print[data-firmware="true"] .cap-tap {
+  line-height: 1.2;
+}
+
+.cap-print[data-firmware="true"] .cap-front {
+  height: max(1em, calc(var(--u) * 0.185));
+  line-height: 1;
+}
+
+.cap-print[data-detail="true"] .cap-tap,
+.cap-print[data-detail="true"] .cap-front,
+.cap-print[data-detail="true"] .cap-corner {
+  visibility: hidden;
+}
+
+.cap-compact-probe {
+  position: absolute;
+  visibility: hidden;
+}
+
+.cap-detail {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 500;
+  font-size: max(11px, calc(var(--u) * 0.18));
+  line-height: 1;
+}
+
+.cap-detail[data-stretch="condensed"],
 .cap-tap[data-stretch="condensed"] {
   font-stretch: 75%;
   font-weight: 500;

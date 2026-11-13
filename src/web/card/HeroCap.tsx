@@ -136,7 +136,10 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
       </span>
       {draft ? <span className="cap-mark cap-mark-draft" aria-hidden="true" /> : null}
     </div>
-    {needsCaption ? <p className="hero-source">When tapped: <span>{legend.tap}</span></p> : null}
+    {needsCaption ? open === null
+      ? <p className="hero-source">When tapped: <span>{legend.tap}</span></p>
+      : <details className="hero-source"><summary>Full firmware name</summary><span>{legend.tap}</span></details>
+      : null}
     </>
   );
 }
