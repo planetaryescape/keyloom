@@ -47,12 +47,17 @@
    strip to fit in now that it fits rather than scrolls (R8-02). */
 .onboarding-stage .keyboard-well { height: 440px; min-height: 320px; padding: var(--space-5); }
 .onboarding-catalogue { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2); max-height: 42vh; overflow-y: auto; margin: var(--space-3) 0; }
-.onboarding-catalogue button { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+/* The rows only: a failed read's buttons inside the list keep their own look (R9-05). */
+.onboarding-catalogue > button { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
 .onboarding-catalogue .silhouette { fill: var(--ink-2); }
 .onboarding-catalogue small { display: block; margin-top: var(--space-1); color: var(--ink-2); }
 /* A line about the list (reading it, or couldn't) spans the grid, and its button sits inline after the words (R6-04). */
 .onboarding-catalogue > p { grid-column: 1 / -1; margin: 0; }
 .onboarding-catalogue > p .sheet-action { display: inline-flex; padding: var(--space-1) var(--space-2); }
+/* A failed read of the list: its words, then Try again or Restart keyloom, wrapping on a phone (R9-05). */
+.onboarding-catalogue > .onboarding-read-failed { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; }
+.onboarding-read-failed > span { flex: 1 1 100%; }
+.onboarding-read-failed .sheet-action { display: inline-flex; padding: var(--space-1) var(--space-2); }
 .onboarding-halves { display: none; }
 .onboarding-waiting { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 0; }
 .onboarding-panel .nb-panel { position: relative; width: 100%; height: auto; }

@@ -2521,6 +2521,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "delete" ? (
         <DeleteConfigDialog
+          token={token}
           name={configDialog.config.name}
           onDelete={async () => {
             await deleteConfig(token, configDialog.config.id, configDialog.config.name);
@@ -2532,6 +2533,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "rename" ? (
         <RenameDialog
+          token={token}
           current={summary.name}
           onRename={async (name) => {
             await renameConfig(token, summary.id, name);
@@ -2542,6 +2544,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "put-on" ? (
         <ConfirmDialog
+          token={token}
           title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
           lines={[
             // kanata has nothing to build: keyloom writes the config and kanata reloads it.
@@ -2557,6 +2560,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "put-version" ? (
         <ConfirmDialog
+          token={token}
           title={`Put ${versionTitle(configDialog.milestone.version)} on your ${boardDisplayName(board.name)}?`}
           lines={[
             configDialog.milestone.version.revisionId === revision.id

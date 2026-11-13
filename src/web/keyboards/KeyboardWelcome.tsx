@@ -11,6 +11,7 @@ import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SearchFailed } from "./SearchFailed.tsx";
 import { SetupCard } from "./SetupCard.tsx";
+import { FlowProblem } from "./FlowProblem.tsx";
 import { NewBoardPanel, type PutSource } from "./NewBoardPanel.tsx";
 import { NewBoardKeyboard, newBoardHalf } from "./NewBoardKeyboard.tsx";
 import { Silhouette } from "../shell/TopBar.tsx";
@@ -19,12 +20,16 @@ import { isOnePiece } from "../../boards/one-piece.ts";
 import { applyDisplayRotation } from "../keyboard/geometry.ts";
 import { catalogueNote, type BoardsRead } from "./catalogue-words.ts";
 import { welcomeLead } from "./onboarding-words.ts";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import "./collection.css";
 
-export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
+export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
   token: string; choices: readonly BoardChoice[];
   /** Where the read of `choices` stands (R6-04): the list says it is reading, or that it couldn't, with Try again. */
   boardsRead?: BoardsRead; onRetryBoards?: () => void;
+  /** Why the read of `choices` failed, so its code picks Restart keyloom where a second read fails the same way (R9-05). */
+  boardsFailure?: PageFailure | null;
   /** A keyboard was just added: `choices` is read again, so one left with Later is in the list below (R8-06). */
   onBoardAdded?: () => void;
   /** A keyboard whose Set up was pressed in Your keyboards: its setup card opens, and `onSetupOpened` says so (R8-06). */
@@ -49,14 +54,15 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
   const [half, setHalf] = useState<"left" | "right">("left");
   const [firmwareSearch, setFirmwareSearch] = useState(false);
   const [collection, setCollection] = useState<CollectionKeyboard[] | null>(null);
-  const [collectionProblem, setCollectionProblem] = useState(false);
+  // Kept whole, so a failure no screen planned for offers Restart keyloom, not a Try again that fails the same way (R9-05).
+  const [collectionProblem, setCollectionProblem] = useState<PageFailure | null>(null);
   const [collectionAttempt, setCollectionAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setCollection(null); setCollectionProblem(false);
+    setCollection(null); setCollectionProblem(null);
     void request("GET", "/api/keyboards/collection", token, CollectionResponseSchema, controller.signal).then(
       (result) => { if (!controller.signal.aborted) setCollection(result.keyboards); },
-      () => { if (!controller.signal.aborted) setCollectionProblem(true); },
+      (error: unknown) => { if (!controller.signal.aborted) setCollectionProblem(pageFailure(error, "")); },
     );
     return () => controller.abort();
   }, [token, collectionVersion, collectionAttempt]);
@@ -86,7 +92,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
   }) ?? []);
   const panel = flow.step.kind === "confirm" || flow.step.kind === "review" || flow.step.kind === "put";
   const rows = choices.filter((board) => `${board.name} ${board.vendor} ${board.id}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const note = catalogueNote(boardsRead, collection !== null ? "ready" : collectionProblem ? "failed" : "loading", rows.length, firmwareSearch);
+  const note = catalogueNote(boardsRead, collection !== null ? "ready" : collectionProblem !== null ? "failed" : "loading", rows.length, firmwareSearch);
   return <div className="keyboard-welcome">
     <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen)}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
@@ -99,9 +105,9 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
           {/* A plugged-in keyboard put off with Not now stays one press away, as the editor's chip keeps it (R8-15). */}
           <PluggedIn waiting={flow.waiting} onReopen={flow.reopen} />
           <div className="onboarding-catalogue">
-            {note === "boards_failed" ? <p role="alert">keyloom couldn't read its keyboard list. {onRetryBoards === undefined ? null : <button type="button" className="sheet-action" onClick={onRetryBoards}><RefreshCw size={13} aria-hidden="true" />Try again</button>}</p>
+            {note === "boards_failed" ? <ReadFailed token={token} words="keyloom couldn't read its keyboard list." failure={boardsFailure} onRetry={onRetryBoards} />
               : note === "boards_loading" ? <p role="status">Reading keyloom's keyboard list…</p>
-              : note === "collection_failed" ? <p role="alert">Couldn't check your keyboard collection. <button type="button" className="sheet-action" onClick={() => setCollectionAttempt((n) => n + 1)}>Try again</button></p>
+              : note === "collection_failed" ? <ReadFailed token={token} words="Couldn't check your keyboard collection." failure={collectionProblem} onRetry={() => setCollectionAttempt((n) => n + 1)} />
               : collection === null ? <p role="status">Checking your keyboard collection…</p> : rows.map((board) => {
               const removed = collection.some((keyboard) => keyboard.boardId === board.id && keyboard.removedAt !== null);
               return <button key={board.id} type="button" onClick={() => removed ? onManage(true) : flow.chooseKnown(board)}>{board.keys ? <Silhouette keys={board.keys} display={board.display} width={48} height={24} /> : null}<span>{board.name}<small>{removed ? "Removed · restore" : board.vendor}</small></span></button>;
@@ -111,7 +117,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
           </div>
           <button type="button" className="sheet-action" disabled={collection === null} onClick={() => { setFirmwareSearch(true); void flow.search(query); }}>Not listed? Search QMK and ZMK</button>
           {firmwareSearch && collection !== null ? <FirmwareResults query={query} flow={flow} /> : null}
-          {flow.problem ? <p role="alert" className="nb-problem">{flow.problem}</p> : null}
+          <FlowProblem flow={flow} />
           {firmwareSearch && flow.searchProblem !== null ? <SearchFailed flow={flow} /> : null}
           <p className="nb-note">Already have a keymap? <button type="button" className="sheet-action" onClick={() => setImporting({ board: null })}>Import a layout</button></p>
         </div> : null}
@@ -121,6 +127,22 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     {/* Words for someone who isn't a developer (R1-30): the app prepares the folder; the guide is for whoever takes it further. */}
     <p className="onboarding-contribution">No drawing of your keyboard&rsquo;s case yet? Its keys still show. To share your keyboard with keyloom, <button type="button" className="link-button" onClick={() => onManage()}>Manage keyboards</button> prepares it as a download. <a href={CONTRIBUTION_GUIDE} target="_blank" rel="noopener">The contribution guide</a> says what happens next.</p>
   </div>;
+}
+
+/**
+ * A read the welcome's list waits on that failed (R9-05): its sentence, then Try again, or Restart keyloom (and the log) for a failure no
+ * screen planned for. The page's sentence is said first; keyloom's own words follow only for such a failure, where they explain the button.
+ */
+export function ReadFailed({ token, words, failure, onRetry }: { token: string; words: string; failure: PageFailure | null; onRetry?: (() => void) | undefined }) {
+  const unexpected = failure !== null && failure.message !== "" && wayOutFor(failure, true) !== null ? failure.message : null;
+  return (
+    <div className="onboarding-read-failed" role="alert">
+      <span>{words}{unexpected === null ? "" : ` ${unexpected}`}</span>
+      {onRetry === undefined ? null : failure === null ? (
+        <button type="button" className="sheet-action" onClick={onRetry}><RefreshCw size={13} aria-hidden="true" />Try again</button>
+      ) : <RetryOrRestart token={token} failure={failure} onRetry={onRetry} className="sheet-action" />}
+    </div>
+  );
 }
 
 /** A plugged-in keyboard keyloom hasn't met, put off with Not now: one press opens its card again (R8-15). */
