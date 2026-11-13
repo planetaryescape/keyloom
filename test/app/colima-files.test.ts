@@ -461,6 +461,19 @@ ${RECORDING_CHOWN}`);
     expect(s.calls()).toEqual([]);
   });
 
+  test("a folder a walk can't list fails the fix, though its errors are thrown away (PR #300 CodeRabbit)", async () => {
+    const s = setup("unlisted", RECORDING_CHOWN);
+    // Enterable but not listable: every step can cd into it, and find can't read what is in it.
+    chmodSync(join(s.dir, "work", "sub"), 0o100);
+    try {
+      const r = await s.run();
+      expect(r.code).toBe(1);
+      expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
+    } finally {
+      chmodSync(join(s.dir, "work", "sub"), 0o755);
+    }
+  });
+
   test("a change macOS refuses is reported with its code", async () => {
     const s = setup("refused");
     const r = await s.run();
