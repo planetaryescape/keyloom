@@ -1,6 +1,6 @@
 # Setting edits admit arbitrary firmware source
 
-Status: Fixed by merge commit `700cf2345b24bbdeaaae2e477512859868f560c0`, pending release. New expression strings and source in setting names are rejected. Imported expressions remain unchanged or can become typed values.
+Status: Fixed by merge commit `700cf2345b24bbdeaaae2e477512859868f560c0`, released in v0.80.0. New expression strings and source in setting names are rejected. Imported expressions remain unchanged or can become typed values.
 
 Security review: SEC-A1, 13 November 2026. Reproduced at `8d09a1f58dab8ddfdb6e58457d0f988a440a62f9`. Relevant source is unchanged at `054d416922af8c65f70a6e993a0a1ae6da45667d`.
 

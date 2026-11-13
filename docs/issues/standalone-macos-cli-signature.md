@@ -26,6 +26,14 @@ For v0.68.2, BK's CLI on PATH is the unchanged signed sidecar extracted from the
 
 The published standalone asset was not overwritten. Re-running the current official installer replaces the signed local CLI with that standalone asset again. See the [release receipt](../research/automatic-review-release-v0.68.2.json).
 
+## v0.80.0 repeats the standalone failure
+
+The published arm64 CLI matches SHA256SUMS (`0ee902aa8caee391a8efe8ee795bd2ce9f88ba6b2a60d64f766bcc2b99903fb5`) and reports `0.80.0`. Strict codesign verification still returns `invalid signature (code or signature have been modified)`.
+
+The installed CLI uses the unchanged signed sidecar from the checksum-verified v0.80.0 desktop ZIP. Its SHA-256 is `7f3dff2fe2372dd8bfa37f59898a4b2880a877e067e498b90b6214ce038903c1`. Strict Developer ID verification passes with team `WAVMJLFY95`. The installed app passes Gatekeeper as Notarized Developer ID. Gatekeeper's app assessment of this copied CLI returns exit 3: `the code is valid but does not seem to be an app`.
+
+Version, helper-only diagnostics and synthetic import/list checks pass through both installed executables. The app restarted normally, and its authenticated live server reports `0.80.0`. No local signing, OS-protection change or published-asset replacement occurred. The [delivery receipt](../research/security-batch-release-v0.80.0.json) keeps these checks separate. The official installer still supplies the standalone asset.
+
 ## Next gate
 
 Reproduce on a newly built macOS release CLI, determine the final signing/entitlement requirements and sign the final executable before publishing its checksum. Verify installed `codesign --verify --strict`, version and paired-helper behavior on both Mac targets. Keep the published hashes immutable; any correction needs a new release. Do not substitute local ad-hoc signing or removal of quarantine/security checks for a valid released signature.
