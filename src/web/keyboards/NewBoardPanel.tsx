@@ -5,6 +5,7 @@ import "../review/review.css";
 import type { PreviewResponse, PutPreviewResponse } from "../../api/keyboards.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import { layoutUnpicked, type NewKeyboard } from "./useNewKeyboard.ts";
+import { FlowProblem } from "./FlowProblem.tsx";
 import "./keyboards.css";
 import { isOnePiece } from "../../boards/one-piece.ts";
 import { ChoiceGroup } from "../editor/ChoiceGroup.tsx";
@@ -101,7 +102,7 @@ function KnownBoard({ flow, known }: { flow: NewKeyboard; known: KnownWays }) {
           <button type="button" className="sheet-action" onClick={flow.putOnKnown}><FilePlus2 size={13} aria-hidden="true" />Put a config on it</button>
         ) : (
           <>
-            <button type="button" className="sheet-action" disabled={flow.busy} onClick={() => void start()}>
+            <button type="button" className="sheet-action" disabled={flow.busy || flow.stuck} onClick={() => void start()}>
               {flow.busy ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <FilePlus2 size={13} aria-hidden="true" />}Start a config
             </button>
             {known.onImport === undefined ? null : (
@@ -214,7 +215,7 @@ function Confirm({ flow, preview, known: ways }: { flow: NewKeyboard; preview: P
             {preview.boardProblem === null ? null : <p className="nb-problem" role="alert">{problem?.text ?? preview.boardProblem}</p>}
           </>
         )}
-        {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
+        <FlowProblem flow={flow} />
       </div>
       <footer className="nb-panel-foot">
         <button type="button" className="sheet-action" onClick={flow.notNow}>Not now</button>
@@ -259,12 +260,12 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
         )}
         {/* Add refused for a reason these answers hit again: why, with the guide, and no Add that would repeat it (R7-11). */}
         {flow.addBlocked === null ? null : <CantAdd flow={flow} problem={flow.addBlocked} />}
-        {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
+        <FlowProblem flow={flow} />
       </div>
       <footer className="nb-panel-foot">
         <button type="button" className="sheet-action" onClick={flow.backToConfirm}>Back</button>
         {flow.addBlocked === null ? (
-          <button type="button" className="bar-apply" disabled={board === null || flow.busy} onClick={() => void flow.add()}>
+          <button type="button" className="bar-apply" disabled={board === null || flow.busy || flow.stuck} onClick={() => void flow.add()}>
             {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
             Add the {name}
           </button>
@@ -316,12 +317,12 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
             ))}
           </div>
         )}
-        {sources.length === 0 ? <div className="nb-blank"><p>Start a config for this keyboard, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
+        {sources.length === 0 ? <div className="nb-blank"><p>Start a config for this keyboard, then edit its keys.</p><button type="button" className="bar-apply" disabled={flow.busy || flow.stuck} onClick={() => void start()}>Start a config</button><p className="nb-note">Nothing is applied or flashed. Use Import instead if you already have a keymap.</p></div> : shown.length === 0 ? <p className="nb-note">No config matches “{filter}”.</p> : null}
         {/* With configs to copy, starting from the board's own keys is still a way on, for when none of them maps (R5-16). */}
         {sources.length === 0 ? null : (
           <p className="nb-note nb-start">
             Or start a config from the {step.boardName}&rsquo;s own keys.{" "}
-            <button type="button" className="sheet-action" disabled={flow.busy} onClick={() => void start()}>Start a config</button>
+            <button type="button" className="sheet-action" disabled={flow.busy || flow.stuck} onClick={() => void start()}>Start a config</button>
           </p>
         )}
         {step.source === null ? sources.length === 0 ? null : <p className="nb-note">Pick one to see it on the {step.boardName}.</p> : flow.putFailure !== null ? (
@@ -398,7 +399,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
             onRestored={() => (flow.removed === "make" ? make() : start())} />
         )}
-        {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
+        <FlowProblem flow={flow} />
       </div>
       <footer className="nb-panel-foot">
         <span className="nb-note">Nothing is applied yet.</span>
@@ -408,7 +409,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           <button
             type="button"
             className="bar-apply"
-            disabled={preview === null || problems.length > 0 || flow.busy}
+            disabled={preview === null || problems.length > 0 || flow.busy || flow.stuck}
             onClick={make}
           >
             {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}

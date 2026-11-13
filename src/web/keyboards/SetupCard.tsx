@@ -5,6 +5,7 @@ import { importLine } from "../import/export-steps.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
 import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
 import { setupFoot, setupWrites } from "./onboarding-words.ts";
+import { FlowProblem } from "./FlowProblem.tsx";
 import "./keyboards.css";
 
 // The "known board, no config" card (D-336): keyloom recognizes the keyboard on USB but has nothing on it yet. Without this the board is
@@ -55,7 +56,7 @@ export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
         <label className="nb-blank-label" htmlFor="nb-blank-name">Or start blank</label>
         <div className="nb-blank-row">
           <input id="nb-blank-name" className="nb-blank-input" value={name} placeholder={`${step.boardName} blank`} autoComplete="off" spellCheck={false} onChange={(e) => setName(e.target.value)} />
-          <button type="button" className="sheet-action" disabled={flow.busy} onClick={() => void startBlank()}>
+          <button type="button" className="sheet-action" disabled={flow.busy || flow.stuck} onClick={() => void startBlank()}>
             {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
             Start blank
           </button>
@@ -64,7 +65,7 @@ export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
       {flow.removed === null ? null : (
         <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
       )}
-      {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
+      <FlowProblem flow={flow} />
       <footer className="nb-foot">
         <span className="nb-note">{setupFoot(firmware, step.keyboard !== null)}</span>
         <button type="button" className="sheet-action" onClick={flow.notNow}>Not now</button>
