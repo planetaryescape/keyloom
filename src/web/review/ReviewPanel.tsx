@@ -15,14 +15,15 @@ import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
-import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
 import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
 import { useProviderStatus } from "../chat/useProviderStatus.ts";
 import { CREDITS_PAGES, PROVIDER_NAMES } from "../chat/setup-words.ts";
 import { chooseProvider } from "../chat/api-chat.ts";
-import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, failedProvider, fixesFor, grouped, markerWords, placeOf, placeWords, segments, sentence, switchTargets } from "./review-words.ts";
+import { APPLIED_NOT_SHOWN, type ApplyFailure, aiMissingWords, appliedNotShown, applyFailureWords, failedProvider, fixesFor, grouped, markerWords, placeOf, placeWords, segments, switchFailure, switchTargets } from "./review-words.ts";
 import { type Review, asFailure } from "./useReview.ts";
 import { SuggestionTestResults, WorkloadTests } from "./WorkloadTests.tsx";
 import "./review.css";
@@ -208,7 +209,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const others = (provider.status?.providers ?? []).map((p) => p.id).filter((id) => id !== activeId && id !== failedOn);
   const [settingUpOther, setSettingUpOther] = useState(false);
   const [switching, setSwitching] = useState<ProviderId | null>(null);
-  const [switchFailed, setSwitchFailed] = useState<{ id: ProviderId; words: string } | null>(null);
+  // Kept with its code (R10-07), so a switch that fails the same way every time offers Restart keyloom, not Try again alone.
+  const [switchFailed, setSwitchFailed] = useState<{ id: ProviderId; failure: PageFailure } | null>(null);
   const switchProvider = (id: ProviderId) => {
     setSwitching(id);
     setSwitchFailed(null);
@@ -216,7 +218,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
       provider.replace(next);
       setSettingUpOther(false);
       void r.run(true);
-    }, (error: unknown) => setSwitchFailed({ id, words: `keyloom couldn't switch to ${PROVIDER_NAMES[id]}.${error instanceof Error && error.message.trim() !== "" ? ` ${sentence(error.message)}` : ""}` }))
+    }, (error: unknown) => setSwitchFailed({ id, failure: switchFailure(PROVIDER_NAMES[id], error) }))
       .finally(() => setSwitching(null));
   };
   // The billing page of the provider the review runs on; Codex sells no credits, so it has none.
@@ -464,8 +466,8 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             {details && review.ai.reason !== null && !missing.reasonShown ? <p className="br-ai-reason">{review.ai.reason}</p> : null}
             {switchFailed === null ? null : (
               <div className="br-apply-failure" role="alert">
-                <p>{switchFailed.words}</p>
-                <button type="button" className="sheet-action" disabled={switching !== null} onClick={() => switchProvider(switchFailed.id)}>Try again</button>
+                <p>{switchFailed.failure.message}</p>
+                <div className="unexpected-actions"><RetryOrRestart token={token} failure={switchFailed.failure} retryDisabled={switching !== null} onRetry={() => switchProvider(switchFailed.id)} className="sheet-action" /></div>
               </div>
             )}
             {settingUpOther && missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
