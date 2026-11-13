@@ -28,7 +28,14 @@ Those old writable files are supporting observations. They do not establish trus
 The new cache fetches every project from its repository at the locked commit.
 
 Focused checks verify immutable revisions, module preservation, cache identity, discarded writable metadata, and read-only mount arguments.
-At candidate `2e847a8f`, both west recipes fetched every pinned input, then failed at `west zephyr-export`. The pinned export script writes `current_path.txt` beside itself, which a read-only source mount correctly rejects. Builds now set the pinned `ZEPHYR_BASE` and pass its exact `Zephyr_DIR` to CMake. They do not run package registration. A real CMake package lookup against the read-only pin succeeded with those explicit paths. The next real configure reached compiler capability checks, then exposed Zephyr's fallback cache under its source tree. `USER_CACHE_DIR` now points to `/tmp/keyloom-cache` inside the disposable container. Both firmware builds still need to pass after those corrections.
+At candidate `2e847a8f`, both west recipes fetched every pinned input, then failed at `west zephyr-export`. The pinned export script writes `current_path.txt` beside itself, which a read-only source mount correctly rejects. Builds now set the pinned `ZEPHYR_BASE` and pass its exact `Zephyr_DIR` to CMake. They do not run package registration. A real CMake package lookup against the read-only pin succeeded with those explicit paths. The next real configure reached compiler capability checks, then exposed Zephyr's fallback cache under its source tree. `USER_CACHE_DIR` now points to `/tmp/keyloom-cache` inside the disposable container. Both corrected recipes passed through the compiled scratch CLI at `9a57eda76c7ae6276aad4b6db282739e506d952e`.
+
+Corne build `bld_01M7AP2WBX7HC0RJP8XXVP8KHF` produced a 295868-byte ZIP with 432128-byte left and 350720-byte right UF2 files.
+Keebart build `bld_01M7ANZ4Q44CNTTMYSFWA6N0QH` produced a 326548-byte ZIP with 471552-byte left and 389120-byte right UF2 files.
+Both logs confirm fresh hands-free build markers. The builds used public fixtures and scratch data and cache directories.
+They ran concurrently under load. Their timings do not establish a speed improvement.
+The build owner's quality ledger retains commands, logs, source identities, and artifact hashes in `evidence/verified-firmware-artifacts.json`.
+Final integration, CI, and required provider review remain separate gates.
 No keyboard flash or hardware behavior is part of these checks.
 
 ## Update the lock with reviewed inputs
