@@ -30,7 +30,8 @@ test("a conversation list read that hit an exception offers Try again and Restar
   expect(lost).not.toContain("Restart keyloom");
 });
 
-const layout = { layers: [] as Layout["layers"], macros: [] as Layout["macros"], tapDances: [] as Layout["tapDances"] } as unknown as Layout;
+// SAFETY: the view reads the layout only to name a decision's keys, and these tests render no decisions.
+const layout = {} as Layout;
 const decisions = (state: Parameters<typeof DecisionsView>[0]["state"]) => renderToStaticMarkup(
   <DecisionsView token="t" state={state} layout={layout} onBack={() => {}} onReload={() => {}} onHighlight={() => {}} onEdit={async () => {}} onRetire={async () => {}} onOpenConversation={async () => null} />,
 );

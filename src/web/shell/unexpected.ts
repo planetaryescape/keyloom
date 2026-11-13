@@ -29,6 +29,7 @@ export interface PageFailure {
 /** A caught error as a screen keeps it. It reads ApiError's fields by name, so this file stays free of the fetch code and pure. */
 export function pageFailure(error: unknown, fallback: string): PageFailure {
   if (!(error instanceof Error)) return { message: fallback };
+  // SAFETY: both fields are read as unknown and checked below, so an Error without them yields neither.
   const { code, generic } = error as { code?: unknown; generic?: unknown };
   return { message: error.message === "" ? fallback : error.message, ...(typeof code === "string" ? { code } : {}), ...(generic === true ? { generic: true } : {}) };
 }
