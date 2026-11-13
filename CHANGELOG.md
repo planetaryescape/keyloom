@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.80.0](https://github.com/planetaryescape/keyloom/compare/v0.79.2...v0.80.0) (2026-11-13)
+
+
+### Features
+
+* edit one-shot modifiers from the key card and picker ([054d416](https://github.com/planetaryescape/keyloom/commit/054d416922af8c65f70a6e993a0a1ae6da45667d))
+* edit one-shot modifiers from the key card and picker ([aaa623a](https://github.com/planetaryescape/keyloom/commit/aaa623af98dfbe9601d188acf110f97916c48df4))
+
+
+### Bug Fixes
+
+* bound tool validation with patched Zod and limited errors ([718d3a6](https://github.com/planetaryescape/keyloom/commit/718d3a6aeaa1d13892e2cc1e20c138aa4a91a6ff))
+* bound ZIP source inflation before importing keymaps ([d7708e3](https://github.com/planetaryescape/keyloom/commit/d7708e3ef5df5ee527f274f9fc7e24324e6eb3d7))
+* configure the Glove80 cache without a mutable installer ([a753630](https://github.com/planetaryescape/keyloom/commit/a7536302b14a88268b53b8fe3e1aac3c7a3b99eb))
+* contain QMK host writes within the build workspace ([e7e7d7a](https://github.com/planetaryescape/keyloom/commit/e7e7d7a02d130333bb85954c651d81a45345360b))
+* create Nix configuration directory in the pinned image ([a4a8cdd](https://github.com/planetaryescape/keyloom/commit/a4a8cdd363f13f12b6265a49cd85516a8e116f06))
+* harden firmware generation and build input boundaries ([700cf23](https://github.com/planetaryescape/keyloom/commit/700cf2345b24bbdeaaae2e477512859868f560c0))
+* isolate each container in a unique build workspace ([c4c9098](https://github.com/planetaryescape/keyloom/commit/c4c9098542da2b6b3b7fef805d39fdb06f15df9f))
+* isolate firmware sources and lock west dependencies ([#331](https://github.com/planetaryescape/keyloom/issues/331)) ([16c4ad8](https://github.com/planetaryescape/keyloom/commit/16c4ad8feb86bdf42321dfd6ea9eb922c43f2053))
+* isolate trusted firmware sources from build workspaces ([0d30b9c](https://github.com/planetaryescape/keyloom/commit/0d30b9c46c7d54cec2498dbb86b7c5eceddbcc66))
+* keep Zephyr capability cache inside the container ([90201a0](https://github.com/planetaryescape/keyloom/commit/90201a025d9c8874d5b647f6bb81d54fea3c6423))
+* lock transitive west inputs and mount sources read-only ([97db880](https://github.com/planetaryescape/keyloom/commit/97db88017b198dc11d84d7ab15ef9a8302f6acec))
+* preserve kept tap dances when picking one-shot modifiers ([9f6b83e](https://github.com/planetaryescape/keyloom/commit/9f6b83e48b4cc9c539b2d646e3415bb02a7037c5))
+* publish firmware snapshots after submodules complete ([85b0253](https://github.com/planetaryescape/keyloom/commit/85b025394ca0c87c27d1e4fed0f4ed8a47bbb725))
+* reject new firmware source in setting changes ([89261f7](https://github.com/planetaryescape/keyloom/commit/89261f777f22e987ce06d4029b216f02e65399a8))
+* reject source directives in conditional layer IDs ([b6dbbb7](https://github.com/planetaryescape/keyloom/commit/b6dbbb76330d57ba38240aed3ac353114d8b9abb))
+* select pinned Zephyr package without source writes ([54c2675](https://github.com/planetaryescape/keyloom/commit/54c26758118161436222a47b98d2b0ace5ea73fd))
+* verify sidecar checksums before desktop packaging ([3499376](https://github.com/planetaryescape/keyloom/commit/3499376af34d1c9348f9f6477df5d6a48a59efe6))
+
 ## [0.79.2](https://github.com/planetaryescape/keyloom/compare/v0.79.1...v0.79.2) (2026-11-13)
 
 
