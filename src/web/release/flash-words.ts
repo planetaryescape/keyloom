@@ -20,11 +20,27 @@ export const BUILD_FILE_GONE = "This build's firmware file is gone, so keyloom c
 
 /**
  * The buttons beside the dialog's own error (R8-03, R8-12): Build again for a file that is gone, Restart keyloom (with Try again for a
- * server fault) for an answer no screen planned for, and Try again for anything else, which repeats what failed.
+ * server fault) for an answer no screen planned for, and Try again for anything else, which repeats what failed. `none`: the step's own
+ * Build firmware is the way on, so the error has no button of its own (a sync's build that is gone, PR #306 review).
  */
-export function errorWayOut(code: string | null): "build_again" | "unexpected" | "try_again" {
+export function errorWayOut(code: string | null): "build_again" | "unexpected" | "try_again" | "none" {
   if (code === "build_file_gone") return "build_again";
+  if (code === SYNC_BUILD_GONE_CODE) return "none";
   return unexpectedWayOut(code ?? undefined, true) === null ? "try_again" : "unexpected";
+}
+
+/** The page's own code for a sync's failed build that keyloom no longer has, so the dialog's error offers no read that can't pass. */
+export const SYNC_BUILD_GONE_CODE = "sync_build_gone";
+
+/**
+ * What the dialog says when it couldn't read the sync's failed build it opened on (R8-01). A build that is gone (its config was deleted,
+ * which deletes its builds) can't be read again, and a restart won't bring it back, so the words point at the step's Build firmware. Any
+ * other failure keeps its code, and the words name only the buttons `errorWayOut` gives that code, with building again beside them.
+ */
+export function syncBuildReadFailure(code: string | null): { text: string; code: string | null } {
+  if (code === "not_found") return { text: "The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.", code: SYNC_BUILD_GONE_CODE };
+  const retry = errorWayOut(code) === "try_again" || unexpectedWayOut(code ?? undefined, true)?.retry === true;
+  return { text: retry ? "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." : "keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.", code };
 }
 
 /**

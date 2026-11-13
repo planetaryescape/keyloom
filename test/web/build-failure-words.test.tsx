@@ -7,6 +7,7 @@ import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
 import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
+import { syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
 
@@ -198,6 +199,32 @@ describe("the dialog's error", () => {
     expect(again).toContain("Available once you build again.");
     expect(again).not.toContain("zapp exited");
     expect(again).not.toContain(">Try again<");
+  });
+});
+
+// PR #306 review: the dialog opened on a sync's failed build that it then couldn't read. Its words name only the buttons it has.
+describe("a failed read of the sync's build", () => {
+  test("a build that is gone points at Build firmware, with no Try again or Restart keyloom that can't bring it back", () => {
+    const gone = syncBuildReadFailure("not_found");
+    expect(gone.text).toBe("The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.");
+    const html = failedStep(null, {}, { build: null, error: gone.text, errorCode: gone.code });
+    expect(html).toContain("no longer there");
+    expect(html).toContain(">Build firmware<");
+    expect(html).not.toContain("Try again");
+    expect(html).not.toContain("Restart keyloom");
+  });
+  test("any other failure keeps its code and names only the buttons that code gets", () => {
+    for (const code of [null, "unreachable", "internal"]) {
+      const failed = syncBuildReadFailure(code);
+      expect(failed).toEqual({ code, text: "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." });
+      expect(failedStep(null, {}, { build: null, error: failed.text, errorCode: failed.code })).toContain(">Try again<");
+    }
+    const unreadable = syncBuildReadFailure("unreadable");
+    expect(unreadable.text).toBe("keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.");
+    const html = failedStep(null, {}, { build: null, error: unreadable.text, errorCode: unreadable.code });
+    expect(html).not.toContain("Try again");
+    expect(html).toContain("Restart keyloom");
+    expect(html).toContain(">Build firmware<");
   });
 });
 

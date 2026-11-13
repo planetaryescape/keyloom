@@ -212,7 +212,8 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
               <p>{fileGone ? BUILD_FILE_GONE : error}</p>
               {errorWay === "try_again" ? <button type="button" className="button" onClick={release.retry}>Try again</button> : null}
             </div>
-            {errorWay === "try_again" ? null : (
+            {/* `none`: the step's Build firmware is the way on. */}
+            {errorWay === "try_again" || errorWay === "none" ? null : (
               <div className="step-actions">
                 {errorWay === "build_again" ? (
                   <button type="button" className="button button-primary" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>

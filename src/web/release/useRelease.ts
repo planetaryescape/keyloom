@@ -8,7 +8,7 @@ import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
-import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf } from "./flash-words.ts";
+import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf, syncBuildReadFailure } from "./flash-words.ts";
 import { fetchRestartLog, pruneDockerBuildCache, restartDockerApp } from "../system.ts";
 import { type CachePruneOutcome, cachePruneOutcome } from "./build-failure-words.ts";
 
@@ -17,7 +17,6 @@ const POLL_MS = 1000;
 const MAX_MISSES = 3;
 const POLL_LOST = "keyloom stopped answering. Check that it is still running, then try again.";
 const BUILD_READ_FAILED = "keyloom couldn't read this build again. Try again to read it.";
-const SYNC_BUILD_READ_FAILED = "keyloom couldn't read the build that failed. Try again to read it.";
 
 export interface Release {
   build: Build | null;
@@ -112,8 +111,9 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [build, setBuild] = useState<Build | null>(null);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [starting, setStarting] = useState<Release["starting"]>(null);
-  // The sentence and its code live together, so a code never outlives its sentence.
-  const [failure, setFailure] = useState<{ text: string; code: string | null } | null>(null);
+  // The sentence and its code live together, so a code never outlives its sentence. `show`: a failed read of a sync's build, which a
+  // later read of it that passes clears.
+  const [failure, setFailure] = useState<{ text: string; code: string | null; show?: true } | null>(null);
   const error = failure?.text ?? null;
   const errorCode = failure?.code ?? null;
   const setError = useCallback((next: string | null | ((now: string | null) => string | null), code: string | null = null) => {
@@ -243,15 +243,16 @@ export function useRelease(token: string, layoutRef: string): Release {
         // Build again builds for the board revision this one was for, with no keyboard to ask (PR #306 CodeRabbit).
         if (next.boardRevision !== undefined) setBoardRevision(next.boardRevision);
         setFlash(null);
-        setError((was) => (was === SYNC_BUILD_READ_FAILED ? null : was));
+        setFailure((was) => (was?.show === true ? null : was));
       })
       .catch((e: unknown) => {
         // A read that something newer replaced says nothing about what is on screen.
         if (read !== showRead.current) return;
         setLast({ kind: "show", buildId: id });
-        setError(SYNC_BUILD_READ_FAILED, codeOf(e));
+        const failed = syncBuildReadFailure(codeOf(e));
+        setFailure({ ...failed, show: true });
       });
-  }, [token, setError]);
+  }, [token]);
 
   const retry = useCallback(() => {
     setError(null);
