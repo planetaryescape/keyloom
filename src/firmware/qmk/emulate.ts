@@ -7,6 +7,7 @@ import type { Layout } from "../../layout/schema.ts";
 import type { EmulationResult, EmulatorEvent } from "../emulate/types.ts";
 import { BuildFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
+import { workspacePath } from "../toolchain/workspace-path.ts";
 import { withLock } from "../toolchain/lock.ts";
 import { type LogSink, run } from "../toolchain/run.ts";
 import { qmkRevision } from "./board-config.ts";
@@ -115,8 +116,8 @@ export async function emulateQmk(input: EmulateQmkInput): Promise<EmulationResul
     async () => {
       await ensureCheckout(spec, { ...(input.log ? { log: input.log } : {}), ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) });
 
-      const dir = join(input.checkoutDir, "tests", name);
-      await writeSource(dir, { keymapName: name, files: files });
+      const dir = await workspacePath(input.checkoutDir, `tests/${name}`);
+      await writeSource(dir, { keymapName: name, files: files }, { root: input.checkoutDir });
       await writeFresh(join(dir, "events.txt"), script);
 
       const inContainer = `/qmk_firmware/tests/${name}`;

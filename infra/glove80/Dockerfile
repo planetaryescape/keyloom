@@ -5,8 +5,10 @@ FROM nixpkgs/nix:nixos-23.11@sha256:11c1c37da85b27f1b47a7c0fdff8e3cf970cafaac623
 ARG ZMK_REF=ce69e85f585c724142aae37ddf8a7e019ff19e93
 ENV PATH=/root/.nix-profile/bin:/usr/bin:/bin
 RUN set -eu; \
-    nix-env -iA cachix -f https://cachix.org/api/v1/install; \
-    cachix use moergo-glove80-zmk-dev; \
+    mkdir -p /etc/nix; \
+    printf '%s\n' \
+      'extra-substituters = https://moergo-glove80-zmk-dev.cachix.org' \
+      'extra-trusted-public-keys = moergo-glove80-zmk-dev.cachix.org-1:D8fhPJ1c3gkuckuyBLRtGYarCVptIDn4g5k8u91NbyM=' >> /etc/nix/nix.conf; \
     git clone --filter=blob:none https://github.com/moergo-sc/zmk /src; \
     cd /src && git checkout -q --detach "$ZMK_REF"; \
     nix-shell --run true -A zmk ./default.nix
