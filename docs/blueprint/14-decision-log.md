@@ -51,7 +51,7 @@ Regression: `test/firmware/qmk/write-source.test.ts`, plus the fake QMK build an
 
 Nix receives the MoErgo cache URL and public signing key directly in `nix.conf`. The key was read from `https://app.cachix.org/api/v1/cache/moergo-glove80-zmk-dev` on 13 November 2026. The image no longer installs Cachix from a mutable Nix expression. The pinned base, firmware source and signature requirement remain. The Dockerfile hash changes the image tag, so an existing image built with the installer is not reused for this candidate.
 
-Regression: the missing-image journey in `test/firmware/zmk/build.test.ts` checks the emitted Dockerfile. A network-disabled, read-only container configuration probe confirms Nix accepts the cache and key while `require-sigs` stays true. This probe does not establish a successful new image or firmware build.
+Regression: the missing-image journey in `test/firmware/zmk/build.test.ts` checks the emitted Dockerfile. A network-disabled, read-only container configuration probe confirms Nix accepts the cache and key while `require-sigs` stays true. A new image and compiled scratch CLI firmware build passed at `a2d0bd9b`, producing both Glove80 half families. The [issue record](../issues/glove80-mutable-cachix-installer.md) keeps the artifact hash and limits. No keyboard was flashed.
 
 ## 2026-11-13 desktop sidecar integrity
 
