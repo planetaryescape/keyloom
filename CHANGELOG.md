@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.78.0](https://github.com/planetaryescape/keyloom/compare/v0.77.0...v0.78.0) (2026-11-13)
+
+
+### Features
+
+* keep a failure's code on every screen and pick its way out from it ([a8e2ff5](https://github.com/planetaryescape/keyloom/commit/a8e2ff56e7e0572c714c46fceb3eb69d8a0ca06d))
+* show keyloom's log beside a failure that says the details are there ([dc2e630](https://github.com/planetaryescape/keyloom/commit/dc2e630ebef2e5fca5d6fde69f544b88124dc2e8))
+
+
+### Bug Fixes
+
+* answer the PR [#306](https://github.com/planetaryescape/keyloom/issues/306) review on the failed-build dialog, the stale check and kanata's return ([4cf39bc](https://github.com/planetaryescape/keyloom/commit/4cf39bcd00daec28b3b716993485660617566fcf))
+* close the key card and park its draft when Show the latest version reads a newer head ([ab55403](https://github.com/planetaryescape/keyloom/commit/ab55403d669303e32c11571dc3e648d39469f168))
+* fit the new-keyboard board to a phone, and give the keyboard screens their ways out ([dc2c22b](https://github.com/planetaryescape/keyloom/commit/dc2c22bace9a6c70ccf0c9c19b906787d037ca2d))
+* fit the new-keyboard board to a phone, and give the keyboard screens their ways out ([30b5868](https://github.com/planetaryescape/keyloom/commit/30b58689d0b7bb595ad7173cd9c2801c1ce618c6))
+* give a Glove80 image build that fills Docker's disk the disk_full code ([3dc8a97](https://github.com/planetaryescape/keyloom/commit/3dc8a977eb974422680fb7645962a60a5c13ad48))
+* give a refused build cache prune its own words, never the restart's ([bc7661b](https://github.com/planetaryescape/keyloom/commit/bc7661b1061b487170ef3364edb0067f3e6d3228))
+* give sync build failures, a full Docker disk and flash dead ends their own codes and buttons ([87b3021](https://github.com/planetaryescape/keyloom/commit/87b3021eca7295d1b47005b76dac899568f75380))
+* keep the failure's code in the chat composer and use one rule for every unexpected answer ([3b35820](https://github.com/planetaryescape/keyloom/commit/3b35820ea9ed57843029e70b7c95284830e71392))
+* let a failed log read be tried again, and finish an edit's follow-up when the toast's Try again lands ([bfe881b](https://github.com/planetaryescape/keyloom/commit/bfe881b1349006aa8b296c12bf84bb97b963a855))
+* never cut a finger word on Review, and act on the PR [#307](https://github.com/planetaryescape/keyloom/issues/307) review ([9edd1d9](https://github.com/planetaryescape/keyloom/commit/9edd1d92a9178a644aa5f93bbeb8ab398968def2))
+* no dead ends in sync failures, Docker's disk, Colima's stop and flash errors (round 8) ([29b86d4](https://github.com/planetaryescape/keyloom/commit/29b86d4996105b6d4a02b9e0c34f4545966bad3a))
+* no dead ends round 8: unexpected errors and the shell ([64f5f73](https://github.com/planetaryescape/keyloom/commit/64f5f7310e2b990ce45d93edb284c089ac4b54f1))
+* offer Restart keyloom on the chat, decisions and direct-edit failures that can't pass again ([bdfe7e3](https://github.com/planetaryescape/keyloom/commit/bdfe7e316fb89e9aea0bd12b39e62d028563d1f0))
+* open the other config when a sync toast is about another config of this keyboard ([33bca33](https://github.com/planetaryescape/keyloom/commit/33bca33fae3752bcd95af13ab0b3580927836e71))
+* quote an unusual Colima profile in the printed sudo lines ([37a5b55](https://github.com/planetaryescape/keyloom/commit/37a5b55e574eea2f433f54bddb74db046379bf05))
+* say what a failed read of a sync's build leaves, with only the buttons it has ([08e1369](https://github.com/planetaryescape/keyloom/commit/08e136906955bea26d587c68fe5951e3018727c1))
+
 ## [0.77.0](https://github.com/planetaryescape/keyloom/compare/v0.76.0...v0.77.0) (2026-11-13)
 
 
