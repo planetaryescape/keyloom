@@ -143,7 +143,8 @@ describe("R7-13: the MacBook's onboarding words", () => {
   test("the setup card never tells a person whose own layout runs on the keyboard that nothing of theirs is on it", () => {
     for (const b of [moonlander, corne, keebart, macbook]) {
       const html = renderToStaticMarkup(<SetupCard flow={flow({ step: { kind: "setup", keyboard: null, boardId: b.id, boardName: b.name } })} boards={[b]} hasConfigs={false} onImport={() => {}} onMade={() => {}} />);
-      expect(html).toContain("keyloom has no config for it yet.");
+      expect(html).toContain(`Your ${b.name} has no config yet`);
+      expect(html).toContain("Import the layout you already use, or start from a blank one.");
       expect(html).not.toContain("nothing of yours");
     }
   });

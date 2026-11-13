@@ -16,7 +16,7 @@ export function welcomeLead(chosen: Firmware | null, listed: boolean = chosen ==
   return "Setup never flashes your keyboard.";
 }
 
-/** The setup card's lead after "keyloom has no config for it yet": when a change first reaches the keyboard. */
+/** The end of the setup card's lead: when a change first reaches the keyboard. */
 export const setupWrites = (firmware: Firmware | undefined): string =>
   firmware === "kanata" ? "Nothing changes on your MacBook until you apply a change." : "Nothing is written to the keyboard until you apply a change.";
 
