@@ -1,5 +1,6 @@
 // What a repair request says under its title, and the buttons that match the words (R6-23). Pure.
 import type { BoardReview } from "../../api/review.ts";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 
 export type RepairKind = "proposal" | "build" | "finding";
 export type RepairView = {
@@ -55,4 +56,16 @@ export function findingRepairState(
   const open = r?.id === draft.reviewId && r.revisionId === draft.headRevisionId && !review.stale
     && r.items.some((item) => item.id === draft.findingId && item.dismissedAt === null && (item.kind === "problem" || item.kind === "hint"));
   return open ? "current" : "stale";
+}
+
+/** Before a revised-proposal request goes out, keyloom reads the layout and the proposal again. This is when that read failed (R10-11). */
+export const RECHECK_FAILED = "keyloom couldn't check the proposal again, so nothing was sent. Your request is kept below.";
+
+/**
+ * A failed recheck, kept with its code (R10-11). Send request is its Try again. For a failure no screen planned for, keyloom's own sentence
+ * follows, because it explains the Restart keyloom beside it; an answer that fails the same way every time turns Send request off (`failsAgain`).
+ */
+export function recheckFailure(error: unknown): PageFailure {
+  const failure = pageFailure(error, "");
+  return { ...failure, message: wayOutFor(failure, true) === null || failure.message === "" ? RECHECK_FAILED : `${RECHECK_FAILED} ${failure.message}` };
 }

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
-import { SHOW_PROPOSAL_WAITS, findingRepairState, repairWords } from "../../src/web/chat/repair-words.ts";
+import { RECHECK_FAILED, SHOW_PROPOSAL_WAITS, findingRepairState, recheckFailure, repairWords } from "../../src/web/chat/repair-words.ts";
+import { ApiError, UNREACHABLE } from "../../src/web/api.ts";
+import { INTERNAL_WORDS, UNREADABLE_WORDS, failsAgain } from "../../src/web/shell/unexpected.ts";
 
 test("a sent request names the history and offers Open history beside Dismiss request (R6-23)", () => {
   for (const kind of ["proposal", "build", "finding"] as const) {
@@ -73,4 +75,18 @@ test("Dismiss and show the proposal waits while keyloom replies, with the reason
   expect(replying.offer).toBe("show_proposal");
   expect(replying.offerWaits).toBe(SHOW_PROPOSAL_WAITS);
   expect(repairWords("proposal", { sent: false, current: false, replying: false }).offerWaits).toBeUndefined();
+});
+
+// R10-11: a recheck that failed says so in plain words, keeps its code, and never names the "recovery source".
+test("a failed recheck says nothing was sent in plain words and keeps its code", () => {
+  const lost = recheckFailure(new ApiError(0, UNREACHABLE));
+  expect(lost.message).toBe(RECHECK_FAILED);
+  expect(lost.message).not.toContain("recovery source");
+  expect(failsAgain(lost)).toBe(false);
+  const internal = recheckFailure(new ApiError(500, INTERNAL_WORDS, { code: "internal" }));
+  expect(internal.code).toBe("internal");
+  expect(internal.message).toBe(`${RECHECK_FAILED} ${INTERNAL_WORDS}`);
+  expect(failsAgain(internal)).toBe(false);
+  const unreadable = recheckFailure(new ApiError(400, UNREADABLE_WORDS, { code: "unreadable" }));
+  expect(failsAgain(unreadable)).toBe(true);
 });
