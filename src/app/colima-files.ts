@@ -248,6 +248,9 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
   const find = "/usr/bin/find -P . -xdev";
   // Each find's last word: no step, and nothing a step starts, holds the record channel (fd 3) open after the script ends.
   const closed = "3>&-";
+  // A walk whose find fails, such as at a folder it can't list, passed over that folder silently, since its errors go nowhere: it counts
+  // as a failed step (PR #300 CodeRabbit).
+  const orFailed = "|| /usr/bin/printf ' failed '";
   // `.`, the folder a step runs from, is one the person can't rename or link in: root's, with no group or other write and no ACL
   // (`ls -lde` prints one line more for each ACL entry; the pattern matches `stat`'s symbolic mode). `.` is the folder find is in, which no
   // name change can move, and the check is in the same shell as the change, so nothing can change `.` between. `$s` keeps its ID.
@@ -303,12 +306,12 @@ export function colimaFilesScript(plan: ColimaFilesPlan, tools: { chown: string;
     // %Mp%Lp is the whole mode, setuid, setgid and sticky bits included, which a bare `chmod 777` would clear.
     `KEYLOOM_MODES=" $(${find} -type d -perm +022 -exec /usr/bin/stat -f ' %d:%i:%Mp%Lp ' {} + ${closed}) "`,
     // Step 1. A folder's ID is recorded once it is root's; a folder root can't fully take is pruned, so nothing below it is touched.
-    `KEYLOOM_LOCKED=" $(${find} -type d \\( -execdir /bin/sh -c ${shellQuote(lock)} sh {} \\; -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\) ${closed}) "`,
+    `KEYLOOM_LOCKED=" $(${find} -type d \\( -execdir /bin/sh -c ${shellQuote(lock)} sh {} \\; -o \\( -prune -exec /usr/bin/printf ' failed ' \\; \\) \\) ${closed} ${orFailed}) "`,
     `export KEYLOOM_MODES KEYLOOM_LOCKED`,
     `gave=yes`,
     // Step 2. The first file whose folder fails the check, or whose change fails, ends it: -quit stops find, so nothing more changes.
-    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) case $(${find} ! -type d -links 1 ! -user ${uid} \\( -execdir /bin/sh -c ${shellQuote(give)} sh {} \\; -o -exec /usr/bin/printf ' failed ' \\; -quit \\) ${closed}) in *failed*) gave=no;; esac;; esac`,
-    `back=$(${find} -depth -type d ! -execdir /bin/sh -c ${shellQuote(giveBack)} sh {} \\; -exec /usr/bin/printf ' failed ' \\; ${closed})`,
+    `case $KEYLOOM_LOCKED in *" failed "*) gave=no;; *) case $(${find} ! -type d -links 1 ! -user ${uid} \\( -execdir /bin/sh -c ${shellQuote(give)} sh {} \\; -o -exec /usr/bin/printf ' failed ' \\; -quit \\) ${closed} ${orFailed}) in *failed*) gave=no;; esac;; esac`,
+    `back=$(${find} -depth -type d ! -execdir /bin/sh -c ${shellQuote(giveBack)} sh {} \\; -exec /usr/bin/printf ' failed ' \\; ${closed} ${orFailed})`,
     `[ "$gave" = yes ] && [ -z "$back" ] || fail colima_chown_failed "macOS didn't let keyloom give all of Colima's files back to you."`,
   ].join("\n");
 }
