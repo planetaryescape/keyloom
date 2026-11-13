@@ -786,7 +786,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                 <ModelSetup {...setup} replacing={setupOpen} />
               </section>
             )}
-            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onDismiss={chat.dismissProblem} />}
+            {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onStop={streaming ? chat.stop : undefined} onDismiss={chat.dismissProblem} />}
             {switchFailure === null ? null : <SwitchFailed token={token} to={switchFailure.id} failure={switchFailure.failure} onRetry={switchFailure.again} onDismiss={() => setSwitchFailure(null)} />}
           </div>
           {commandRows.length === 0 ? null : (

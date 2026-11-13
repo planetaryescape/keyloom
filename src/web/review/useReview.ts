@@ -4,7 +4,8 @@ import { isReviewCurrent } from "../../api/review.ts";
 import type { FixedItem } from "../../validation/review-item.ts";
 import { ApiError } from "../api.ts";
 import * as api from "./api-review.ts";
-import { type ReviewAction, type ReviewProblem, reviewProblemWords } from "./review-words.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
+import { type ReviewAction, type ReviewLoadProblem, type ReviewProblem, reviewLoadProblem, reviewProblemWords } from "./review-words.ts";
 
 /** An error as the words functions read it: an ApiError's status and code, or a transport failure as status -1. */
 export const asFailure = (error: unknown): { code: string | undefined; status: number; message: string } =>
@@ -18,7 +19,8 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
   const response = saved?.token === token && saved.layoutId === layoutId ? saved.response : null;
   // The request that failed, in words, and the way on: the same request again, or a fresh read when it was refused (R5-10).
   // A failed read has no `again`: Try again reads with the current `load`.
-  const [failure, setFailure] = useState<{ action: ReviewAction; view: ReviewProblem; again: (() => void) | null } | null>(null);
+  // A failed read keeps its failure and way, so the panel picks its buttons from the code (R9-06).
+  const [failure, setFailure] = useState<{ action: ReviewAction; view: ReviewProblem; again: (() => void) | null; load?: { failure: PageFailure } & ReviewLoadProblem } | null>(null);
   const [action, setAction] = useState<{ token: string; layoutId: string; serial: number; kind: Exclude<ReviewAction, "load"> } | null>(null);
   const busy = action?.token === token && action.layoutId === layoutId;
   // The fixed items of a review that arrived while the page was open, for the tick and the toast; once per review.
@@ -50,7 +52,9 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
       } else if (review !== null && seen.current === null) seen.current = review.id;
     } catch (error) {
       if (signal?.aborted || serial !== request.current) return;
-      setFailure({ action: "load", view: reviewProblemWords("load", asFailure(error)), again: null });
+      const kept = pageFailure(error, "The review couldn't be read.");
+      const load = reviewLoadProblem(kept, asFailure(error).status);
+      setFailure({ action: "load", view: { words: load.words, button: "Try again", next: "repeat" }, again: null, load: { failure: kept, ...load } });
     }
   }, [token, layoutId, headRevisionId, event]);
 
@@ -89,6 +93,11 @@ export function useReview(token: string, layoutId: string, headRevisionId: strin
     readFailed: failure?.action === "load",
     /** What failed, in words; null when nothing has. */
     problem: failure?.view.words ?? null,
+    /**
+     * A failed read's failure and way (R9-06): `unexpected` gets `UnexpectedWayOut`, `gone` gets Restart keyloom alone, `retry` keeps
+     * `problemAction`. Null for every other request.
+     */
+    loadProblem: failure?.load ?? null,
     /** The button for `problem`: Try again repeats the request that failed, Read the review again reads it afresh. */
     problemAction: failure === null ? null : { label: failure.view.button, run: failure.view.next === "repeat" && failure.again !== null ? failure.again : () => void load() },
     // A review event disables the old results before the GET can replace them, even when it reuses the same review row.

@@ -3,6 +3,8 @@
 import type { ChatProviderStatus } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { ReviewItem } from "../../validation/review-item.ts";
+import { CONFIG_GONE } from "../history/useVersions.ts";
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
 
 /** A message as a sentence that ends in a full stop. */
 export const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
@@ -175,4 +177,18 @@ export function reviewProblemWords(action: ReviewAction, error: { code: string |
   // Each of these requests is safe to repeat: a second run replaces the first, and hiding a hidden item hides it.
   // A server fault's own words ("internal error") say nothing to a person; its detail is in the server's log.
   return { words: `${what} ${error.status < 400 ? "The server didn't answer." : "It hit an unexpected error."}`, button: "Try again", next: "repeat" };
+}
+
+/**
+ * A review read that failed (R9-06), decided by the failure's code through `wayOutFor`, never by status alone. An exception gets Try again,
+ * Restart keyloom and the log; keyloom's catch-all 404 or an answer this page can't read gets Restart keyloom alone, because reading
+ * again fails the same way; a config deleted in another window (the route's own `not_found`) says so, with Restart keyloom, which opens
+ * the page on the configs keyloom has. Anything else, such as no answer, keeps Try again.
+ */
+export type ReviewLoadProblem = { words: string; way: "retry" | "unexpected" | "gone" };
+export function reviewLoadProblem(failure: PageFailure, status: number): ReviewLoadProblem {
+  const what = "keyloom couldn't read this config's review.";
+  if (wayOutFor(failure, true) !== null) return { words: `${what} ${failure.message}`, way: "unexpected" };
+  if (failure.code === "not_found") return { words: CONFIG_GONE, way: "gone" };
+  return { words: `${what} ${status < 400 ? "The server didn't answer." : sentence(failure.message)}`, way: "retry" };
 }

@@ -11,8 +11,10 @@ import { type PageFailure, unexpectedWayOut, wayOutFor } from "./unexpected.ts";
  * Pass `failure` (from `pageFailure`) where the screen kept the whole failure: a route's own `not_found` then keeps the screen's buttons
  * (R8-03). `code` alone treats every `not_found` as unexpected.
  */
-export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled = false, className = "button", primary }: {
+export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled = false, className = "button", primary, retryLabel = "Try again" }: {
   token: string; code?: string | undefined; failure?: PageFailure; onRetry?: (() => void) | undefined; className?: string;
+  /** The Try again's own words where the screen names what it repeats, such as Check again or Stop again. */
+  retryLabel?: string;
   /** Try again is off while the screen runs another action, as the screen's own Try again is. */
   retryDisabled?: boolean;
   /** False where the screen's own button is the Try again and already primary, such as the key card's Apply. */
@@ -23,7 +25,7 @@ export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled 
   return (
     <>
       {way.retry && onRetry !== undefined ? (
-        <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+        <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />{retryLabel}</button>
       ) : null}
       <RestartKeyloom token={token} primary={primary ?? !way.retry} />
       {/* "The details are in keyloom's log." gets a way to read it (R8-09). Only an exception's words name the log. */}
@@ -37,11 +39,11 @@ export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled 
  * a lost connection; Try again and Restart keyloom for an exception; Restart keyloom alone for an answer that fails the same way every
  * time. Use it in place of a bare Try again.
  */
-export function RetryOrRestart({ token, failure, onRetry, retryDisabled = false, className = "button" }: {
-  token: string; failure: PageFailure; onRetry: () => void; retryDisabled?: boolean; className?: string;
+export function RetryOrRestart({ token, failure, onRetry, retryDisabled = false, className = "button", retryLabel = "Try again" }: {
+  token: string; failure: PageFailure; onRetry: () => void; retryDisabled?: boolean; className?: string; retryLabel?: string;
 }) {
-  if (wayOutFor(failure, true) !== null) return <UnexpectedWayOut token={token} failure={failure} onRetry={onRetry} retryDisabled={retryDisabled} className={className} />;
-  return <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>;
+  if (wayOutFor(failure, true) !== null) return <UnexpectedWayOut token={token} failure={failure} onRetry={onRetry} retryDisabled={retryDisabled} className={className} retryLabel={retryLabel} />;
+  return <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />{retryLabel}</button>;
 }
 
 /**

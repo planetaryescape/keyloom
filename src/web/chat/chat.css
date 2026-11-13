@@ -435,7 +435,12 @@
   margin: var(--space-1) 0 0;
 }
 
+/* A wrapping row, so Try again or Stop again, Restart keyloom and the log's line keep their gaps (R9-03). */
 .chat-problem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   margin-top: var(--space-3);
 }
 

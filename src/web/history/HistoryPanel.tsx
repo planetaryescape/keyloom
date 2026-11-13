@@ -3,9 +3,9 @@ import { useState } from "react";
 import type { VersionHistoryResponse } from "../../api/configs.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
-import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { FailureNote, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
-import { wayOutFor } from "../shell/unexpected.ts";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import { historyWords } from "./history-words.ts";
 import type { Versions } from "./useVersions.ts";
 import { changes, versionTitle, versionWhen } from "./version-words.ts";
@@ -71,7 +71,7 @@ export function HistoryPanel(props: Props) {
   );
 }
 
-function Timeline({ history, layout, boardName, onKeyboard, onGoBack, onCompare, onPutOn, onNewConfig, onName, blockedReason }: Props & { history: VersionHistoryResponse }) {
+function Timeline({ token, history, layout, boardName, onKeyboard, onGoBack, onCompare, onPutOn, onNewConfig, onName, blockedReason }: Props & { history: VersionHistoryResponse }) {
   const now = Date.now();
   const [working, setWorking] = useState<string | null>(null);
   // The current version's changes show; older ones fold until asked.
@@ -125,6 +125,7 @@ function Timeline({ history, layout, boardName, onKeyboard, onGoBack, onCompare,
                 <div className="sheet-row-main">
                   {naming === v.id ? (
                     <NameField
+                      token={token}
                       initial={v.name ?? ""}
                       onCancel={() => setNaming(null)}
                       onSave={async (name) => {
@@ -254,19 +255,23 @@ function RevisionRow({ revision, layout, head, folded, now, busy, disabled, onGo
   );
 }
 
-function NameField({ initial, onSave, onCancel }: { initial: string; onSave: (name: string) => Promise<void>; onCancel: () => void }) {
+function NameField({ token, initial, onSave, onCancel }: { token: string; initial: string; onSave: (name: string) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState(initial);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // The failure keeps its code (R9-05): Save the name is its Try again, and an answer that fails the same way every time turns Save off,
+  // with Restart keyloom and the log beside the sentence.
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   const save = async () => {
     setBusy(true);
+    setProblem(null);
     try {
       await onSave(name.trim());
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "Couldn't name it.");
+      setProblem(pageFailure(error, "Couldn't name it."));
       setBusy(false);
     }
   };
+  const repeats = problem === null || wayOutFor(problem, true)?.retry !== false;
   return (
     <form
       className="history-name-field"
@@ -292,9 +297,9 @@ function NameField({ initial, onSave, onCancel }: { initial: string; onSave: (na
       <div className="history-name-actions">
         <button type="button" className="sheet-action" onClick={onCancel}>Cancel</button>
         {/* An empty name takes the name away (the API's rule), so Save works on an empty field too. */}
-        <button type="submit" className="bar-apply" disabled={busy || name.trim() === initial}>Save the name</button>
+        <button type="submit" className="bar-apply" disabled={busy || name.trim() === initial || !repeats}>Save the name</button>
       </div>
-      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
     </form>
   );
 }
