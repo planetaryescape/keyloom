@@ -3,11 +3,22 @@ import type { CompareResponse } from "../../api/configs.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { keyWords } from "./compare-words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import type { Milestone } from "./HistoryPanel.tsx";
 import { versionTitle, versionWhen } from "./version-words.ts";
 import "./history.css";
 
-export type Comparing = { milestone: Milestone } & ({ status: "loading" } | { status: "error"; message: string } | { status: "ready"; compare: CompareResponse });
+export type Comparing = { milestone: Milestone } & ({ status: "loading" } | ({ status: "error" } & PageFailure) | { status: "ready"; compare: CompareResponse });
+
+/** The compare route's own `not_found`: the config or this version is gone, so comparing again can't pass. History shows what keyloom has. */
+export const VERSION_GONE = "keyloom no longer has this version. It may have been deleted in another window. Go back to History to see the versions keyloom has.";
+
+/** A compare that failed, as the panel keeps it (R9-05): its code picks the buttons, and a version that is gone says so. */
+export function compareFailure(error: unknown): PageFailure {
+  const failure = pageFailure(error, "Couldn't compare.");
+  return failure.code === "not_found" && failure.generic !== true ? { ...failure, message: VERSION_GONE } : failure;
+}
 
 type Diff = CompareResponse["diff"];
 
@@ -44,7 +55,9 @@ export function otherChanges(diff: Diff, layerName: (id: string) => string = (id
 
 // One version against now (v3, D-315): the keys that would change if BK went back are marked on the board in the proposal's amber,
 // each with what it was; here they are listed per layer, then everything else, then the three ways to use the version.
-export function VersionCompare({ comparing, layout, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, onRetry, blockedReason }: {
+export function VersionCompare({ token, comparing, layout, boardName, layerId, layerName, onBack, onClose, onShowLayer, onGoBack, onPutOn, onNewConfig, onRetry, blockedReason }: {
+  /** The session token, for Restart keyloom beside a compare that fails the same way every time. */
+  token: string;
   comparing: Comparing;
   /** The layout now, for saying what each key does now. */
   layout: Pick<Layout, "layers" | "macros" | "tapDances" | "passthrough">;
@@ -81,7 +94,15 @@ export function VersionCompare({ comparing, layout, boardName, layerId, layerNam
         ) : comparing.status === "error" ? (
           <div className="sheet-empty" role="alert">
             <p>{comparing.message}</p>
-            <button type="button" className="button" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+            {/* An answer that fails the same way every time gets Restart keyloom, never Try again alone; a version that is gone goes back to
+                History, which reads what keyloom has (R9-05). */}
+            {wayOutFor(comparing, true) !== null ? (
+              <div className="sheet-actions"><UnexpectedWayOut token={token} failure={comparing} onRetry={onRetry} /></div>
+            ) : comparing.code === "not_found" ? (
+              <button type="button" className="button" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" />Back to History</button>
+            ) : (
+              <button type="button" className="button" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+            )}
           </div>
         ) : comparing.compare.diff.same ? (
           <p className="sheet-empty">Nothing differs from now.</p>

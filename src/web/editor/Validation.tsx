@@ -3,11 +3,19 @@ import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
 import type { Issue, ValidationResult } from "../../validation/result.ts";
 import { Reminders } from "../decisions/Reminders.tsx";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
 import { functionLabel } from "./function-label.ts";
 import type { CheckState } from "./useCheck.ts";
 import { keyIn } from "../../validation/words.ts";
 
 interface Props {
+  /**
+   * The session token, for Restart keyloom and the log beside a check that fails the same way every time (R9-02). Every pane that checks
+   * passes it; only a proposal card, which shows a finished result and never a failed check, leaves it out.
+   */
+  token?: string | undefined;
   layout: Layout;
   /** The key being edited, so issues about it read "This key" and others name their key. Omitted for a proposal, where every key is named. */
   slot?: Slot;
@@ -96,9 +104,25 @@ function Summary({ result, layout, showMoves }: { result: ValidationResult; layo
   );
 }
 
+/**
+ * The way on under a failed check (R9-02, D-540): Check again for a failure that can pass on a second try, such as a lost connection;
+ * Check again, Restart keyloom and the log for an exception; Restart keyloom alone for an answer that fails the same way every time, and
+ * for a layout deleted in another window (the route's own `not_found`), which no check can bring back.
+ */
+export function CheckWayOut({ token, failure, onRecheck }: { token: string | undefined; failure: PageFailure; onRecheck: () => void }) {
+  if (token !== undefined && wayOutFor(failure, true) !== null) return <UnexpectedWayOut token={token} failure={failure} onRetry={onRecheck} retryLabel="Check again" />;
+  if (token !== undefined && failure.code === "not_found") return <RestartKeyloom token={token} primary />;
+  return (
+    <button type="button" className="button" onClick={onRecheck}>
+      <RefreshCw size={14} aria-hidden="true" />
+      Check again
+    </button>
+  );
+}
+
 // Everything the validator said about the draft, in the order it matters: errors block Apply,
 // warnings don't, and a clean pass says so rather than staying silent.
-export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves = true, hideLost = false, onShowLatest }: Props) {
+export function Validation({ token, layout, slot, idleNote, state, onRecheck, showMoves = true, hideLost = false, onShowLatest }: Props) {
   let body;
   if (state.status === "idle") {
     body = (
@@ -116,14 +140,12 @@ export function Validation({ layout, slot, idleNote, state, onRecheck, showMoves
     );
   } else if (state.status === "error") {
     body = (
-      <div className="validation-note validation-note-error" role="alert">
-        <CircleX size={16} aria-hidden="true" />
-        <span>{state.message}</span>
-        {state.stale ? null : (
-          <button type="button" className="button" onClick={onRecheck}>
-            Check again
-          </button>
-        )}
+      <div role="alert">
+        <p className="validation-note validation-note-error">
+          <CircleX size={16} aria-hidden="true" />
+          <span>{state.message}</span>
+        </p>
+        {state.stale ? null : <div className="unexpected-actions"><CheckWayOut token={token} failure={state} onRecheck={onRecheck} /></div>}
       </div>
     );
   } else {

@@ -387,7 +387,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
         </details>
 
         {combo === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
-          <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
+          <Validation token={token} layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
         )}
       </fieldset>
       </div>

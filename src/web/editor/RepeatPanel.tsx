@@ -3,6 +3,10 @@ import { useMemo, useState } from "react";
 import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
+import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { LAYOUT_GONE } from "../release/flash-words.ts";
+import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
 import { bindingSummary } from "./draft.ts";
 import { planRepeat, repeatMeaning, repeatSummary, type LastChange } from "./repeat-plan.ts";
 import { useCheckOps } from "./useCheckOps.ts";
@@ -30,12 +34,16 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
   const plan = useMemo(() => planRepeat(layout, layerId, positions, last), [layout, layerId, positions, last]);
   const { state, recheck } = useCheckOps(token, layoutRef, revisionId, plan.ops);
   const [applying, setApplying] = useState(false);
-  const [applyError, setApplyError] = useState<string | null>(null);
+  // The failure keeps its code (R9-05): Apply is its Try again, and an answer that fails the same way every time turns Apply off, with
+  // Restart keyloom and the log beside the sentence.
+  const [applyError, setApplyError] = useState<PageFailure | null>(null);
   const layerName = layout.layers.find((l) => l.id === layerId)?.name ?? layerId;
 
   const result = state.status === "done" ? state.result : null;
   const warnings = result?.warnings.length ?? 0;
-  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying;
+  // The route's own not_found: the layout was deleted in another window, so no Apply can land (PR #310 CodeRabbit, as checkFailed does).
+  const layoutGone = applyError?.code === "not_found" && applyError.generic !== true;
+  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !failsAgain(applyError) && !layoutGone;
   const idleNote = plan.transform === null ? "The last change didn't change anything, so there is nothing to repeat." : "Every selected key already matches, or can't take this change.";
 
   async function apply() {
@@ -48,7 +56,7 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
       await onApplied(summary, plan.ops.length > 0 && plan.ops[0]?.op === "setBinding" ? plan.ops[0].at.position : positions[0] ?? 0);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale")) onStale();
-      else setApplyError(error instanceof Error ? error.message : "The change could not be applied.");
+      else setApplyError(pageFailure(error, "The change could not be applied."));
     } finally {
       setApplying(false);
     }
@@ -96,11 +104,16 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
         </ul>
       )}
 
-      <Validation layout={layout} idleNote={idleNote} state={state} onRecheck={recheck} />
+      <Validation token={token} layout={layout} idleNote={idleNote} state={state} onRecheck={recheck} />
 
       <footer className="editor-foot">
         <div className="editor-foot-note" aria-live="polite">
-          {applyError !== null ? <p className="blocked" role="alert">{applyError}</p> : <p className="muted">Nothing is saved until you apply.</p>}
+          {layoutGone ? (
+            <div className="blocked" role="alert">
+              <p>{LAYOUT_GONE}</p>
+              <div className="unexpected-actions"><RestartKeyloom token={token} primary /></div>
+            </div>
+          ) : applyError !== null ? <FailureNote token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
         </div>
         <button type="button" className="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>

@@ -14,6 +14,8 @@ import { describeKey } from "../../layout/describe.ts";
 import { layerName } from "../chat/proposal-facts.ts";
 import { formatWhen } from "../history/words.ts";
 import { MiniCap } from "../shell/Sheet.tsx";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { ModelSetup } from "../chat/ModelSetup.tsx";
 import { ProviderPicker } from "../chat/ProviderPicker.tsx";
 import { activeProviderReady, offersPicker } from "../chat/provider-ready.ts";
@@ -230,7 +232,10 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
   const problem = r.problem === null ? null : (
     <div className="br-apply-failure" role="alert">
       <p>{r.problem}</p>
-      {r.problemAction === null ? null : <button type="button" className="sheet-action" onClick={r.problemAction.run}>{r.problemAction.label}</button>}
+      {/* A read that fails the same way every time never gets Try again alone (R9-06): its code picks the buttons. */}
+      {r.loadProblem?.way === "unexpected" ? <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={r.loadProblem.failure} onRetry={r.reload} className="sheet-action" /></div>
+        : r.loadProblem?.way === "gone" ? <div className="unexpected-actions"><RestartKeyloom token={token} primary /></div>
+          : r.problemAction === null ? null : <button type="button" className="sheet-action" onClick={r.problemAction.run}>{r.problemAction.label}</button>}
     </div>
   );
   // Every running look has a Stop (R6-12). While its activity tests run it ends them, the look they belong to and their container (R5-17);

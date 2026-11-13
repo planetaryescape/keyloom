@@ -12,7 +12,7 @@ test("an invalidated review offers one fresh-review action rather than pretendin
       review: { id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "connect", checkedAt: 0,
         checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai: { status: "failed", reason: "The keyboard reconnected.", model: null },
         freshness: { current: false, reason: "The keyboard reconnected. A fresh analysis is required." }, items: [], fixed: [] },
-      stale: true, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
+      stale: true, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, loadProblem: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
      }, layout: tinyLayout(), board: tinyBoard(), rows: {}, boardName: "Synthetic", configName: "Synthetic config", proposals: [], pinnedId: null,
     onPin() {}, onApply: async () => {}, onShowLayer() {}, onPlanRepair() {}, onClose() {},
   }));
@@ -32,7 +32,7 @@ function populatedReview(): Review {
         { id: "suggestion", source: "agent", kind: "suggestion", severity: "info", code: "suggestion", title: "Previous suggestion", body: "Old proposal", keys: [], layers: [], proposalId: "proposal", fixes: [], dismissedAt: null },
         { id: "hidden", source: "check", kind: "hint", severity: "info", code: "hidden", title: "Hidden finding", body: "Hidden", keys: [], layers: [], proposalId: null, fixes: [], dismissedAt: 1 },
       ] },
-    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
+    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, loadProblem: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
     run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
   };
 }

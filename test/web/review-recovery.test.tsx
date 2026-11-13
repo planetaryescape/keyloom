@@ -1,16 +1,19 @@
 // #288 review: a refused look and an unread proposals list each offer the button that fixes them.
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { BoardReview } from "../../src/api/review.ts";
 import { ReviewPanel } from "../../src/web/review/ReviewPanel.tsx";
 import type { Review } from "../../src/web/review/useReview.ts";
+import { reviewLoadProblem } from "../../src/web/review/review-words.ts";
+import { CONFIG_GONE } from "../../src/web/history/useVersions.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, type PageFailure } from "../../src/web/shell/unexpected.ts";
 import { tinyBoard, tinyLayout } from "../helpers/workload.ts";
 
 function panel(ai: BoardReview["ai"], items: BoardReview["items"] = [], proposalsFailed = false) {
   const review: Review = {
     review: { id: "rvw", layoutId: "lay", revisionId: "rev", trigger: "manual", checkedAt: 0, checks: { status: "done", summary: { layers: 1, keys: 4, combos: 0 } }, ai, freshness: { current: true, reason: null }, fixed: [], items },
-    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
+    stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, loadProblem: null, stopping: false, stop: async () => {}, activities: [], justFixed: [], clearJustFixed() {},
     run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined,
   };
   return renderToStaticMarkup(createElement(ReviewPanel, {
@@ -44,7 +47,7 @@ test("an unread proposals list says so with Try again, and a suggestion says its
 // R5-03, R5-10, R5-17: every failed review request shows its words with the button that moves on, before a first review too.
 function shown(over: Partial<Review>) {
   const review: Review = {
-    review: null, stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, stopping: false, stop: async () => {},
+    review: null, stale: false, loaded: true, busy: false, refreshing: false, problem: null, readFailed: false, problemAction: null, loadProblem: null, stopping: false, stop: async () => {},
     activities: [], justFixed: [], clearJustFixed() {}, run: async () => {}, dismiss: async () => {}, restore: async () => {}, reload: () => undefined, ...over,
   };
   return renderToStaticMarkup(createElement(ReviewPanel, {
@@ -102,4 +105,37 @@ test("a used-up Codex plan shows its reset time in place, and offers no switch o
   expect(html).not.toContain("keyloom&#x27;s own look didn&#x27;t finish");
   // The reason shows in place, so there is no Details to open.
   expect(html).not.toContain(">Details<");
+});
+
+// R9-06: the review's load failure decides with `wayOutFor`, not by status: keyloom's catch-all never gets a Try again that fails the same
+// way, an exception gets the log's way, and a config deleted elsewhere says so.
+describe("a review read that failed", () => {
+  const failed = (failure: PageFailure, status: number) => {
+    const load = reviewLoadProblem(failure, status);
+    return shown({ loaded: false, readFailed: true, problem: load.words, problemAction: { label: "Try again", run() {} }, loadProblem: { failure, ...load } });
+  };
+  test("keyloom's catch-all 404 gets Restart keyloom alone, with the page's own words", () => {
+    const html = failed({ message: NOT_FOUND_WORDS, code: "not_found", generic: true }, 404);
+    expect(html).toContain("Restart keyloom");
+    expect(html).not.toContain(">Try again<");
+    expect(html).not.toContain("unexpected error");
+  });
+  test("an exception gets Try again and Restart keyloom", () => {
+    const html = failed({ message: INTERNAL_WORDS, code: "internal" }, 500);
+    expect(html).toContain("Try again");
+    expect(html).toContain("Restart keyloom");
+  });
+  test("a config deleted in another window says so, with Restart keyloom and no Try again", () => {
+    const load = reviewLoadProblem({ message: "no layout lay", code: "not_found" }, 404);
+    expect(load).toEqual({ words: CONFIG_GONE, way: "gone" });
+    const html = failed({ message: "no layout lay", code: "not_found" }, 404);
+    expect(html).toContain("Restart keyloom");
+    expect(html).not.toContain(">Try again<");
+  });
+  test("no answer keeps Try again alone", () => {
+    expect(reviewLoadProblem({ message: "keyloom stopped answering." }, 0)).toEqual({ words: "keyloom couldn't read this config's review. The server didn't answer.", way: "retry" });
+    const html = failed({ message: "keyloom stopped answering." }, 0);
+    expect(html).toContain(">Try again<");
+    expect(html).not.toContain("Restart keyloom");
+  });
 });

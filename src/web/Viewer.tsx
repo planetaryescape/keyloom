@@ -14,6 +14,7 @@ import { ApiError } from "./api.ts";
 import { RestartDialog } from "./shell/RestartDialog.tsx";
 import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
 import { type PageFailure, unexpectedWayOut, wayOutFor } from "./shell/unexpected.ts";
+import { type UnexpectedDialog, failedToast as failedToastInput } from "./shell/failed-toast.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
@@ -51,7 +52,7 @@ import { marksOn, otherMarkedLayers, previewProposal, rememberedOn } from "./cha
 import { Reminders } from "./decisions/Reminders.tsx";
 import { HistoryPanel, type Milestone } from "./history/HistoryPanel.tsx";
 import { useVersions } from "./history/useVersions.ts";
-import { VersionCompare, type Comparing } from "./history/VersionCompare.tsx";
+import { VersionCompare, type Comparing, compareFailure } from "./history/VersionCompare.tsx";
 import { versionTitle } from "./history/version-words.ts";
 import { archiveConfig, compareVersion, createConfig, deleteConfig, nameVersion, renameConfig, restoreConfig, restoreVersion, syncConfig, useConfig } from "./configs/api-configs.ts";
 import { ConfigMenu } from "./configs/ConfigMenu.tsx";
@@ -344,7 +345,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [quick, setQuick] = useState<readonly string[] | null>(null);
   const [pendingDrop, setPendingDrop] = useState<{ ops: ChangeOp[]; summary: string; lost: string[]; reason: string } | null>(null);
   // A board change that hit a failure no screen planned for, opened from its toast's Restart keyloom (R8-03).
-  const [unexpected, setUnexpected] = useState<{ failure: PageFailure; retry?: () => void } | null>(null);
+  const [unexpected, setUnexpected] = useState<(Omit<UnexpectedDialog, "title"> & { title?: string }) | null>(null);
+  // Update layout that keyloom's check turned down, for the revision it was asked on (R9-09).
+  const [upgradeRefusal, setUpgradeRefusal] = useState<{ revisionId: string; hidden: boolean } | null>(null);
   const [changing, setChanging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
@@ -739,6 +742,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
+  // Read when a toast's Try again runs, which can be long after the failure: a key opened since then blocks the step (PR #310 CodeRabbit).
+  const undoBlockNow = useRef(undoBlock);
+  undoBlockNow.current = undoBlock;
   const mode: PanelMode = chatOpen && !keyOverChat ? "chat" : editing !== null ? "key" : combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
   const libraryHighlight = useMemo(() => {
     const keys = new Set(mode === "library" && libraryKeys !== null ? libraryKeys : []);
@@ -1603,6 +1609,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A failed action's toast keeps its code, so a failure no screen planned for gets Restart keyloom (R9-05).
+  const failedToast = (message: string, error: unknown, retry?: () => void) => toasts.show(failedToastInput(message, error, setUnexpected, retry));
+
   async function archiveThis() {
     try {
       await archiveConfig(token, summary.id);
@@ -1612,7 +1621,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       configs.reload();
       if (moving && keyboardConfig !== null) switchLayout(keyboardConfig.id);
     } catch (error) {
-      toasts.show({ kind: "error", message: "Couldn't archive it", ...(error instanceof Error ? { detail: error.message } : {}) });
+      failedToast("Couldn't archive it", error, () => void archiveThis());
     }
   }
 
@@ -1623,7 +1632,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       configs.reload();
       chrome.onReload?.(restored.id);
     } catch (error) {
-      toasts.show({ kind: "error", message: "Couldn't restore it", ...(error instanceof Error ? { detail: error.message } : {}) });
+      failedToast("Couldn't restore it", error, () => void restoreArchived(id));
     }
   }
 
@@ -1633,7 +1642,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       const compare = await compareVersion(token, layoutRef, milestone.version.id);
       setComparing((now) => (now?.milestone.version.id === milestone.version.id ? { milestone, status: "ready", compare } : now));
     } catch (error) {
-      setComparing({ milestone, status: "error", message: error instanceof Error ? error.message : "Couldn't compare." });
+      setComparing({ milestone, status: "error", ...compareFailure(error) });
     }
   }
 
@@ -1667,7 +1676,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
   /** Resolves true when the step back went through, so Compare closes only then and a failure keeps it open beside the toast (R3-23). */
-  async function undo(target?: { id: string; summary: string }): Promise<boolean> {
+  async function undo(target?: { id: string; summary: string }, after?: () => void): Promise<boolean> {
     setUndoing(true);
     setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
@@ -1675,6 +1684,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     try {
       await undoChange(token, layoutRef, { revisionId: revision.id, ...(target === undefined ? {} : { to: target.id }) });
       // The step is written; a failed read says so with Show the new layout, never "Couldn't undo" (R6-03).
+      // What the caller does once the step has landed, such as closing Compare; a retry from the toast runs it too (PR #310 CodeRabbit).
+      after?.();
       if (!(await readAfterApply(onChanged, showAppliedNotShown))) return true;
       toasts.show(
         target === undefined
@@ -1685,7 +1696,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       if (stale) showLatest(STALE_UNDO);
-      else toasts.show({ kind: "error", message: target === undefined ? "Couldn't undo" : "Couldn't go back", ...(error instanceof Error ? { detail: error.message } : {}) });
+      else failedToast(target === undefined ? "Couldn't undo" : "Couldn't go back", error, () => {
+        if (undoBlockNow.current !== null) toasts.show({ kind: "info", message: undoBlockNow.current });
+        else void undo(target, after);
+      });
       return false;
     } finally {
       setUndoing(false);
@@ -1713,7 +1727,18 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (!(await readIfChanged(out.changed, onChanged, showAppliedNotShown))) return;
     toasts.show({ kind: out.changed ? "success" : "info", message: out.changed ? "Updated" : "Nothing to update", detail: out.message });
   }
-  const offer = detail.upgrade === null || detail.upgrade === undefined ? null : <UpgradeOffer offer={detail.upgrade} onUpgrade={upgradeNow} />;
+  // A refused update and a hidden offer hold for this version of the layout only: a change may let the update pass (R9-09).
+  const upgradeRefused = upgradeRefusal?.revisionId === revision.id;
+  const offer = detail.upgrade === null || detail.upgrade === undefined || (upgradeRefused && upgradeRefusal.hidden) ? null : (
+    <UpgradeOffer
+      offer={detail.upgrade}
+      onUpgrade={upgradeNow}
+      token={token}
+      refused={upgradeRefused}
+      onRefused={() => setUpgradeRefusal({ revisionId: revision.id, hidden: false })}
+      onHide={() => setUpgradeRefusal({ revisionId: revision.id, hidden: true })}
+    />
+  );
 
   async function onTuned(summaryText: string) {
     if (await readAfterApply(onChanged, showAppliedNotShown)) toasts.show({ kind: "success", message: "Applied", detail: summaryText });
@@ -2330,16 +2355,21 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             historyOpen ? (
               comparing !== null ? (
                 <VersionCompare
+                  token={token}
                   comparing={comparing}
                   layout={layout}
                   boardName={boardDisplayName(board.name)}
                   layerId={layer.id}
                   layerName={layerNameOf}
-                  onBack={() => setComparing(null)}
+                  onBack={() => {
+                    // A version that is gone may still be in the list History read earlier, so Back reads it again (PR #310 review).
+                    setComparing(null);
+                    history.reload();
+                  }}
                   onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
-                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then((wentBack) => wentBack && setComparing(null))}
+                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }, () => setComparing(null))}
                   onPutOn={() => setConfigDialog({ kind: "put-version", milestone: comparing.milestone })}
                   onNewConfig={() => setConfigDialog({ kind: "new", start: "version", version: comparing.milestone.version.id })}
                   blockedReason={undoBlock}
@@ -2575,7 +2605,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : null}
       {unexpected === null ? null : (
-        <RestartDialog token={token} title="keyloom couldn't make that change" failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
+        <RestartDialog token={token} title={unexpected.title ?? "keyloom couldn't make that change"} failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
       )}
       {pendingDrop === null ? null : (
         <DropConfirm

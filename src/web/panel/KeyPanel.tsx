@@ -778,7 +778,7 @@ export function KeyPanel(props: Props) {
         )}
         {/* Only what needs saying: problems, warnings, or a check that couldn't run. A clean change says nothing; Apply is enough. */}
         {binding === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
-          <Validation layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost {...(onShowLatest === undefined ? {} : { onShowLatest })} />
+          <Validation token={token} layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost {...(onShowLatest === undefined ? {} : { onShowLatest })} />
         )}
         {binding === null || !(reasonOpen || reason !== "") ? null : (
           <div className="card-reason">
