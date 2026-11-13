@@ -165,3 +165,22 @@ describe("setupFailure", () => {
     expect(setupFailure("kanata_swapped", "x")).toEqual({ text: expect.stringContaining("installed nothing. Press the button again"), link: null });
   });
 });
+
+// R9-12: kanata takes the built-in keyboard by name; a Mac model keyloom doesn't know names it differently, so every other step can be
+// done while nothing is remapped.
+describe("a built-in keyboard keyloom doesn't know by name", () => {
+  test("is a step to do, shown while kanata runs too, with the contribution guide", () => {
+    const steps = setupSteps(status([...running, f("keyboard_name", "warn", "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare")]));
+    const step = steps.find((s) => s.key === "keyboard-name");
+    expect(step).toMatchObject({ state: "todo", title: "kanata can't find this Mac's keyboard", whileRunning: true, link: { label: "Open the contribution guide" } });
+    expect(step?.link?.href).toContain("CONTRIBUTING.md");
+    expect(step?.detail).not.toContain("`");
+    expect(step?.detail).not.toContain("kanata --list");
+    // So the running view never reads as all done while kanata remaps nothing.
+    expect(attentionSteps(status([...running, f("keyboard_name", "warn")])).map((s) => s.key)).toContain("keyboard-name");
+  });
+  test("a keyboard keyloom finds, or a list it couldn't read, adds no step", () => {
+    expect(setupSteps(status([...running, f("keyboard_name", "ok")])).some((s) => s.key === "keyboard-name")).toBe(false);
+    expect(setupSteps(status([...running, f("keyboard_name", "unknown")])).some((s) => s.key === "keyboard-name")).toBe(false);
+  });
+});

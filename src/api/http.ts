@@ -655,7 +655,9 @@ export const SyncStateSchema = z.discriminatedUnion("kind", [
     why: z.enum(["waiting", "auto_off", "paused", "unproven", "failed", "unknown_build", "other_config", "changed_since", "remapping_off"]),
     error: z.string().nullable(),
   }),
-  z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string() }),
+  // `instructionCode`: a permission that would let keyloom do it itself next time, such as "permission_input_monitoring" (R9-01). Absent
+  // when there is none, and on older senders.
+  z.object({ kind: z.literal("needs_hand"), instruction: z.string(), reason: z.string(), instructionCode: z.string().optional() }),
   // changes: what was applied since the last build keyloom put on the keyboard, when it knows (see SyncFacts.lastKnown).
   // `firstFlash`: keyloom sees this board only once its firmware is on it, and it never has been (R6-10). Absent on older senders.
   z.object({ kind: z.literal("not_connected"), changes: z.number().int().nonnegative().nullable().optional(), firstFlash: z.literal(true).optional() }),
@@ -671,7 +673,10 @@ export const SyncRunSchema = z.object({
   revisionId: z.string().min(1),
   failure: z.string().nullable(),
   error: z.string().nullable(),
-  /** A failed build's or flash's code, such as "docker_unavailable" (R3-05) or "write_timeout" (R8-11). Absent on older senders. */
+  /**
+   * A failed build's or flash's code, such as "docker_unavailable" (R3-05) or "write_timeout" (R8-11), or the sync's own, such as
+   * "flash_tool_missing" (R9-10). Absent on older senders.
+   */
   errorCode: z.string().nullable().optional(),
   /** The build this sync made, so Build and flash can open on it (R8-01). Absent on older senders. */
   buildId: z.string().min(1).nullable().optional(),

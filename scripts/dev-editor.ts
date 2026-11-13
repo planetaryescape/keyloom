@@ -18,6 +18,11 @@
 // KEYLOOM_FAKE_PRUNE=empty the cache was already empty, =busy refuses it because a build runs, =fail fails it (R8-04).
 // KEYLOOM_FAKE_SYNC=build_failed gives the Moonlander a sync pill: its auto-sync builds the head with the fake build at once, and when that
 // build fails the pill and its toast say so, with Build and flash on that build (R8-01). Pair it with a KEYLOOM_FAKE_FAIL_BUILD mode.
+// KEYLOOM_FAKE_SYNC=files_and_folders|files_split|input_monitoring|tool_missing gives the Moonlander a pill that syncs for 3 s (KEYLOOM_FAKE_SYNC_MS) from when a page first follows it, then ends
+// as a sync whose flash macOS refused (R9-01: behind, a split board's needs-hand, the Moonlander's reset wait) or whose flash tool is missing
+// (R9-10, pair it with KEYLOOM_FAKE_FLASH=no-zapp); =kanata_keyboard shows kanata's checklist with a keyboard keyloom doesn't know by name
+// (R9-12). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
+// Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine readiness reports.
 // KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY=1 fails the first layout read after each apply, as when the change is written but the page
 // can't show it (R7-06).
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
@@ -52,6 +57,7 @@ import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
+import type { RemapperSetupBackend } from "../src/server/system-remapper-routes.ts";
 import { type SyncBackend, SyncError } from "../src/server/sync-backend.ts";
 import { EditorError } from "../src/server/editor-backend.ts";
 import type { BoardSync } from "../src/api/http.ts";
@@ -150,7 +156,7 @@ const system: SystemBackend = {
       }
     : colimaBroken && !colimaRestarted
       ? { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima", alternatives: ALTERNATIVES, engineAction: engineAction() }
-      : { ok: true, version: "29.0.0", engine: "Docker", autoStart: true },
+      : { ok: true, version: "29.0.0", engine: process.env.KEYLOOM_FAKE_ENGINE ?? "Docker", autoStart: true },
   startDocker: async () => {
     // Start it now brings back an app a failed forced restart left down (R7-03).
     appLeftDown = false;
@@ -205,6 +211,8 @@ const system: SystemBackend = {
     const mode = process.env.KEYLOOM_FAKE_PRUNE;
     if (mode === "busy") return { ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished." };
     await Bun.sleep(2000);
+    if (mode === "daemon") return { ok: false, code: "docker_unavailable", reason: "Docker couldn't free its build cache: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" };
+    if (mode === "internal") throw new Error("database is locked");
     if (mode === "fail") return { ok: false, reason: "Docker couldn't free its build cache: Error response from daemon: a prune operation is already running." };
     if (mode === "empty") return { ok: true, freed: "0B" };
     fake.diskFull = false;
@@ -251,7 +259,29 @@ if (unexpected.get("check") === "gone") fake.check = async (ref: string) => { th
 if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw new EditorError(409, "validation_failed", "the upgrade was not saved: the upgraded layout doesn't parse"); };
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
-const sync = process.env.KEYLOOM_FAKE_SYNC === "build_failed" ? await fakeBuildFailedSync() : undefined;
+const syncMode = process.env.KEYLOOM_FAKE_SYNC;
+const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard"] as const;
+const staticMode = STATIC_SYNC.find((m) => m === syncMode);
+const sync = syncMode === "build_failed" ? await fakeBuildFailedSync() : staticMode !== undefined ? await fakeFlashRefusedSync(staticMode) : undefined;
+// System Settings never opens here: the fake says it did, or that it didn't with KEYLOOM_FAKE_OPEN_SETTINGS=fail.
+const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined ? undefined : {
+  status: async () => ({
+    platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null },
+    kanata: { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: "1.12.0" }, driverVersion: "6.2.0",
+    findings: [
+      { code: "kanata_version", name: "kanata", status: "ok", detail: "1.12.0" }, { code: "driver_mismatch", name: "driver", status: "ok", detail: "6.2.0" },
+      { code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare" },
+      { code: "port_closed", name: "kanata's port", status: "ok", detail: "kanata answers" },
+    ],
+  }),
+  installKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't install kanata." }),
+  cancelInstall: async () => ({ ok: true }),
+  startKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't start kanata." }),
+  openSettings: async (pane) => {
+    console.log(`fake: open settings pane ${pane}`);
+    return process.env.KEYLOOM_FAKE_OPEN_SETTINGS === "fail" ? { ok: false, code: "failed", reason: "macOS didn't open System Settings: open exited 1" } : { ok: true };
+  },
+};
 
 // KEYLOOM_FAKE_RESTART=1 answers /api/restart as the desktop app's server would, and /api/log with a log file, so Restart keyloom and Show
 // keyloom's log render as they do there. Neither restarts or opens anything.
@@ -259,7 +289,64 @@ const desktop = process.env.KEYLOOM_FAKE_RESTART === "1" ? {
   restart: { canRestart: true, command: "keyloom serve", restart: () => console.log("fake: restart asked for") },
   log: { log: { kind: "file" as const, path: "/Users/you/Library/Logs/keyloom/keyloom.log", canShow: true }, show: async () => { console.log("fake: show log"); } },
 } : {};
-const server = startServer({ port, source, editor: fake, chat, system, ...desktop, ...(sync === undefined ? {} : { sync }), token: "dev-editor-token" });
+const server = startServer({ port, source, editor: fake, chat, system, ...desktop, ...(sync === undefined ? {} : { sync }), ...(remapperSetup === undefined ? {} : { remapperSetup }), token: "dev-editor-token" });
+
+/**
+ * One Moonlander whose sync runs for 3 s, then ends the way `mode` says (R9-01, R9-10, R9-12), so its toast shows too. Each sentence is
+ * the flasher's own, which the page must not show as the way on.
+ */
+async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise<SyncBackend> {
+  const sample = await fake.source().get("moonlander-daily");
+  if (sample === null) throw new Error("the dev editor has no Daily driver layout");
+  const head = sample.revision.id;
+  const build = await fake.startBuild("moonlander-daily", { revisionId: head, boardRevision: "revb" });
+  // The sync starts when the first page follows it, so a page opened late still sees it end and shows the toast.
+  let startedAt = Date.now();
+  let followed = false;
+  const timings = { waitMs: 0, buildMs: null, flashMs: null, totalMs: null };
+  const auto = { on: true, choice: null, paused: false, proven: true, provenAt: startedAt - 86_400_000, dueAt: null };
+  const files = "Copying to /Volumes/GLV80RHBOOT/CURRENT.UF2 failed: EACCES: permission denied, open '/Volumes/GLV80RHBOOT/CURRENT.UF2'. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
+  const hand = "macOS didn't let keyloom restart the keyboard by itself. Press the reset button on the Moonlander (the small hole on the left half) within 2 minutes.";
+  const zapp = "zapp isn't installed. Install it with `brew install zapp`, then flash again.";
+  const status = async (): Promise<BoardSync[]> => {
+    const running = Date.now() - startedAt < Number(process.env.KEYLOOM_FAKE_SYNC_MS ?? 3000);
+    const base = { boardId: "zsa/moonlander", boardName: "Moonlander", layoutId: "moonlander-daily", layoutName: "Daily driver", headRevisionId: head, otherLayouts: 0, auto };
+    const last = (failure: string, error: string, errorCode: string | null) => ({
+      id: "sync_1", trigger: "auto" as const, status: running ? "flashing" as const : "failed" as const, step: running ? "writing" : "done", revisionId: head,
+      failure: running ? null : failure, error: running ? null : error, errorCode: running ? null : errorCode, buildId: build.id, startedAt, finishedAt: running ? null : Date.now(), timings,
+    });
+    if (mode === "kanata_keyboard") return [{ ...base, remapper: true, state: { kind: "in_sync" }, last: null }];
+    if (running) return [{ ...base, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: last("flash", "", null) }];
+    switch (mode) {
+      case "files_and_folders": return [{ ...base, state: { kind: "behind", changes: 1, why: "failed", error: files }, last: last("flash", files, "permission_files_and_folders") }];
+      case "files_split": return [{ ...base, state: { kind: "needs_hand", instruction: files, reason: "" }, last: last("flash", files, "permission_files_and_folders") }];
+      case "input_monitoring": return [{ ...base, state: { kind: "needs_hand", instruction: hand, reason: "keyloom couldn't restart it by itself", instructionCode: "permission_input_monitoring" }, last: last("needs_hand", "No Moonlander in bootloader mode was found within 2 minutes. Nothing was flashed.", null) }];
+      case "tool_missing": return [{ ...base, state: { kind: "behind", changes: 1, why: "failed", error: zapp }, last: last("flash", zapp, "flash_tool_missing") }];
+    }
+  };
+  const refused = (): never => {
+    throw new SyncError(400, "busy", "The dev editor's fake sync only shows how a sync ended.");
+  };
+  return {
+    status, syncNow: refused, setAutoSync: refused, setPaused: refused, disableRemapping: refused, replaceForeignRemapperConfig: refused, confirmExitChord: refused,
+    newKeyboards: () => [], setupBoards: () => [],
+    subscribe: (listener) => {
+      if (!followed) {
+        followed = true;
+        startedAt = Date.now();
+      }
+      let last = "";
+      const tell = () => void status().then((boards) => {
+        const now = JSON.stringify(boards.map((b) => b.state));
+        if (now !== last) listener(boards, [], []);
+        last = now;
+      });
+      tell();
+      const timer = setInterval(tell, 1000);
+      return () => clearInterval(timer);
+    },
+  };
+}
 
 /** One Moonlander whose auto-sync builds the head now, with the fake build, and is behind once that build fails (R8-01). */
 async function fakeBuildFailedSync(): Promise<SyncBackend> {

@@ -48,7 +48,7 @@ export async function waitFor(cond: () => boolean, what: string, ms = 15_000): P
  * retry restarts it just as the stop arrives, so the flasher says `inBootloader` and refuses the stop, and then the half's drive
  * goes away before the copy.
  */
-export type FlashMode = "ok" | "unverified" | "fail" | "write_timeout" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop" | "restart_at_stop";
+export type FlashMode = "ok" | "unverified" | "fail" | "write_timeout" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop" | "restart_at_stop" | "tool_missing";
 
 export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean } = {}) {
   const app: App = openApp({ dataDir: tempDir() });
@@ -67,6 +67,8 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
     /** The failed build's code, as the real build records it (D-501), such as "docker_unavailable". */
     buildErrorCode: undefined as string | undefined,
     flashMode: "ok" as FlashMode,
+    /** The permission a `needs_hand` flash says would let keyloom restart the keyboard itself, as the Moonlander's flasher does (D-501). */
+    needsHandProblem: undefined as "permission_input_monitoring" | undefined,
     /** Called on each read of the keyboards, for tests that change the world between a decision and its launch. */
     onRead: undefined as ((n: number) => void) | undefined,
   };
@@ -123,6 +125,8 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
       peak = Math.max(peak, running);
       try {
         calls.flashes.push(a.buildId);
+        // zapp isn't installed: the real flash use case throws before it makes a flash row (R9-10).
+        if (world.flashMode === "tool_missing") return { ok: false, error: "zapp isn't installed. Install it with `brew install zapp`, then flash again.", code: "flash_tool_missing" };
         const flashId = newFlashId();
         createFlash(app.db, { id: flashId, buildId: a.buildId, logPath: `logs/${flashId}.log` });
         a.onFlashId(flashId);
@@ -143,7 +147,8 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
           return { ok: false, flashId, error };
         }
         if (world.flashMode === "needs_hand") {
-          a.onFlasherState("waiting_for_bootloader", "keyloom couldn't restart the keyboard by itself (no raw HID). Press the reset button.", { needsHand: true });
+          const problem = world.needsHandProblem;
+          a.onFlasherState("waiting_for_bootloader", problem === undefined ? "keyloom couldn't restart the keyboard by itself (no raw HID). Press the reset button." : "macOS didn't let keyloom restart the keyboard by itself. Press the reset button.", { needsHand: true, ...(problem === undefined ? {} : { problem }) });
           const stopped = new Promise<"aborted">((resolve) => a.signal.addEventListener("abort", () => resolve("aborted"), { once: true }));
           if (world.flashGate) await Promise.race([world.flashGate.promise, stopped]);
           else await stopped;

@@ -5,6 +5,7 @@ import type { DockerReadinessResponse } from "../../api/system.ts";
 import type { DockerStartResponse } from "../../api/system.ts";
 import { fetchDockerReadiness, fixColimaFiles, restartDockerApp, startDockerEngine } from "../system.ts";
 import { linkedFileAfter } from "./release-words.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 export type Docker = {
   /** Null when the server offers no system routes, or the page hasn't asked yet. */
@@ -17,6 +18,12 @@ export type Docker = {
   problem: string | null;
   /** The server's code for `problem`, such as `cancelled` for a password dialog the person closed (D-533). */
   problemCode: DockerStartCode | null;
+  /**
+   * A start, restart or fix whose request itself failed, with its code, so one no screen planned for offers Restart keyloom and never a
+   * Try again that fails the same way (R9-05, D-540). Optional, with `token`, for pages that build a Docker by hand.
+   */
+  problemFailure?: PageFailure | null;
+  token?: string;
   /**
    * The file with a second name that Fix Colima's files found, while no fix has completed since, so the page holds back Colima's `chown -R`
    * command and names the file. Kept apart from `problemCode`, which the next press replaces (PR #300 CodeRabbit).
@@ -42,6 +49,7 @@ export function useDocker(token: string): Docker {
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [problemCode, setProblemCode] = useState<Docker["problemCode"]>(null);
+  const [problemFailure, setProblemFailure] = useState<PageFailure | null>(null);
   const [lastAction, setLastAction] = useState<Docker["lastAction"]>(null);
   const [linkedFile, setLinkedFile] = useState<string | null>(null);
   const [asks, setAsks] = useState(0);
@@ -75,6 +83,7 @@ export function useDocker(token: string): Docker {
     setStarting(true);
     setProblem(null);
     setProblemCode(null);
+    setProblemFailure(null);
     const before = lastAction;
     setLastAction(action);
     ask(token)
@@ -94,7 +103,11 @@ export function useDocker(token: string): Docker {
         // Fixing Colima's files changes what Docker needs, so the page asks again by itself rather than keep the old answer (D-533).
         if (action === "fix-files") setAsks((n) => n + 1);
       })
-      .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "Docker could not be started."))
+      .catch((err: unknown) => {
+        const failure = pageFailure(err, "Docker could not be started.");
+        setProblem(failure.message);
+        setProblemFailure(failure);
+      })
       .finally(() => setStarting(false));
   }, [token, lastAction]);
   const start = useCallback(() => run("start", startDockerEngine), [run]);
@@ -102,7 +115,7 @@ export function useDocker(token: string): Docker {
   const fixFiles = useCallback(() => run("fix-files", fixColimaFiles), [run]);
 
   const refresh = useCallback(() => setAsks((n) => n + 1), []);
-  return { readiness, unanswered, starting, problem, problemCode, linkedFile, lastAction, start, restart, fixFiles, refresh };
+  return { readiness, unanswered, starting, problem, problemCode, problemFailure, token, linkedFile, lastAction, start, restart, fixFiles, refresh };
 }
 
 const ENGINE_ACTION_POLL_MS = 2000;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InstallState, InstallableTool } from "../../api/tool-install.ts";
 import { cancelInstall, fetchInstall, startInstall } from "./install-api.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 const POLL_MS = 1000;
 
@@ -19,6 +20,9 @@ export type Install = {
   state: InstallState | null;
   /** Why the page couldn't start or stop the install; the install itself may still be running. */
   problem: string | null;
+  /** `problem` with its code, so one no screen planned for offers Restart keyloom (R9-05, D-540). Optional, with `token`, for hand-built ones. */
+  failure?: PageFailure | null;
+  token?: string;
   start: () => void;
   /** Stops the running install; it ends `cancelled` once Homebrew has exited. */
   cancel: () => void;
@@ -26,7 +30,8 @@ export type Install = {
 
 export function useInstall(token: string, tool: InstallableTool, onDone: () => void): Install {
   const [state, setState] = useState<InstallState | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [failure, setFailure] = useState<PageFailure | null>(null);
+  const problem = failure?.message ?? null;
   const done = useRef(onDone);
   done.current = onDone;
   const running = state?.status === "running";
@@ -62,18 +67,18 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   }, [token, tool, running]);
 
   const start = useCallback(() => {
-    setProblem(null);
+    setFailure(null);
     startInstall(token, tool)
       .then(setState)
-      .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "The install could not start."));
+      .catch((err: unknown) => setFailure(pageFailure(err, "The install could not start.")));
   }, [token, tool]);
 
   const cancel = useCallback(() => {
-    setProblem(null);
+    setFailure(null);
     cancelInstall(token, tool)
       .then(setState)
-      .catch((err: unknown) => setProblem(err instanceof Error ? err.message : "The install could not be stopped."));
+      .catch((err: unknown) => setFailure(pageFailure(err, "The install could not be stopped.")));
   }, [token, tool]);
 
-  return { state, problem, start, cancel };
+  return { state, problem, failure, token, start, cancel };
 }

@@ -86,6 +86,8 @@ Failure handling matches [06](06-firmware-zmk.md#build-runs-the-moergo-template-
 
 Status update, 2026-11-11 (D-523): a compile error in the generated source, a key code QMK doesn't know included, fails with `compile_error`, and a firmware too big for the flash (GNU ld's region overflow, or QMK's AVR size check) with `too_large`. Build and flash then offers the last revision that built and a question to keyloom instead of Build again. Checked against recorded log lines with a fake Docker; no real build was run for this.
 
+Status update, 2026-11-13 (D-549): a Docker daemon that stops during the build fails with `docker_unavailable`, as ZMK's builds now do, so Build and flash shows its Docker callout; the sentence says "Start it and build again", not Docker Desktop. Checked with a fake docker that prints the client's daemon error.
+
 ## Emulate runs the generated keymap on QMK's own core
 
 `keyloom emulate` answers "what would my Moonlander type for these key presses?" without the keyboard. The generated `keymap.c` is compiled into QMK's host test harness (`platforms/test`, `tests/test_common`, gtest), which builds the real action, tap-hold, layer, one-shot, combo, tap-dance and macro code for this machine and captures the HID reports. Nothing is reimplemented, so chordal hold, permissive hold and `TAPPING_TERM` behave as they do on the board (D-080).

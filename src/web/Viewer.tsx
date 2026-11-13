@@ -244,6 +244,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   useEffect(() => () => stopWaiting.current(), []);
   const refusalHandlers: RefusalHandlers = {
     open_status: openStatus,
+    // A sync request that failed no way the page planned for (R9-05).
+    restart_keyloom: (failure) => setUnexpected({ failure, title: "keyloom couldn't do that" }),
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: (buildId?: string) => onOpenRelease(undefined, buildId),

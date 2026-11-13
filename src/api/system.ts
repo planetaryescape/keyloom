@@ -87,7 +87,8 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
 // Freeing Docker's build cache (R8-04). `freed` is Docker's own total, such as "1.2GB" or "0B", or null when it printed none.
 export const DockerPruneResponseSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), freed: z.string().min(1).nullable() }),
-  z.object({ ok: z.literal(false), reason: z.string().min(1), code: z.enum(["engine_busy", "build_running"]).optional() }),
+  // `docker_unavailable`: Docker's daemon didn't answer, so nothing was freed; Build again starts it (R9-07).
+  z.object({ ok: z.literal(false), reason: z.string().min(1), code: z.enum(["engine_busy", "build_running", "docker_unavailable"]).optional() }),
 ]);
 export type DockerPruneResponse = z.infer<typeof DockerPruneResponseSchema>;
 

@@ -63,7 +63,10 @@ export function syncBuildReadFailure(code: string | null, generic = false): { te
  * The System Settings pane a permission code opens, the button that opens it, and what to say beside it. `failed` leads a failed
  * flash's message in plain words; the server's sentence follows it, because on a split board it also says how recovery went.
  */
-export type PermissionFix = { pane: SettingsPaneName; button: string; text: string; failed: string };
+export type PermissionFix = { pane: SettingsPaneName; button: string; text: string; failed: string;
+  /** `text` for a sync, whose way on is the sync again, not Flash (R9-01). */
+  sync: string;
+};
 
 export function permissionFix(code: FlashErrorCode | null | undefined): PermissionFix | null {
   switch (code) {
@@ -72,12 +75,14 @@ export function permissionFix(code: FlashErrorCode | null | undefined): Permissi
         pane: "files_and_folders", button: "Open Files and Folders settings",
         text: "Allow keyloom to use removable volumes, then flash again.",
         failed: "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed.",
+        sync: "Allow keyloom to use removable volumes, then sync again.",
       };
     case "permission_input_monitoring":
       return {
         pane: "input_monitoring", button: "Open Input Monitoring settings",
         text: "Allow keyloom in Input Monitoring, and the next flash needs no keypress.",
         failed: "macOS didn't let keyloom restart the keyboard by itself.",
+        sync: "Allow keyloom in Input Monitoring, and the next sync needs no keypress.",
       };
     default:
       return null;

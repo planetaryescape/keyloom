@@ -9,6 +9,8 @@ import { retryWhileBusy } from "./busy-retry.ts";
 import { RemapperSetupResponseSchema, SetupActionResponseSchema, type KanataInstallAction, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
 
 export interface SyncApi {
+  /** The session token, for the ways out a sync screen offers itself, such as Restart keyloom (R9-05). */
+  token: string;
   boards: readonly BoardSync[];
   /** Keyboards on USB keyloom has no board for, from the engine's reads (D-336). */
   newKeyboards: readonly DetectedKeyboard[];
@@ -23,7 +25,7 @@ export interface SyncApi {
   /** The server answered the stream with 401: it restarted with another token, and this page can't reconnect (D-494). */
   tokenRejected: boolean;
   /** Why the last action failed, until the next one starts. `code` is the server's (R1-16), which the toast turns into an action. */
-  error: { message: string; code: string | undefined } | null;
+  error: { message: string; code: string | undefined; generic?: true } | null;
   syncNow: (layoutId: string) => Promise<void>;
   /** Stops a Sync now that waits for a running build or flash (R3-18). The layout page calls it when it closes, since this hook outlives it. */
   stopWaiting: () => void;
@@ -56,7 +58,10 @@ const RETRY_MIN_MS = 1000;
 const STALE_REPLACE: ReadonlySet<string> = new Set(["kanata_not_foreign", "kanata_not_running", "keyboard_removed"]);
 const RETRY_MAX_MS = 10_000;
 
-const asSyncError = (e: unknown): NonNullable<SyncApi["error"]> => ({ message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined });
+// `generic` comes with it, so keyloom's catch-all 404 gets Restart keyloom and a route's own refusal doesn't (R9-05, D-540).
+const asSyncError = (e: unknown): NonNullable<SyncApi["error"]> => ({
+  message: e instanceof Error ? e.message : "keyloom couldn't do that.", code: e instanceof ApiError ? e.code : undefined, ...(e instanceof ApiError && e.generic === true ? { generic: true as const } : {}),
+});
 
 // Follows /api/events with fetch, because EventSource can't send the session token. A stream that ends is reopened with a growing
 // pause; the first frame of each is a whole snapshot, so nothing missed meanwhile matters.
@@ -155,7 +160,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
+    token, boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
     syncNow,
     stopWaiting: () => waiting.current?.abort(),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),

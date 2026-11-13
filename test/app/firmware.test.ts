@@ -358,6 +358,10 @@ describe("startFlash / flashAndWait (fake zapp)", () => {
       expect(err).toBeInstanceOf(FlashToolMissingError);
       expect(err.tool).toBe("zapp");
       expect(err.message).toContain(process.platform === "darwin" ? "brew install zapp" : "github.com/zsa/zapp");
+      // A sync's flash has no flash row to carry the code, so the sync's own outcome does, and the page offers Build and flash (R9-10).
+      const { appSyncDeps } = await import("../../src/app/sync-deps.ts");
+      const outcome = await appSyncDeps(e.app).flash({ buildId: b.id, signal: new AbortController().signal, onFlashId: () => undefined, onFlasherState: () => undefined });
+      expect(outcome).toMatchObject({ ok: false, code: "flash_tool_missing" });
     }, { PATH: `${noZapp}:/usr/bin:/bin` });
     expect(e.app.db.query("SELECT COUNT(*) AS n FROM flashes").get()).toEqual({ n: 0 });
     await e.run(async () => {

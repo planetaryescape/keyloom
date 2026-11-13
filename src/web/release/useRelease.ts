@@ -285,11 +285,14 @@ export function useRelease(token: string, layoutRef: string): Release {
     const done = (outcome: CachePruneOutcome) => {
       if (pruneFor.current === asked) setCachePrune({ running: false, outcome });
     };
+    // The engine names the other ways to make room: Docker Desktop's limit is in its Settings, which the step opens (R9-07).
+    const engine = docker.readiness?.engine ?? null;
     pruneDockerBuildCache(token).then(
-      (result) => done(cachePruneOutcome(result)),
-      (e: unknown) => done(cachePruneOutcome(codeOf(e) === "unreachable" || !(e instanceof Error) ? { ok: false, unreachable: true } : { ok: false, reason: e.message })),
+      (result) => done(cachePruneOutcome(result, engine)),
+      // The request's own code stays, so an exception offers the log and Restart keyloom, not "make room another way" (R9-07).
+      (e: unknown) => done(cachePruneOutcome(codeOf(e) === "unreachable" || !(e instanceof Error) ? { ok: false, unreachable: true } : { ok: false, failure: pageFailure(e, "keyloom couldn't free Docker's build cache.") }, engine)),
     );
-  }, [token, buildId]);
+  }, [token, buildId, docker.readiness]);
 
   const restartAndBuild = useCallback((revisionId: string, shown: () => string) => {
     restartWait.current?.abort();

@@ -432,7 +432,7 @@ export const BUILD_CACHE_UNGUARDED = "keyloom can't tell whether a build is runn
  * refused as `build_running` while a build, flash, keyboard write, lab analysis, review test or emulator run is under way, and refused
  * without a blocker at all.
  */
-export async function freeBuildCache(opts: { blocker?: () => string | null; overrides?: ToolchainOverrides } = {}): Promise<{ ok: true; freed: string | null } | { ok: false; reason: string; code?: "engine_busy" | "build_running" }> {
+export async function freeBuildCache(opts: { blocker?: () => string | null; overrides?: ToolchainOverrides } = {}): Promise<{ ok: true; freed: string | null } | { ok: false; reason: string; code?: "engine_busy" | "build_running" | "docker_unavailable" }> {
   // The page keeps Free Docker's build cache for this refusal and has no Check again, so the words say when to press it (PR #306 review).
   if (engineHolder !== null) {
     const what = ENGINE_ACTION_WORDS[engineHolder.kind];

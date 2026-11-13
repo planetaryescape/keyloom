@@ -6,13 +6,19 @@ import { LogTail } from "./LogTail.tsx";
 import type { FileProblem } from "./flash-words.ts";
 import { type FlashStepView, plain } from "./release-words.ts";
 import type { Install } from "./useInstall.ts";
+import { UnexpectedActions } from "./UnexpectedActions.tsx";
 
 type NeedsTool = Extract<FlashStepView, { kind: "needs-tool" }>;
 type Manual = Extract<FlashStepView, { kind: "manual" }>;
 
 export function ToolCallout({ view, boardName, install, onCheck }: { view: NeedsTool; boardName: string; install: Install; onCheck: () => void }) {
   const state = install.state;
-  const problem = install.problem === null ? null : <p className="callout-note" role="alert">{install.problem}</p>;
+  const problem = install.problem === null ? null : (
+    <>
+      <p className="callout-note" role="alert">{install.problem}</p>
+      <UnexpectedActions token={install.token} failure={install.failure} />
+    </>
+  );
   if (state?.status === "running") {
     return (
       <div className="callout callout-info" role="status">

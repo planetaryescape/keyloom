@@ -61,6 +61,10 @@ test("a failed Apply of a lab fix says why and how to go on (R3-02)", () => {
   expect(closed.next).toBe("again");
   expect(closed.text).not.toContain("cs_1");
   expect(labApplyFailure({ code: "usage", message: "x" }).next).toBe("again");
+  // R9-05: an exception keeps Try again and adds Restart keyloom with the log; an answer that fails the same way gets Restart keyloom only.
+  expect(labApplyFailure({ code: "internal", message: "keyloom hit a problem it didn't expect." })).toMatchObject({ next: "retry", failure: { code: "internal" } });
+  expect(labApplyFailure({ code: "unreadable", message: "x" }).next).toBe("restart");
+  expect(labApplyFailure({ code: "not_found", message: "x", generic: true }).next).toBe("restart");
 });
 
 test("a past session's fix that is no longer proposed says why instead of offering Apply", () => {

@@ -392,8 +392,15 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       </button>
                     )
                   ) : failure?.kind === "disk_full" ? (
-                    // Freeing the cache comes first, then Build again; once the prune has ended, Build again is the one thing to do.
+                    // Freeing the cache comes first, then Build again; once the prune has ended, Build again is the one thing to do. Docker
+                    // Desktop's disk limit is in its Settings, which the step opens when that is the way to make room (R9-07).
                     <>
+                      {release.cachePrune.outcome?.openApp !== "docker_desktop" ? null : (
+                        <button type="button" className="button button-primary" onClick={() => release.openSettings("docker_desktop")}>
+                          <Settings size={14} aria-hidden="true" />
+                          Open Docker Desktop
+                        </button>
+                      )}
                       {release.cachePrune.outcome !== null && !release.cachePrune.outcome.again ? null : (
                         <button type="button" className="button button-primary" disabled={release.cachePrune.running || starting !== null} onClick={release.freeCache}>
                           {release.cachePrune.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Eraser size={14} aria-hidden="true" />}
@@ -402,12 +409,16 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       )}
                       <button
                         type="button"
-                        className={release.cachePrune.outcome !== null && !release.cachePrune.outcome.again ? "button button-primary" : "button"}
+                        className={release.cachePrune.outcome !== null && !release.cachePrune.outcome.again && release.cachePrune.outcome.openApp === undefined && release.cachePrune.outcome.failure === undefined ? "button button-primary" : "button"}
                         disabled={starting !== null || blocked !== null || release.cachePrune.running}
                         onClick={() => release.buildNow(head.id)}
                       >
                         Build again
                       </button>
+                      {/* A prune request that failed no way the page planned for: Restart keyloom, and the log for an exception (D-540). */}
+                      {release.cachePrune.outcome?.failure === undefined ? null : (
+                        <UnexpectedWayOut token={token} failure={release.cachePrune.outcome.failure} primary={!release.cachePrune.outcome.again} />
+                      )}
                     </>
                   ) : failure?.kind === "restart_engine" && failure.button !== null && release.engineRestart.waitingFor !== null ? (
                     // Waiting for running work to end: the restart starts by itself, and Cancel stops waiting (R7-04).
@@ -434,7 +445,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                     </button>
                   )}
                   {failure?.kind === "restart_engine" && release.engineRestart.problem !== null ? <p className="blocked-reason" role="alert">{release.engineRestart.problem}</p> : null}
-                  {failure?.kind === "folder_not_shared" && release.settingsProblem !== null ? <p className="blocked-reason" role="alert">{release.settingsProblem}</p> : null}
+                  {(failure?.kind === "folder_not_shared" || failure?.kind === "disk_full") && release.settingsProblem !== null ? <p className="blocked-reason" role="alert">{release.settingsProblem}</p> : null}
                   {blocked === null || failure?.kind === "same_every_time" ? null : <p className="blocked-reason">{blocked}</p>}
                   {goBackRefused === null ? null : <p className="blocked-reason" role="alert">{goBackRefused.text}</p>}
                   {goBackRefused?.next !== "reload" ? null : (

@@ -30,6 +30,8 @@ export interface SetupStep {
 }
 
 const KANATA_RELEASES = "https://github.com/jtroo/kanata/releases";
+/** How a board learns this Mac's keyboard: its `device.name` (CONTRIBUTING.md, the board reference). */
+const CONTRIBUTION_GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
 const kanataRelease = (version: string) => `${KANATA_RELEASES}/tag/v${version}`;
 const driverPage = (version: string | null) =>
   version === null ? "https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases" : `https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases/tag/v${version}`;
@@ -181,6 +183,16 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
         detail: `kanata's background service runs kanata from a folder apps running as you can change. Setting up again runs keyloom's own copy, in ${KANATA_COPY_DIR}, which only macOS can change. macOS asks for your password.`,
       }));
     }
+  }
+
+  // kanata takes the built-in keyboard by the name keyloom's board gives it. A Mac model keyloom doesn't know names it differently, so
+  // kanata can run with every step done and remap nothing (R9-12). keyloom can't learn the name by itself: the board has to name it.
+  if (find("keyboard_name")?.status === "warn") {
+    steps.push(step({
+      key: "keyboard-name", state: "todo", title: "kanata can't find this Mac's keyboard", whileRunning: true,
+      detail: "This Mac's built-in keyboard has a name keyloom doesn't know yet, so kanata leaves it alone and nothing is remapped. keyloom can remap it once its MacBook board knows this Mac model. The contribution guide says how to add it.",
+      link: { href: CONTRIBUTION_GUIDE, label: "Open the contribution guide" },
+    }));
   }
 
   if (find("karabiner_config")?.status === "warn") {

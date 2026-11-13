@@ -1,6 +1,8 @@
 // What the typing lab offers beside a problem, from the server's code (R1-19). A keyloom build that can't stream yet is fixed by putting
 // keyloom's current build on it: Sync now when keyloom syncs this board, Build and flash otherwise or when the sync fails. Firmware keyloom
 // didn't build is Build and flash's alone, because a sync never replaces it. macOS's refusal opens Input Monitoring (R3-09).
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
+
 export type LabFix = { id: "sync_now" | "open_release" | "reload" | "open_input_monitoring" | "retry" | "restart" | "read_again" | "stop_recording"; label: string };
 
 export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
@@ -63,12 +65,17 @@ export const labNeedsDocker = (code: string | null): boolean => code === "docker
  * Why Apply on a lab fix failed (R3-02), and the way on. A layout changed since the recording no longer takes the fix as it was tried, so
  * the way on is to type again on the layout as it is now; any other failure may pass on a second try.
  */
-export function labApplyFailure(error: { code?: string | undefined; message: string }): { text: string; next: "again" | "retry" } {
+export function labApplyFailure(error: { code?: string | undefined; message: string; generic?: boolean | undefined }): { text: string; next: "again" | "retry" | "restart"; failure?: PageFailure } {
   if (error.code === "stale_base") return { text: "The layout changed since this recording, so this fix no longer applies as it was tried. Type again to try fixes on the layout as it is now.", next: "again" };
   if (error.code === "validation_failed") return { text: "The layout's checks refused this fix as the layout is now. Type again to try fixes on the layout as it is now.", next: "again" };
   // The apply route answers `not_open` for a fix that is no longer proposed, and `usage` for its other refusals; a second try is refused
   // the same way.
   if (error.code === "not_open" || error.code === "usage") return { text: "This fix can't be applied any more. Type again to try fixes on the layout as it is now.", next: "again" };
+  // A failure no screen planned for keeps its code (R9-05, D-540): an exception may pass on a second try and names keyloom's log; an answer
+  // this page can't read, or keyloom's catch-all 404, fails the same way, so the way on is Restart keyloom, never Try again.
+  const failure: PageFailure = { message: error.message, code: error.code, ...(error.generic === true ? { generic: true } : {}) };
+  const way = wayOutFor(failure, true);
+  if (way !== null) return { text: `keyloom couldn't apply this fix. ${error.message}`, next: way.retry ? "retry" : "restart", failure };
   return { text: `keyloom couldn't apply this fix. ${error.message}`, next: "retry" };
 }
 

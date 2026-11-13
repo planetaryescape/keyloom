@@ -3,6 +3,7 @@ import { type Build, BuildSchema, CHAT_MESSAGE_MAX } from "../../api/http.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { ApiError } from "../api.ts";
 import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
 import { COLIMA_HELP_URL, plain } from "./release-words.ts";
 
 /**
@@ -56,19 +57,45 @@ const DISK_FULL_NEXT = "Freeing Docker's build cache makes room. Nothing you mad
  * What freeing Docker's build cache ended in, for the disk_full step (R8-04). `again`: the button stays, because the next press can work
  * (a build or flash was running, or keyloom was busy with Docker). Otherwise Build again is the way on now.
  */
-export type CachePruneOutcome = { text: string; again: boolean };
+/**
+ * `openApp`: the way to make room is in Docker Desktop's settings, which the step opens (R9-07). `failure`: the prune's request failed no
+ * way the page planned for, so the step shows Restart keyloom, and the log for an exception, beside it (D-540).
+ */
+export type CachePruneOutcome = { text: string; again: boolean; openApp?: "docker_desktop"; failure?: PageFailure };
 
-const MAKE_ROOM = "Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.";
+/**
+ * `lead`, then the other ways to make room, named for the engine: Docker Desktop's limit is in its own Settings, which the step opens
+ * (R9-07). The prune button goes, because pressing it again ends the same way.
+ */
+function makeRoom(lead: string, engine: string | null): CachePruneOutcome {
+  if (engine === "Docker Desktop") {
+    return { text: `${lead} Make room in Docker's disk another way: raise the disk usage limit in Docker Desktop's Settings, under Resources, or remove images you no longer use, then build again.`, again: false, openApp: "docker_desktop" };
+  }
+  return { text: `${lead} Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.`, again: false };
+}
 
-export function cachePruneOutcome(result: { ok: true; freed: string | null } | { ok: false; reason: string; code?: string | undefined } | { ok: false; unreachable: true }): CachePruneOutcome {
+/** `engine`: the Docker engine readiness names, such as "Docker Desktop" or "Colima", or null when keyloom doesn't know it. */
+export function cachePruneOutcome(
+  result: { ok: true; freed: string | null } | { ok: false; reason: string; code?: string | undefined } | { ok: false; unreachable: true } | { ok: false; failure: PageFailure },
+  engine: string | null = null,
+): CachePruneOutcome {
   if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again.", again: true };
+  if ("failure" in result) {
+    // The request itself failed, so the prune never ran and making room another way isn't the answer yet. An exception may pass on a
+    // second press; an answer this page can't read fails the same way, so only Restart keyloom is offered for it (R9-07, D-540).
+    const way = wayOutFor(result.failure, true);
+    if (way !== null) return { text: result.failure.message, again: way.retry, failure: result.failure };
+    return makeRoom(plain(result.failure.message).replace(/\.?$/, "."), engine);
+  }
   if (!result.ok) {
     // A running build or flash, or a start or restart of Docker, ends by itself; any other failure would fail the same way again.
     if (result.code === "build_running" || result.code === "engine_busy") return { text: plain(result.reason), again: true };
-    return { text: `${plain(result.reason).replace(/\.?$/, ".")} ${MAKE_ROOM}`, again: false };
+    // Docker only needs starting, and the build starts it (ensureDocker); the disk may still be full then, and the step says so again.
+    if (result.code === "docker_unavailable") return { text: "Docker isn't running, so its build cache wasn't freed. Build again starts Docker.", again: false };
+    return makeRoom(plain(result.reason).replace(/\.?$/, "."), engine);
   }
   if (result.freed !== null && /^0(\.0+)?[kKMGTP]?i?B$/.test(result.freed)) {
-    return { text: `Docker's build cache was already empty, so nothing was freed. ${MAKE_ROOM}`, again: false };
+    return makeRoom("Docker's build cache was already empty, so nothing was freed.", engine);
   }
   const freed = result.freed === null ? "Docker freed its build cache." : `Freed ${result.freed} of Docker's build cache.`;
   return { text: `${freed} Build again to continue; it takes longer this time.`, again: false };

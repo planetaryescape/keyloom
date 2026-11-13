@@ -479,7 +479,9 @@ export class SyncEngine {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
       errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId)
         : s.failure === "flash" && s.flashId !== null ? this.flashCodeOf(s.flashId)
-        : this.replaceable(s) ? "foreign_file" : null,
+        : this.replaceable(s) ? "foreign_file"
+        // A failure found before any flash row, such as a flash tool that isn't installed (R9-10).
+        : s.status === "failed" ? s.errorCode : null,
       buildId: s.buildId,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
@@ -698,7 +700,7 @@ export class SyncEngine {
         await this.exclusive(() => this.refresh(true));
         const after = this.readingOf(row.boardId);
         const failure = run.recovering ? "flash" : stepNow === "needs_hand" ? "needs_hand" : after.state === "absent" ? "disconnected" : "flash";
-        return finish({ status: "failed", failure, error: flashed.error });
+        return finish({ status: "failed", failure, error: flashed.error, code: flashed.code });
       }
       if (!flashed.verified) {
         return finish({ status: "failed", failure: "verify", error: "keyloom flashed the keyboard but couldn't confirm it is running this build, because the build carries no marker. It is not counted as in sync." });
@@ -729,10 +731,11 @@ export class SyncEngine {
     // A half keyloom restarted is committed until the flasher moves on; a later half waiting for a hand is not, so it can be cancelled.
     if (this.running?.row.id === row.id) this.running.committed = state === "writing" || note?.inBootloader === true;
     // The instruction of a failed hand-off stays on the row (finishSync keeps it for needs_hand), so the header can still show what to do.
-    if (note?.needsHand) progressSync(this.app.db, row.id, { step: "needs_hand", instruction });
-    else if (note?.verifying) progressSync(this.app.db, row.id, { step: "verifying", instruction: null });
-    else if (state === "writing") progressSync(this.app.db, row.id, { step: "writing", instruction: null });
-    else progressSync(this.app.db, row.id, { step: "restarting", instruction: null });
+    // Its code goes with it, so the page offers the permission that lets keyloom do it next time (R9-01).
+    if (note?.needsHand) progressSync(this.app.db, row.id, { step: "needs_hand", instruction, instructionCode: note.problem ?? null });
+    else if (note?.verifying) progressSync(this.app.db, row.id, { step: "verifying", instruction: null, instructionCode: null });
+    else if (state === "writing") progressSync(this.app.db, row.id, { step: "writing", instruction: null, instructionCode: null });
+    else progressSync(this.app.db, row.id, { step: "restarting", instruction: null, instructionCode: null });
     this.publish();
   }
 
