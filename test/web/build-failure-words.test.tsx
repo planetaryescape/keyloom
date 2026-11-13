@@ -188,6 +188,9 @@ describe("the dialog's error", () => {
     expect(html).toContain("Build again");
     expect(html).not.toContain("Try again");
     expect(html).not.toContain("/Users/x");
+    // Flashing the same build again fails the same way, so its button waits for the new build.
+    expect(html).not.toContain("Flash to keyboard");
+    expect(html).toContain("Available once you build again.");
   });
 });
 

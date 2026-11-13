@@ -125,7 +125,9 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
   const flash = build !== null && lastFlash !== null && lastFlash.buildId === build.id ? lastFlash : null;
   const earlier = lastBuild !== null && shownBuild === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
-  const canFlash = build?.status === "succeeded" && !flashing;
+  // A build whose file is gone can't be flashed again; Build again above makes one that can (R8-12).
+  const fileGone = release.errorCode === "build_file_gone";
+  const canFlash = build?.status === "succeeded" && !flashing && !fileGone;
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
@@ -456,7 +458,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
           <Step number={2} title={`Flash ${boardName}`} state={flashState} {...(flash === null ? {} : { aside: elapsedOf(flash, now) })}>
             {flash === null ? (
               !canFlash ? (
-                <p className="muted">Available once the build succeeds.</p>
+                <p className="muted">{fileGone ? "Available once you build again." : "Available once the build succeeds."}</p>
               ) : flashPlan?.kind === "manual" ? (
                 <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} onBuildAgain={() => release.buildNow(head.id)} problem={release.fileProblem} />
               ) : flashPlan?.kind === "needs-tool" ? (

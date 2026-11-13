@@ -404,7 +404,10 @@ export function KeyPanel(props: Props) {
       : check.state.status === "checking"
         ? "Checking the change."
         : result !== null && !result.ok
-          ? lostNow.length > 0 && lostNow.every((row) => drops.has(row.lost.function) || placements.some((p) => p.function === row.lost.function)) === false
+          // A check against an older head: the latest version is on its way, and the draft is checked again on it (R8-13).
+          ? result.errors.some((issue) => issue.code === "stale_base")
+            ? "Waiting for the latest version."
+            : lostNow.length > 0 && lostNow.every((row) => drops.has(row.lost.function) || placements.some((p) => p.function === row.lost.function)) === false
             ? `Drop ${lostNow.map((row) => functionName(row.lost.function, layout)).join(" and ")} or put it somewhere first.`
             : "Fix the problems above first."
           : null;
