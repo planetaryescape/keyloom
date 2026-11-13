@@ -38,9 +38,20 @@ describe("setupSteps", () => {
   test("a Mac with no built-in keyboard says so, with nothing to install or name (R10-14)", () => {
     const steps = setupSteps(status([f("kanata_version", "ok"), f("keyboard_name", "fail", "this Mac has no built-in keyboard"), f("port_closed", "ok")]));
     const none = steps.find((s) => s.key === "keyboard-name");
-    expect(none).toMatchObject({ state: "note", title: "This Mac has no built-in keyboard", actions: [], link: null });
+    expect(none).toMatchObject({ state: "note", title: "This Mac has no built-in keyboard", actions: [], link: { href: expect.stringContaining("CONTRIBUTING.md"), label: "Open the contribution guide" } });
     expect(none?.detail).not.toContain("kanata --list");
     expect(attentionSteps(status([f("keyboard_name", "fail"), f("port_closed", "ok")])).map((s) => s.key)).toContain("keyboard-name");
+  });
+
+  // PR #315 review: keyloom offers set-up only for a keyboard it supports, so the note promises no more; and a Mac mini isn't led through
+  // the install, the password dialog and the permissions for a remapper with nothing to remap.
+  test("a Mac with no built-in keyboard shows only the note, not the install, start and permission steps", () => {
+    const stopped = status([f("kanata_missing", "fail"), f("driver_missing", "fail"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail"), f("keyboard_name", "fail")]);
+    const steps = setupSteps(stopped);
+    expect(steps.map((s) => s.key)).toEqual(["keyboard-name"]);
+    expect(steps[0]?.detail).toContain("When you plug in a keyboard keyloom supports");
+    expect(steps[0]?.detail).not.toContain("on USB");
+    expect(steps.flatMap((s) => s.actions)).toEqual([]);
   });
 
   test("a kanata missing from PATH while kanata's service runs is still a step, because keyloom checks configs with it (R10-01)", () => {

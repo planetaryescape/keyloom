@@ -78,10 +78,15 @@ function installJob(status: RemapperSetupResponse, action: KanataInstallAction, 
   return null;
 }
 
-/** The steps in the order they have to happen: kanata, its driver, starting it, then macOS's permissions for the copy it starts. */
+/**
+ * The steps in the order they have to happen: kanata, its driver, starting it, then macOS's permissions for the copy it starts. A Mac with
+ * no built-in keyboard (a Mac mini or a Mac Studio) gets only the note that says so: kanata would have nothing to remap, so installing it,
+ * the password dialog and the permissions would lead nowhere (R10-14, PR #315 review).
+ */
 export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
   const mac = status.platform === "darwin";
   const find = (code: string) => status.findings.find((f) => f.code === code);
+  if (find("keyboard_name")?.status === "fail") return [noBuiltInKeyboard()];
   const steps: SetupStep[] = [];
 
   const kanata = find("kanata_missing") ?? find("kanata_version");
@@ -191,13 +196,6 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
 
   // kanata takes the built-in keyboard by the name keyloom's board gives it. A Mac model keyloom doesn't know names it differently, so
   // kanata can run with every step done and remap nothing (R9-12). keyloom can't learn the name by itself: the board has to name it.
-  // No built-in keyboard at all (a Mac mini or a Mac Studio): there is nothing for this board to remap, and no name to add (R10-14).
-  if (find("keyboard_name")?.status === "fail") {
-    steps.push(step({
-      key: "keyboard-name", state: "note", title: "This Mac has no built-in keyboard", whileRunning: true,
-      detail: "The MacBook board remaps a MacBook's own keyboard, so kanata has nothing to remap here. A keyboard plugged into this Mac is a board of its own: keyloom offers to set it up when it sees it on USB.",
-    }));
-  }
   if (find("keyboard_name")?.status === "warn") {
     steps.push(step({
       key: "keyboard-name", state: "todo", title: "kanata can't find this Mac's keyboard", whileRunning: true,
@@ -219,6 +217,19 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push(step({ key: "karabiner-upgrade", state: "note", title: "Don't upgrade Karabiner-Elements", detail: "Version 16 replaces the driver with one kanata can't use yet." }));
   }
   return steps;
+}
+
+/**
+ * No built-in keyboard at all: there is nothing for this board to remap, and no name to add (R10-14). keyloom offers set-up only for a
+ * keyboard it supports that it sees on USB (`SyncEngine.setupBoards`), so the words promise no more than that, and any other keyboard
+ * gets the contribution guide.
+ */
+function noBuiltInKeyboard(): SetupStep {
+  return step({
+    key: "keyboard-name", state: "note", title: "This Mac has no built-in keyboard", whileRunning: true,
+    detail: "The MacBook board remaps a MacBook's own keyboard, so kanata has nothing to remap here and needs no setup. When you plug in a keyboard keyloom supports, such as a Moonlander or a Glove80, keyloom offers to set it up. For any other keyboard, the contribution guide says how to add it to keyloom.",
+    link: { href: CONTRIBUTION_GUIDE, label: "Open the contribution guide" },
+  });
 }
 
 /** The steps that still need doing while kanata runs: an update, setting it up again, or a kanata changed outside Homebrew. */
