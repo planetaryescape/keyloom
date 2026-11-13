@@ -2,7 +2,7 @@
 // in the order the steps have to happen, and no step shows a CLI command.
 import { describe, expect, test } from "bun:test";
 import type { KanataInstall, RemapperSetupResponse, SetupFinding } from "../../src/api/system-remapper.ts";
-import { attentionSteps, setupFailure, setupSteps } from "../../src/web/sync/remapper-words.ts";
+import { attentionSteps, recheckAfter, setupFailure, setupSteps } from "../../src/web/sync/remapper-words.ts";
 
 const f = (code: SetupFinding["code"], status: SetupFinding["status"], detail = "x"): SetupFinding => ({ code, name: code, status, detail });
 const k = (over: Partial<RemapperSetupResponse["kanata"]> = {}): RemapperSetupResponse["kanata"] => ({ version: null, wanted: "1.12.0", update: null, path: null, copyVersion: null, ...over });
@@ -138,6 +138,13 @@ describe("setupSteps", () => {
       ...attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) })),
     ];
     for (const s of all) expect(`${s.title} ${s.detail ?? ""}`).not.toMatch(/`|sudo|keyloom (doctor|remap|import)|brew install/);
+  });
+});
+
+describe("recheckAfter (R8-17)", () => {
+  test("a pane opened for the person is read again when keyloom is back in front; anything keyloom ran, at once", () => {
+    expect(recheckAfter({ kind: "open_settings" })).toBe("on_return");
+    for (const kind of ["install_kanata", "update_kanata", "reinstall_kanata", "cancel_install", "start_kanata"]) expect(recheckAfter({ kind })).toBe("now");
   });
 });
 

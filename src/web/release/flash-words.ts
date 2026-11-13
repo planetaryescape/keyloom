@@ -2,6 +2,7 @@
 // Pure, so the wording is tested without a browser.
 import type { BoardSync, FlashCheckResponse, FlashErrorCode } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
+import { unexpectedWayOut } from "../shell/unexpected.ts";
 
 /**
  * Why the firmware file couldn't be saved or shown in Finder, in the server's words. `gone`: keyloom has no file for this build any more
@@ -12,6 +13,34 @@ export type FileProblem = { text: string; gone: boolean };
 export function fileProblem(error: unknown, fallback: string): FileProblem {
   if (!(error instanceof Error)) return { text: fallback, gone: false };
   return { text: error.message, gone: "code" in error && error.code === "not_found" };
+}
+
+/** A build whose firmware file went between Build and Flash: flashing again fails the same way, so the way on is a new build (R8-12). */
+export const BUILD_FILE_GONE = "This build's firmware file is gone, so keyloom can't flash it. Build again to make a new one.";
+
+/**
+ * The buttons beside the dialog's own error (R8-03, R8-12): Build again for a file that is gone, Restart keyloom (with Try again for a
+ * server fault) for an answer no screen planned for, and Try again for anything else, which repeats what failed. `none`: the step's own
+ * Build firmware is the way on, so the error has no button of its own (a sync's build that is gone, PR #306 review).
+ */
+export function errorWayOut(code: string | null): "build_again" | "unexpected" | "try_again" | "none" {
+  if (code === "build_file_gone") return "build_again";
+  if (code === SYNC_BUILD_GONE_CODE) return "none";
+  return unexpectedWayOut(code ?? undefined, true) === null ? "try_again" : "unexpected";
+}
+
+/** The page's own code for a sync's failed build that keyloom no longer has, so the dialog's error offers no read that can't pass. */
+export const SYNC_BUILD_GONE_CODE = "sync_build_gone";
+
+/**
+ * What the dialog says when it couldn't read the sync's failed build it opened on (R8-01). A build that is gone (its config was deleted,
+ * which deletes its builds) can't be read again, and a restart won't bring it back, so the words point at the step's Build firmware. Any
+ * other failure keeps its code, and the words name only the buttons `errorWayOut` gives that code, with building again beside them.
+ */
+export function syncBuildReadFailure(code: string | null): { text: string; code: string | null } {
+  if (code === "not_found") return { text: "The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.", code: SYNC_BUILD_GONE_CODE };
+  const retry = errorWayOut(code) === "try_again" || unexpectedWayOut(code ?? undefined, true)?.retry === true;
+  return { text: retry ? "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." : "keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.", code };
 }
 
 /**
@@ -40,10 +69,13 @@ export function permissionFix(code: FlashErrorCode | null | undefined): Permissi
 }
 
 /**
- * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is never dropped. A write
+ * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is dropped only for a write that
+ * timed out, whose sentence names a CLI flag (R8-11). A write
  * that finished but couldn't be confirmed says so first, because the keyboard may well run the new build.
  */
 export function failedFlashText(code: FlashErrorCode | null | undefined, error: string | null): { lead: string | null; detail: string } {
+  // The server's sentence names a CLI flag for an earlier build; the page's way on is the step's own Try again (R8-11).
+  if (code === "write_timeout") return { lead: "Flashing didn't finish within 3 minutes, so keyloom stopped it.", detail: "The keyboard may be left in its bootloader, where it doesn't type. Try again to put this build on it." };
   const lead = code === "not_confirmed" ? "keyloom wrote the firmware, but couldn't confirm the keyboard runs it." : (permissionFix(code)?.failed ?? null);
   return { lead, detail: error ?? "Flashing failed." };
 }

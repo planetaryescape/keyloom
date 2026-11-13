@@ -72,7 +72,7 @@ case "$1" in
   version) [ "$FAKE_MODE" = nodaemon ] && exit 1; echo 28.0.0; exit 0;;
   rm) echo "$@" >> "$FAKE_DOCKER_LOG"; exit 0;;
   image) echo "$@" >> "$FAKE_DOCKER_LOG"; [ "$FAKE_IMAGE" = missing ] && [ ! -f "$FAKE_IMAGE_MARK" ] && exit 1; exit 0;;
-  build) echo "$@" >> "$FAKE_DOCKER_LOG"; touch "$FAKE_IMAGE_MARK"; echo "Step 1/6 : FROM nixpkgs/nix"; exit 0;;
+  build) echo "$@" >> "$FAKE_DOCKER_LOG"; [ "$FAKE_IMAGE_BUILD" = disk ] && { echo "ERROR: failed to solve: write /var/lib/docker/buildkit/content: no space left on device"; exit 1; }; touch "$FAKE_IMAGE_MARK"; echo "Step 1/6 : FROM nixpkgs/nix"; exit 0;;
 esac
 echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""

@@ -110,8 +110,10 @@ describe("buildQmk (fake docker)", () => {
   test("a full Docker disk is called what it is", async () => {
     const s = await setup();
     await expect(s.build("disk")).rejects.toThrow(/Docker ran out of disk space/);
-    // It can pass once space is freed, so it carries no code and keeps Build again (R5-02).
-    expect((await failureOf(s.build("disk"))).code).toBeNull();
+    // It fills the same disk again, so it carries a code whose button frees Docker's build cache first (R8-04). The CLI keeps the command.
+    const failure = await failureOf(s.build("disk"));
+    expect(failure.code).toBe("disk_full");
+    expect(failure.message).toContain("`docker builder prune`");
   });
 
   describe("failures that repeat every time carry their code (R5-02, recorded lines in test/fixtures/build-logs)", () => {

@@ -111,6 +111,25 @@ describe("appSystemBackend", () => {
     expect(fixes).toBe(1);
   });
 
+  test("freeing Docker's build cache hands serve's build check to the prune, two clicks share one prune, and no check refuses it (R8-04)", async () => {
+    let prunes = 0;
+    const done = Promise.withResolvers<void>();
+    const given: Array<(() => string | null) | undefined> = [];
+    const prune = async (opts?: { blocker?: () => string | null }) => { prunes += 1; given.push(opts?.blocker); await done.promise; return { ok: true as const, freed: "512MB" }; };
+    const pruneBlocker = () => null;
+    // The restart's blocker is not the prune's: its words would tell the person to restart Docker (PR #306 review).
+    const backend = appSystemBackend({}, { prune, pruneBlocker, restartBlocker: () => "restart words" });
+    const first = backend.pruneBuildCache?.();
+    const second = backend.pruneBuildCache?.();
+    done.resolve();
+    expect(await first).toEqual({ ok: true, freed: "512MB" });
+    expect(await second).toEqual({ ok: true, freed: "512MB" });
+    expect(prunes).toBe(1);
+    expect(given).toEqual([pruneBlocker]);
+    expect(await appSystemBackend({}, { prune, restartBlocker: () => null }).pruneBuildCache?.()).toMatchObject({ ok: false, code: "build_running" });
+    expect(prunes).toBe(1);
+  });
+
   test("stopInstalls, which serve's shutdown runs, ends a running install (#277 review)", async () => {
     const runner: InstallRunner = (_cmd, opts) => new Promise((resolve) => opts.signal?.addEventListener("abort", () => resolve({ exitCode: null, timedOut: false }), { once: true }));
     const backend = appSystemBackend({ platform: "darwin", has: (c) => c === "brew", runner });

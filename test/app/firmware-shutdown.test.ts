@@ -85,7 +85,11 @@ for (const outcome of ["throws", "missing"] as const) {
       const starting = startFlash(e.app, { buildId: build.id });
       const rejected = starting.then(() => { throw new Error("the artifact check must refuse this start"); }, (error) => {
         if (outcome === "throws") expect(error).toBe(failure);
-        else expect(error).toMatchObject({ name: "UsageError", message: expect.stringContaining("is gone; build it again") });
+        else {
+          // Its own code at the route (R8-12), still a usage error to the CLI.
+          expect(error).toBeInstanceOf(UsageError);
+          expect(error).toMatchObject({ name: "BuildFileGoneError", message: expect.stringContaining("is gone; build it again") });
+        }
       });
       let drained = false;
       const draining = drainManualFlashTasks(e.app).then(() => { drained = true; });

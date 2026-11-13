@@ -48,7 +48,7 @@ export async function waitFor(cond: () => boolean, what: string, ms = 15_000): P
  * retry restarts it just as the stop arrives, so the flasher says `inBootloader` and refuses the stop, and then the half's drive
  * goes away before the copy.
  */
-export type FlashMode = "ok" | "unverified" | "fail" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop" | "restart_at_stop";
+export type FlashMode = "ok" | "unverified" | "fail" | "write_timeout" | "unplug" | "needs_hand" | "wrong_marker" | "reset_at_stop" | "restart_at_stop";
 
 export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean } = {}) {
   const app: App = openApp({ dataDir: tempDir() });
@@ -169,6 +169,12 @@ export async function syncWorld(opts: { engine?: SyncOptions; proven?: boolean }
           finishFlash(app.db, flashId, null);
           return { ok: true, flashId, verified, note: verified ? `Verified: the keyboard is running build ${a.buildId}.` : null };
         };
+        // A Moonlander write that ran past its limit, with its code, as `flashWithZapp` records it (R8-11).
+        if (world.flashMode === "write_timeout") {
+          const error = "Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.";
+          finishFlash(app.db, flashId, { error, errorCode: "write_timeout" });
+          return { ok: false, flashId, error };
+        }
         switch (world.flashMode) {
           case "fail":
             return fail("zapp exited with code 1");

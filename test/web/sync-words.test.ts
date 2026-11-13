@@ -141,7 +141,7 @@ describe("syncNotice", () => {
   test("a notice with no button is the same on any page", () => {
     const notice = syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }));
     if (notice === null) throw new Error("expected a notice");
-    expect(noticeOnPage(notice, at({ kind: "in_sync" }), "zsa/moonlander")).toBe(notice);
+    expect(noticeOnPage(notice, at({ kind: "in_sync" }), { boardId: "zsa/moonlander", layoutId: "lay_9" })).toBe(notice);
   });
 
   test("a failed sync says what failed", () => {
@@ -153,28 +153,93 @@ describe("syncNotice", () => {
   // R3-05: Docker's own sentence (which can name a terminal fix) stays in the build log; the toast, the line and the menu bar say this.
   test("an auto-sync build that failed because Docker wasn't ready offers Build and flash", () => {
     const raw = "Colima is running, but this account can't use its Docker socket. Quit your Docker app and open it again.";
-    const docker = { ...run("failed"), failure: "build", error: raw, errorCode: "docker_unavailable" };
+    const docker = { ...run("failed"), failure: "build", error: raw, errorCode: "docker_unavailable", buildId: "bld_d" };
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: raw }, docker);
     const notice = syncNotice(at(syncing), failed);
     expect(notice).toEqual({
       kind: "error", message: "Docker isn't ready", detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs.",
-      action: { id: "open_release", label: "Build and flash…" },
+      action: { id: "open_release", label: "Build and flash…", buildId: "bld_d" },
     });
     const line = syncLine(failed, "lay_1");
     expect(line.detail).toStartWith("Docker isn't ready");
-    expect(line.action).toEqual({ id: "open_release", label: "Build and flash…" });
+    expect(line.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_d" });
     expect(JSON.stringify([notice, line])).not.toContain("Quit your Docker app");
     // Build and flash acts on the layout on screen: on the Glove80's page the notice keeps it, on another board's page it opens the Glove80.
     if (notice === null) throw new Error("expected a notice");
-    expect(noticeOnPage(notice, failed, "moergo/glove80")).toBe(notice);
-    expect(noticeOnPage(notice, failed, "zsa/moonlander")).toEqual({
+    expect(noticeOnPage(notice, failed, { boardId: "moergo/glove80", layoutId: "lay_1" })).toBe(notice);
+    expect(noticeOnPage(notice, failed, { boardId: "zsa/moonlander", layoutId: "lay_9" })).toEqual({
       kind: "error", message: "Docker isn't ready",
       detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs. Its page has Build and flash.",
       action: { id: "open_board", label: "Open Glove80" },
     });
-    // Any other build failure keeps its own words: they are the compiler's, and the log has the rest.
-    const other = { ...run("failed"), failure: "build", error: "compile error in keymap.c", errorCode: null };
-    expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "compile error in keymap.c" }, other))?.detail).toBe("compile error in keymap.c");
+    // A build failure with no code says the build failed, never the CLI's sentence, and opens Build and flash on that build (R8-01).
+    const other = { ...run("failed"), failure: "build", error: "build bld_1 failed: compile error in keymap.c (log: /x/build.log)", errorCode: null, buildId: "bld_1" };
+    expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: other.error }, other))).toEqual({
+      kind: "error", message: "Couldn't build the change for your Glove80", detail: "The firmware build failed. Build and flash shows its log and can build it again.",
+      action: { id: "open_release", label: "Build and flash…", buildId: "bld_1" },
+    });
+  });
+
+  // PR #306 review: the person moved to config B of the same Glove80 while A's sync built. Build and flash here would open B's dialog on
+  // A's build, which hides it as an older version; the toast opens A instead, whose pill has Build and flash on that build.
+  test("a failed sync of another config of this keyboard opens that config, never this config's Build and flash", () => {
+    const failedRun = { ...run("failed"), failure: "build", error: "build bld_A failed", errorCode: "disk_full", buildId: "bld_A" };
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: failedRun.error }, failedRun);
+    const notice = syncNotice(at(syncing), failed);
+    if (notice === null) throw new Error("expected a notice");
+    expect(notice.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_A" });
+    expect(noticeOnPage(notice, failed, { boardId: "moergo/glove80", layoutId: "lay_B" })).toEqual({
+      kind: "error", message: "Couldn't build the change for your Glove80",
+      detail: "Docker ran out of disk space, so the build stopped. Build and flash can free Docker's build cache. main's page has Build and flash.",
+      action: { id: "open_config", label: "Open main", layoutId: "lay_1" },
+    });
+  });
+
+  // R8-01: every code a sync's build can carry says what the code means, on the pill and the toast, and never the build's sentence.
+  test("a sync whose build failed shows the code's own words and opens Build and flash on that build", () => {
+    const cli = "build bld_9 failed: Docker still shows an old copy … restart it with `colima restart`, or move XDG_CACHE_HOME … (log: /x/b.log)";
+    const words: Record<string, string> = {
+      stale_mount: "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them. Build and flash shows how to clear it.",
+      stuck_container: "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started. Build and flash shows how to clear it.",
+      folder_not_shared: "Docker can't see the folder keyloom builds in, so the build stopped before it started. Build and flash says where to share it.",
+      disk_full: "Docker ran out of disk space, so the build stopped. Build and flash can free Docker's build cache.",
+      compile_error: "The firmware didn't compile from this layout. Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.",
+      too_large: "The firmware is too big for the keyboard's memory. Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.",
+      source_error: "keyloom couldn't write this layout as the firmware's source. Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.",
+      docker_unavailable: "Docker isn't ready, so keyloom couldn't build the change. Build and flash shows what Docker needs, with a button to fix it.",
+      some_future_code: "The firmware build failed. Build and flash shows its log and can build it again.",
+    };
+    for (const [errorCode, detail] of Object.entries(words)) {
+      const last = { ...run("failed"), failure: "build", error: cli, errorCode, buildId: "bld_9" };
+      const failed = at({ kind: "behind", changes: 1, why: "failed", error: cli }, last);
+      const line = syncLine(failed, "lay_1");
+      expect(line.detail).toBe(detail);
+      expect(line.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_9" });
+      const notice = syncNotice(at(syncing), failed);
+      if (errorCode !== "docker_unavailable") expect(notice).toEqual({ kind: "error", message: "Couldn't build the change for your Glove80", detail, action: { id: "open_release", label: "Build and flash…", buildId: "bld_9" } });
+      expect(JSON.stringify([line, notice])).not.toMatch(/`|colima restart|XDG_CACHE_HOME|log:/);
+    }
+  });
+
+  test("a sync whose build was stopped offers Sync now, and its toast has nothing to open", () => {
+    const last = { ...run("failed"), failure: "build", error: "Build stopped.", errorCode: "cancelled", buildId: "bld_2" };
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: "Build stopped." }, last);
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "The build was stopped before it finished, so nothing changed on the keyboard.", action: { id: "sync_now", label: "Sync now" } });
+    expect(syncNotice(at(syncing), failed)).toEqual({ kind: "error", message: "Couldn't build the change for your Glove80", detail: "The build was stopped before it finished, so nothing changed on the keyboard." });
+  });
+
+  test("a sync whose Moonlander write timed out says so in the page's words, never the --build flag (R8-11)", () => {
+    const cli = "Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.";
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: cli }, { ...run("failed"), failure: "flash", error: cli, errorCode: "write_timeout" });
+    const words = "Flashing didn't finish within 3 minutes, so keyloom stopped it. The keyboard may be left in its bootloader, where it doesn't type. Sync now flashes it again.";
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: words, action: { id: "sync_now", label: "Sync now" } });
+    expect(syncNotice(at(syncing), failed)?.detail).toBe(words);
+  });
+
+  test("a flash failure's sentence loses its backticks on the page", () => {
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: "Run `keyloom flash` again." }, { ...run("failed"), failure: "flash", error: "Run `keyloom flash` again." });
+    expect(syncLine(failed, "lay_1").detail).toBe("Run keyloom flash again.");
+    expect(syncNotice(at(syncing), failed)?.detail).toBe("Run keyloom flash again.");
   });
 
   test("a failed latest sync cannot produce a success toast from a stale in-sync reading", () => {

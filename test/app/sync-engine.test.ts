@@ -183,6 +183,8 @@ describe("failures leave the keyboard alone and say why", () => {
     w.apply();
     await waitFor(() => w.stateOf(e)?.kind === "behind" && (w.stateOf(e) as { error: string | null }).error !== null, "the failure");
     expect(e.views()[0]?.last).toMatchObject({ failure: "build", errorCode: "docker_unavailable" });
+    // The failed build itself, so Build and flash opens on it with its buttons (R8-01).
+    expect(e.views()[0]?.last?.buildId).toBe(w.calls.builds.at(-1)?.buildId);
   });
 
   test("a flash that fails is behind with the error and is not repeated by itself", async () => {
@@ -196,6 +198,17 @@ describe("failures leave the keyboard alone and say why", () => {
     expect(w.stateOf(e)).toMatchObject({ error: "zapp exited with code 1" });
     await Bun.sleep(150);
     expect(w.calls.flashes).toHaveLength(1);
+  });
+
+  test("a flash that timed out carries its code to the page, which shows its own words, not the CLI flag (R8-11)", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.flashMode = "write_timeout";
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await waitFor(() => w.stateOf(e)?.kind === "behind" && (w.stateOf(e) as { why: string }).why === "failed", "the failure");
+    expect(e.views()[0]?.last).toMatchObject({ failure: "flash", errorCode: "write_timeout" });
   });
 
   test("a flash the flasher could not verify is not in sync", async () => {

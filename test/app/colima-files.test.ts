@@ -744,7 +744,21 @@ describe("what the page shows (D-533)", () => {
     const shown = dockerView(refused, false, COLIMA_VM_RUNNING, null, "fix-files", "vm_running");
     expect(shown).toMatchObject({ kind: "no-access", command: access.command, fix: { offered: false, note: expect.stringContaining("The command below stops that copy, gives the files back and starts Colima as you.") } });
     expect(buildBlockedReason(shown)).toBe("Give keyloom access to Docker first.");
+    // An older server sends no stop on its own, so the words say to stop it with the button kept.
     expect(dockerView(refused, false, COLIMA_VM_RUNNING, null, "fix-files", "vm_running", "/Users/someone/.colima/x")).toMatchObject({ command: null, fix: { offered: true, note: expect.stringContaining("Stop that copy of Colima, then press Fix Colima's files again.") } });
+  });
+
+  test("with the full command held, a running VM gets Colima's stop on its own, which changes no owners, and keeps the button (R8-05)", () => {
+    const stop = 'sudo env HOME="$HOME" colima stop --profile work';
+    const withStop = { ...refused, access: { ...access, stopCommand: stop } };
+    for (const [held, linked] of [[{ ...withStop, access: { ...withStop.access, command: null, scanIncomplete: true } }, null], [withStop, "/Users/someone/.colima/x"]] as const) {
+      const view = dockerView(held, false, COLIMA_VM_RUNNING, null, "fix-files", "vm_running", linked);
+      expect(view).toMatchObject({ kind: "no-access", command: null, stopCommand: stop, fix: { offered: true, note: expect.stringContaining("Stop that copy with the command below, which changes no file's owner, then press Fix Colima's files again.") } });
+      expect(JSON.stringify(view)).not.toContain("chown");
+    }
+    // Any other outcome, or a fresh page, shows no stop on its own: the readiness alone doesn't know a copy runs.
+    expect(dockerView({ ...withStop, access: { ...withStop.access, command: null, scanIncomplete: true } }, false, "You cancelled.", null, "fix-files", "cancelled")).not.toHaveProperty("stopCommand");
+    expect(dockerView({ ...withStop, access: { ...withStop.access, command: null, scanIncomplete: true } }, false, null, null)).not.toHaveProperty("stopCommand");
   });
 
   test("once Docker needs something else, that readiness decides: a Colima that didn't come up gets Restart Colima", () => {

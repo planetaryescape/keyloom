@@ -26,7 +26,8 @@ interface PillProps {
   /** The layout on screen, which "Sync now" puts on the keyboard. */
   layoutId: string;
   layoutName: string;
-  onOpenRelease: () => void;
+  /** Opens Build and flash, on the sync's failed build when `buildId` names one (R8-01). */
+  onOpenRelease: (buildId?: string) => void;
   /** Opens the put-on confirm for a config (D-300), the same one the config menu uses. */
   onPutOn: (target: { id: string; name: string }) => void;
 }
@@ -37,8 +38,8 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
   const auto = autoSyncLine(board);
   // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
   const target = selected && layoutId !== board.layoutId ? { id: layoutId, name: layoutName } : { id: board.layoutId, name: board.layoutName };
-  const act = (id: SyncActionId) => {
-    if (id === "flash_keyloom" || id === "open_release") onOpenRelease();
+  const act = (id: SyncActionId, buildId?: string) => {
+    if (id === "flash_keyloom" || id === "open_release") onOpenRelease(buildId);
     else if (id === "put_on") onPutOn(target);
     else if (id === "replace_foreign") sync.setReplaceAsk(selected ? layoutId : board.layoutId);
     else void sync.syncNow(selected ? layoutId : board.layoutId);
@@ -77,7 +78,7 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
               )}
             </div>
             {line.action === null ? null : (
-              <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id); }}>
+              <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id, line.action!.buildId); }}>
                 {line.action.id === "open_release" ? <Hammer size={14} aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
                 <span className="menu-item-label">{line.action.label}</span>
               </button>
@@ -140,7 +141,7 @@ interface Props {
   layoutId: string;
   layoutName: string;
   boardId: string;
-  onOpenRelease: () => void;
+  onOpenRelease: (buildId?: string) => void;
   onPutOn: (target: { id: string; name: string }) => void;
 }
 

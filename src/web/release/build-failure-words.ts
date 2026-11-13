@@ -1,9 +1,9 @@
 // What a failed build's step says and offers (R5-02), by the build's code, never its text. Pure, so each case is tested without a browser.
-import { type Build, CHAT_MESSAGE_MAX } from "../../api/http.ts";
+import { type Build, BuildSchema, CHAT_MESSAGE_MAX } from "../../api/http.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { ApiError } from "../api.ts";
 import { type GoBackRefusal, goBackRefusal } from "../shell/mismatch-words.ts";
-import { COLIMA_HELP_URL } from "./release-words.ts";
+import { COLIMA_HELP_URL, plain } from "./release-words.ts";
 
 /**
  * `docker`: the Docker callout answers it (D-488). `same_every_time`: the layout doesn't compile or fit, so building again fails the same
@@ -12,13 +12,14 @@ import { COLIMA_HELP_URL } from "./release-words.ts";
  * restart the engine and build again (R6-09, R6-17). `may_pass`: anything else, such as a download that failed, keeps Build again beside
  * the question. `folder_not_shared`: the engine doesn't share keyloom's build folder (R7-02); the step says which folder and where it is
  * shared, with `openApp` (Docker Desktop, whose settings hold its file sharing) or `helpUrl` (Colima's own page on its mounts), and Build
- * again for after it is shared.
+ * again for after it is shared. `disk_full`: Docker's disk is full, so the step offers to free Docker's build cache, then Build again (R8-04).
  */
 export type BuildFailureView =
   | { kind: "docker" }
+  | { kind: "disk_full"; text: string; next: string }
   | { kind: "folder_not_shared"; text: string; next: string; openApp: "docker_desktop" | null; helpUrl: string | null }
   | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
-  | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
+  | { kind: "same_every_time"; code: "compile_error" | "too_large" | "source_error"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
 /** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
@@ -26,13 +27,14 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | 
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
   if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed);
   if (build.errorCode === "folder_not_shared") return folderView(build.folderNotShared ?? null);
+  if (build.errorCode === "disk_full") return { kind: "disk_full", text: DISK_FULL_TEXT, next: DISK_FULL_NEXT };
   if (build.errorCode !== "compile_error" && build.errorCode !== "too_large" && build.errorCode !== "source_error") return { kind: "may_pass" };
   // Going back moves the head; a build of an earlier revision chosen in History has no head to move.
   const goBack = earlierRevision ? null : (build.lastBuilt ?? null);
   const next = goBack === null
     ? "Building it again fails the same way. Ask keyloom about this build, or change the layout and build again."
     : `Building it again fails the same way. The last version that built is “${headline(goBack.summary)}”. Going back adds a new revision, so this one stays in History.`;
-  return { kind: "same_every_time", next, goBack };
+  return { kind: "same_every_time", code: build.errorCode, next, goBack };
 }
 
 // The build's own sentence names a terminal command and XDG_CACHE_HOME; the page says what happened and offers the restart instead.
@@ -45,6 +47,58 @@ function engineRestartView(code: "stale_mount" | "stuck_container", engine: stri
   if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
   return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
 }
+
+const DISK_FULL_TEXT = "Docker ran out of disk space, so the build stopped.";
+// The build's sentence names `docker builder prune`, which the CLI keeps; the page runs it (R8-04).
+const DISK_FULL_NEXT = "Freeing Docker's build cache makes room. Nothing you made is removed, but the next build takes longer while Docker rebuilds what it had cached.";
+
+/**
+ * What freeing Docker's build cache ended in, for the disk_full step (R8-04). `again`: the button stays, because the next press can work
+ * (a build or flash was running, or keyloom was busy with Docker). Otherwise Build again is the way on now.
+ */
+export type CachePruneOutcome = { text: string; again: boolean };
+
+const MAKE_ROOM = "Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.";
+
+export function cachePruneOutcome(result: { ok: true; freed: string | null } | { ok: false; reason: string; code?: string | undefined } | { ok: false; unreachable: true }): CachePruneOutcome {
+  if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again.", again: true };
+  if (!result.ok) {
+    // A running build or flash, or a start or restart of Docker, ends by itself; any other failure would fail the same way again.
+    if (result.code === "build_running" || result.code === "engine_busy") return { text: plain(result.reason), again: true };
+    return { text: `${plain(result.reason).replace(/\.?$/, ".")} ${MAKE_ROOM}`, again: false };
+  }
+  if (result.freed !== null && /^0(\.0+)?[kKMGTP]?i?B$/.test(result.freed)) {
+    return { text: `Docker's build cache was already empty, so nothing was freed. ${MAKE_ROOM}`, again: false };
+  }
+  const freed = result.freed === null ? "Docker freed its build cache." : `Freed ${result.freed} of Docker's build cache.`;
+  return { text: `${freed} Build again to continue; it takes longer this time.`, again: false };
+}
+
+/**
+ * What the sync pill and its toast say about a sync whose build failed (R8-01), from the build's code, never its sentence: the sync's error
+ * is the CLI's, with its commands and log path. The way on is Build and flash, which opens on that build with its buttons.
+ */
+export function syncBuildFailureLine(code: string | null | undefined): string {
+  const view = buildFailureView({ errorCode: isBuildCode(code) ? code : null, lastBuilt: null, restartEngine: null, folderNotShared: null }, false);
+  switch (view.kind) {
+    case "docker": return "Docker isn't ready, so keyloom couldn't build the change. Build and flash shows what Docker needs, with a button to fix it.";
+    case "disk_full": return `${view.text} Build and flash can free Docker's build cache.`;
+    case "restart_engine": return `${view.text} Build and flash shows how to clear it.`;
+    case "folder_not_shared": return `${view.text} Build and flash says where to share it.`;
+    case "same_every_time": return `${SAME_EVERY_TIME[view.code]} Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.`;
+    case "may_pass": return code === "cancelled" ? "The build was stopped before it finished, so nothing changed on the keyboard." : "The firmware build failed. Build and flash shows its log and can build it again.";
+  }
+}
+
+const SAME_EVERY_TIME = {
+  compile_error: "The firmware didn't compile from this layout.",
+  too_large: "The firmware is too big for the keyboard's memory.",
+  source_error: "keyloom couldn't write this layout as the firmware's source.",
+} as const;
+
+// The sync sends the build's code as a plain string, so one this page doesn't know reads as no code.
+const BUILD_CODES: readonly string[] = BuildSchema.shape.errorCode.unwrap().options;
+const isBuildCode = (code: string | null | undefined): code is NonNullable<Build["errorCode"]> => BUILD_CODES.includes(code ?? "");
 
 /** Colima's FAQ entry on a bind mount outside the home folder, which says to add it to `mounts` (checked 2026-11-12). */
 export const COLIMA_MOUNTS_URL = `${COLIMA_HELP_URL}#docker-bind-mount-showing-empty`;

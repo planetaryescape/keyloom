@@ -70,7 +70,7 @@ export function printable(path: string): string {
 }
 
 // Colima's own profile names: letters, digits, dot, dash and underscore. Anything else never reaches the script.
-const PROFILE = /^[A-Za-z0-9._-]+$/;
+export const PROFILE = /^[A-Za-z0-9._-]+$/;
 
 export type PlanDeps = {
   /** The home folder keyloom runs with ($HOME), as a real path. Colima keeps its files under it. */
