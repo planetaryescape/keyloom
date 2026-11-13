@@ -21,6 +21,7 @@ test("an answer that fails the same way every time opens the dialog without Try 
   opened.length = 0;
   const toast = failedToast("Couldn't undo", new ApiError(400, UNREADABLE_WORDS, { code: "unreadable" }), open, retry);
   toast.action?.run();
+  expect(opened).toHaveLength(1);
   expect(opened[0]?.retry).toBeUndefined();
 });
 

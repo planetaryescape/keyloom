@@ -742,6 +742,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [draft.binding]);
 
   const undoBlock = editing !== null && draft.dirty ? "Apply or reset the key you are editing first" : null;
+  // Read when a toast's Try again runs, which can be long after the failure: a key opened since then blocks the step (PR #310 CodeRabbit).
+  const undoBlockNow = useRef(undoBlock);
+  undoBlockNow.current = undoBlock;
   const mode: PanelMode = chatOpen && !keyOverChat ? "chat" : editing !== null ? "key" : combosOpen ? "combo" : repeating ? "repeat" : historyOpen ? "history" : libraryOpen ? "library" : settingsOpen ? "settings" : "summary";
   const libraryHighlight = useMemo(() => {
     const keys = new Set(mode === "library" && libraryKeys !== null ? libraryKeys : []);
@@ -1693,7 +1696,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       if (stale) showLatest(STALE_UNDO);
-      else failedToast(target === undefined ? "Couldn't undo" : "Couldn't go back", error, () => void undo(target, after));
+      else failedToast(target === undefined ? "Couldn't undo" : "Couldn't go back", error, () => {
+        if (undoBlockNow.current !== null) toasts.show({ kind: "info", message: undoBlockNow.current });
+        else void undo(target, after);
+      });
       return false;
     } finally {
       setUndoing(false);
