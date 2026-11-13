@@ -34,6 +34,11 @@ export function pageFailure(error: unknown, fallback: string): PageFailure {
   return { message: error.message === "" ? fallback : error.message, ...(typeof code === "string" ? { code } : {}), ...(generic === true ? { generic: true } : {}) };
 }
 
+/** A kept failure as an Error again, for code that must reject: `pageFailure` reads its code back, so it isn't lost on the way (R8-03). */
+export function failureError(failure: PageFailure): Error {
+  return Object.assign(new Error(failure.message), failure.code === undefined ? {} : { code: failure.code }, failure.generic === true ? { generic: true } : {});
+}
+
 /**
  * The code for a failed answer: the server's own when it sent one. Without one, a 404 is an address keyloom doesn't know, a 413 is a body
  * over the server's cap (Bun answers it before any route runs), a 5xx is an exception, and any other refusal is a request this keyloom

@@ -13,6 +13,7 @@ import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, pla
 import { headline } from "../../layout/history-summary.ts";
 import { BUILD_FILE_GONE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import "./release.css";
 
@@ -126,7 +127,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
   const earlier = lastBuild !== null && shownBuild === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
   // A build whose file is gone can't be flashed again; Build again above makes one that can (R8-12).
-  const errorWay = errorWayOut(release.errorCode);
+  const errorWay = errorWayOut(release.errorCode, release.errorGeneric);
   const fileGone = errorWay === "build_again";
   const canFlash = build?.status === "succeeded" && !flashing && !fileGone;
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
@@ -220,9 +221,11 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                     <Hammer size={14} aria-hidden="true" />
                     Build again
                   </button>
+                ) : errorWay === "gone" ? (
+                  <RestartKeyloom token={token} primary />
                 ) : (
                   // Repeating a start or a read that hit a server fault is safe: a flash already running refuses a second one.
-                  <UnexpectedWayOut token={token} code={release.errorCode ?? undefined} onRetry={release.retry} />
+                  <UnexpectedWayOut token={token} failure={{ message: error, code: release.errorCode ?? undefined, generic: release.errorGeneric }} onRetry={release.retry} />
                 )}
               </div>
             )}

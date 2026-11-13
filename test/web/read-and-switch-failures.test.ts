@@ -29,7 +29,7 @@ describe("a failed read is not an empty list (R4-08)", () => {
 });
 
 test("a provider switch that fails says so, keeps the conversation, and can be tried again (R4-18)", () => {
-  const html = renderToStaticMarkup(createElement(SwitchFailed, { to: "codex", message: "Can't reach keyloom.", onRetry: noop, onDismiss: noop }));
+  const html = renderToStaticMarkup(createElement(SwitchFailed, { token: "t", to: "codex", failure: { message: "Can't reach keyloom.", code: "unreachable" }, onRetry: noop, onDismiss: noop }));
   expect(html).toContain("keyloom couldn&#x27;t switch to Codex");
   expect(html).toContain("Your conversation and its model are unchanged.");
   expect(html).toContain("Try again");

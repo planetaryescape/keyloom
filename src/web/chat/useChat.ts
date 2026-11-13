@@ -16,8 +16,8 @@ import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type Assi
 /** Why a reply stopped, as the failure box reads it (failure-words.ts). */
 type TurnFailure = NonNullable<AssistantTurn["failure"]>;
 
-/** A refusal before the reply started, or a history/provider request problem. */
-export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other"; message: string };
+/** A refusal before the reply started, or a history/provider request problem. It keeps the failure's code, so the box picks its buttons (R8-03). */
+export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other" } & PageFailure;
 
 export type History =
   | { status: "idle" }
@@ -25,15 +25,15 @@ export type History =
   | { status: "ready"; items: ConversationSummary[] }
   | ({ status: "error" } & PageFailure);
 
-function classify(error: unknown): Problem {
+export function classify(error: unknown): Problem {
+  const failure = pageFailure(error, "Something went wrong sending that.");
   if (error instanceof ApiError) {
-    if (error.code === "missing_api_key") return { kind: "missing_key", message: error.message };
-    if (error.status === 409) return { kind: "busy", message: error.message };
-    if (error.status === 429) return { kind: "rate_limit", message: error.message };
-    if (error.status === 0) return { kind: "unreachable", message: error.message };
-    return { kind: "other", message: error.message };
+    if (error.code === "missing_api_key") return { kind: "missing_key", ...failure };
+    if (error.status === 409) return { kind: "busy", ...failure };
+    if (error.status === 429) return { kind: "rate_limit", ...failure };
+    if (error.status === 0) return { kind: "unreachable", ...failure };
   }
-  return { kind: "other", message: error instanceof Error ? error.message : "Something went wrong sending that." };
+  return { kind: "other", ...failure };
 }
 
 /** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */

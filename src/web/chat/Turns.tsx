@@ -306,7 +306,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
   return (
     <div className="msg msg-assistant" data-phase={turn.phase}>
       <p className="msg-who">keyloom</p>
-      <PriorityChips priorities={turn.priorities} layout={layout} onRemove={onRemovePriority} />
+      <PriorityChips priorities={turn.priorities} layout={layout} onRemove={onRemovePriority} token={token} />
       {streaming ? <AgentWorking view={work} motionPaused={motionPaused} /> : null}
       {/* Hidden from the live region until the reply is whole, so a screen reader hears it once, not token by token. */}
       <div aria-hidden={streaming || undefined}>
@@ -349,6 +349,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
                   onReadAgain={busy ? undefined : onReadProposals}
+                  token={token}
                   revised={revised?.has(shown.changeSetId) ?? false}
                   compact
                 />
@@ -373,6 +374,7 @@ export function AssistantMessage({ turn, layout, board, pinnedId, onPreview, onP
                   onAskAgain={onAskAgain}
                   onOpenRelease={onOpenRelease}
                   onReadAgain={busy ? undefined : onReadProposals}
+                  token={token}
                 />
               </li>
             ))}

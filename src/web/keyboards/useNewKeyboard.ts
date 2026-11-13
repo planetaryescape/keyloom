@@ -9,8 +9,7 @@ import * as api from "./api-keyboards.ts";
 import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
 import { putProblem, type PutProblem } from "./put-words.ts";
 import { keyboardRemoved } from "./RestoreKeyboard.tsx";
-import type { UnexpectedCode } from "../shell/unexpected.ts";
-import { unexpectedCodeOf } from "./unexpected-code.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 // The new-keyboard flow (22, D-336): a keyboard keyloom has no board for is plugged in, BK confirms which it is, says where the home row
 // is (and, for a ZMK shield, the controller), sees the board keyloom would add, adds it, and puts one of his configs on it. Nothing here
@@ -103,8 +102,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   // The board keyloom already has for a keyboard picked as new (R6-07): the page offers to put a config on it instead. Its name is
   // keyloom's, not the search result's ("Moonlander", not "Moonlander Mark I"), so the steps after it name the board as keyloom does.
   const [previewProblemBoard, setPreviewProblemBoard] = useState<KnownBoardRef | null>(null);
-  // A preview that failed in a way no screen planned for (R8-03): the Reading step offers Restart keyloom, and Try again only for an exception.
-  const [previewUnexpected, setPreviewUnexpected] = useState<UnexpectedCode | undefined>(undefined);
+  // A failed preview as the page keeps it (R8-03): its code picks Restart keyloom for a failure no screen planned for, with Try again only
+  // for an exception.
+  const [previewFailure, setPreviewFailure] = useState<PageFailure | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
   // The Put step's map that failed replaces "Mapping it…"; Try again reads it again (R6-05).
   const [putFailure, setPutFailure] = useState<PutProblem | null>(null);
@@ -161,7 +161,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     setPreviewProblem(null);
     setPreviewProblemCode(null);
     setPreviewProblemBoard(null);
-    setPreviewUnexpected(undefined);
+    setPreviewFailure(null);
     // The drawing of the old home row or controller must not stay up while the new one is read, or a failed read would hide behind it.
     setPreview(null);
     api.previewKeyboard(token, {
@@ -174,7 +174,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
       setPreviewProblem(message(e));
       setPreviewProblemCode(e instanceof ApiError ? (e.code ?? null) : null);
       setPreviewProblemBoard(knownBoardOf(e, step.candidate.name));
-      setPreviewUnexpected(unexpectedCodeOf(e));
+      setPreviewFailure(pageFailure(e, ""));
     });
     return () => controller.abort();
     // The key stands for the step's inputs; the attempt is Try again.
@@ -236,7 +236,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
     },
     /** For Restart keyloom beside a failure no screen planned for (R8-03). */
     token,
-    step, preview, addBlocked, previewProblem, previewUnexpected, previewProblemCode, previewProblemBoard, putPreview, putFailure, busy, problem, searchProblem, removed, waiting,
+    step, preview, addBlocked, previewProblem, previewFailure, previewProblemCode, previewProblemBoard, putPreview, putFailure, busy, problem, searchProblem, removed, waiting,
     /** Reads the board preview again after it failed. */
     retryPreview: () => setPreviewAttempt((n) => n + 1), setupWaiting, searchText, found, foundFor, activities, setActivities,
     /** Restores a removed keyboard, for a config refused because of it (R6-08). */

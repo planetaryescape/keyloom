@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LogShownSchema, ServerLogSchema } from "../../src/api/server-log.ts";
-import { LOG_FILE_ENV, LogShowError, type ServerLog, serverLog, showServerLog } from "../../src/app/server-log.ts";
+import { LOG_FILE_ENV, LogShowError, type ServerLog, openLogFile, serverLog, showServerLog } from "../../src/app/server-log.ts";
 import { type LogBackend, handleLogRoute } from "../../src/server/log-routes.ts";
 
 const TOKEN = "t".repeat(43);
@@ -75,4 +75,13 @@ test("the route opens the log, and answers each refusal with its code", async ()
   const { call } = serve({ kind: "terminal" });
   expect((await call("/api/log/show", { method: "POST", body: "{}" })).status).toBe(415);
   expect((await call("/api/log/show")).status).toBe(405);
+});
+
+const ran = (exitCode: number, stderr = "") => ({ exitCode, signalCode: null, timedOut: false, aborted: false, durationMs: 1, stdout: "", stderr });
+
+test("Show keyloom's log runs macOS open by its absolute path, so another open on the PATH never runs", async () => {
+  const cmds: string[][] = [];
+  await openLogFile("/Users/me/Library/Logs/k/keyloom.log", async (cmd) => { cmds.push(cmd); return ran(0); });
+  expect(cmds).toEqual([["/usr/bin/open", "/Users/me/Library/Logs/k/keyloom.log"]]);
+  await expect(openLogFile("/x.log", async () => ran(1, "The file /x.log does not exist.\n"))).rejects.toThrow("The file /x.log does not exist.");
 });

@@ -7,6 +7,7 @@ import { failure, isGone, removeOrGone, request } from "../../src/web/api-write.
 import { ApiError, fetchLayouts } from "../../src/web/api.ts";
 import { uploadLayout } from "../../src/web/import/api-import.ts";
 import { HistoryPanel } from "../../src/web/history/HistoryPanel.tsx";
+import { CONFIG_GONE } from "../../src/web/history/useVersions.ts";
 import { RetryOrRestart, UnexpectedWayOut } from "../../src/web/shell/UnexpectedWayOut.tsx";
 import { INTERNAL_WORDS, NOT_FOUND_WORDS, TOO_LARGE_WORDS, UNREADABLE_WORDS, failureCode, failureWords, pageFailure, unexpectedWayOut, wayOutFor } from "../../src/web/shell/unexpected.ts";
 
@@ -115,8 +116,15 @@ const historyProps = {
 };
 
 test("a history keyloom can't find offers Restart keyloom, never a Try again that would fail the same way (R7 sweep)", () => {
-  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: NOT_FOUND_WORDS, code: "not_found" }} />);
+  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: NOT_FOUND_WORDS, code: "not_found", generic: true }} />);
   expect(html).toContain("keyloom couldn&#x27;t find what this page asked for.");
+  expect(html).toContain("Restart keyloom");
+  expect(html).not.toContain("Try again");
+});
+
+test("a history whose config was deleted elsewhere says so, with Restart keyloom and no Try again (D-540)", () => {
+  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: CONFIG_GONE, code: "not_found" }} />);
+  expect(html).toContain("keyloom no longer has this config.");
   expect(html).toContain("Restart keyloom");
   expect(html).not.toContain("Try again");
 });

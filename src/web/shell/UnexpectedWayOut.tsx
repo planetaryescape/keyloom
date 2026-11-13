@@ -12,7 +12,7 @@ import { type PageFailure, unexpectedWayOut, wayOutFor } from "./unexpected.ts";
  * (R8-03). `code` alone treats every `not_found` as unexpected.
  */
 export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled = false, className = "button", primary }: {
-  token: string; code?: string | undefined; failure?: PageFailure; onRetry?: () => void; className?: string;
+  token: string; code?: string | undefined; failure?: PageFailure; onRetry?: (() => void) | undefined; className?: string;
   /** Try again is off while the screen runs another action, as the screen's own Try again is. */
   retryDisabled?: boolean;
   /** False where the screen's own button is the Try again and already primary, such as the key card's Apply. */
@@ -37,7 +37,22 @@ export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled 
  * a lost connection; Try again and Restart keyloom for an exception; Restart keyloom alone for an answer that fails the same way every
  * time. Use it in place of a bare Try again.
  */
-export function RetryOrRestart({ token, failure, onRetry, className = "button" }: { token: string; failure: PageFailure; onRetry: () => void; className?: string }) {
-  if (wayOutFor(failure, true) !== null) return <UnexpectedWayOut token={token} failure={failure} onRetry={onRetry} className={className} />;
-  return <button type="button" className={className} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>;
+export function RetryOrRestart({ token, failure, onRetry, retryDisabled = false, className = "button" }: {
+  token: string; failure: PageFailure; onRetry: () => void; retryDisabled?: boolean; className?: string;
+}) {
+  if (wayOutFor(failure, true) !== null) return <UnexpectedWayOut token={token} failure={failure} onRetry={onRetry} retryDisabled={retryDisabled} className={className} />;
+  return <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>;
+}
+
+/**
+ * A failed action's line, where the control that failed stays and is the Try again (R8-03): the sentence, then Restart keyloom and the
+ * log for a failure no screen planned for. Without a token it is the sentence alone.
+ */
+export function FailureNote({ token, failure, className }: { token: string | undefined; failure: PageFailure; className: string }) {
+  return (
+    <div className={className} role="alert">
+      <p>{failure.message}</p>
+      {token === undefined ? null : <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={failure} primary={false} /></div>}
+    </div>
+  );
 }

@@ -2477,6 +2477,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}
               onOpenRelease={() => onOpenRelease()}
+              token={token}
             />
           </div>
         ) : null}

@@ -13,7 +13,9 @@ import { previewProposal } from "./preview.ts";
 import { ProposalMoves } from "./ProposalMoves.tsx";
 import { changeWords, keyLabel, leadSentence, replacedNatives, shortTitle, slotKey, slotName } from "./proposal-facts.ts";
 import { AfterApplyNote } from "../release/AfterApply.tsx";
-import { CLOSED_WORDS, proposalApplyFailure } from "./proposal-apply-words.ts";
+import { CLOSED_WORDS, proposalApplyFailure, proposalFailureWay } from "./proposal-apply-words.ts";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import "./proposal.css";
 
 interface Props {
@@ -42,17 +44,19 @@ interface Props {
    * and keeps the button. Absent where nothing can read them again (a reply still streaming).
    */
   onReadAgain?: (() => void | Promise<void>) | undefined;
+  /** The session token, for Restart keyloom beside a failure that fails the same way every time (R8-03). Without it the card adds nothing. */
+  token?: string | undefined;
 }
 
 const MAX_ROWS = 6;
 
 // One alternative from the agent. The same card serves a fresh proposal, an applied one and a
 // superseded sibling, so the choice reads the same whichever you look at.
-export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false, revised = false, onReadAgain }: Props) {
+export function ProposalCard({ proposal, option, layout, board, pinned, onPreview, onPin, onApply, onAskAgain, onOpenRelease, compact = false, line = false, revised = false, onReadAgain, token }: Props) {
   const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [failure, setFailure] = useState<{ message: string; stale: boolean; closed: boolean; reasons: string[] } | null>(null);
+  const [failure, setFailure] = useState<(PageFailure & { stale: boolean; closed: boolean; reasons: string[] }) | null>(null);
   const [reading, setReading] = useState(false);
   // Once the read shows it applied or superseded, its badge says so, and the failure would only repeat it.
   useEffect(() => {
@@ -106,7 +110,10 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
       setJustApplied(true);
     } catch (error) {
       setConfirming(false);
+      const kept = pageFailure(error, "Couldn't apply this.");
       setFailure({
+        // The code picks the way out; the words are the card's own (R8-03).
+        ...(kept.code === undefined ? {} : { code: kept.code }), ...(kept.generic === true ? { generic: true } : {}),
         ...proposalApplyFailure(error instanceof ApiError ? error : error instanceof Error ? { message: error.message } : null),
         reasons: error instanceof ApiError && error.validation ? validationReasons(error.validation.errors, layout) : [],
       });
@@ -120,14 +127,21 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
     setReading(true);
     void Promise.resolve().then(onReadAgain).then(
       () => setReading(false),
-      () => {
+      (error: unknown) => {
         setReading(false);
-        setFailure((f) => f === null ? f : { ...f, message: `${CLOSED_WORDS} keyloom couldn't read the proposals again.` });
+        // The read's code replaces the apply's, so an answer that fails the same way every time offers Restart keyloom (R8-03).
+        const { code, generic } = pageFailure(error, "");
+        setFailure((f) => f === null ? f : { ...f, message: `${CLOSED_WORDS} keyloom couldn't read the proposals again.`, code, generic });
       },
     );
   }
-  // A closed proposal's one way on: read the proposals, so the card shows what happened to it.
-  const readAgainButton = failure?.closed === true && onReadAgain !== undefined ? (
+  // Restart keyloom, and the log for an exception, where a failure is one no screen planned for. Apply or Read proposals again is the card's
+  // own Try again, so it is never repeated here.
+  const way = failure === null ? null : proposalFailureWay(failure);
+  const restart = failure !== null && way?.restart === true && token !== undefined ? <UnexpectedWayOut token={token} failure={failure} className="bar-link" primary={false} /> : null;
+  // A closed proposal's one way on: read the proposals, so the card shows what happened to it. Not after a read that fails the same way
+  // every time.
+  const readAgainButton = way?.readAgain === true && onReadAgain !== undefined ? (
     <button type="button" className="bar-link" disabled={reading} onClick={readAgain}>
       {reading ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : null}Read proposals again
     </button>
@@ -186,6 +200,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
         {dropped.length === 0 ? null : <span className="proposal-line-drop">Drops {dropped.map((d) => functionName(d.function, layout)).join(", ")}</span>}
         {failure === null ? null : <span className="proposal-line-problem" role="alert">{failure.message}</span>}
         {readAgainButton}
+        {restart}
         {recovery}
         {confirming ? <span className="proposal-line-problem" role="alert">Replaces {natives.length === 1 ? "a custom key" : `${natives.length} custom keys`} keyloom can&apos;t write back; Undo restores it.</span> : null}
         <span className="proposal-bar-gap" />
@@ -245,6 +260,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
               <p>{failure.message}</p>
               {readAgainButton}
               {recovery}
+              {restart === null ? null : <div className="unexpected-actions">{restart}</div>}
             </div>
           </div>
         )}
@@ -369,6 +385,7 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
             <p>{failure.message}</p>
             {readAgainButton}
             {recovery}
+            {restart === null ? null : <div className="unexpected-actions">{restart}</div>}
           </div>
         </div>
       )}

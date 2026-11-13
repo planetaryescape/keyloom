@@ -13,7 +13,7 @@ const candidate = { id: "zmk/corne", name: "Corne", firmware: "zmk" } as ApiCand
 // SAFETY: the Confirm panel reads only these fields of the hook's result; the rest of its API is never called while rendering.
 const flow = (previewProblem: string | null, extra: Partial<NewKeyboard> = {}): NewKeyboard => ({
   step: { kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null },
-  preview: null, addBlocked: null, previewProblem, previewProblemCode: null, problem: null, retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, review: () => {},
+  preview: null, addBlocked: null, previewProblem, previewProblemCode: null, previewFailure: null, problem: null, retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, review: () => {},
   setHomeRow: () => {}, setController: () => {}, setLayout: () => {}, busy: false, ...extra,
 }) as unknown as NewKeyboard;
 const render = (f: NewKeyboard) => renderToStaticMarkup(<NewBoardPanel flow={f} sources={[]} onMade={() => {}} />);

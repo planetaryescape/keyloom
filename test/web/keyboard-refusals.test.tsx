@@ -25,7 +25,7 @@ const moonlander = board("zsa/moonlander", "Moonlander", ["oryx-source"], "qmk")
 // SAFETY: the panel reads only these fields of the hook's result while rendering; the rest of its API is never called.
 const flow = (extra: Partial<NewKeyboard>): NewKeyboard => ({
   step: { kind: "confirm", keyboard: null, candidate: { id: "zmk:corne", name: "Corne", firmware: "zmk" } as ApiCandidate, homeRow: null, controller: null, layout: null },
-  preview: null, addBlocked: null, previewProblem: null, previewProblemCode: null, previewProblemBoard: null, putPreview: null, putFailure: null, problem: null, removed: null,
+  preview: null, addBlocked: null, previewProblem: null, previewProblemCode: null, previewFailure: null, previewProblemBoard: null, putPreview: null, putFailure: null, problem: null, removed: null,
   searchProblem: null, activities: [], busy: false, retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, review: () => {}, putOnKnown: () => {},
   retryPut: () => {}, clearSource: () => {}, retrySearch: () => {}, close: () => {}, ...extra,
 }) as unknown as NewKeyboard;

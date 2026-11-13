@@ -25,7 +25,7 @@ import { PluggedIn } from "../../src/web/keyboards/KeyboardWelcome.tsx";
 import { FINGER_LETTERS, NewBoardKeyboard, newBoardHalf } from "../../src/web/keyboards/NewBoardKeyboard.tsx";
 import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
-import { unexpectedCodeOf } from "../../src/web/keyboards/unexpected-code.ts";
+import { pageFailure, wayOutFor } from "../../src/web/shell/unexpected.ts";
 import type { NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
 // The new-keyboard stage's content box on a 390 x 844 phone, measured in the first-run screen: the well is 318 px wide and 300 px tall
@@ -67,12 +67,14 @@ describe("R8-02: the new-keyboard drawing on a phone", () => {
 
 describe("R8-03: failures no screen planned for", () => {
   test("only an exception, an unreadable answer and the catch-all not_found count; a route's own not_found is the screen's", () => {
-    expect(unexpectedCodeOf(new ApiError(500, "x", { code: "internal" }))).toBe("internal");
-    expect(unexpectedCodeOf(new ApiError(400, "x", { code: "unreadable" }))).toBe("unreadable");
-    expect(unexpectedCodeOf(new ApiError(404, "x", { code: "not_found", generic: true }))).toBe("not_found");
-    expect(unexpectedCodeOf(new ApiError(404, "no keyboard", { code: "not_found" }))).toBeUndefined();
-    expect(unexpectedCodeOf(new ApiError(400, "x", { code: "board_known" }))).toBeUndefined();
-    expect(unexpectedCodeOf(new Error("x"))).toBeUndefined();
+    // The shared rule these screens now use (D-540): pageFailure keeps the code, wayOutFor picks the buttons.
+    const way = (error: unknown) => wayOutFor(pageFailure(error, "x"), true);
+    expect(way(new ApiError(500, "x", { code: "internal" }))).toEqual({ retry: true, restart: true });
+    expect(way(new ApiError(400, "x", { code: "unreadable" }))).toEqual({ retry: false, restart: true });
+    expect(way(new ApiError(404, "x", { code: "not_found", generic: true }))).toEqual({ retry: false, restart: true });
+    expect(way(new ApiError(404, "no keyboard", { code: "not_found" }))).toBeNull();
+    expect(way(new ApiError(400, "x", { code: "board_known" }))).toBeNull();
+    expect(way(new Error("x"))).toBeNull();
   });
 
   const candidate = { id: "qmk:lily58", name: "Lily58", firmware: "qmk" } as ApiCandidate;
@@ -80,31 +82,34 @@ describe("R8-03: failures no screen planned for", () => {
   const reading = (extra: Partial<NewKeyboard>): string => renderToStaticMarkup(<NewBoardPanel sources={[]} onMade={() => {}} flow={{
     token: "t", step: { kind: "confirm", keyboard: null, candidate, homeRow: null, controller: null, layout: null },
     preview: null, addBlocked: null, previewProblem: "keyloom couldn't find what this page asked for.", previewProblemCode: "not_found", previewProblemBoard: null,
-    previewUnexpected: undefined, putPreview: null, putFailure: null, problem: null, removed: null, searchProblem: null, activities: [], busy: false,
+    previewFailure: null, putPreview: null, putFailure: null, problem: null, removed: null, searchProblem: null, activities: [], busy: false,
     retryPreview: () => {}, backToCard: () => {}, notNow: () => {}, ...extra,
   } as unknown as NewKeyboard} />);
 
   test("the new-keyboard Reading step offers Restart keyloom, and Try again only for an exception", () => {
-    const mismatch = reading({ previewUnexpected: "not_found" });
+    const mismatch = reading({ previewFailure: { message: "x", code: "not_found", generic: true } });
     expect(mismatch).toContain("Restart keyloom");
     expect(mismatch).not.toContain("Try again");
-    const exception = reading({ previewProblemCode: "internal", previewUnexpected: "internal" });
+    const exception = reading({ previewProblemCode: "internal", previewFailure: { message: "x", code: "internal" } });
     expect(exception).toContain("Restart keyloom");
     expect(exception).toContain("Try again");
     // A failure the screen knows, such as GitHub not answering, keeps its own Try again.
-    const own = reading({ previewProblemCode: "firmware_unreachable" });
+    const own = reading({ previewProblemCode: "firmware_unreachable", previewFailure: { message: "x", code: "firmware_unreachable" } });
     expect(own).toContain("Try again");
     expect(own).not.toContain("Restart keyloom");
   });
 
   test("Your keyboards and the import screen's board list do the same", () => {
-    const collection = (code?: "internal" | "not_found") => renderToStaticMarkup(<CollectionProblem token="t" busy={false} problem={{ text: "x", retry: () => {}, code }} />);
+    const collection = (code?: string, generic?: true) => renderToStaticMarkup(<CollectionProblem token="t" busy={false} problem={{ text: "x", retry: () => {}, failure: { message: "x", code, generic } }} />);
     expect(collection()).toContain("Try again");
     expect(collection()).not.toContain("Restart keyloom");
-    expect(collection("not_found")).toContain("Restart keyloom");
-    expect(collection("not_found")).not.toContain("Try again");
+    expect(collection("not_found", true)).toContain("Restart keyloom");
+    expect(collection("not_found", true)).not.toContain("Try again");
+    // A keyboard removed elsewhere is the screen's own not_found: its Try again (and the row's Restore) stay.
+    expect(collection("not_found")).toContain("Try again");
+    expect(collection("not_found")).not.toContain("Restart keyloom");
     expect(collection("internal")).toContain("Try again");
-    const boards = (code?: "unreadable") => renderToStaticMarkup(<BoardsFailed token="t" message="x" code={code} onRetry={() => {}} />);
+    const boards = (code?: "unreadable") => renderToStaticMarkup(<BoardsFailed token="t" failure={{ message: "x", code }} onRetry={() => {}} />);
     expect(boards()).toContain("Try again");
     expect(boards("unreadable")).toContain("Restart keyloom");
     expect(boards("unreadable")).not.toContain("Try again");
@@ -254,7 +259,7 @@ describe("PR #307 review", () => {
   });
 
   test("Your keyboards' Try again beside Restart keyloom is off while another action runs", () => {
-    const html = (busy: boolean) => renderToStaticMarkup(<CollectionProblem token="t" busy={busy} problem={{ text: "x", retry: () => {}, code: "internal" }} />);
+    const html = (busy: boolean) => renderToStaticMarkup(<CollectionProblem token="t" busy={busy} problem={{ text: "x", retry: () => {}, failure: { message: "x", code: "internal" } }} />);
     expect(html(true)).toMatch(/<button[^>]*disabled=""[^>]*>.*Try again/);
     expect(html(false)).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Try again/);
   });

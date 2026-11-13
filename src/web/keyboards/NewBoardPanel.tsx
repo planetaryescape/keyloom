@@ -15,6 +15,7 @@ import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
 import { firstFlashLine } from "./first-flash-words.ts";
 import { FINGER_LETTERS } from "./NewBoardKeyboard.tsx";
 import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { wayOutFor } from "../shell/unexpected.ts";
 
 /** `boardId` leaves out the configs already on the board being put on: a put copies across boards, and `config new` copies within one. */
 export type PutSource = { id: string; name: string; boardName: string; boardId?: string; note: string | null };
@@ -144,10 +145,10 @@ function Reading({ flow, name, known: ways }: { flow: NewKeyboard; name: string;
   return (
     <div className="nb-problem" role="alert">
       <p>{known?.text ?? `keyloom couldn't draw this board. ${flow.previewProblem}`}</p>
-      {flow.previewUnexpected === undefined ? (
+      {flow.previewFailure === null || wayOutFor(flow.previewFailure, true) === null ? (
         <button type="button" className="sheet-action" onClick={flow.retryPreview}><RefreshCw size={13} aria-hidden="true" />Try again</button>
       ) : (
-        <p className="nb-actions"><UnexpectedWayOut token={flow.token} code={flow.previewUnexpected} onRetry={flow.retryPreview} className="sheet-action" /></p>
+        <p className="nb-actions"><UnexpectedWayOut token={flow.token} failure={flow.previewFailure} onRetry={flow.retryPreview} className="sheet-action" /></p>
       )}
     </div>
   );
