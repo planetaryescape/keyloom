@@ -2,6 +2,8 @@ import { LoaderCircle, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CollectionKeyboard } from "../../api/keyboards.ts";
 import { ApiError } from "../api.ts";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
 import "./keyboards.css";
 
 /** A config refused because its keyboard was removed (R6-08): the page offers Restore, not the server's sentence. */
@@ -13,13 +15,15 @@ export const removedWords = (boardName: string, doing: string): string =>
 
 /**
  * Restores the keyboard, then does the refused thing again, unless the refusal is no longer on screen: a file chosen while the restore
- * ran replaced it, and the old import must not run after it (#299 review). Resolves to why the restore failed, or null.
+ * ran replaced it, and the old import must not run after it (#299 review). Resolves to why the restore failed, kept whole so its code
+ * picks the buttons (R10-07), or null.
  */
-export async function restoreThenRetry(restore: () => Promise<unknown>, onRestored: () => void | Promise<void>, current: () => boolean): Promise<string | null> {
+export async function restoreThenRetry(restore: () => Promise<unknown>, onRestored: () => void | Promise<void>, current: () => boolean): Promise<PageFailure | null> {
   try {
     await restore();
   } catch (error) {
-    return error instanceof Error ? error.message : "keyloom couldn't restore it.";
+    // No words of its own: the line already says the restore failed, and "That didn't work." would only say it twice.
+    return pageFailure(error, "");
   }
   if (current()) await onRestored();
   return null;
@@ -27,9 +31,12 @@ export async function restoreThenRetry(restore: () => Promise<unknown>, onRestor
 
 /**
  * A config refused because its keyboard was removed (R6-08): Restore {board}, the same restore as Your keyboards' Restore button, then
- * `onRestored` does the refused import or new config again. A failed restore says so and keeps the button.
+ * `onRestored` does the refused import or new config again. A failed restore says so and keeps the button, unless it would fail the same
+ * way again: then Restart keyloom beside the sentence is the way on (R10-07).
  */
-export function RestoreKeyboard({ restore: restoreIt, boardName, doing, onRestored }: {
+export function RestoreKeyboard({ token, restore: restoreIt, boardName, doing, onRestored }: {
+  /** For Restart keyloom beside a failure no screen planned for. Without it the sentence shows alone and Restore stays. */
+  token?: string | undefined;
   /** The restore call, `restoreKeyboard` from api-keyboards.ts for the board. */
   restore: () => Promise<CollectionKeyboard>;
   boardName: string;
@@ -38,7 +45,8 @@ export function RestoreKeyboard({ restore: restoreIt, boardName, doing, onRestor
   onRestored: () => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<PageFailure | null>(null);
+  const off = token !== undefined && failsAgain(failed);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -57,12 +65,13 @@ export function RestoreKeyboard({ restore: restoreIt, boardName, doing, onRestor
   return (
     <div className="nb-problem nb-cant" role="alert">
       <p>{removedWords(boardName, doing)}</p>
-      {failed === null ? null : <p className="nb-restore-failed">keyloom couldn't restore the {boardName}. {failed}</p>}
+      {failed === null ? null : <p className="nb-restore-failed">keyloom couldn't restore the {boardName}.{failed.message === "" ? "" : ` ${failed.message}`}</p>}
       <p className="nb-actions">
-        <button type="button" className="sheet-action" disabled={busy} onClick={() => void restore()}>
+        <button type="button" className="sheet-action" disabled={busy || off} onClick={() => void restore()}>
           {busy ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <RotateCcw size={13} aria-hidden="true" />}
           Restore {boardName}
         </button>
+        {token === undefined || failed === null ? null : <UnexpectedWayOut token={token} failure={failed} primary={off} className="sheet-action" />}
       </p>
     </div>
   );

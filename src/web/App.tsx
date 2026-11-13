@@ -19,6 +19,7 @@ import { useSync, type SyncApi } from "./sync/useSync.ts";
 import { Viewer, type Arrival } from "./Viewer.tsx";
 import { KeyboardCollection } from "./keyboards/KeyboardCollection.tsx";
 import { KeyboardWelcome } from "./keyboards/KeyboardWelcome.tsx";
+import { type CardMemory, useCardMemory } from "./keyboards/useNewKeyboard.ts";
 import type { BoardsRead } from "./keyboards/catalogue-words.ts";
 import { Pegboard } from "./home/Pegboard.tsx";
 import { markOpened, undoChange } from "./api-write.ts";
@@ -28,7 +29,7 @@ import { archiveConfig, useConfig } from "./configs/api-configs.ts";
 import { archiveChoice } from "./configs/archive-choice.ts";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { ConfirmDialog } from "./configs/ConfigDialogs.tsx";
-import { type GoBackRefusal, goBackRefusal, lookupFailedWords, mismatchUnexpected } from "./shell/mismatch-words.ts";
+import { type GoBackRefusal, type MismatchAction, goBackRefusal, lookupFailedWords, mismatchActionOff, mismatchUnexpected } from "./shell/mismatch-words.ts";
 import { refusalProblem } from "./sync/useSyncToasts.ts";
 import { RemapperSetup } from "./sync/RemapperSetup.tsx";
 import type { FindingRepairDraft } from "../api/review.ts";
@@ -98,6 +99,9 @@ export function App({ token }: { token: string }) {
   const [boardsAttempt, setBoardsAttempt] = useState(0);
   // A keyboard with no config whose Set up was pressed in Your keyboards (R8-06): the welcome opens its setup card once.
   const [setupBoard, setSetupBoard] = useState<{ id: string; name: string } | null>(null);
+  // Which plugged-in keyboards' cards opened or were put off with Not now, for the whole page: the editor remounts on every config switch
+  // and would open them again (R10-08).
+  const cardMemory = useCardMemory();
   const readBoardsAgain = () => setBoardsAttempt((n) => n + 1);
   useEffect(() => {
     const controller = new AbortController();
@@ -211,7 +215,7 @@ export function App({ token }: { token: string }) {
           setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
-          onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />
+          onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} cardMemory={cardMemory} />
       </Shell>
     );
   }
@@ -332,6 +336,7 @@ export function App({ token }: { token: string }) {
       detail={current.detail}
       menu={menu}
       boardChoices={boardChoices}
+      cardMemory={cardMemory}
       sync={sync}
       onHome={returnToWall}
       onChanged={refresh}
@@ -364,6 +369,7 @@ function LayoutPage({
   detail,
   menu,
   boardChoices,
+  cardMemory,
   sync,
   onHome,
   onChanged,
@@ -377,6 +383,7 @@ function LayoutPage({
   detail: LayoutDetail;
   menu: HeaderMenu;
   boardChoices: readonly BoardChoice[];
+  cardMemory: CardMemory;
   sync: SyncApi;
   onHome?: () => void;
   onChanged: () => Promise<void>;
@@ -422,7 +429,7 @@ function LayoutPage({
           repairDraft={repairDraft}
           onRepairDraft={onRepairDraft}
           buildQuestion={asked}
-          chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry }}
+          chrome={{ ...menu, onHome, boardChoices, ...(release === null ? {} : { release: { status: release.status, onOpen: () => release.open() } }), arrival, onCarry, cardMemory }}
         />
       )}
       {dialog}
@@ -485,6 +492,8 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
   const [putting, setPutting] = useState(false);
   // Kept whole, so a failure no screen planned for offers Restart keyloom beside it (R9-05).
   const [refused, setRefused] = useState<PageFailure | null>(null);
+  // Which button the refusal answered (R10-05): one whose request would fail the same way again goes off, and Restart keyloom leads.
+  const [refusedBy, setRefusedBy] = useState<MismatchAction | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
   // A lookup that failed is not "none fits": the page says so and offers to look again.
   const [lookupFailed, setLookupFailed] = useState<PageFailure | null>(null);
@@ -511,7 +520,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
     return () => controller.abort();
   }, [token, summary.id, summary.revisionId, fixable, lookups]);
   // Going back keeps this layout on screen; an archived one leaves it, so the reload selects nothing.
-  const act = async (run: () => Promise<unknown>, failed: string, stay: boolean) => {
+  const act = async (run: () => Promise<unknown>, failed: string, stay: boolean, by: MismatchAction) => {
     setBusy(true);
     setRefused(null);
     try {
@@ -520,6 +529,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
       else onReload?.();
     } catch (error) {
       setRefused(pageFailure(error, failed));
+      setRefusedBy(by);
       setBusy(false);
     }
   };
@@ -531,8 +541,10 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
         if (error instanceof ApiError && error.status === 409) setGoBackRefused(goBackRefusal(error.code, error.message));
         throw error;
       }
-    }, "keyloom couldn't go back to that revision.", true);
-  const archiveIt = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
+    }, "keyloom couldn't go back to that revision.", true, "go_back");
+  const archiveIt = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false, "archive");
+  const goBackOff = mismatchActionOff(refused, refusedBy, "go_back");
+  const archiveOff = mismatchActionOff(refused, refusedBy, "archive");
   const onKeyboard = archive.kind === "on_keyboard" ? archive : null;
   const other = onKeyboard?.putOn ?? null;
   const unexpected = mismatchUnexpected(refused, lookupFailed);
@@ -544,7 +556,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
       actions={
         <>
           {fitting === null ? null : goBackRefused === null ? (
-            <button type="button" className="button button-primary" disabled={busy} onClick={() => void goBack(fitting.id)}>
+            <button type="button" className={goBackOff ? "button" : "button button-primary"} disabled={busy || goBackOff} onClick={() => void goBack(fitting.id)}>
               Go back to the last revision that matched
             </button>
           ) : goBackRefused.next === "reload" && onReload !== undefined ? (
@@ -558,7 +570,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
             </button>
           ) : null}
           {onHome === undefined ? null : <button type="button" className={fitting === null && lookupFailed === null && (unexpected === null || !failsAgain(unexpected)) ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
-          {archive.kind === "archive" ? <button type="button" className="button" disabled={busy} onClick={() => void archiveIt()}>Archive this config</button> : null}
+          {archive.kind === "archive" ? <button type="button" className="button" disabled={busy || archiveOff} onClick={() => void archiveIt()}>Archive this config</button> : null}
           {other === null ? null : <button type="button" className="button" disabled={busy} onClick={() => setPutting(true)}>Put {other.name} on it…</button>}
           {unexpected === null ? null : <UnexpectedWayOut token={token} failure={unexpected} primary={failsAgain(unexpected)} />}
         </>

@@ -26,7 +26,7 @@ import { matchCommands, type Command } from "./chat/commands.ts";
 import { ChatPanel } from "./chat/ChatPanel.tsx";
 import { ChatStopButton } from "./chat/Composer.tsx";
 import { sidebarAfterUpdate, type Sidebar } from "./shell/sidebars.ts";
-import { useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
+import { type CardMemory, useNewKeyboard } from "./keyboards/useNewKeyboard.ts";
 import { NewKeyboardCard } from "./keyboards/NewKeyboardCard.tsx";
 import { SetupCard } from "./keyboards/SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./keyboards/NewBoardPanel.tsx";
@@ -154,6 +154,8 @@ interface ViewerProps {
     boardChoices: readonly BoardChoice[];
     /** Absent for a board that is never built or flashed (the MacBook keyboard). */
     release?: { status: ReleaseStatus; onOpen: () => void };
+    /** App's memory of the plugged-in keyboards' cards, kept across config switches (R10-08). */
+    cardMemory?: CardMemory | undefined;
   };
 }
 
@@ -437,7 +439,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // finger's speed or errors (D-314).
   const labPanelShown = labOpen && lab.phase.kind === "readout" && !narrow;
   // A new keyboard (D-336): the card over the stage, then its board on the stage and its questions in the column beside it.
-  const newBoard = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards);
+  // App's memory of the cards, so a config switch doesn't open one already closed; none opens by itself over the review or a dialog (R10-08).
+  const newBoard = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, undefined, { memory: chrome.cardMemory, hold: sidebar === "review" || configDialog !== null || unexpected !== null });
   const newBoardDrawn = (newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put") && newBoard.preview?.board != null ? newBoard.preview.board : null;
   const newBoardShownHalf = newBoardHalf(phone, newBoardDrawn, undefined, half);
   const newBoardPanel = newBoard.step.kind === "confirm" || newBoard.step.kind === "review" || newBoard.step.kind === "put";

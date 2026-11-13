@@ -10,7 +10,7 @@ import { FlowProblem } from "../../src/web/keyboards/FlowProblem.tsx";
 import { ReadFailed } from "../../src/web/keyboards/KeyboardWelcome.tsx";
 import { SetupCard } from "../../src/web/keyboards/SetupCard.tsx";
 import { cardToOpen, shownAfterClose, type NewBoardStep, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
-import { lookupFailedWords, mismatchUnexpected } from "../../src/web/shell/mismatch-words.ts";
+import { lookupFailedWords, mismatchActionOff, mismatchUnexpected } from "../../src/web/shell/mismatch-words.ts";
 import { INTERNAL_WORDS, NOT_FOUND_WORDS, type PageFailure, UNREADABLE_WORDS, failsAgain } from "../../src/web/shell/unexpected.ts";
 
 const mismatch: PageFailure = { message: NOT_FOUND_WORDS, code: "not_found", generic: true };
@@ -76,10 +76,16 @@ describe("the import card (R9-05)", () => {
 
 describe("the new-keyboard steps (R9-05)", () => {
   test("a failed Add, Start blank or Make offers Restart keyloom for a failure no screen planned for", () => {
-    const html = renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: unreadable }} />);
+    const html = renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: unreadable, stuck: true }} />);
     expect(html).toContain("Restart keyloom");
-    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: { message: "That name is taken.", code: "name_taken" } }} />)).not.toContain("Restart keyloom");
-    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: null }} />)).toBe("");
+    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: { message: "That name is taken.", code: "name_taken" }, stuck: false }} />)).not.toContain("Restart keyloom");
+    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: null, stuck: false }} />)).toBe("");
+  });
+
+  // R10-05: with the step's button off, Restart keyloom is the one live way on, so it is the primary button.
+  test("Restart keyloom is the primary button only while the step's own button is off", () => {
+    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: unreadable, stuck: true }} />)).toContain("button-primary");
+    expect(renderToStaticMarkup(<FlowProblem flow={{ token: "t", problem: internal, stuck: false }} />)).not.toContain("button-primary");
   });
 
   // SAFETY: the setup card reads only these fields of the hook's result while rendering.
@@ -163,5 +169,24 @@ describe("R9-08: Later on the Put step", () => {
     const shown = new Set(["x"]);
     expect(shownAfterClose({ kind: "idle" }, shown)).toBe(shown);
     expect(cardToOpen([], [lily({ id: "foostan/corne", name: "Corne" })], shownAfterClose(put("derived/lily58"), shown))?.step).toMatchObject({ kind: "setup", boardId: "foostan/corne" });
+  });
+});
+
+describe("R10-05: the buttons that go off", () => {
+  test("the mismatch page turns off only the button whose request fails the same way again", () => {
+    expect(mismatchActionOff(mismatch, "go_back", "go_back")).toBe(true);
+    expect(mismatchActionOff(unreadable, "archive", "archive")).toBe(true);
+    // Archive sends another request, so it stays while Go back is off.
+    expect(mismatchActionOff(mismatch, "go_back", "archive")).toBe(false);
+    // An exception can pass on a second try, and a lost connection can come back.
+    expect(mismatchActionOff(internal, "go_back", "go_back")).toBe(false);
+    expect(mismatchActionOff(lost, "go_back", "go_back")).toBe(false);
+    expect(mismatchActionOff(null, null, "go_back")).toBe(false);
+  });
+
+  test("the import card makes Restart keyloom primary only when the button that failed went off", () => {
+    expect(renderToStaticMarkup(<CardProblem token="t" problem={unreadable} primary />)).toContain("button-primary");
+    // A failed drop keeps the drop zone as its Try again.
+    expect(renderToStaticMarkup(<CardProblem token="t" problem={unreadable} />)).not.toContain("button-primary");
   });
 });

@@ -113,7 +113,7 @@ function KnownBoard({ flow, known }: { flow: NewKeyboard; known: KnownWays }) {
         <button type="button" className="sheet-action" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Pick another keyboard</button>
       </p>
       {flow.removed === "blank" && board !== null ? (
-        <RestoreKeyboard restore={() => flow.restoreKeyboard(board.id)} boardName={board.name} doing="start a config" onRestored={start} />
+        <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(board.id)} boardName={board.name} doing="start a config" onRestored={start} />
       ) : null}
     </div>
   );
@@ -236,6 +236,8 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
   const board = preview?.board ?? null;
   const name = preview?.displayName ?? step.candidate.name;
   const controller = preview?.controllers.find((c) => c.id === step.controller)?.name ?? null;
+  // Add found the board already in keyloom (R10-13). With no drawing, Reading says it instead.
+  const addedNow = board !== null && knownBoard(flow);
   return (
     <section className="nb-panel" aria-label={`How keyloom reads your ${name}`}>
       <header className="nb-panel-head">
@@ -260,11 +262,13 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
         )}
         {/* Add refused for a reason these answers hit again: why, with the guide, and no Add that would repeat it (R7-11). */}
         {flow.addBlocked === null ? null : <CantAdd flow={flow} problem={flow.addBlocked} />}
+        {/* Another tab or the CLI added it after the preview (R10-13): put a config on it, as the preview offers. */}
+        {addedNow ? <KnownBoard flow={flow} known={known} /> : null}
         <FlowProblem flow={flow} />
       </div>
       <footer className="nb-panel-foot">
         <button type="button" className="sheet-action" onClick={flow.backToConfirm}>Back</button>
-        {flow.addBlocked === null ? (
+        {flow.addBlocked === null && !addedNow ? (
           <button type="button" className="bar-apply" disabled={board === null || flow.busy || flow.stuck} onClick={() => void flow.add()}>
             {flow.busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
             Add the {name}
@@ -396,7 +400,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           </div>
         )}
         {flow.removed === null ? null : (
-          <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
+          <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
             onRestored={() => (flow.removed === "make" ? make() : start())} />
         )}
         <FlowProblem flow={flow} />
