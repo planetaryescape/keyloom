@@ -9,6 +9,8 @@ import { retryWhileBusy } from "./busy-retry.ts";
 import { RemapperSetupResponseSchema, SetupActionResponseSchema, type KanataInstallAction, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
 
 export interface SyncApi {
+  /** The session token, for the ways out a sync screen offers itself, such as Restart keyloom (R9-05). */
+  token: string;
   boards: readonly BoardSync[];
   /** Keyboards on USB keyloom has no board for, from the engine's reads (D-336). */
   newKeyboards: readonly DetectedKeyboard[];
@@ -158,7 +160,7 @@ export function useSync(token: string): SyncApi {
   }, []);
 
   return {
-    boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
+    token, boards, newKeyboards, setupBoards, lastReview, lastLayoutUpdated, live, tokenRejected, error, replaceAsk, setReplaceAsk,
     syncNow,
     stopWaiting: () => waiting.current?.abort(),
     setAuto: (boardId, enabled) => act(async () => (await request("POST", "/api/sync/auto", token, SyncStatusResponseSchema, undefined, { boardId, enabled })).boards),

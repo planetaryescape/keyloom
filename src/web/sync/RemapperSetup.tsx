@@ -1,10 +1,13 @@
 import { CircleCheck, Circle, ExternalLink, Info, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RemapperSetupResponse } from "../../api/system-remapper.ts";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import type { SyncApi } from "./useSync.ts";
 import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, recheckAfter, setupFailure, setupSteps } from "./remapper-words.ts";
 
-type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; message: string };
+// A failure keeps its code, so one no screen planned for offers Restart keyloom, never only Check again (R9-05, D-540).
+type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; failure: PageFailure };
 
 const actionKey = (id: SetupActionId) => (id.kind === "open_settings" ? `pane:${id.pane}` : id.kind);
 // Often enough that Homebrew's lines read as progress, not so often that a long install floods the server.
@@ -21,7 +24,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const [problem, setProblem] = useState<SetupFailure | null>(null);
+  const [problem, setProblem] = useState<(SetupFailure & { failure?: PageFailure }) | null>(null);
   // A pane was opened for the person to change something there: the list reads the machine again when keyloom's window is back in front.
   const [awaitingReturn, setAwaitingReturn] = useState(false);
   const { status: readStatus, installKanata, cancelInstall, startKanata, openSettings } = sync.remapperSetup;
@@ -31,7 +34,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     try {
       setLoad({ kind: "ready", status: await readStatus(boardId) });
     } catch (error) {
-      setLoad({ kind: "error", message: error instanceof Error ? error.message : "keyloom couldn't check kanata." });
+      setLoad({ kind: "error", failure: pageFailure(error, "keyloom couldn't check kanata.") });
     } finally {
       setChecking(false);
     }
@@ -72,7 +75,8 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
       if (!r.ok) setProblem(setupFailure(r.code, r.reason));
       if (!r.ok && onReturn) setAwaitingReturn(false);
     } catch (error) {
-      setProblem({ text: error instanceof Error ? error.message : "That didn't work.", link: null });
+      const failure = pageFailure(error, "That didn't work.");
+      setProblem({ text: failure.message, link: null, failure });
       if (onReturn) setAwaitingReturn(false);
     } finally {
       setBusy(null);
@@ -105,8 +109,12 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   // A read that failed says so with Check again, in either mode: the attention steps vanishing would hide an update kanata needs (R6-22).
   const readFailed = load.kind !== "error" ? null : (
     <div className="sync-setup">
-      <p className="sync-setup-problem" role="alert">{load.message}</p>
-      <button type="button" className="button" disabled={checking} onClick={() => void check()}><RefreshCw size={14} aria-hidden="true" /> Check again</button>
+      <p className="sync-setup-problem" role="alert">{load.failure.message}</p>
+      {wayOutFor(load.failure, true) === null ? (
+        <button type="button" className="button" disabled={checking} onClick={() => void check()}><RefreshCw size={14} aria-hidden="true" /> Check again</button>
+      ) : (
+        <span className="sync-setup-actions"><UnexpectedWayOut token={sync.token} failure={load.failure} onRetry={() => void check()} retryDisabled={checking} /></span>
+      )}
     </div>
   );
   if (mode === "attention") {
@@ -117,7 +125,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     return (
       <div className="sync-setup">
         <Steps steps={steps} busy={busy} installing={installing} onRun={run} />
-        <ProblemLine problem={problem} />
+        <ProblemLine problem={problem} token={sync.token} />
         {/* A step done elsewhere (System Settings, Karabiner, Terminal) shows as done once the list is read again (R8-17). */}
         {recheck}
       </div>
@@ -130,7 +138,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   return (
     <div className="sync-setup">
       <Steps steps={setupSteps(load.status)} busy={busy} installing={installing} onRun={run} />
-      <ProblemLine problem={problem} />
+      <ProblemLine problem={problem} token={sync.token} />
       {/* Usable while Homebrew runs: an install finished elsewhere, or a pane allowed meanwhile, shows up at once. */}
       {recheck}
     </div>
@@ -182,17 +190,22 @@ function LogTail({ lines }: { lines: string[] }) {
   return <pre ref={box} className="sync-setup-log" aria-label="What Homebrew printed last">{text}</pre>;
 }
 
-function ProblemLine({ problem }: { problem: SetupFailure | null }) {
+function ProblemLine({ problem, token }: { problem: (SetupFailure & { failure?: PageFailure }) | null; token: string }) {
   if (problem === null) return null;
+  // The step's own button repeats it; a failure no screen planned for adds Restart keyloom, and the log for an exception (R9-05).
+  const unexpected = problem.failure !== undefined && wayOutFor(problem.failure, false) !== null ? problem.failure : null;
   return (
-    <p className="sync-setup-problem" role="alert">
-      {problem.text}
-      {problem.link === null ? null : (
-        <>
-          {" "}
-          <a href={problem.link.href} target="_blank" rel="noreferrer">{problem.link.label} <ExternalLink size={12} aria-hidden="true" /></a>
-        </>
-      )}
-    </p>
+    <>
+      <p className="sync-setup-problem" role="alert">
+        {problem.text}
+        {problem.link === null ? null : (
+          <>
+            {" "}
+            <a href={problem.link.href} target="_blank" rel="noreferrer">{problem.link.label} <ExternalLink size={12} aria-hidden="true" /></a>
+          </>
+        )}
+      </p>
+      {unexpected === null ? null : <span className="sync-setup-actions"><UnexpectedWayOut token={token} failure={unexpected} primary={false} /></span>}
+    </>
   );
 }
