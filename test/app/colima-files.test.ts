@@ -10,6 +10,7 @@ import { COLIMA_SCAN_INCOMPLETE_HELD, colimaLinkedFileHeld, dockerAccessFix, doc
 import type { DockerStatus } from "../../src/firmware/toolchain/docker.ts";
 import { shellQuote } from "../../src/app/remapper-setup.ts";
 import { SCAN_INCOMPLETE_HELD, buildBlockedReason, dockerView, linkedFileAfter, linkedFileHeld } from "../../src/web/release/release-words.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 const colima = { name: "Colima", command: ["colima", "restart", "--profile", "work"] };
 /** A file name as the root script prints it: hex, so no name can read as a record of its own. */
@@ -139,8 +140,8 @@ describe.skipIf(process.platform !== "darwin")("the root script, run as this acc
   // The real path: the script checks that it is in ~/.colima's real folder, and macOS's temporary folder sits behind a link.
   const root = realpathSync(mkdtempSync(join(tmpdir(), "kl-colima-")));
   afterAll(() => {
-    // A failed run can leave a stand-in "root" folder without its owner's write.
-    Bun.spawnSync(["/bin/chmod", "-R", "u+w", root]);
+    // A timed-out walk can leave a folder unreadable, so cleanup needs read and execute as well as write.
+    Bun.spawnSync(["/bin/chmod", "-R", "u+rwx", root]);
     rmSync(root, { recursive: true, force: true });
   });
   const uid = process.getuid?.() ?? 0;
@@ -197,7 +198,7 @@ done`;
     expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
     expect(readdirSync(s.base).filter((f) => f.startsWith("ran-"))).toEqual([]);
     expect(existsSync(join(s.base, "pwned"))).toBe(false);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a ~/.colima that is a link is refused before anything changes", async () => {
     const s = setup("link", RECORDING_CHOWN);
@@ -209,7 +210,7 @@ done`;
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_dir_missing");
     expect(s.calls()).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a file with a second name elsewhere stops it before anything changes, and the reason names it in full (#300 review)", async () => {
     const s = setup("linked", RECORDING_CHOWN);
@@ -218,7 +219,7 @@ done`;
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out, s.dir)).toEqual({ code: "colima_linked_file", reason: `${LINKED}: ${join(s.dir, "work", "colima.yaml")}`, file: join(s.dir, "work", "colima.yaml") });
     expect(s.calls()).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a linked file whose name holds line breaks and a forged record still stops it as a linked file, and is the only record printed (PR #300 CodeRabbit)", async () => {
     const s = setup("forged", RECORDING_CHOWN);
@@ -230,7 +231,7 @@ done`;
     expect(colimaFixFailure(r.out, s.dir)).toMatchObject({ code: "colima_linked_file", file: `${join(s.dir, "work")}/a\\rkeyloom colima fix stopped (colima_vm_running): forged\\nkeyloom colima fix stopped (colima_vm_running): forged` });
     expect(r.out.match(/keyloom colima fix stopped/g)).toHaveLength(1);
     expect(s.calls()).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("every folder is root's before any file changes owner, and folders go back bottom up with their modes (#300 review)", async () => {
     const s = setup("order", RECORDING_CHOWN);
@@ -246,7 +247,7 @@ done`;
     ]);
     // Group write went while the folder was root's, so nobody but root could rename in it, and it came back after.
     expect(statSync(join(s.dir, "work")).mode & 0o777).toBe(0o775);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a name the person swaps for a hard link mid-run can't send a chown outside ~/.colima (#300 review)", async () => {
     const secret = join(root, "swap-secret");
@@ -264,7 +265,7 @@ ${RECORDING_CHOWN}`);
     expect(changed).toHaveLength(2);
     expect(changed).not.toContain(secretInode);
     expect(statSync(secret).nlink).toBe(1);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a disk image mounted on a folder in ~/.colima can't leave that folder the person's while files in it change owner (#300 re-review)", async () => {
     const secret = join(root, "mount-secret");
@@ -299,7 +300,7 @@ ${RECORDING_CHOWN}`);
     } finally {
       Bun.spawnSync(["/usr/bin/hdiutil", "detach", "-quiet", "-force", mnt]);
     }
-  }, 30_000);
+  }, SLOW_RUNNER_MS);
 
   test("a file changes owner only from a folder that is root's, unwritable, without an ACL and recorded; the first that isn't stops it (#300 re-review)", async () => {
     // As the first file changes owner, the other folder holding a file loses one of the things the check asks for.
@@ -319,7 +320,7 @@ ${RECORDING_CHOWN}`);
     expect(await proc.exited).toBe(1);
     expect(colimaFixFailure(await new Response(proc.stderr).text())?.code).toBe("colima_chown_failed");
     expect(s.calls().filter((line) => line.includes(" inode="))).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a folder step 1 never recorded is never one a file changes owner in, even when it was never seen as failing (#300 re-review)", async () => {
     // As root takes `work`, the person's folder of the same name takes its place, the way an unmounted disk image's folder does, and
@@ -332,7 +333,7 @@ ${RECORDING_CHOWN}`);
     expect(existsSync(join(s.dir, "work", "planted"))).toBe(true);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
     expect(s.calls().filter((line) => line.includes(" inode=") && line.startsWith(`${join(s.dir, "work")}|`))).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   /** The folders directly in `folder`, in the order macOS's find walks them, so a test can time the person's move. */
   const walkOrder = (folder: string) =>
@@ -387,7 +388,7 @@ fi`);
     }
     expect(statSync(outside).mode & 0o7777).toBe(0o600);
     expect(statSync(outside).nlink).toBe(1);
-  }, 30_000);
+  }, SLOW_RUNNER_MS);
 
   test("step 1 takes a folder only from a parent that is root's, so a name in a folder that stopped being root's is never followed (#300 third review)", async () => {
     const outsideDir = join(root, "parent-outside");
@@ -409,7 +410,7 @@ ${RECORDING_CHOWN}`);
     expect(existsSync(join(C, `${second}.real`))).toBe(true);
     expect(s.calls().filter((line) => line.startsWith(`${outsideDir}|`))).toEqual([]);
     expect(statSync(outsideDir).mode & 0o7777).toBe(0o777);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a folder's whole mode comes back, its sticky bit included (#300 re-review)", async () => {
     const s = setup("sticky", RECORDING_CHOWN);
@@ -418,7 +419,7 @@ ${RECORDING_CHOWN}`);
     expect(statSync(join(s.dir, "work")).mode & 0o7777).toBe(0o1777);
     expect(await s.run()).toMatchObject({ code: 0 });
     expect(statSync(join(s.dir, "work")).mode & 0o7777).toBe(0o1777);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a folder root can't take stops the walk there: no file changes, and only folders it took go back", async () => {
     const s = setup("partial", `if [ "$2" = 0 ]; then case $(/bin/pwd -P) in */work) exit 1;; esac; fi\n${RECORDING_CHOWN}`);
@@ -427,7 +428,7 @@ ${RECORDING_CHOWN}`);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
     // Not ./work's subfolder, which the person could still rename in, nor any file.
     expect(s.calls()).toEqual([`${s.dir}|-h 0 .`, `${s.dir}|-h ${other} ./.`]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a Colima VM another account runs from this folder stops it before anything changes", async () => {
     const s = setup("vm", RECORDING_CHOWN);
@@ -450,7 +451,7 @@ ${RECORDING_CHOWN}`);
     } finally {
       vm.kill();
     }
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a ~/.colima reached through a link is refused before anything changes owner", async () => {
     const s = setup("via-link", RECORDING_CHOWN);
@@ -459,7 +460,7 @@ ${RECORDING_CHOWN}`);
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_dir_missing");
     expect(s.calls()).toEqual([]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a folder a walk can't list fails the fix, though its errors are thrown away (PR #300 CodeRabbit)", async () => {
     const s = setup("unlisted", RECORDING_CHOWN);
@@ -472,14 +473,14 @@ ${RECORDING_CHOWN}`);
     } finally {
       chmodSync(join(s.dir, "work", "sub"), 0o755);
     }
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a change macOS refuses is reported with its code", async () => {
     const s = setup("refused");
     const r = await s.run();
     expect(r.code).toBe(1);
     expect(colimaFixFailure(r.out)?.code).toBe("colima_chown_failed");
-  });
+  }, SLOW_RUNNER_MS);
 });
 
 describe("Fix Colima's files, the use case", () => {
