@@ -190,7 +190,8 @@ export type BuildRequest = z.infer<typeof BuildRequestSchema>;
 // when keyloom can't flash it; `tool` is the program the flash runs and whether it is here.
 export const FlashPlanSchema = z.object({
   manual: z.string().nullable(),
-  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), url: z.string().min(1) }).nullable(),
+  // `canDownload`: no Homebrew, and keyloom can download the tool's pinned release itself (Zapp, D-561). Optional for older servers.
+  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), canDownload: z.boolean().optional(), url: z.string().min(1) }).nullable(),
   canReveal: z.boolean(),
 });
 export type FlashPlan = z.infer<typeof FlashPlanSchema>;

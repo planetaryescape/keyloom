@@ -21,10 +21,11 @@ export type OpenSettingsRequest = z.infer<typeof OpenSettingsRequestSchema>;
 export const StartKanataRequestSchema = z.object({ boardId: z.string().min(1) }).strict();
 
 /**
- * `upgrade` is Update kanata, for a kanata older than the one keyloom writes for (R2-10). `reinstall` puts Homebrew's own kanata back
+ * `download` is Get kanata on a Mac without Homebrew: keyloom downloads kanata's pinned release, checks its SHA-256 and keeps it in its own
+ * folder (D-560). `upgrade` is Update kanata, for a kanata older than the one keyloom writes for (R2-10). `reinstall` puts Homebrew's own kanata back
  * over one that changed outside Homebrew (D-498).
  */
-export const KanataInstallActionSchema = z.enum(["install", "upgrade", "reinstall"]);
+export const KanataInstallActionSchema = z.enum(["install", "upgrade", "reinstall", "download"]);
 export type KanataInstallAction = z.infer<typeof KanataInstallActionSchema>;
 export const InstallKanataRequestSchema = z.object({ action: KanataInstallActionSchema.optional() }).strict();
 export type InstallKanataRequest = z.infer<typeof InstallKanataRequestSchema>;
@@ -32,6 +33,7 @@ export type InstallKanataRequest = z.infer<typeof InstallKanataRequestSchema>;
 export const SetupFindingCodeSchema = z.enum([
   "kanata_missing", "kanata_version", "driver_missing", "driver_mismatch", "karabiner_elements", "keyboard_name", "karabiner_config",
   "permissions", "daemon_missing", "port_closed", "kbd_file", "kanata_updated", "kanata_replaced", "daemon_outdated",
+  "kanata_kept_changed",
 ]);
 export type SetupFindingCode = z.infer<typeof SetupFindingCodeSchema>;
 
@@ -50,7 +52,7 @@ export type SetupFinding = z.infer<typeof SetupFindingSchema>;
 export const KanataInstallSchema = z.object({
   state: z.enum(["idle", "running", "succeeded", "failed", "cancelled"]),
   action: KanataInstallActionSchema.nullable(),
-  /** The last lines Homebrew printed, oldest first. */
+  /** The last lines Homebrew, or Get kanata's download, printed, oldest first. */
   log: z.array(z.string()),
   failure: z.object({ code: z.string().min(1), reason: z.string().min(1) }).nullable(),
 });
@@ -60,6 +62,8 @@ export const RemapperSetupResponseSchema = z.object({
   platform: z.enum(["darwin", "other"]),
   /** Homebrew is here, so Install kanata and Update kanata can run. */
   canInstall: z.boolean(),
+  /** keyloom can download kanata's pinned release for this Mac, so Get kanata can run (D-560). Optional for older servers. */
+  canDownload: z.boolean().optional(),
   install: KanataInstallSchema,
   /**
    * The kanata on PATH and the version keyloom writes for. `update` says how to get that version: `brew` runs Update kanata (a Homebrew

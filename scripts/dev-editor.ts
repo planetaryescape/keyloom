@@ -46,7 +46,9 @@
 // =vm refuses it before the dialog because another account's Colima VM runs (D-533). KEYLOOM_FAKE_COLIMA_SCAN=incomplete holds Colima's
 // command back, as a look through ~/.colima that didn't finish does; with =vm the fix then shows Colima's stop on its own (R8-05).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
-// its Install button installs a fake one in about four seconds (D-489).
+// its Install button installs a fake one in about four seconds (D-489). KEYLOOM_FAKE_NO_BREW=1 takes Homebrew away, so that button is Get
+// Zapp, a pretend download of Zapp's pinned release (D-561); KEYLOOM_FAKE_SYNC=kanata_no_brew is the MacBook's checklist on a Mac without
+// Homebrew or kanata, whose Get kanata does the same (D-560). KEYLOOM_FAKE_DOWNLOAD=mismatch ends either download as a checksum mismatch.
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
 // KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way (codex_missing: locked to a Codex that isn't installed);
 // KEYLOOM_FAKE_CHAT=unreadable refuses each message with an answer the page can't read; KEYLOOM_FAKE_CHAT_STOP=internal, with
@@ -79,7 +81,21 @@ import { type ShownFailureKind, isShownFailureKind } from "../test/helpers/model
 const port = Number(process.argv[2] ?? 4490);
 const fixture = await devSample();
 const flashMode = process.env.KEYLOOM_FAKE_FLASH;
-const zappPlan = (installed: boolean): FlashPlan => ({ manual: null, tool: { name: "zapp", installed, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true });
+const noBrew = process.env.KEYLOOM_FAKE_NO_BREW === "1" || process.env.KEYLOOM_FAKE_SYNC === "kanata_no_brew";
+const zappPlan = (installed: boolean): FlashPlan => ({ manual: null, tool: { name: "zapp", installed, canInstall: !noBrew, canDownload: noBrew, url: "https://github.com/zsa/zapp" }, canReveal: true });
+/** A pretend download of a pinned release (D-560, D-561): progress for about four seconds, then kept, or refused with KEYLOOM_FAKE_DOWNLOAD=mismatch. */
+const fakeDownload = (name: string, version: string, url: string, startedAt: number) => {
+  const elapsed = Date.now() - startedAt;
+  const log = [`keyloom: downloading ${name} ${version} from ${url}`, ...[1, 2, 3, 4].filter((q) => elapsed > q * 900).map((q) => `keyloom: ${(q * 0.6).toFixed(1)} of 2.4 MB`)];
+  if (elapsed <= 4000) return { state: "running" as const, log, failure: null };
+  if (process.env.KEYLOOM_FAKE_DOWNLOAD === "mismatch") {
+    return {
+      state: "failed" as const, log: [...log, "keyloom: the download's SHA-256 doesn't match the pinned one; nothing was kept"],
+      failure: { code: "checksum_mismatch", reason: `The file keyloom downloaded isn't ${name} ${version} as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get ${name} from its release page.` },
+    };
+  }
+  return { state: "succeeded" as const, log: [...log, "keyloom: the SHA-256 matches the release", `keyloom: kept ${name} ${version} in ~/Library/Application Support/keyloom/bin`], failure: null };
+};
 const flashPlan: FlashPlan = flashMode === "manual"
   ? { manual: "Put the board in its bootloader, then flash the file with QMK Toolbox.", tool: null, canReveal: true }
   : zappPlan(flashMode !== "no-zapp");
@@ -133,6 +149,14 @@ const installState = (tool: InstallState["tool"]): InstallState => {
   const started = installs.get(tool);
   if (started === undefined) return { tool, status: "idle", phase: null, logTail: [], error: null, errorCode: null };
   if (started.cancelled) return { tool, status: "cancelled", phase: null, logTail: [`keyloom: brew install ${tool}`, "keyloom: stopping the install"], error: null, errorCode: null };
+  if (noBrew && tool === "zapp") {
+    const got = fakeDownload("Zapp", "1.0.2", "https://github.com/zsa/zapp/releases/download/v1.0.2/zapp-macos-aarch64.tar.gz", started.startedAt);
+    if (got.state === "succeeded") Object.assign(flashPlan, zappPlan(true));
+    if (got.state === "running") return { tool, status: "running", phase: "downloading", logTail: got.log, error: null, errorCode: null };
+    return got.state === "failed"
+      ? { tool, status: "failed", phase: null, logTail: got.log, error: got.failure.reason, errorCode: "checksum_mismatch" }
+      : { tool, status: "succeeded", phase: null, logTail: got.log, error: null, errorCode: null };
+  }
   const done = Date.now() - started.startedAt > 4000;
   if (done && tool === "zapp") Object.assign(flashPlan, zappPlan(true));
   return { tool, status: done ? "succeeded" : "running", phase: done ? null : "installing", logTail: [`keyloom: brew install ${tool}`, `==> Pouring ${tool}--1.0.2.arm64_sequoia.bottle.tar.gz`], error: null, errorCode: null };
@@ -273,7 +297,15 @@ if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw 
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
-const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign", "kanata_no_driver", "kanata_not_answering", "kanata_karabiner"] as const;
+const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign", "kanata_no_driver", "kanata_not_answering", "kanata_karabiner", "kanata_no_brew"] as const;
+// Get kanata in kanata_no_brew (D-560): when it started, or null before it has.
+let kanataDownload: { startedAt: number; cancelled: boolean } | null = null;
+const kanataJob = (): RemapperSetupResponse["install"] => {
+  if (kanataDownload === null) return { state: "idle", action: null, log: [], failure: null };
+  if (kanataDownload.cancelled) return { state: "cancelled", action: "download", log: [], failure: { code: "cancelled", reason: "You cancelled the download. keyloom kept nothing." } };
+  const got = fakeDownload("kanata", "1.12.0", "https://github.com/jtroo/kanata/releases/download/v1.12.0/macos-binaries-arm64.zip", kanataDownload.startedAt);
+  return { state: got.state, action: "download", log: got.log, failure: got.failure };
+};
 // The checklist's findings for each kanata mode (D-493): a keyboard keyloom doesn't know by name (R9-12), a kanata older than keyloom writes
 // for (R10-01), a first run before Set up and start kanata (R10-03), and a Mac with no built-in keyboard (R10-14).
 const kanataFindings = (): RemapperSetupResponse["findings"] => {
@@ -282,6 +314,11 @@ const kanataFindings = (): RemapperSetupResponse["findings"] => {
     case "kanata_keyboard": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare" }, ok("port_closed", "kanata answers")];
     case "kanata_setup": return [{ code: "kanata_version", name: "kanata", status: "warn", detail: "1.10.0 at /opt/homebrew/bin/kanata; keyloom writes configs for 1.12.0" }, ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
     case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
+    case "kanata_no_brew": return [
+      kanataJob().state === "succeeded" ? ok("kanata_version", "1.12.0") : { code: "kanata_missing", name: "kanata", status: "fail", detail: "not found" },
+      { code: "driver_missing", name: "driver", status: "fail", detail: "not installed" }, { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" },
+      { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" },
+    ];
     case "kanata_no_builtin": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "fail", detail: "this Mac has no built-in keyboard" }, ok("port_closed", "kanata answers")];
     case "kanata_no_driver": return [ok("kanata_version", "1.12.0"), { code: "driver_missing", name: "Karabiner VirtualHID driver", status: "fail", detail: "the driver kanata needs isn't installed" }, { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
     case "kanata_not_answering": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, ok("daemon_missing", "installed"), ok("kanata_updated", "the same kanata"), { code: "port_closed", name: "kanata's port", status: "warn", detail: "nothing answers" }];
@@ -294,7 +331,7 @@ const sync = syncMode === "build_failed" ? await fakeBuildFailedSync() : staticM
 // System Settings never opens here: the fake says it did, or that it didn't with KEYLOOM_FAKE_OPEN_SETTINGS=fail.
 const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined ? undefined : {
   status: async () => ({
-    platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null },
+    platform: "darwin", canInstall: !noBrew, canDownload: true, install: kanataJob(),
     kanata: syncMode === "kanata_setup"
       ? { version: "1.10.0", wanted: "1.12.0", update: "brew", path: "/opt/homebrew/bin/kanata", copyVersion: "1.10.0" }
       : { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: "1.12.0" },
@@ -302,8 +339,15 @@ const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined
     findings: kanataFindings(),
     karabinerEntry: '{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }',
   }),
-  installKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't install kanata." }),
-  cancelInstall: async () => ({ ok: true }),
+  installKanata: async (action) => {
+    if (action !== "download") return { ok: false, code: "unsupported", reason: "The dev editor doesn't install kanata." };
+    if (kanataJob().state !== "running") kanataDownload = { startedAt: Date.now(), cancelled: false };
+    return { ok: true };
+  },
+  cancelInstall: async () => {
+    if (kanataDownload !== null && kanataJob().state === "running") kanataDownload.cancelled = true;
+    return { ok: true };
+  },
   startKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't start kanata." }),
   // Nothing restarts and no dialog opens: a fixed answer after the time a real restart waits for kanata, so the button shows its progress.
   restartKanata: async () => {
@@ -369,7 +413,7 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
     // The MacBook's modes stand on this page's board, named as the MacBook so the words read as they do there.
     const mac = { ...base, boardName: "MacBook", remapper: true };
     if (mode === "kanata_keyboard" || mode === "kanata_no_builtin") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
-    if (mode === "kanata_first_run" || mode === "kanata_no_driver" || mode === "kanata_not_answering") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
+    if (mode === "kanata_first_run" || mode === "kanata_no_driver" || mode === "kanata_not_answering" || mode === "kanata_no_brew") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
     if (mode === "kanata_karabiner") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
     if (mode === "kanata_foreign") return [{ ...mac, state: { kind: "not_keyloom", detail: "kanata runs /Users/you/kanata.kbd" }, last: null }];
     if (mode === "kanata_refused" || mode === "kanata_setup" || mode === "kanata_unwritable" || mode === "kanata_reload_failed") {

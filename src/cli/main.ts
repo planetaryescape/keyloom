@@ -22,6 +22,8 @@ import { registerRemapCommands } from "./commands/remap.ts";
 import { registerReviewCommand } from "./commands/review.ts";
 import { registerProviderCommands } from "./commands/provider.ts";
 import { installDockerWithProgress } from "./install-docker.ts";
+import { downloadToolWithProgress } from "./download-tool.ts";
+import { KEPT_TOOLS, type KeptTool } from "../app/tool-download.ts";
 import { EXIT, classify } from "./errors.ts";
 import { DEFAULT_PORT, restartCommand, serve, serveBoardDev } from "./serve.ts";
 import { RESTART_EXIT_CODE } from "../api/restart.ts";
@@ -391,8 +393,9 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string;
     .option("--start-docker", "start Docker Desktop (or whatever runs the daemon here) when it isn't running, then check the toolchain")
     // Flags on doctor rather than an `install` command: like --start-docker, each fixes what the docker check reports, and the check runs after.
     .option("--install-docker", "install Docker (Colima, with Homebrew on a Mac) and start it, then check the toolchain")
+    .addOption(new Option("--download <tool>", "on a Mac without Homebrew: download kanata's or zapp's pinned release, check its SHA-256 and keep it in keyloom's own folder, then check").choices(KEPT_TOOLS))
     .option("--restart-docker", "restart what runs Docker: the Mac app, when it refuses this account its socket, or Colima, when it won't start; then check the toolchain")
-    .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean; installDocker?: boolean; restartDocker?: boolean }) => {
+    .action(async (options: { deviceHelperOnly?: boolean; startDocker?: boolean; installDocker?: boolean; restartDocker?: boolean; download?: KeptTool }) => {
       const helper = await runDeviceHelperCheck();
       // Progress goes to stderr, so `--format json` stays one document on stdout.
       const say = (line: string) => io.err(`${line}\n`);
@@ -402,6 +405,15 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string;
         if (!outcome.ok && outcome.code === "cancelled") {
           state.exitCode = EXIT.toolchain;
           return;
+        }
+      }
+      if (options.download !== undefined && !options.deviceHelperOnly) {
+        const tool = options.download;
+        const outcome = await abortOnInterrupt((signal) => downloadToolWithProgress(tool, say, {}, signal));
+        if (!outcome.ok) {
+          // The checks below would say the tool is missing; the exit code says the download is why.
+          state.exitCode = EXIT.toolchain;
+          if (outcome.code === "cancelled") return;
         }
       }
       if (options.restartDocker && !options.deviceHelperOnly) {
@@ -425,7 +437,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string;
         json: { ok: checks.every((c) => c.ok), checks },
         table: checks.map((c) => `${c.ok ? (c.warn ? "warn" : "ok  ") : "FAIL"}  ${c.name}: ${c.detail}`).join("\n"),
       });
-      if (checks.some((c) => !c.ok)) state.exitCode = EXIT.bug;
+      // A failed --download already set its own code; a check that fails because of it keeps that code (PR #317 review).
+      if (checks.some((c) => !c.ok) && state.exitCode === EXIT.ok) state.exitCode = EXIT.bug;
     });
 
   return program;
