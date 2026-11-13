@@ -221,7 +221,7 @@ jobs:
       - name: Take the sidecar from the release
         working-directory: desktop/tauri
         run: |
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern keyloom-darwin-arm64 --dir "$RUNNER_TEMP/sidecar"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern keyloom-darwin-arm64 --pattern SHA256SUMS --dir "$RUNNER_TEMP/sidecar"
           sh scripts/fetch-sidecar.sh "$RUNNER_TEMP/sidecar/keyloom-darwin-arm64"
           bun install --frozen-lockfile
       # Tauri imports the certificate itself (APPLE_CERTIFICATE below) into a keychain of its own and signs with
