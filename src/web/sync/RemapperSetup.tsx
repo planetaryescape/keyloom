@@ -79,17 +79,20 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   };
   useEffect(() => {
     if (!awaitingReturn) return;
-    const back = () => {
-      if (document.visibilityState !== "visible") return;
-      setAwaitingReturn(false);
-      void check();
-    };
-    window.addEventListener("focus", back);
-    document.addEventListener("visibilitychange", back);
-    return () => {
+    // Focus and visibilitychange both fire on the way back; the first one reads the list, and both listeners go at once.
+    const stop = () => {
       window.removeEventListener("focus", back);
       document.removeEventListener("visibilitychange", back);
     };
+    function back() {
+      if (document.visibilityState !== "visible") return;
+      stop();
+      setAwaitingReturn(false);
+      void check();
+    }
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
+    return stop;
   }, [awaitingReturn, check]);
   const recheck = (
     <button type="button" className="button sync-setup-recheck" disabled={checking} onClick={() => void check()}>

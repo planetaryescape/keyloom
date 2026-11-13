@@ -126,7 +126,8 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
   const earlier = lastBuild !== null && shownBuild === null;
   const flashing = flash?.status === "waiting_for_bootloader" || flash?.status === "writing";
   // A build whose file is gone can't be flashed again; Build again above makes one that can (R8-12).
-  const fileGone = release.errorCode === "build_file_gone";
+  const errorWay = errorWayOut(release.errorCode);
+  const fileGone = errorWay === "build_again";
   const canFlash = build?.status === "succeeded" && !flashing && !fileGone;
   const flashPlan = build === null ? null : flashStepView(build.flashPlan);
 
@@ -204,29 +205,26 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
         </header>
         <p className="sr-only" role="status">{status.label}</p>
 
-        {error === null ? null : errorWayOut(release.errorCode) === "try_again" ? (
-          <div className="callout callout-error" role="alert">
-            <CircleAlert size={18} aria-hidden="true" />
-            <p>{error}</p>
-            <button type="button" className="button" onClick={release.retry}>Try again</button>
-          </div>
-        ) : (
+        {error === null ? null : (
           <>
             <div className="callout callout-error" role="alert">
               <CircleAlert size={18} aria-hidden="true" />
-              <p>{release.errorCode === "build_file_gone" ? BUILD_FILE_GONE : error}</p>
+              <p>{fileGone ? BUILD_FILE_GONE : error}</p>
+              {errorWay === "try_again" ? <button type="button" className="button" onClick={release.retry}>Try again</button> : null}
             </div>
-            <div className="step-actions">
-              {release.errorCode === "build_file_gone" ? (
-                <button type="button" className="button button-primary" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
-                  <Hammer size={14} aria-hidden="true" />
-                  Build again
-                </button>
-              ) : (
-                // Repeating a start or a read that hit a server fault is safe: a flash already running refuses a second one.
-                <UnexpectedWayOut token={token} code={release.errorCode ?? undefined} onRetry={release.retry} />
-              )}
-            </div>
+            {errorWay === "try_again" ? null : (
+              <div className="step-actions">
+                {errorWay === "build_again" ? (
+                  <button type="button" className="button button-primary" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
+                    <Hammer size={14} aria-hidden="true" />
+                    Build again
+                  </button>
+                ) : (
+                  // Repeating a start or a read that hit a server fault is safe: a flash already running refuses a second one.
+                  <UnexpectedWayOut token={token} code={release.errorCode ?? undefined} onRetry={release.retry} />
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -343,27 +341,18 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
                     )}
                   </>
-                ) : failure?.kind === "disk_full" ? (
-                  // The build's sentence names `docker builder prune`, which stays the CLI's; the page runs it (R8-04).
+                ) : failure?.kind === "folder_not_shared" || failure?.kind === "disk_full" ? (
+                  // The build's sentence names XDG_CACHE_HOME or `docker builder prune`, which stay the CLI's; the page names the folder and
+                  // where it is shared (R7-02), or frees the cache itself (R8-04).
                   <>
                     <div className="callout callout-error" role="alert">
                       <CircleAlert size={18} aria-hidden="true" />
                       <p>{failure.text}</p>
                     </div>
                     <p>{failure.next}</p>
-                    {release.cachePrune.outcome === null ? null : (
+                    {failure.kind !== "disk_full" || release.cachePrune.outcome === null ? null : (
                       <p className={release.cachePrune.outcome.again ? "blocked-reason" : "muted"} role="status">{release.cachePrune.outcome.text}</p>
                     )}
-                    <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
-                  </>
-                ) : failure?.kind === "folder_not_shared" ? (
-                  // The build's sentence names XDG_CACHE_HOME, which stays the CLI's; the page names the folder and where it is shared (R7-02).
-                  <>
-                    <div className="callout callout-error" role="alert">
-                      <CircleAlert size={18} aria-hidden="true" />
-                      <p>{failure.text}</p>
-                    </div>
-                    <p>{failure.next}</p>
                     <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
                   </>
                 ) : (
@@ -409,7 +398,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
                       )}
                       <button
                         type="button"
-                        className={release.cachePrune.outcome?.build === true ? "button button-primary" : "button"}
+                        className={release.cachePrune.outcome !== null && !release.cachePrune.outcome.again ? "button button-primary" : "button"}
                         disabled={starting !== null || blocked !== null || release.cachePrune.running}
                         onClick={() => release.buildNow(head.id)}
                       >

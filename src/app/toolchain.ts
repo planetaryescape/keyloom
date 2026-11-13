@@ -429,9 +429,7 @@ export const BUILD_CACHE_UNGUARDED = "keyloom can't tell whether a build is runn
  * keyboard write, lab analysis, review test or emulator run is under way, and refused without a blocker at all.
  */
 export async function freeBuildCache(opts: { blocker?: () => string | null; overrides?: ToolchainOverrides } = {}): Promise<{ ok: true; freed: string | null } | { ok: false; reason: string; code?: "engine_busy" | "build_running" }> {
-  const busy = engineBusy();
-  if (busy !== null) return { ok: false, reason: busy.reason, code: busy.code };
-  return holdEngine("prune", async () => {
+  return engineBusy() ?? holdEngine("prune", async () => {
     const blocked = opts.blocker === undefined ? BUILD_CACHE_UNGUARDED : opts.blocker();
     if (blocked !== null) return { ok: false as const, reason: blocked, code: "build_running" as const };
     return (opts.overrides?.pruneCache ?? pruneBuildCache)();
@@ -473,11 +471,10 @@ export async function ensureDocker(opts: { onProgress?: (line: string) => void; 
   // cache a build reads. A build or replay that gets here while one runs waits for it, so it never starts a container between the last
   // check for running work and the stop (D-529, D-533, R8-04).
   // The wait can take minutes, so the build log says why it has stopped moving.
-  if (engineHolder?.kind === "restart") opts.onProgress?.("keyloom: waiting for keyloom to finish restarting Docker");
-  if (engineHolder?.kind === "fix-files") opts.onProgress?.("keyloom: waiting for keyloom to finish fixing Colima's files");
-  if (engineHolder?.kind === "prune") opts.onProgress?.("keyloom: waiting for keyloom to finish freeing Docker's build cache");
+  const waitsFor: readonly EngineAction[] = ["restart", "fix-files", "prune"];
+  if (engineHolder !== null && waitsFor.includes(engineHolder.kind)) opts.onProgress?.(`keyloom: waiting for keyloom to finish ${ENGINE_ACTION_WORDS[engineHolder.kind]}`);
   try {
-    await waitForEngine(opts.signal, ["restart", "fix-files", "prune"]);
+    await waitForEngine(opts.signal, waitsFor);
   } catch (err) {
     if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
     throw err;

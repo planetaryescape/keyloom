@@ -37,7 +37,7 @@ function RestartEngine({ engine, docker }: { engine: string; docker: Docker }) {
  * A Colima on a Mac whose files belong to another account (D-533): Fix Colima's files runs Colima's command through macOS's password
  * dialog. The command stays below as the way to do it by hand, and becomes the way on once the button has failed.
  */
-function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null; stopCommand?: string | null }; fix: { offered: boolean; note: string | null }; docker: Docker }) {
+function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null; stopCommand?: string | undefined }; fix: { offered: boolean; note: string | null }; docker: Docker }) {
   return (
     <div className="callout callout-warning" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
@@ -51,7 +51,7 @@ function ColimaNoAccess({ view, fix, docker }: { view: { command: string | null;
         ) : null}
         {fix.note === null ? null : <p className="callout-note">{fix.note}</p>}
         {/* Another account's Colima still runs: its stop comes first, then Fix Colima's files (R8-05). */}
-        {view.stopCommand == null ? null : (
+        {view.stopCommand === undefined ? null : (
           <>
             <p className="callout-note">Run this in Terminal to stop that copy of Colima:</p>
             <CopyCommand command={view.stopCommand} />

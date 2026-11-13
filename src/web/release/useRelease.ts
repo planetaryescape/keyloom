@@ -225,13 +225,13 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token, build, refreshBuild]);
 
   // The build and flash on screen, read by showBuild when its answer comes, so it never replaces a newer one.
-  const shown = useRef<{ build: Build | null; flashActive: boolean }>({ build: null, flashActive: false });
-  shown.current = { build, flashActive };
+  const onScreen = useRef<{ build: Build | null; flashActive: boolean }>({ build: null, flashActive: false });
+  onScreen.current = { build, flashActive };
   const showBuild = useCallback((id: string) => {
-    if (!mayShowBuild(shown.current, { id })) return;
+    if (!mayShowBuild(onScreen.current, { id })) return;
     fetchBuild(token, id, new AbortController().signal)
       .then((next) => {
-        if (!mayShowBuild(shown.current, next)) return;
+        if (!mayShowBuild(onScreen.current, next)) return;
         setBuild(next);
         setFlash(null);
         setError((was) => (was === SYNC_BUILD_READ_FAILED ? null : was));

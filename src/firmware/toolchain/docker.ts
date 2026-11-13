@@ -75,7 +75,7 @@ export async function pruneBuildCache(timeoutMs = 5 * 60_000): Promise<BuildCach
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to prune Docker's build cache in a test");
   const r = await capture(["docker", "builder", "prune", "-f"], { timeoutMs });
   if (r.exitCode === 0) return { ok: true, freed: pruneTotal(r.stdout) };
-  const why = (r.stderr || r.stdout).trim().split("\n").at(-1) || (r.timedOut ? "it didn't finish in time" : `it exited with code ${r.exitCode}`);
+  const why = lastLine(r) || (r.timedOut ? "it didn't finish in time" : `it exited with code ${r.exitCode}`);
   return { ok: false, reason: `Docker couldn't free its build cache: ${why.replace(/\.$/, "")}.` };
 }
 

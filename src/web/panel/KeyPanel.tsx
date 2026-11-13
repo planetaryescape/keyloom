@@ -398,19 +398,15 @@ export function KeyPanel(props: Props) {
   const ctx = { layers: drawn.layers, macros: drawn.macros, tapDances: drawn.tapDances, passthrough: drawn.passthrough };
   const shownLegend = bindingLegend(binding ?? draftBinding ?? original, ctx);
   const shownTone = (binding ?? draftBinding ?? original).kind;
-  const whyNot =
-    binding === null
-      ? dirty ? (incomplete ?? "This is the same as the key now.") : null
-      : check.state.status === "checking"
-        ? "Checking the change."
-        : result !== null && !result.ok
-          // A check against an older head: the latest version is on its way, and the draft is checked again on it (R8-13).
-          ? result.errors.some((issue) => issue.code === "stale_base")
-            ? "Waiting for the latest version."
-            : lostNow.length > 0 && lostNow.every((row) => drops.has(row.lost.function) || placements.some((p) => p.function === row.lost.function)) === false
-            ? `Drop ${lostNow.map((row) => functionName(row.lost.function, layout)).join(" and ")} or put it somewhere first.`
-            : "Fix the problems above first."
-          : null;
+  const whyNot = ((): string | null => {
+    if (binding === null) return dirty ? (incomplete ?? "This is the same as the key now.") : null;
+    if (check.state.status === "checking") return "Checking the change.";
+    if (result === null || result.ok) return null;
+    // A check against an older head: the latest version is on its way, and the draft is checked again on it (R8-13).
+    if (result.errors.some((issue) => issue.code === "stale_base")) return "Waiting for the latest version.";
+    const unplaced = lostNow.length > 0 && lostNow.every((row) => drops.has(row.lost.function) || placements.some((p) => p.function === row.lost.function)) === false;
+    return unplaced ? `Drop ${lostNow.map((row) => functionName(row.lost.function, layout)).join(" and ")} or put it somewhere first.` : "Fix the problems above first.";
+  })();
 
   const holdText = holdSlotText(draft, layout);
   const selectedTap = new Set(selectedIdsFor("tap", draft));

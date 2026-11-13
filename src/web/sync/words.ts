@@ -49,8 +49,22 @@ const plural = (n: number, one: string, many: string): string => (n === 1 ? `1 $
 const buildFailed = (board: BoardSync): boolean => board.last?.failure === "build";
 const dockerNotReady = (board: BoardSync): boolean => buildFailed(board) && board.last?.errorCode === "docker_unavailable";
 const buildStopped = (board: BoardSync): boolean => buildFailed(board) && board.last?.errorCode === "cancelled";
-/** The failed build Build and flash opens on, when the sync made one. */
-const failedBuildId = (board: BoardSync): string | undefined => (buildFailed(board) ? board.last?.buildId ?? undefined : undefined);
+/**
+ * A sync that failed after its build. A flash code the page has its own words for says them, because the flasher's sentence names a CLI
+ * flag (R8-11); any other sentence loses its backticks.
+ */
+function failedSyncText(board: BoardSync, error: string): string {
+  if (board.last?.failure === "flash" && board.last.errorCode === "write_timeout") {
+    return "Flashing didn't finish within 3 minutes, so keyloom stopped it. The keyboard may be left in its bootloader, where it doesn't type. Sync now flashes it again.";
+  }
+  return plain(error);
+}
+
+/** Build and flash, on the sync's failed build when it made one. Called only for a sync that failed at its build. */
+function openFailedBuild(board: BoardSync): { id: "open_release"; label: string; buildId?: string } {
+  const buildId = board.last?.buildId ?? undefined;
+  return { id: "open_release", label: "Build and flash…", ...(buildId === undefined ? {} : { buildId }) };
+}
 
 /** `selectedLayoutId` is the layout on screen: a keyboard that runs another layout of the same board says so. */
 export function syncLine(board: BoardSync, selectedLayoutId: string | null): SyncLine {
@@ -78,7 +92,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
       const label = s.changes === null || s.changes === 0 ? `Changes not on your ${name}` : `${plural(s.changes, "change", "changes")} not on your ${name}`;
       const detail =
         s.why === "failed" && buildFailed(board) ? syncBuildFailureLine(board.last?.errorCode)
-        : s.why === "failed" ? plain(s.error ?? "The last sync failed.")
+        : s.why === "failed" ? failedSyncText(board, s.error ?? "The last sync failed.")
         : s.why === "waiting" ? (s.error ? `${plain(s.error)} Trying again.` : "Syncing in a moment.")
         : s.why === "paused" ? "Auto-sync is paused."
         : s.why === "auto_off" ? "Auto-sync is off for this keyboard."
@@ -119,10 +133,7 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
 function behindAction(board: BoardSync, why: Extract<BoardSync["state"], { kind: "behind" }>["why"]): SyncLine["action"] {
   if (why === "other_config") return { id: "put_on", label: `Put “${board.layoutName}” on it` };
   // A stopped build has nothing to show: syncing again builds it again.
-  if (why === "failed" && buildFailed(board) && !buildStopped(board)) {
-    const buildId = failedBuildId(board);
-    return { id: "open_release", label: "Build and flash…", ...(buildId === undefined ? {} : { buildId }) };
-  }
+  if (why === "failed" && buildFailed(board) && board.last?.errorCode !== "cancelled") return openFailedBuild(board);
   return { id: "sync_now", label: "Sync now" };
 }
 
@@ -228,12 +239,12 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
     return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: FOREIGN_FILE_DETAIL, action: REPLACE_FOREIGN };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {
-    const buildId = failedBuildId(after);
-    const open = { id: "open_release" as const, label: "Build and flash…", ...(buildId === undefined ? {} : { buildId }) };
-    if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: open };
-    if (buildStopped(after)) return { kind: "error", message: `Couldn't build the change for your ${after.boardName}`, detail: syncBuildFailureLine("cancelled") };
-    if (buildFailed(after)) return { kind: "error", message: `Couldn't build the change for your ${after.boardName}`, detail: syncBuildFailureLine(after.last?.errorCode), action: open };
-    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: plain(now.error ?? "The sync failed.") };
+    if (dockerNotReady(after)) return { kind: "error", message: "Docker isn't ready", detail: `keyloom couldn't build the change for your ${after.boardName}. Build and flash shows what Docker needs.`, action: openFailedBuild(after) };
+    // A stopped build has nothing to show in Build and flash; the pill offers Sync now.
+    if (buildFailed(after)) {
+      return { kind: "error", message: `Couldn't build the change for your ${after.boardName}`, detail: syncBuildFailureLine(after.last?.errorCode), ...(buildStopped(after) ? {} : { action: openFailedBuild(after) }) };
+    }
+    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: failedSyncText(after, now.error ?? "The sync failed.") };
   }
   if (now.kind === "needs_hand") return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };
   return null;

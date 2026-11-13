@@ -668,7 +668,7 @@ export const SyncRunSchema = z.object({
   revisionId: z.string().min(1),
   failure: z.string().nullable(),
   error: z.string().nullable(),
-  /** A failed build's code, such as "docker_unavailable" (R3-05). Absent on older senders. */
+  /** A failed build's or flash's code, such as "docker_unavailable" (R3-05) or "write_timeout" (R8-11). Absent on older senders. */
   errorCode: z.string().nullable().optional(),
   /** The build this sync made, so Build and flash can open on it (R8-01). Absent on older senders. */
   buildId: z.string().min(1).nullable().optional(),

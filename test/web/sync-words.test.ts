@@ -213,6 +213,14 @@ describe("syncNotice", () => {
     expect(syncNotice(at(syncing), failed)).toEqual({ kind: "error", message: "Couldn't build the change for your Glove80", detail: "The build was stopped before it finished, so nothing changed on the keyboard." });
   });
 
+  test("a sync whose Moonlander write timed out says so in the page's words, never the --build flag (R8-11)", () => {
+    const cli = "Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.";
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: cli }, { ...run("failed"), failure: "flash", error: cli, errorCode: "write_timeout" });
+    const words = "Flashing didn't finish within 3 minutes, so keyloom stopped it. The keyboard may be left in its bootloader, where it doesn't type. Sync now flashes it again.";
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: words, action: { id: "sync_now", label: "Sync now" } });
+    expect(syncNotice(at(syncing), failed)?.detail).toBe(words);
+  });
+
   test("a flash failure's sentence loses its backticks on the page", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "Run `keyloom flash` again." }, { ...run("failed"), failure: "flash", error: "Run `keyloom flash` again." });
     expect(syncLine(failed, "lay_1").detail).toBe("Run keyloom flash again.");

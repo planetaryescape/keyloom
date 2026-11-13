@@ -19,7 +19,7 @@ export type BuildFailureView =
   | { kind: "disk_full"; text: string; next: string }
   | { kind: "folder_not_shared"; text: string; next: string; openApp: "docker_desktop" | null; helpUrl: string | null }
   | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
-  | { kind: "same_every_time"; next: string; goBack: { revisionId: string; summary: string } | null }
+  | { kind: "same_every_time"; code: "compile_error" | "too_large" | "source_error"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
 /** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
@@ -34,7 +34,7 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | 
   const next = goBack === null
     ? "Building it again fails the same way. Ask keyloom about this build, or change the layout and build again."
     : `Building it again fails the same way. The last version that built is “${headline(goBack.summary)}”. Going back adds a new revision, so this one stays in History.`;
-  return { kind: "same_every_time", next, goBack };
+  return { kind: "same_every_time", code: build.errorCode, next, goBack };
 }
 
 // The build's own sentence names a terminal command and XDG_CACHE_HOME; the page says what happened and offers the restart instead.
@@ -54,22 +54,24 @@ const DISK_FULL_NEXT = "Freeing Docker's build cache makes room. Nothing you mad
 
 /**
  * What freeing Docker's build cache ended in, for the disk_full step (R8-04). `again`: the button stays, because the next press can work
- * (a build or flash was running, or keyloom was busy with Docker). `build`: Build again is the way on now.
+ * (a build or flash was running, or keyloom was busy with Docker). Otherwise Build again is the way on now.
  */
-export type CachePruneOutcome = { text: string; again: boolean; build: boolean };
+export type CachePruneOutcome = { text: string; again: boolean };
+
+const MAKE_ROOM = "Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.";
 
 export function cachePruneOutcome(result: { ok: true; freed: string | null } | { ok: false; reason: string; code?: string | undefined } | { ok: false; unreachable: true }): CachePruneOutcome {
-  if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Try again.", again: true, build: false };
+  if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Try again.", again: true };
   if (!result.ok) {
     // A running build or flash, or a start or restart of Docker, ends by itself; any other failure would fail the same way again.
-    if (result.code === "build_running" || result.code === "engine_busy") return { text: plain(result.reason), again: true, build: false };
-    return { text: `${plain(result.reason).replace(/\.?$/, ".")} Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.`, again: false, build: true };
+    if (result.code === "build_running" || result.code === "engine_busy") return { text: plain(result.reason), again: true };
+    return { text: `${plain(result.reason).replace(/\.?$/, ".")} ${MAKE_ROOM}`, again: false };
   }
   if (result.freed !== null && /^0(\.0+)?[kKMGTP]?i?B$/.test(result.freed)) {
-    return { text: "Docker's build cache was already empty, so nothing was freed. Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.", again: false, build: true };
+    return { text: `Docker's build cache was already empty, so nothing was freed. ${MAKE_ROOM}`, again: false };
   }
   const freed = result.freed === null ? "Docker freed its build cache." : `Freed ${result.freed} of Docker's build cache.`;
-  return { text: `${freed} Build again to continue; it takes longer this time.`, again: false, build: true };
+  return { text: `${freed} Build again to continue; it takes longer this time.`, again: false };
 }
 
 /**
@@ -83,7 +85,7 @@ export function syncBuildFailureLine(code: string | null | undefined): string {
     case "disk_full": return `${view.text} Build and flash can free Docker's build cache.`;
     case "restart_engine": return `${view.text} Build and flash shows how to clear it.`;
     case "folder_not_shared": return `${view.text} Build and flash says where to share it.`;
-    case "same_every_time": return `${SAME_EVERY_TIME[code as keyof typeof SAME_EVERY_TIME] ?? SAME_EVERY_TIME.compile_error} Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.`;
+    case "same_every_time": return `${SAME_EVERY_TIME[view.code]} Building it again fails the same way. Build and flash shows the error, and can ask keyloom about it.`;
     case "may_pass": return code === "cancelled" ? "The build was stopped before it finished, so nothing changed on the keyboard." : "The firmware build failed. Build and flash shows its log and can build it again.";
   }
 }

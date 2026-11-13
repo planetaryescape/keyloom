@@ -1,6 +1,7 @@
 // An in-memory EditorBackend and LayoutSource for the dev harness and the server tests. It handles
 // only setBinding, checks only what the editor UI can get wrong, and times builds and flashes from
 // the clock, so a reader polling it sees the same progression a real build would show.
+import { DISK_FULL_MESSAGE } from "../../src/firmware/toolchain/build-failure.ts";
 import {
   KEYCODES,
 } from "../../src/layout/keycodes.ts";
@@ -81,7 +82,7 @@ const STALE_MOUNT_ERROR = "Docker still sees an old or missing copy of keymap.c 
 const FOLDER = "/Volumes/Cache/keyloom/build/zsa-moonlander";
 const FOLDER_ERROR = `Docker can't see ${FOLDER}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`;
 
-const DISK_ERROR = "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.";
+const DISK_ERROR = DISK_FULL_MESSAGE;
 
 export class FakeEditor implements EditorBackend {
   /** The pretend stale mount `failBuildStale` fails on; a forced restart in the dev editor clears it. */
