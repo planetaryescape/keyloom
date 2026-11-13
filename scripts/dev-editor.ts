@@ -14,6 +14,10 @@
 // waits and restarts by itself once it ends (R7-04). KEYLOOM_FAKE_RESTART_ENGINE names the engine (Colima by default); with "Docker
 // Desktop" and =fail, Docker reads down after the failed restart (R7-03). KEYLOOM_FAKE_FAIL_BUILD=folder fails every build because the
 // engine doesn't share the build folder, naming KEYLOOM_FAKE_RESTART_ENGINE or Docker Desktop (R7-02).
+// KEYLOOM_FAKE_FAIL_BUILD=disk fails every build because Docker's disk is full, until Free Docker's build cache (about 2 s) frees it; with
+// KEYLOOM_FAKE_PRUNE=empty the cache was already empty, =busy refuses it because a build runs, =fail fails it (R8-04).
+// KEYLOOM_FAKE_SYNC=build_failed gives the Moonlander a sync pill: its auto-sync builds the head with the fake build at once, and when that
+// build fails the pill and its toast say so, with Build and flash on that build (R8-01). Pair it with a KEYLOOM_FAKE_FAIL_BUILD mode.
 // KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY=1 fails the first layout read after each apply, as when the change is written but the page
 // can't show it (R7-06).
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
@@ -24,7 +28,8 @@
 // something else for 6 s, so a restart then is refused as engine_busy (R4-04). With no-access-mac, Fix Colima's files succeeds after
 // about 3 s; KEYLOOM_FAKE_COLIMA_FIX=cancel makes its password dialog cancelled the first time, =fail makes it fail, =linked stops it at a
 // linked file, =linked-cancel stops it at a linked file and then has every later dialog cancelled, =busy refuses it as build_running,
-// =vm refuses it before the dialog because another account's Colima VM runs (D-533).
+// =vm refuses it before the dialog because another account's Colima VM runs (D-533). KEYLOOM_FAKE_COLIMA_SCAN=incomplete holds Colima's
+// command back, as a look through ~/.colima that didn't finish does; with =vm the fix then shows Colima's stop on its own (R8-05).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
@@ -42,6 +47,8 @@ import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
+import { type SyncBackend, SyncError } from "../src/server/sync-backend.ts";
+import type { BoardSync } from "../src/api/http.ts";
 import { COLIMA_VM_RUNNING } from "../src/app/colima-files.ts";
 import { dockerAccessFix } from "../src/app/toolchain.ts";
 import { type ShownFailureKind, isShownFailureKind } from "../test/helpers/model-failures.ts";
@@ -59,6 +66,7 @@ const fake = new FakeEditor(fixture, {
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
   failBuildCompile: process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile",
   failBuildStale: process.env.KEYLOOM_FAKE_FAIL_BUILD === "stale",
+  failBuildDisk: process.env.KEYLOOM_FAKE_FAIL_BUILD === "disk",
   restartEngine: restartEngineName,
   failBuildFolder: process.env.KEYLOOM_FAKE_FAIL_BUILD === "folder" ? { engine: process.env.KEYLOOM_FAKE_RESTART_ENGINE ?? "Docker Desktop" } : null,
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
@@ -121,13 +129,16 @@ let forcedLines: string[] = [];
 let forcing = false;
 let labUntil: number | null = null;
 let appLeftDown = false;
+// KEYLOOM_FAKE_COLIMA_SCAN=incomplete: keyloom's look through ~/.colima didn't finish, so Colima's command is held back (D-533, R8-05).
+const heldAccess = (access: ReturnType<typeof dockerAccessFix>) =>
+  process.env.KEYLOOM_FAKE_COLIMA_SCAN === "incomplete" && access.fixFiles ? { ...access, command: null, scanIncomplete: true } : access;
 const system: SystemBackend = {
   docker: async () => appLeftDown
     ? { ok: false, problem: "daemon-down", reason: `${restartEngineName} isn't running.`, engine: restartEngineName, canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null }
     : (dockerMode === "no-access-linux" || dockerMode === "no-access-mac") && !colimaFilesFixed
     ? {
         ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
-        canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] }),
+        canStart: false, autoStart: true, install: null, access: heldAccess(dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] })),
       }
     : colimaBroken && !colimaRestarted
       ? { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima", alternatives: ALTERNATIVES, engineAction: engineAction() }
@@ -182,6 +193,15 @@ const system: SystemBackend = {
     colimaRestarted = true;
     return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
   },
+  pruneBuildCache: async () => {
+    const mode = process.env.KEYLOOM_FAKE_PRUNE;
+    if (mode === "busy") return { ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished." };
+    await Bun.sleep(2000);
+    if (mode === "fail") return { ok: false, reason: "Docker couldn't free its build cache: Error response from daemon: a prune operation is already running." };
+    if (mode === "empty") return { ok: true, freed: "0B" };
+    fake.diskFull = false;
+    return { ok: true, freed: "1.8GB" };
+  },
   fixColimaFiles: async () => {
     const mode = process.env.KEYLOOM_FAKE_COLIMA_FIX;
     if (mode === "busy") return { ok: false, code: "build_running", reason: "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.", engine: null };
@@ -216,5 +236,50 @@ const source = { ...fakeSource, get: async (ref: string) => {
   return fakeSource.get(ref);
 } };
 
-const server = startServer({ port, source, editor: fake, chat, system, token: "dev-editor-token" });
+const sync = process.env.KEYLOOM_FAKE_SYNC === "build_failed" ? await fakeBuildFailedSync() : undefined;
+
+const server = startServer({ port, source, editor: fake, chat, system, ...(sync === undefined ? {} : { sync }), token: "dev-editor-token" });
+
+/** One Moonlander whose auto-sync builds the head now, with the fake build, and is behind once that build fails (R8-01). */
+async function fakeBuildFailedSync(): Promise<SyncBackend> {
+  const sample = await fake.source().get("moonlander-daily");
+  if (sample === null) throw new Error("the dev editor has no Daily driver layout");
+  const head = sample.revision.id;
+  const build = await fake.startBuild("moonlander-daily", { revisionId: head, boardRevision: "revb" });
+  const startedAt = Date.now();
+  const timings = { waitMs: 0, buildMs: null, flashMs: null, totalMs: null };
+  const auto = { on: true, choice: null, paused: false, proven: true, provenAt: startedAt - 86_400_000, dueAt: null };
+  const status = async (): Promise<BoardSync[]> => {
+    const now = await fake.getBuild(build.id);
+    const running = now === null || now.status === "running";
+    const failed = now !== null && now.status === "failed";
+    const cli = `build ${build.id} failed: ${now?.error ?? ""} (log: /Users/you/Library/Application Support/keyloom/logs/build-${build.id}.log)`;
+    return [{
+      boardId: "zsa/moonlander", boardName: "Moonlander", layoutId: "moonlander-daily", layoutName: "Daily driver", headRevisionId: head, otherLayouts: 0, auto,
+      state: running ? { kind: "syncing", step: "building", syncId: "sync_1", startedAt, trigger: "auto" } : failed ? { kind: "behind", changes: 1, why: "failed", error: cli } : { kind: "in_sync" },
+      last: {
+        id: "sync_1", trigger: "auto", status: running ? "building" : failed ? "failed" : "succeeded", step: running ? "building" : "done", revisionId: head,
+        failure: failed ? "build" : null, error: failed ? cli : null, errorCode: failed ? now?.errorCode ?? null : null, buildId: build.id, startedAt, finishedAt: running ? null : Date.now(), timings,
+      },
+    }];
+  };
+  const refused = (): never => {
+    throw new SyncError(400, "busy", "The dev editor's fake sync only shows a failed build.");
+  };
+  return {
+    status, syncNow: refused, setAutoSync: refused, setPaused: refused, disableRemapping: refused, replaceForeignRemapperConfig: refused, confirmExitChord: refused,
+    newKeyboards: () => [], setupBoards: () => [],
+    subscribe: (listener) => {
+      let last = "";
+      const tell = () => void status().then((boards) => {
+        const now = JSON.stringify(boards.map((b) => b.state));
+        if (now !== last) listener(boards, [], []);
+        last = now;
+      });
+      tell();
+      const timer = setInterval(tell, 1000);
+      return () => clearInterval(timer);
+    },
+  };
+}
 console.log(server.url);

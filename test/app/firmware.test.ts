@@ -9,7 +9,7 @@ import {
   generateFirmware, getBuild, getFlash, importLayout, openApp, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { createBuild, newBuildId } from "../../src/persistence/builds.ts";
-import { checkoutDirFor, engineRestartBlocker, engineRestartWork } from "../../src/app/firmware.ts";
+import { buildCachePruneBlocker, checkoutDirFor, engineRestartBlocker, engineRestartWork } from "../../src/app/firmware.ts";
 import { holdContainerWork } from "../../src/app/toolchain.ts";
 import { holdKeyboardWrite } from "../../src/firmware/toolchain/write-guard.ts";
 import { showBoard } from "../../src/app/boards.ts";
@@ -247,6 +247,23 @@ describe("startBuild / getBuild / buildAndWait", () => {
     expect(engineRestartBlocker(e.app)).toBe("keyloom is writing to a keyboard. Restart Docker once that has finished, so nothing else happens while it writes.");
     write();
     expect(engineRestartBlocker(e.app)).toBeNull();
+    e.closeApp();
+  });
+
+  test("a prune waits for the same work, and its words name the work and say freeing waits, never Docker's restart (PR #306 review)", async () => {
+    const e = await toolchainEnv();
+    expect(buildCachePruneBlocker(e.app)).toBeNull();
+    const lab = holdContainerWork("a lab analysis");
+    expect(buildCachePruneBlocker(e.app)).toBe("keyloom is running a lab analysis. Free Docker's build cache once it has finished.");
+    const tests = holdContainerWork("a board review's tests");
+    expect(buildCachePruneBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests. Free Docker's build cache once they have finished.");
+    const write = holdKeyboardWrite();
+    expect(buildCachePruneBlocker(e.app)).toBe("keyloom is running a lab analysis and a board review's tests and writing to a keyboard. Free Docker's build cache once they have finished.");
+    lab();
+    tests();
+    expect(buildCachePruneBlocker(e.app)).toBe("keyloom is writing to a keyboard. Free Docker's build cache once it has finished.");
+    write();
+    expect(buildCachePruneBlocker(e.app)).toBeNull();
     e.closeApp();
   });
 

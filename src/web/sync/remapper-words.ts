@@ -3,6 +3,12 @@
 // never shown here.
 import type { KanataInstallAction, RemapperSetupResponse, SettingsPaneName } from "../../api/system-remapper.ts";
 
+/**
+ * When a step's button has ended, the checklist reads the machine again: at once for anything keyloom ran, and when the window is back in
+ * front for a System Settings or Karabiner pane, where the person makes the change themselves (R8-17).
+ */
+export const recheckAfter = (id: { kind: string }): "now" | "on_return" => (id.kind === "open_settings" ? "on_return" : "now");
+
 export type SetupActionId =
   | { kind: "install_kanata" } | { kind: "update_kanata" } | { kind: "reinstall_kanata" } | { kind: "cancel_install" } | { kind: "start_kanata" }
   | { kind: "open_settings"; pane: SettingsPaneName };

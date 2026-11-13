@@ -74,7 +74,7 @@ const LIST_PATH = "/api/layouts";
 const DETAIL_PREFIX = "/api/layouts/";
 // Starting or restarting Docker waits up to about three minutes for the daemon, past Bun's 10 s idle limit. On Bun 1.3.14 that limit cut
 // a request with no body and spared one with a JSON body, which is what the page sends, so this guards against relying on that.
-const NO_IDLE_LIMIT = new Set(["/api/system/docker/start", "/api/system/docker/restart", "/api/system/docker/fix-colima-files"]);
+const NO_IDLE_LIMIT = new Set(["/api/system/docker/start", "/api/system/docker/restart", "/api/system/docker/fix-colima-files", "/api/system/docker/prune-build-cache"]);
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.

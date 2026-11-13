@@ -1,7 +1,7 @@
 // The server's write interface over the app's use cases (rung 2). The server stays ignorant of
 // storage, Docker and Zapp; this adapter is the one place that knows both sides.
 import {
-  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRefusal, BoardRevisionNeededError, BuildNotCancellableError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, NotOpenError, cancelBuild, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
+  type App, type BuildView, type FlashOptions, type FlashView, type RevealDeps, BoardRefusal, BoardRevisionNeededError, BuildFileGoneError, BuildNotCancellableError, FlashNotCancellableError, FlashToolMissingError, NotFoundError, NotOpenError, cancelBuild, cancelFlash, checkFlashAgain, lastFittingRevision, buildArtifact, revealBuildArtifact, StaleBaseError, UsageError, ValidationFailedError, applyChange, applyOps, checkChange, parseBindingExpression,
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
@@ -17,7 +17,7 @@ function keymapFileOf(definition: ReturnType<typeof listBoardDefinitions>[number
 }
 
 const toBuild = (b: BuildView): Build => ({
-  id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, errorCode: b.errorCode, lastBuilt: b.lastBuilt, restartEngine: b.restartEngine, folderNotShared: b.folderNotShared, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
+  id: b.id, revisionId: b.revisionId, boardRevision: b.boardRevision, status: b.status, error: b.error, errorCode: b.errorCode, lastBuilt: b.lastBuilt, restartEngine: b.restartEngine, folderNotShared: b.folderNotShared, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
 });
 
 const toFlash = (f: FlashView): Flash => ({
@@ -43,6 +43,8 @@ async function translate<T>(fn: () => Promise<T> | T): Promise<T> {
     if (err instanceof BoardRevisionNeededError) throw new EditorError(400, "board_revision_needed", err.message);
     if (err instanceof FlashNotCancellableError) throw new EditorError(409, err.why === "writing" ? "flash_writing" : "flash_finished", err.message);
     if (err instanceof BuildNotCancellableError) throw new EditorError(409, "build_finished", err.message);
+    // Before UsageError, which it extends: flashing again fails the same way, so the page offers Build again (R8-12).
+    if (err instanceof BuildFileGoneError) throw new EditorError(409, "build_file_gone", err.message);
     // Before UsageError, which it extends: the page offers Restore, or Import it as that board's config (R6-08, R6-18).
     if (err instanceof BoardRefusal) throw new EditorError(400, err.code, err.message, undefined, err.board);
     // Before UsageError, which it extends: a proposal applied or set aside elsewhere, apart from any other refusal (R6-06).

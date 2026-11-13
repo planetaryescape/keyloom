@@ -19,8 +19,10 @@ export class BuildFailure extends Error {
  * `source_error`: keyloom can't write this layout as the firmware's source, so every build of it stops the same way, like `compile_error`
  * (R7-02). `folder_not_shared`: Docker mounts an empty folder for the build checkout, because the engine doesn't share it; building again
  * fails the same way until that folder is shared, so the UI says where and offers the engine's own settings (D-536).
+ * `disk_full`: Docker's disk is full ("No space left on device"). Building again fills the same disk, so the UI offers to free Docker's
+ * build cache first, then Build again (R8-04).
  */
-export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared"] as const;
+export const BUILD_ERROR_CODES = ["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared", "disk_full"] as const;
 export type BuildErrorCode = (typeof BUILD_ERROR_CODES)[number];
 export const isBuildErrorCode = (code: string | null): code is BuildErrorCode => (BUILD_ERROR_CODES as readonly string[]).includes(code ?? "");
 
@@ -40,18 +42,26 @@ export const PROBE_CLEANUP_EXIT = 87;
  */
 const MOUNTS_DENIED = /Mounts denied|is not shared from the host/i;
 
+/** What a full Docker disk prints, from `cp` in the container to BuildKit and git (`test/fixtures/build-logs/zmk-docker-disk-full.log`). */
+const DISK_FULL = /No space left on device/i;
+export const diskFull = (lines: readonly string[]): boolean => lines.some((line) => DISK_FULL.test(line));
+
 /**
  * A probe that didn't pass. The folder isn't shared when its sentinel test said so, or when Docker Desktop refused the mount (its words in
  * `output`). A cleanup that failed, or Docker's own failure, says what it was, with its words in the build log, and may pass on a second try.
  */
 export function probeFailure(exitCode: number | null, output: readonly string[], checkoutDir: string, notShared: string): BuildFailure {
   if (exitCode === NOT_SHARED_EXIT) return new BuildFailure(notShared, "folder_not_shared");
+  if (exitCode !== 0 && diskFull(output)) return new BuildFailure(DISK_FULL_MESSAGE, "disk_full");
   if (exitCode !== 0 && output.some((line) => MOUNTS_DENIED.test(line))) {
     return new BuildFailure(`Docker Desktop doesn't share ${checkoutDir}. Allow that folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.`, "folder_not_shared");
   }
   if (exitCode === PROBE_CLEANUP_EXIT) return new BuildFailure(`keyloom couldn't clear the last build's output in ${checkoutDir}. The error is in the build log; build again.`);
   return new BuildFailure(`Docker couldn't run keyloom's first step in ${checkoutDir} (${exitCode === null ? "it was stopped" : `exit ${exitCode}`}). Docker's own words are in the build log; build again.`);
 }
+
+/** The terminal's sentence for a full Docker disk; the page shows its own words and a button that frees the build cache (R8-04). */
+export const DISK_FULL_MESSAGE = "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.";
 
 /** The codes whose build fails the same way each time, so building again can't help (R5-02). */
 export const DETERMINISTIC_BUILD_CODES: ReadonlySet<BuildErrorCode> = new Set(["compile_error", "too_large", "source_error"]);
@@ -92,9 +102,12 @@ export function tooLargeMessage(boardName: string, overflow: { bytes: number | n
 /**
  * The failure a build that exited non-zero ends in, in D-523's order: Docker's own trouble first (`docker`, a full disk or a stopped daemon),
  * since it can pass; then a firmware too big to fit; then the driver's compile error (`compileError`, from its own locators); then the
- * driver's `generic` sentence. Only the middle two carry a code, because only they fail the same way every time.
+ * driver's `generic` sentence. The middle two carry a code, because they fail the same way every time; a full disk carries `disk_full`.
  */
 export function classifyBuildFailure(output: readonly string[], driver: { boardName: string; docker: string | undefined; compileError: () => string | undefined; generic: string }): BuildFailure {
+  // A full disk fills again on the next build, so it has a code whose button frees space first (R8-04), whatever the driver's hint says.
+  if (diskFull(output)) return new BuildFailure(DISK_FULL_MESSAGE, "disk_full");
+  // A stopped daemon may pass.
   if (driver.docker !== undefined) return new BuildFailure(driver.docker);
   const overflow = firmwareOverflow(output);
   if (overflow !== null) return new BuildFailure(tooLargeMessage(driver.boardName, overflow), "too_large");

@@ -69,6 +69,21 @@ export function importLine(board: BoardChoice | undefined): string {
   return guide.readFromMac ? `Bring in what you set up in ${guide.tool}.` : `Drop the file from ${guide.tool}.`;
 }
 
+/**
+ * The import screen's intro (R8-18), true for the cards it shows: one card says where its own layout comes from (an editor's export, a
+ * zmk-config's .keymap, or Karabiner's settings on this Mac); several say that each card does.
+ */
+export function importIntro(shown: readonly BoardChoice[]): string {
+  const one = shown.length === 1 ? shown[0] : undefined;
+  if (one === undefined) return "Each card says where that keyboard's layout comes from and how to bring it in. Every layer shows up here, and nothing reaches a keyboard until you apply a change.";
+  const guide = guideFor(one);
+  const how = guide.link !== undefined ? `Export your layout from ${guide.tool} and drop the file on its card.`
+    : guide.readFromMac === true ? `Read your ${guide.tool} settings from this Mac with the button on its card, or drop a copy of the file.`
+    : `Drop the file from ${guide.tool} on its card.`;
+  const reaches = one.firmware === "kanata" ? "nothing changes on your MacBook" : "nothing reaches the keyboard";
+  return `${how} Every layer shows up here, and ${reaches} until you apply a change.`;
+}
+
 export const importCommand = (board: BoardChoice, activities: readonly ReviewActivity[] = []): string => `keyloom import --board ${board.id}${activities.length ? ` --activities ${activities.join(",")}` : ""} <file>`;
 
 export function acceptsFile(guide: ExportGuide, filename: string): boolean {

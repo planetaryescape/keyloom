@@ -5,8 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Build } from "../../src/api/http.ts";
 import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
-import { buildFailureView, buildQuestion, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
-import type { Release } from "../../src/web/release/useRelease.ts";
+import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
+import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
+import { syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
 
@@ -77,7 +78,7 @@ describe("buildQuestion", () => {
 const noop = () => {};
 function release(build: Build, over: Partial<Release> = {}): Release {
   return {
-    build, flash: null, starting: null, error: null, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
+    build, flash: null, starting: null, error: null, errorCode: null, showBuild: noop, freeCache: noop, cachePrune: { running: false, outcome: null }, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
     docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
@@ -91,7 +92,7 @@ function failedStep(errorCode: Build["errorCode"], over: Partial<Build> = {}, re
     flashPlan: { manual: null, tool: null, canReveal: true }, startedAt: 0, finishedAt: 1, logTail: ["make: *** [keymap.o] Error 1"], artifactPath: null, logPath: "/tmp/x.log", ...over,
   } as Build;
   return renderToStaticMarkup(createElement(ReleaseDialog, {
-    open: true, onClose: noop, release: release(build, releaseOver), head: { id: "rev_B", summary: "Added a combo" }, boardName: "Moonlander", boardRevisions: [],
+    token: "t", open: true, onClose: noop, release: release(build, releaseOver), head: { id: "rev_B", summary: "Added a combo" }, boardName: "Moonlander", boardRevisions: [],
     status: { label: "Build failed", tone: "error" } as never, now: 2, onGoBack: async () => {}, onShowLatest: async () => {}, onAskAboutBuild: noop,
   }));
 }
@@ -128,6 +129,117 @@ describe("the failed build step", () => {
     expect(html).toContain("Build again");
     expect(html).toContain("Ask keyloom about this build");
     expect(html).not.toContain("Go back to the last version that built");
+  });
+});
+
+// R8-04: a full Docker disk fills again on the next build, so the step frees Docker's build cache first, then builds again.
+describe("a build that ran out of Docker's disk", () => {
+  const error = "Docker ran out of disk space. Free its build cache with `docker builder prune`, or raise its disk limit, then build again.";
+  test("offers Free Docker's build cache, says the next build takes longer, and never shows the command or Ask keyloom", () => {
+    expect(buildFailureView({ errorCode: "disk_full" }, false)).toMatchObject({ kind: "disk_full", next: expect.stringContaining("the next build takes longer") });
+    const html = failedStep("disk_full", { error, logTail: ["cp: write error: No space left on device", `keyloom: build failed: ${error}`] });
+    expect(html).toContain("Docker ran out of disk space, so the build stopped.");
+    expect(html).toContain("Free Docker&#x27;s build cache");
+    expect(html).toContain(">Build again<");
+    expect(html).not.toContain("docker builder prune");
+    expect(html).not.toContain("Ask keyloom about this build");
+  });
+  test("after a prune, Build again is the way on and the button goes; a refusal that can pass keeps it", () => {
+    const freed = cachePruneOutcome({ ok: true, freed: "1.2GB" });
+    expect(freed).toEqual({ text: "Freed 1.2GB of Docker's build cache. Build again to continue; it takes longer this time.", again: false });
+    const after = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: freed } });
+    expect(after).not.toContain("Free Docker&#x27;s build cache<");
+    expect(after).toContain('class="button button-primary">Build again<');
+    expect(after).toContain("Freed 1.2GB");
+    // Nothing to free says what else makes room, and building is still the way on once it has.
+    expect(cachePruneOutcome({ ok: true, freed: "0B" })).toMatchObject({ again: false, text: expect.stringContaining("already empty") });
+    expect(cachePruneOutcome({ ok: true, freed: null }).text).toBe("Docker freed its build cache. Build again to continue; it takes longer this time.");
+    // A running build or flash, or a Docker start, ends by itself: the button stays with the reason.
+    expect(cachePruneOutcome({ ok: false, code: "build_running", reason: "keyloom is running a build. Free Docker's build cache once it has finished." })).toMatchObject({ again: true });
+    expect(cachePruneOutcome({ ok: false, code: "engine_busy", reason: "keyloom is starting Docker. Free Docker's build cache once that has finished." })).toMatchObject({ again: true });
+    // The step's one button is Free Docker's build cache, so no words promise a Try again.
+    expect(cachePruneOutcome({ ok: false, unreachable: true })).toEqual({ again: true, text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again." });
+    // Docker's own failure would fail again, so the button goes and Build again stays.
+    expect(cachePruneOutcome({ ok: false, reason: "Docker couldn't free its build cache: `daemon` error" })).toMatchObject({ again: false, text: expect.not.stringContaining("`") });
+    const refused = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: cachePruneOutcome({ ok: false, code: "build_running", reason: "A build runs." }) } });
+    expect(refused).toContain("Free Docker&#x27;s build cache");
+    expect(refused).toContain("A build runs.");
+  });
+});
+
+// R8-03, R8-12: the dialog's own error keeps its code, so an answer no screen planned for gets Restart keyloom, and a file that is gone
+// gets Build again, never a Try again that fails the same way.
+describe("the dialog's error", () => {
+  const withError = (errorCode: string | null, error = "keyloom hit a problem it didn't expect. The details are in keyloom's log.") =>
+    failedStep(null, { status: "succeeded", error: null }, { error, errorCode });
+  test("a server fault gets Try again and Restart keyloom; a missing route or an unreadable answer gets Restart keyloom alone", () => {
+    const internal = withError("internal");
+    expect(internal).toContain("Try again");
+    expect(internal).toContain("Restart keyloom");
+    for (const code of ["not_found", "unreadable"]) {
+      const html = withError(code, "keyloom sent an answer this page can't read.");
+      expect(html).toContain("Restart keyloom");
+      expect(html).not.toContain("Try again");
+    }
+    // Any other refusal keeps its own sentence and Try again.
+    expect(withError("usage", "flash flash_1 is already in progress; wait for it to finish")).toContain("Try again");
+  });
+  test("a build whose file is gone offers Build again, never Try again or the file's path", () => {
+    const html = withError("build_file_gone", "build bld's file /Users/x/.cache/keyloom/bld.bin is gone; build it again");
+    expect(html).toContain("This build&#x27;s firmware file is gone, so keyloom can&#x27;t flash it.");
+    expect(html).toContain("Build again");
+    expect(html).not.toContain("Try again");
+    expect(html).not.toContain("/Users/x");
+    // Flashing the same build again fails the same way, so its button waits for the new build.
+    expect(html).not.toContain("Flash to keyboard");
+    expect(html).toContain("Available once you build again.");
+    // An earlier flash of the same build that failed keeps no Try again that would flash the missing file (PR #306 CodeRabbit).
+    const earlier = { id: "fl_1", buildId: "bld", status: "failed", error: "zapp exited with code 1", startedAt: 0, finishedAt: 1, instruction: null, note: null, verified: false, logTail: [], errorCode: null };
+    const again = failedStep(null, { status: "succeeded", error: null }, { error: "gone", errorCode: "build_file_gone", flash: earlier as never });
+    expect(again).toContain("Available once you build again.");
+    expect(again).not.toContain("zapp exited");
+    expect(again).not.toContain(">Try again<");
+  });
+});
+
+// PR #306 review: the dialog opened on a sync's failed build that it then couldn't read. Its words name only the buttons it has.
+describe("a failed read of the sync's build", () => {
+  test("a build that is gone points at Build firmware, with no Try again or Restart keyloom that can't bring it back", () => {
+    const gone = syncBuildReadFailure("not_found");
+    expect(gone.text).toBe("The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.");
+    const html = failedStep(null, {}, { build: null, error: gone.text, errorCode: gone.code });
+    expect(html).toContain("no longer there");
+    expect(html).toContain(">Build firmware<");
+    expect(html).not.toContain("Try again");
+    expect(html).not.toContain("Restart keyloom");
+  });
+  test("any other failure keeps its code and names only the buttons that code gets", () => {
+    for (const code of [null, "unreachable", "internal"]) {
+      const failed = syncBuildReadFailure(code);
+      expect(failed).toEqual({ code, text: "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." });
+      expect(failedStep(null, {}, { build: null, error: failed.text, errorCode: failed.code })).toContain(">Try again<");
+    }
+    const unreadable = syncBuildReadFailure("unreadable");
+    expect(unreadable.text).toBe("keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.");
+    const html = failedStep(null, {}, { build: null, error: unreadable.text, errorCode: unreadable.code });
+    expect(html).not.toContain("Try again");
+    expect(html).toContain("Restart keyloom");
+    expect(html).toContain(">Build firmware<");
+  });
+});
+
+// R8-01: the dialog opens on a sync's failed build only where it says more than what is on screen.
+describe("mayShowBuild", () => {
+  const at = (id: string, startedAt: number, status: "running" | "succeeded" | "failed" = "failed") => ({ id, startedAt, status });
+  test("an empty dialog, or an older build, gives way to the sync's failed build", () => {
+    expect(mayShowBuild({ build: null, flashActive: false }, { id: "b2" })).toBe(true);
+    expect(mayShowBuild({ build: at("b1", 1), flashActive: false }, at("b2", 2))).toBe(true);
+  });
+  test("a running build, a flash under way, the same build or a newer one stays", () => {
+    expect(mayShowBuild({ build: at("b1", 1, "running"), flashActive: false }, { id: "b2" })).toBe(false);
+    expect(mayShowBuild({ build: at("b1", 1, "succeeded"), flashActive: true }, { id: "b2" })).toBe(false);
+    expect(mayShowBuild({ build: at("b2", 2), flashActive: false }, at("b2", 2))).toBe(false);
+    expect(mayShowBuild({ build: at("b3", 3, "succeeded"), flashActive: false }, at("b2", 2))).toBe(false);
   });
 });
 

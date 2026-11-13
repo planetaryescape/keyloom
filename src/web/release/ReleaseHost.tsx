@@ -7,8 +7,11 @@ import { releaseStatus, type ReleaseStatus } from "./status.ts";
 import { useNow } from "./useNow.ts";
 import { useRelease } from "./useRelease.ts";
 
-/** What the page needs of Build and flash: the header button's words and a way to open the dialog. */
-export type ReleaseHandle = { status: ReleaseStatus; open: (revision?: { id: string; summary: string }) => void };
+/**
+ * What the page needs of Build and flash: the header button's words and a way to open the dialog. `failedBuildId` opens it on a sync's
+ * failed build, so that build's buttons (restart, Go back, Ask keyloom) show at once (R8-01).
+ */
+export type ReleaseHandle = { status: ReleaseStatus; open: (revision?: { id: string; summary: string }, failedBuildId?: string) => void };
 
 type AutoSync = { on: boolean; paused: boolean; onPause: () => void; onResume?: () => void } | null;
 
@@ -38,8 +41,9 @@ export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, 
   const status = releaseStatus(release.build, release.flash, head.id, now);
   const handle: ReleaseHandle = {
     status,
-    open: (revision) => {
+    open: (revision, failedBuildId) => {
       setTarget(revision === undefined || revision.id === head.id ? null : revision);
+      if (failedBuildId !== undefined) release.showBuild(failedBuildId);
       setOpen(true);
     },
   };
@@ -50,6 +54,7 @@ export function ReleaseHost({ token, layoutId, head, boardName, boardRevisions, 
   };
   const dialog = (
     <ReleaseDialog
+      token={token}
       open={open}
       onClose={close}
       release={release}

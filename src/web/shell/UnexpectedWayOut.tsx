@@ -11,8 +11,10 @@ import { type PageFailure, unexpectedWayOut, wayOutFor } from "./unexpected.ts";
  * Pass `failure` (from `pageFailure`) where the screen kept the whole failure: a route's own `not_found` then keeps the screen's buttons
  * (R8-03). `code` alone treats every `not_found` as unexpected.
  */
-export function UnexpectedWayOut({ token, code, failure, onRetry, className = "button", primary }: {
+export function UnexpectedWayOut({ token, code, failure, onRetry, retryDisabled = false, className = "button", primary }: {
   token: string; code?: string | undefined; failure?: PageFailure; onRetry?: () => void; className?: string;
+  /** Try again is off while the screen runs another action, as the screen's own Try again is. */
+  retryDisabled?: boolean;
   /** False where the screen's own button is the Try again and already primary, such as the key card's Apply. */
   primary?: boolean;
 }) {
@@ -21,7 +23,7 @@ export function UnexpectedWayOut({ token, code, failure, onRetry, className = "b
   return (
     <>
       {way.retry && onRetry !== undefined ? (
-        <button type="button" className={className} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+        <button type="button" className={className} disabled={retryDisabled} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
       ) : null}
       <RestartKeyloom token={token} primary={primary ?? !way.retry} />
       {/* "The details are in keyloom's log." gets a way to read it (R8-09). Only an exception's words name the log. */}

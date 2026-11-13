@@ -12,6 +12,9 @@ import "../editor/editor.css";
 import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
 import { CONTRIBUTION_GUIDE } from "./search-words.ts";
 import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
+import { firstFlashLine } from "./first-flash-words.ts";
+import { FINGER_LETTERS } from "./NewBoardKeyboard.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 
 /** `boardId` leaves out the configs already on the board being put on: a put copies across boards, and `config new` copies within one. */
 export type PutSource = { id: string; name: string; boardName: string; boardId?: string; note: string | null };
@@ -54,9 +57,7 @@ export function FlashWords({ flash, boardName }: { flash: { kind: string; manual
         </p>
       ) : (
         <p>
-          <b>keyloom won't flash from here.</b> The first flash is by hand: Build and flash, then {flash.steps.length > 1 ? "on each half, " : ""}
-          {(flash.steps[0] ?? "put the keyboard in its bootloader when it asks").replace(/^Plug in the (left|right) half and /i, "").replace(/\.$/, "").toLowerCase()} when it asks.
-          After that first one, keyloom can sync your {boardName} for you.
+          <b>keyloom won't flash from here.</b> The first flash is by hand: {firstFlashLine(flash.steps)} After that first one, keyloom can sync your {boardName} for you.
         </p>
       )}
     </div>
@@ -139,10 +140,15 @@ function Reading({ flow, name, known: ways }: { flow: NewKeyboard; name: string;
   if (knownBoard(flow)) return <KnownBoard flow={flow} known={ways} />;
   const known = deriveProblem(flow.previewProblemCode, name);
   if (known?.blocked === true) return <CantAdd flow={flow} problem={known} />;
+  // A failure no screen planned for gets Restart keyloom, with Try again only for an exception; a mismatch fails the same way again (R8-03).
   return (
     <div className="nb-problem" role="alert">
       <p>{known?.text ?? `keyloom couldn't draw this board. ${flow.previewProblem}`}</p>
-      <button type="button" className="sheet-action" onClick={flow.retryPreview}><RefreshCw size={13} aria-hidden="true" />Try again</button>
+      {flow.previewUnexpected === undefined ? (
+        <button type="button" className="sheet-action" onClick={flow.retryPreview}><RefreshCw size={13} aria-hidden="true" />Try again</button>
+      ) : (
+        <p className="nb-actions"><UnexpectedWayOut token={flow.token} code={flow.previewUnexpected} onRetry={flow.retryPreview} className="sheet-action" /></p>
+      )}
     </div>
   );
 }
@@ -233,7 +239,7 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />{reviewBackLabel((preview?.layouts.length ?? 0) > 1, controller !== null)}</button>
         <h2>How keyloom reads your {name}</h2>
-        <p className="nb-lead">Each key shows the finger keyloom expects to press it. If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
+        <p className="nb-lead">Each key shows the finger keyloom expects to press it. {FINGER_LETTERS} If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
       </header>
       <div className="nb-panel-body">
         {board === null ? <Reading flow={flow} name={name} known={known} /> : (
@@ -246,7 +252,8 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
               {controller === null ? null : (<><dt>Controller</dt><dd>{controller}</dd></>)}
               <dt>Firmware</dt><dd>{step.candidate.firmware === "zmk" ? "ZMK" : "QMK"}, from its own tree</dd>
             </dl>
-            <FlashWords flash={board.flash} boardName={name} />
+            {/* A board keyloom can't add has no first flash to describe, and no sync to promise (R8-07). */}
+            {flow.addBlocked === null ? <FlashWords flash={board.flash} boardName={name} /> : null}
           </>
         )}
         {/* Add refused for a reason these answers hit again: why, with the guide, and no Add that would repeat it (R7-11). */}

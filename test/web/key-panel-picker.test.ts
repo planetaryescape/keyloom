@@ -19,7 +19,9 @@ describe("the picker offers each slot what it can take", () => {
 
   test("a hold can't point at the layer being edited", () => {
     const layers = pickerSections(base({ slot: "hold", tab: "layers" })).flatMap((s) => s.items);
-    expect(layers.find((item) => item.pick.t === "layer" && item.pick.layerId === "base")?.disabled).toBe(true);
+    expect(layers.find((item) => item.pick.t === "layer" && item.pick.layerId === "base")).toMatchObject({ disabled: true, detail: "This key's own layer" });
+    // The tiles a hold can take say nothing extra (R8-14).
+    expect(layers.filter((item) => item.disabled !== true).every((item) => item.detail === undefined)).toBe(true);
     expect(layers.some((item) => item.disabled !== true)).toBe(true);
   });
 

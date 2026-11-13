@@ -94,6 +94,9 @@ export function App({ token }: { token: string }) {
   // A read again after one that worked keeps the list it has.
   const [boardsRead, setBoardsRead] = useState<BoardsRead>("loading");
   const [boardsAttempt, setBoardsAttempt] = useState(0);
+  // A keyboard with no config whose Set up was pressed in Your keyboards (R8-06): the welcome opens its setup card once.
+  const [setupBoard, setSetupBoard] = useState<{ id: string; name: string } | null>(null);
+  const readBoardsAgain = () => setBoardsAttempt((n) => n + 1);
   useEffect(() => {
     const controller = new AbortController();
     setBoardsRead((now) => (now === "ready" ? now : "loading"));
@@ -164,7 +167,8 @@ export function App({ token }: { token: string }) {
   const wayOut = (failure: Failure) => (unexpectedWayOut(failure.code, false) === null ? {} : { actions: <UnexpectedWayOut token={token} code={failure.code} /> });
   const wrap = (page: ReactNode) => <>{banner}{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
     active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload} initiallyRemoved={manageRemoved}
-    onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard} /> : null}</>;
+    onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard}
+    onSetUp={(board) => { setManaging(false); setImporting(false); setSetupBoard(board); setAdding(true); }} /> : null}</>;
 
   if (listError !== null) {
     return wrap(
@@ -198,7 +202,8 @@ export function App({ token }: { token: string }) {
   if (layouts.length === 0 || adding) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: openImport }}>
-        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} onRetryBoards={() => setBoardsAttempt((n) => n + 1)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
+        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} onRetryBoards={readBoardsAgain} onBoardAdded={readBoardsAgain}
+          setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
           onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} />

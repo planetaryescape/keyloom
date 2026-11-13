@@ -101,6 +101,8 @@ describe("flashWithZapp (fake zapp)", () => {
     const r = await s.flash({ writeTimeoutMs: 400 });
     expect(r.state).toBe("failed");
     expect(r.error).toContain("didn't finish within 3 minutes");
+    // The page maps the code to its own words and Try again; the CLI keeps the sentence and its flag (R8-11).
+    expect(r.errorCode).toBe("write_timeout");
     expect(s.states.map(([st]) => st)).toEqual(["waiting_for_bootloader", "writing", "failed"]);
   });
 

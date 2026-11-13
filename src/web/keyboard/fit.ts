@@ -89,3 +89,11 @@ export function fitLegend(text: string, keyWidth: number, range: { max: number; 
   if (wanted >= min) return { size: wanted, fits: true };
   return { size: min, fits: false };
 }
+
+/**
+ * Whether every tap fits its cap on one line at the drawn size, never under the floor. A board whose overrides carry a short form uses it
+ * on every key when one tap doesn't fit (Keyboard.tsx): a mix of words and letters reads as two kinds of key (PR #307 review).
+ */
+export function tapsFit(taps: readonly { text: string; width: number }[], px: { unit: number; floor: number }): boolean {
+  return taps.every(({ text, width }) => fitLegend(text, width, tapRange(text), px, isCondensed(text)).fits);
+}
