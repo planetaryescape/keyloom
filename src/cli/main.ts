@@ -437,7 +437,8 @@ export function buildProgram(io: Io, state: { exitCode: number; dataDir: string;
         json: { ok: checks.every((c) => c.ok), checks },
         table: checks.map((c) => `${c.ok ? (c.warn ? "warn" : "ok  ") : "FAIL"}  ${c.name}: ${c.detail}`).join("\n"),
       });
-      if (checks.some((c) => !c.ok)) state.exitCode = EXIT.bug;
+      // A failed --download already set its own code; a check that fails because of it keeps that code (PR #317 review).
+      if (checks.some((c) => !c.ok) && state.exitCode === EXIT.ok) state.exitCode = EXIT.bug;
     });
 
   return program;

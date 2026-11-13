@@ -151,6 +151,8 @@ export async function downloadTool(tool: KeptTool, onLine: (line: string) => voi
     return mismatch;
   }
   onLine("keyloom: the SHA-256 matches the release");
+  // Zapp's tar.gz is read asynchronously, so a Cancel can land during extraction; the write is the last point to honour it (PR #317 review).
+  if (signal?.aborted) return cancelled;
 
   const dir = deps.dir ?? keptToolsDir();
   const path = join(dir, tool);

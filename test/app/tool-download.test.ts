@@ -90,6 +90,20 @@ describe("downloadTool", () => {
     expect(readdirSync(dir)).toEqual([]);
   });
 
+  test("a Cancel that lands after the checks still keeps nothing", async () => {
+    const dir = scratch();
+    const controller = new AbortController();
+    const { fetch } = serving(zappTar);
+    const lines: string[] = [];
+    const out = await downloadTool("zapp", (line) => {
+      lines.push(line);
+      // Said after both hashes and the extraction, just before the write.
+      if (line === "keyloom: the SHA-256 matches the release") controller.abort();
+    }, { ...mac, fetch, dir, pins: pins() }, controller.signal);
+    expect(out).toMatchObject({ ok: false, code: "cancelled" });
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
   test("a folder keyloom can't write is write_failed, and leaves no half-written file", async () => {
     const parent = scratch();
     // A file where the folder should be: mkdir fails.
