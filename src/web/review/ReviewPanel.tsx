@@ -446,7 +446,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
                 <button type="button" className="sheet-action" aria-expanded={settingUpOther} onClick={() => setSettingUpOther((v) => !v)}>Set up another model</button>
               ) : null}
               {missing.actions.includes("set_up") ? (
-                <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
+                <button type="button" className="sheet-action" aria-expanded={picking} onClick={() => { if (provider.status === null && !provider.reading) provider.reload(); setPicking((v) => !v); }}>Set up a model</button>
               ) : null}
               {missing.actions.includes("retry") ? (
                 // Not while a switch is on its way: a run started now would hold the old model, and the switch's run would join it.
@@ -466,7 +466,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
             {settingUpOther && missing.actions.includes("set_up_other") && switchTo.length === 0 ? (
               // Another provider, set up here; once it is ready, Switch to it appears above. Shown only while the words offer it, so a lock
               // that loads after the press closes it.
-              <ModelSetup token={token} status={provider.status} only={others} onReload={() => void provider.reload()} onChanged={(next) => {
+              <ModelSetup token={token} status={provider.status} reading={provider.reading} only={others} onReload={() => void provider.reload()} onChanged={(next) => {
                 provider.replace(next);
                 // A provider set up here can become the chosen one by itself (no choice saved yet); then the review runs on it at once.
                 if (next.active?.provider !== activeId && activeProviderReady(next)) {
@@ -481,6 +481,7 @@ export function ReviewPanel({ token, review: r, layout, board, rows, boardName, 
               <ModelSetup
                 token={token}
                 status={provider.status}
+                reading={provider.reading}
                 replacing={missing.refused ? provider.status?.active?.provider ?? null : null}
                 onReload={() => void provider.reload()}
                 onChanged={(next) => {

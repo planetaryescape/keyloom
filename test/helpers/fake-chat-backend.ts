@@ -30,6 +30,10 @@ export interface FakeChatOptions {
   codexLocked?: { installed: () => boolean } | null;
   /** Accept each message as a saved run, as the real server does, then fail it that way once the run is under way (R4-02). */
   failAfterAcceptance?: ShownFailureKind | null;
+  /** Refuse each message with an answer the page can't read, before the stream opens (PR #305 review). */
+  refuseUnreadable?: boolean;
+  /** With failAfterAcceptance: the run keeps going, and Stop hits a server exception, which keyloom answers 500 `internal` (PR #305 review). */
+  stopThrows?: boolean;
 }
 
 // Nothing is asked first: every reply acts on the obvious default and says what it assumed, in one line (D-380).
@@ -96,7 +100,7 @@ export class FakeChat implements ChatBackend {
     private readonly layoutId = "moonlander-daily",
     options: FakeChatOptions = {},
   ) {
-    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, codexLocked: null, failAfterAcceptance: null, ...options };
+    this.options = { replyText: PROPOSAL_INTRO, tokenDelayMs: 35, stepMs: 400, missingKey: false, failMidStream: false, busy: false, codexLocked: null, failAfterAcceptance: null, refuseUnreadable: false, stopThrows: false, ...options };
     const failure = this.options.failAfterAcceptance;
     if (failure !== null) this.runs = this.failingRuns(failure);
   }
@@ -137,6 +141,7 @@ export class FakeChat implements ChatBackend {
           version: 1, id: `run_${++this.counter}`, requestId: request.requestId, conversationId: conversation.summary.id, userMessageId,
           status: "running", seq: 1, cancelRequested: false, committedPreparations: 0, preparations: [], presentation: running,
         });
+        if (this.options.stopThrows) return snapshot;
         setTimeout(() => {
           const current = find(snapshot.id);
           if (current.status !== "running") return;
@@ -151,6 +156,7 @@ export class FakeChat implements ChatBackend {
       latest: async (conversationId) => [...runs.values()].findLast((run) => run.conversationId === conversationId) ?? null,
       answer: async () => { throw new ChatError(400, "usage", "that question is no longer current"); },
       cancel: async (id) => {
+        if (this.options.stopThrows) throw new Error("fake: the database is locked");
         const current = find(id);
         if (current.status !== "running") return current;
         const conversation = this.conversations.get(current.conversationId);
@@ -259,6 +265,7 @@ export class FakeChat implements ChatBackend {
       throw new ChatError(503, "missing_api_key", "ANTHROPIC_API_KEY is not set. Start keyloom with it set to use the chat.");
     }
     if (this.options.busy) throw new ChatError(409, "busy", "This conversation is still answering the last message.");
+    if (this.options.refuseUnreadable) throw new ChatError(400, "unreadable", "fake: an answer this page can't read");
 
     const conversation = request.conversationId === undefined ? this.open(request.message ?? "") : this.conversations.get(request.conversationId);
     if (conversation === undefined) throw new ChatError(404, "not_found", `no conversation "${request.conversationId}"`);

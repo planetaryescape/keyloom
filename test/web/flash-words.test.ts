@@ -2,7 +2,8 @@
 // keyboard again says what it found, and the line after Apply tells the truth for the keyboard.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { afterApply, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote } from "../../src/web/release/flash-words.ts";
+import { BUILD_FILE_GONE, LAYOUT_GONE, afterApply, buildCancelProblem, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices, cancelNote, startFailure } from "../../src/web/release/flash-words.ts";
+import { NOT_FOUND_WORDS } from "../../src/web/shell/unexpected.ts";
 
 const synced = (over: Partial<BoardSync> = {}, auto: Partial<BoardSync["auto"]> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -60,10 +61,20 @@ describe("errorWayOut (R8-03, R8-12)", () => {
   test("picks the dialog error's buttons from its code", () => {
     expect(errorWayOut("build_file_gone")).toBe("build_again");
     expect(errorWayOut("internal")).toBe("unexpected");
-    expect(errorWayOut("not_found")).toBe("unexpected");
+    // keyloom's catch-all is a version mismatch; a route's own not_found is the dialog's: the layout it builds is gone (D-540).
+    expect(errorWayOut("not_found", true)).toBe("unexpected");
+    expect(errorWayOut("not_found")).toBe("gone");
     expect(errorWayOut("unreadable")).toBe("unexpected");
     expect(errorWayOut(null)).toBe("try_again");
     expect(errorWayOut("unreachable")).toBe("try_again");
+  });
+
+  test("a start's own not_found names what is gone: a flash's build gets Build again, a build's layout its own words", () => {
+    expect(startFailure("flash", { message: 'no build "bld_1"', code: "not_found" })).toEqual({ text: BUILD_FILE_GONE, code: "build_file_gone", generic: false });
+    expect(startFailure("build", { message: 'no layout "lay_1"', code: "not_found" })).toEqual({ text: LAYOUT_GONE, code: "not_found", generic: false });
+    expect(startFailure("flash", { message: NOT_FOUND_WORDS, code: "not_found", generic: true })).toEqual({ text: NOT_FOUND_WORDS, code: "not_found", generic: true });
+    expect(startFailure("build", { message: "x", code: "internal" })).toEqual({ text: "x", code: "internal", generic: false });
+    expect(startFailure("build", { message: "x" })).toEqual({ text: "x", code: null, generic: false });
   });
 });
 

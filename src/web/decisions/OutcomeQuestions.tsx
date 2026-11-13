@@ -1,6 +1,8 @@
 import { LoaderCircle } from "lucide-react";
 import { useId, useState } from "react";
 import type { DecisionCard, OutcomeAnswer, OutcomeQuestionsResponse } from "../../api/http.ts";
+import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import "./decisions.css";
 
 type Question = OutcomeQuestionsResponse["questions"][number];
@@ -9,6 +11,8 @@ interface Props {
   questions: readonly Question[];
   /** Rejects with a message to show. */
   onAnswer: (id: string, answer: OutcomeAnswer) => Promise<void>;
+  /** For Restart keyloom beside a failure no screen planned for (R8-03). The question's own buttons are the Try again. */
+  token?: string | undefined;
 }
 
 const MAX_SHOWN = 2;
@@ -16,25 +20,25 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 // Q6: once, a week after a flash, keyloom asks whether a choice worked out. One question per
 // hypothesis, a verdict in BK's words or "not now", and the card goes away either way.
-export function OutcomeQuestions({ questions, onAnswer }: Props) {
+export function OutcomeQuestions({ questions, onAnswer, token }: Props) {
   if (questions.length === 0) return null;
   const shown = questions.slice(0, MAX_SHOWN);
   return (
     <>
       {shown.map((q) => (
-        <Ask key={q.decision.id} decision={q.decision} flashedAt={q.flashedAt} onAnswer={onAnswer} />
+        <Ask key={q.decision.id} decision={q.decision} flashedAt={q.flashedAt} onAnswer={onAnswer} token={token} />
       ))}
       {questions.length > MAX_SHOWN ? <p className="muted outcome-more">{questions.length - MAX_SHOWN} more to ask about after these.</p> : null}
     </>
   );
 }
 
-function Ask({ decision, flashedAt, onAnswer }: { decision: DecisionCard; flashedAt: number; onAnswer: Props["onAnswer"] }) {
+function Ask({ decision, flashedAt, onAnswer, token }: { decision: DecisionCard; flashedAt: number; onAnswer: Props["onAnswer"]; token: string | undefined }) {
   const id = useId();
   const [verdict, setVerdict] = useState<"tried_helpful" | "tried_unhelpful" | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
 
   async function send(answer: OutcomeAnswer) {
     setBusy(true);
@@ -42,7 +46,7 @@ function Ask({ decision, flashedAt, onAnswer }: { decision: DecisionCard; flashe
     try {
       await onAnswer(decision.id, answer);
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "That didn't save.");
+      setProblem(pageFailure(error, "That didn't save."));
       setBusy(false);
     }
   }
@@ -81,7 +85,7 @@ function Ask({ decision, flashedAt, onAnswer }: { decision: DecisionCard; flashe
           {note.trim() === "" ? <p id={`${id}-why`} className="muted">Write what you noticed to save it.</p> : null}
         </form>
       )}
-      {problem === null ? null : <p role="alert" className="decision-problem">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="decision-problem" />}
     </section>
   );
 }

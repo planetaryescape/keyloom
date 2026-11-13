@@ -1685,3 +1685,30 @@ a.menu-item {
   align-items: center;
   gap: var(--space-2);
 }
+
+/* A failure opened from a toast's Restart keyloom (R8-03): the sentence in the error colour, its buttons in the foot. */
+.restart-dialog .layer-dialog-lead[data-tone="error"] {
+  color: var(--color-error);
+}
+
+/* The way to keyloom's log beside an unexpected failure (R8-09): a button, the file's path to copy, or where the log is. */
+.show-log {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The buttons under an unexpected failure (R8-03): a wrapping row in the page's own text colour, so only the sentence reads as the error. */
+.unexpected-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--color-text);
+}
+
+.unexpected-actions:empty {
+  display: none;
+}

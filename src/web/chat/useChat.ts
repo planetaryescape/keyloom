@@ -9,30 +9,31 @@ export type OpenRequestedView = (view: AgentView, signal: AbortSignal) => Promis
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
 import { removeOrGone } from "../api-write.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn } from "./transcript.ts";
 
 /** Why a reply stopped, as the failure box reads it (failure-words.ts). */
 type TurnFailure = NonNullable<AssistantTurn["failure"]>;
 
-/** A refusal before the reply started, or a history/provider request problem. */
-export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other"; message: string };
+/** A refusal before the reply started, or a history/provider request problem. It keeps the failure's code, so the box picks its buttons (R8-03). */
+export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other" } & PageFailure;
 
 export type History =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; items: ConversationSummary[] }
-  | { status: "error"; message: string };
+  | ({ status: "error" } & PageFailure);
 
-function classify(error: unknown): Problem {
+export function classify(error: unknown): Problem {
+  const failure = pageFailure(error, "Something went wrong sending that.");
   if (error instanceof ApiError) {
-    if (error.code === "missing_api_key") return { kind: "missing_key", message: error.message };
-    if (error.status === 409) return { kind: "busy", message: error.message };
-    if (error.status === 429) return { kind: "rate_limit", message: error.message };
-    if (error.status === 0) return { kind: "unreachable", message: error.message };
-    return { kind: "other", message: error.message };
+    if (error.code === "missing_api_key") return { kind: "missing_key", ...failure };
+    if (error.status === 409) return { kind: "busy", ...failure };
+    if (error.status === 429) return { kind: "rate_limit", ...failure };
+    if (error.status === 0) return { kind: "unreachable", ...failure };
   }
-  return { kind: "other", message: error instanceof Error ? error.message : "Something went wrong sending that." };
+  return { kind: "other", ...failure };
 }
 
 /** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */
@@ -292,13 +293,13 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     try {
       setHistory({ status: "ready", items: await fetchConversations(token, layoutRef, new AbortController().signal) });
     } catch (error) {
-      setHistory({ status: "error", message: error instanceof Error ? error.message : "Couldn't load your conversations." });
+      setHistory({ status: "error", ...pageFailure(error, "Couldn't load your conversations.") });
     }
   }, [token, layoutRef]);
 
-  /** Resolves to null once showing, an error message on failure, or undefined if canceled or replaced. */
+  /** Resolves to null once showing, the failure, or undefined if canceled or replaced. */
   const open = useCallback(
-    async (id: string): Promise<string | null | undefined> => {
+    async (id: string): Promise<PageFailure | null | undefined> => {
       viewLife.current?.abort();
       handoff.current = undefined;
       controller.current?.abort();
@@ -322,7 +323,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
       } catch (error) {
         if (controller.current !== mine || mine.signal.aborted) return undefined;
         controller.current = null;
-        return error instanceof Error ? error.message : "Couldn't open that conversation.";
+        return pageFailure(error, "Couldn't open that conversation.");
       }
     },
     [token, storageKey, observe],

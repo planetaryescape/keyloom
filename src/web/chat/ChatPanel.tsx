@@ -39,6 +39,7 @@ import { declinedProposalCodes, refusalReasons, type RecoveryContext, type Recov
 import { owningRequest, proposalContext } from "./recovery-context.ts";
 import { useProviderStatus } from "./useProviderStatus.ts";
 import { activeProviderReady, offersPicker } from "./provider-ready.ts";
+import { type PageFailure, failureError, pageFailure } from "../shell/unexpected.ts";
 import "./chat.css";
 import "./command-bar.css";
 
@@ -144,7 +145,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   const reloadProvider = useCallback(() => void provider.reload(), [provider.reload]);
   // Opened by an account failure ("The key was refused"): the setup, with that provider's key field open over the saved one.
   const [setupOpen, setSetupOpen] = useState<keyof typeof PROVIDER_NAMES | null>(null);
-  const [switchFailure, setSwitchFailure] = useState<{ id: keyof typeof PROVIDER_NAMES; message: string; again: () => void } | null>(null);
+  const [switchFailure, setSwitchFailure] = useState<{ id: keyof typeof PROVIDER_NAMES; failure: PageFailure; again: () => void } | null>(null);
   // A failed switch belongs to the conversation it was pressed in; another conversation drops its Try again.
   useEffect(() => setSwitchFailure(null), [chat.transcript.conversationId]);
   const { transcript, streaming } = chat;
@@ -471,7 +472,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // A conversation keeps its provider, so switching after an account failure starts a new one with the failed message back in the box.
   const usedProvider = transcript.pinned?.provider ?? status?.active?.provider;
   const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
-  const setup = { token, status, onChanged: provider.replace, onReload: reloadProvider };
+  const setup = { token, status, reading: provider.reading, onChanged: provider.replace, onReload: reloadProvider };
   // A message refused for a missing key stays in the box; a ready provider takes it in a new conversation, sent when BK is ready.
   // Every switch says when it fails, and can be asked again (R4-18); until it succeeds nothing else changes.
   const choose = (id: keyof typeof PROVIDER_NAMES, then: () => void) => {
@@ -479,7 +480,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     void chooseProvider(token, { provider: id }).then((next) => {
       provider.replace(next);
       then();
-    }, (error: unknown) => setSwitchFailure({ id, message: error instanceof Error ? error.message : "The switch didn't go through.", again: () => choose(id, then) }));
+    }, (error: unknown) => setSwitchFailure({ id, failure: pageFailure(error, "The switch didn't go through."), again: () => choose(id, then) }));
   };
   const retry = {
     pinned: transcript.pinned?.provider ?? null,
@@ -506,7 +507,8 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     if (id === null) return;
     const failed = await chat.open(id);
     // null: shown; undefined: replaced by another open, which says its own outcome.
-    if (failed !== null && failed !== undefined) throw new Error(failed);
+    // Rejected with its code, so the card's own failure box offers Restart keyloom where reading again can't pass (R8-03).
+    if (failed !== null && failed !== undefined) throw failureError(failed);
   };
 
   // A revised-proposal request that went out of date (R7-14): the proposal's card holds the recovery action, so this drops the request and
@@ -515,7 +517,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     if (source.conversationId !== undefined && source.conversationId !== transcript.conversationId) {
       const failed = await chat.open(source.conversationId);
       if (failed === undefined) return;
-      if (failed !== null) { setRecoveryNotice(`keyloom couldn't open that proposal's conversation. ${failed} Your request is kept.`); return; }
+      if (failed !== null) { setRecoveryNotice(`keyloom couldn't open that proposal's conversation. ${failed.message} Your request is kept.`); return; }
     }
     setRecoveryNotice(null);
     onRepairSent?.(id);
@@ -619,6 +621,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
 
       {view === "decisions" ? (
         <DecisionsView
+          token={token}
           state={decisions.state}
           layout={layout}
           onBack={() => setView("chat")}
@@ -634,6 +637,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         />
       ) : view === "history" ? (
         <ConversationList
+          token={token}
           history={chat.history}
           currentId={transcript.conversationId}
           onBack={() => setView("chat")}
@@ -657,6 +661,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
             onAskAgain={planProposal}
             onOpenRelease={onOpenRelease}
             onReadAgain={streaming ? undefined : readProposals}
+            token={token}
             compact
             line
           />
@@ -666,7 +671,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       ) : (
         <>
           <p className="sr-only" role="status">{announcement}</p>
-          {folded ? null : <OutcomeQuestions questions={outcomes.questions} onAnswer={outcomes.answer} />}
+          {folded ? null : <OutcomeQuestions token={token} questions={outcomes.questions} onAnswer={outcomes.answer} />}
           <div
             hidden={folded}
             ref={log}
@@ -782,7 +787,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
               </section>
             )}
             {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onDismiss={chat.dismissProblem} />}
-            {switchFailure === null ? null : <SwitchFailed to={switchFailure.id} message={switchFailure.message} onRetry={switchFailure.again} onDismiss={() => setSwitchFailure(null)} />}
+            {switchFailure === null ? null : <SwitchFailed token={token} to={switchFailure.id} failure={switchFailure.failure} onRetry={switchFailure.again} onDismiss={() => setSwitchFailure(null)} />}
           </div>
           {commandRows.length === 0 ? null : (
             <ul className="bar-commands" role="listbox" aria-label="Commands">

@@ -2,7 +2,7 @@
 // Pure, so the wording is tested without a browser.
 import type { BoardSync, FlashCheckResponse, FlashErrorCode } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
-import { unexpectedWayOut } from "../shell/unexpected.ts";
+import { wayOutFor } from "../shell/unexpected.ts";
 
 /**
  * Why the firmware file couldn't be saved or shown in Finder, in the server's words. `gone`: keyloom has no file for this build any more
@@ -18,15 +18,31 @@ export function fileProblem(error: unknown, fallback: string): FileProblem {
 /** A build whose firmware file went between Build and Flash: flashing again fails the same way, so the way on is a new build (R8-12). */
 export const BUILD_FILE_GONE = "This build's firmware file is gone, so keyloom can't flash it. Build again to make a new one.";
 
+/** The layout a build was asked for is gone (the route's own `not_found`): deleted in another window or by the CLI (D-540). */
+export const LAYOUT_GONE = "keyloom no longer has this layout. It may have been deleted in another window. Restarting keyloom opens the page on the layouts it has.";
+
 /**
  * The buttons beside the dialog's own error (R8-03, R8-12): Build again for a file that is gone, Restart keyloom (with Try again for a
  * server fault) for an answer no screen planned for, and Try again for anything else, which repeats what failed. `none`: the step's own
- * Build firmware is the way on, so the error has no button of its own (a sync's build that is gone, PR #306 review).
+ * Build firmware is the way on, so the error has no button of its own (a sync's build that is gone, PR #306 review). `gone`: the build's
+ * layout was deleted, which nothing in the dialog can bring back, so Restart keyloom alone opens the page on the layouts keyloom has.
+ * `wayOutFor` decides what is unexpected, so keyloom's catch-all `not_found` is a version mismatch and a route's own is this dialog's (D-540).
  */
-export function errorWayOut(code: string | null): "build_again" | "unexpected" | "try_again" | "none" {
+export function errorWayOut(code: string | null, generic = false): "build_again" | "unexpected" | "gone" | "try_again" | "none" {
   if (code === "build_file_gone") return "build_again";
   if (code === SYNC_BUILD_GONE_CODE) return "none";
-  return unexpectedWayOut(code ?? undefined, true) === null ? "try_again" : "unexpected";
+  if (wayOutFor({ message: "", code: code ?? undefined, generic }, true) !== null) return "unexpected";
+  return code === "not_found" ? "gone" : "try_again";
+}
+
+/**
+ * A build or flash that couldn't start, as the dialog keeps it (D-540). The route's own `not_found` names what is gone: a flash's build,
+ * whose way on is a new build (`build_file_gone`), or a build's layout, deleted elsewhere. keyloom's catch-all keeps its code and `generic`.
+ */
+export function startFailure(action: "build" | "flash", error: { message: string; code?: string | undefined; generic?: boolean | undefined }): { text: string; code: string | null; generic: boolean } {
+  const generic = error.generic === true;
+  if (error.code === "not_found" && !generic) return action === "flash" ? { text: BUILD_FILE_GONE, code: "build_file_gone", generic } : { text: LAYOUT_GONE, code: "not_found", generic };
+  return { text: error.message, code: error.code ?? null, generic };
 }
 
 /** The page's own code for a sync's failed build that keyloom no longer has, so the dialog's error offers no read that can't pass. */
@@ -37,10 +53,10 @@ export const SYNC_BUILD_GONE_CODE = "sync_build_gone";
  * which deletes its builds) can't be read again, and a restart won't bring it back, so the words point at the step's Build firmware. Any
  * other failure keeps its code, and the words name only the buttons `errorWayOut` gives that code, with building again beside them.
  */
-export function syncBuildReadFailure(code: string | null): { text: string; code: string | null } {
-  if (code === "not_found") return { text: "The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.", code: SYNC_BUILD_GONE_CODE };
-  const retry = errorWayOut(code) === "try_again" || unexpectedWayOut(code ?? undefined, true)?.retry === true;
-  return { text: retry ? "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." : "keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.", code };
+export function syncBuildReadFailure(code: string | null, generic = false): { text: string; code: string | null; generic?: true } {
+  if (code === "not_found" && !generic) return { text: "The build that failed is no longer there, so keyloom can't show it. Build the firmware again to put this layout on the keyboard.", code: SYNC_BUILD_GONE_CODE };
+  const retry = errorWayOut(code, generic) === "try_again" || wayOutFor({ message: "", code: code ?? undefined, generic }, true)?.retry === true;
+  return { text: retry ? "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." : "keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.", code, ...(generic ? { generic: true as const } : {}) };
 }
 
 /**

@@ -2,6 +2,8 @@ import { BookmarkCheck, LoaderCircle, X } from "lucide-react";
 import { useState } from "react";
 import type { PriorityCard } from "../../api/http.ts";
 import type { Layout } from "../../layout/schema.ts";
+import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { priorityChipText } from "./priorities.ts";
 import "./priority.css";
 
@@ -10,13 +12,15 @@ interface Props {
   layout: Layout;
   /** Retires it on the server; rejects with a message to show. */
   onRemove: (id: string) => Promise<void>;
+  /** For Restart keyloom beside a failure no screen planned for (R8-03). The chip's own button is the Try again. */
+  token?: string | undefined;
 }
 
 // What BK said that keyloom will remember. A misheard priority is one click to undo (08), so the
 // remove button is on the chip itself and the chip says in his own words where it came from.
-export function PriorityChips({ priorities, layout, onRemove }: Props) {
+export function PriorityChips({ priorities, layout, onRemove, token }: Props) {
   const [removing, setRemoving] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   if (priorities.length === 0) return null;
 
   async function remove(id: string) {
@@ -25,7 +29,7 @@ export function PriorityChips({ priorities, layout, onRemove }: Props) {
     try {
       await onRemove(id);
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "Couldn't forget that.");
+      setProblem(pageFailure(error, "Couldn't forget that."));
       setRemoving(null);
     }
   }
@@ -49,7 +53,7 @@ export function PriorityChips({ priorities, layout, onRemove }: Props) {
           );
         })}
       </ul>
-      {problem === null ? null : <p className="priorities-problem" role="alert">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="priorities-problem" />}
     </div>
   );
 }

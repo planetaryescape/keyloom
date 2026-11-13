@@ -1,13 +1,16 @@
-import { ArrowLeft, LoaderCircle, MessageSquareText, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, LoaderCircle, MessageSquareText, Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import type { DecisionCard, DecisionPatch } from "../../api/http.ts";
 import type { Slot } from "../../layout/change.ts";
 import type { Layout } from "../../layout/schema.ts";
+import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { STATUS_WORDS, keysLine, kindWords, missingFieldsWords, splitByLife, successorOf } from "./decision-text.ts";
 import type { DecisionsState } from "./useDecisions.ts";
 import "./decisions.css";
 
 interface Props {
+  token: string;
   state: DecisionsState;
   layout: Layout;
   onBack: () => void;
@@ -17,15 +20,15 @@ interface Props {
   /** Rejects with a message to show. */
   onEdit: (id: string, patch: DecisionPatch) => Promise<void>;
   onRetire: (id: string) => Promise<void>;
-  /** Null means showing; undefined means canceled or replaced; a string is an error. */
-  onOpenConversation: (conversationId: string) => Promise<string | null | undefined>;
+  /** Null means showing; undefined means canceled or replaced; anything else is the failure. */
+  onOpenConversation: (conversationId: string) => Promise<PageFailure | null | undefined>;
 }
 
 const when = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 // What keyloom remembers, in the open: every decision with its status, the keys it is about, and the words
 // it came from. BK can correct or retire any of them (08), so nothing here is read-only.
-export function DecisionsView({ state, layout, onBack, onReload, onHighlight, onEdit, onRetire, onOpenConversation }: Props) {
+export function DecisionsView({ token, state, layout, onBack, onReload, onHighlight, onEdit, onRetire, onOpenConversation }: Props) {
   return (
     <div className="decisions">
       <button type="button" className="button history-back" onClick={onBack}>
@@ -37,16 +40,16 @@ export function DecisionsView({ state, layout, onBack, onReload, onHighlight, on
       ) : state.status === "error" ? (
         <div className="chat-inline-error" role="alert">
           <p>{state.message}</p>
-          <button type="button" className="button" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+          <div className="unexpected-actions"><RetryOrRestart token={token} failure={state} onRetry={onReload} /></div>
         </div>
       ) : (
-        <List items={state.items} layout={layout} onHighlight={onHighlight} onEdit={onEdit} onRetire={onRetire} onOpenConversation={onOpenConversation} />
+        <List token={token} items={state.items} layout={layout} onHighlight={onHighlight} onEdit={onEdit} onRetire={onRetire} onOpenConversation={onOpenConversation} />
       )}
     </div>
   );
 }
 
-function List({ items, layout, onHighlight, onEdit, onRetire, onOpenConversation }: Omit<Props, "state" | "onBack" | "onReload"> & { items: DecisionCard[] }) {
+function List({ token, items, layout, onHighlight, onEdit, onRetire, onOpenConversation }: Omit<Props, "state" | "onBack" | "onReload"> & { items: DecisionCard[] }) {
   const { active, replaced } = splitByLife(items);
   if (items.length === 0) {
     return (
@@ -58,7 +61,7 @@ function List({ items, layout, onHighlight, onEdit, onRetire, onOpenConversation
   }
   const row = (d: DecisionCard) => (
     <li key={d.id}>
-      <Decision decision={d} all={items} layout={layout} onHighlight={onHighlight} onEdit={onEdit} onRetire={onRetire} onOpenConversation={onOpenConversation} />
+      <Decision token={token} decision={d} all={items} layout={layout} onHighlight={onHighlight} onEdit={onEdit} onRetire={onRetire} onOpenConversation={onOpenConversation} />
     </li>
   );
   return (
@@ -75,26 +78,26 @@ function List({ items, layout, onHighlight, onEdit, onRetire, onOpenConversation
 }
 
 function Decision({
-  decision: d, all, layout, onHighlight, onEdit, onRetire, onOpenConversation,
+  token, decision: d, all, layout, onHighlight, onEdit, onRetire, onOpenConversation,
 }: Omit<Props, "state" | "onBack" | "onReload"> & { decision: DecisionCard; all: readonly DecisionCard[] }) {
   const titleId = useId();
   const [mode, setMode] = useState<"view" | "edit" | "retire">("view");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   const keys = keysLine(layout, d);
   const slots = d.subject.slots ?? [];
   const successor = successorOf(d, all);
   const live = d.status !== "superseded";
 
-  async function run(work: () => Promise<string | null | void>) {
+  async function run(work: () => Promise<PageFailure | null | undefined | void>) {
     setBusy(true);
     setProblem(null);
     try {
       const failure = await work();
-      if (typeof failure === "string") setProblem(failure);
+      if (failure !== null && failure !== undefined) setProblem(failure);
       else setMode("view");
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "That didn't work.");
+      setProblem(pageFailure(error, "That didn't work."));
     } finally {
       setBusy(false);
     }
@@ -176,7 +179,13 @@ function Decision({
           )}
         </div>
       ) : null}
-      {problem === null ? null : <p className="decision-problem" role="alert">{problem}</p>}
+      {problem === null ? null : (
+        // The button that failed stays, so it is the Try again; an answer that fails the same way every time also gets Restart keyloom (R8-03).
+        <div className="decision-problem" role="alert">
+          <p>{problem.message}</p>
+          <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={problem} /></div>
+        </div>
+      )}
     </article>
   );
 }

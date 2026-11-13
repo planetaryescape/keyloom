@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DecisionCard, DecisionPatch, OutcomeAnswer, OutcomeQuestionsResponse } from "../../api/http.ts";
 import { removeOrGone } from "../api-write.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { answerOutcome, fetchDecisions, fetchOutcomeQuestions, patchDecision, retireDecision } from "./api-decisions.ts";
 
 export type DecisionsState =
   | { status: "loading" }
   | { status: "ready"; items: DecisionCard[] }
-  | { status: "error"; message: string };
-
-const messageOf = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
+  | ({ status: "error" } & PageFailure);
 
 /**
  * The layout's decisions. `revisionId` is the head the page shows: an apply writes a decision and
@@ -24,7 +23,7 @@ export function useDecisions(token: string, layoutRef: string, revisionId: strin
     fetchDecisions(token, layoutRef, controller.signal)
       .then((items) => setState({ status: "ready", items }))
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setState({ status: "error", message: messageOf(error, "Couldn't load what keyloom remembers.") });
+        if (!controller.signal.aborted) setState({ status: "error", ...pageFailure(error, "Couldn't load what keyloom remembers.") });
       });
     return () => controller.abort();
   }, [token, layoutRef, revisionId, enabled, attempt]);

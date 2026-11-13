@@ -8,7 +8,8 @@ import { type Install, useInstall } from "./useInstall.ts";
 import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
-import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf, syncBuildReadFailure } from "./flash-words.ts";
+import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf, startFailure, syncBuildReadFailure } from "./flash-words.ts";
+import { pageFailure } from "../shell/unexpected.ts";
 import { fetchRestartLog, pruneDockerBuildCache, restartDockerApp } from "../system.ts";
 import { type CachePruneOutcome, cachePruneOutcome } from "./build-failure-words.ts";
 
@@ -29,6 +30,8 @@ export interface Release {
    * Restart keyloom, and `build_file_gone` gets Build again. Null for the page's own errors.
    */
   errorCode: string | null;
+  /** keyloom's catch-all answered `errorCode`'s `not_found`: the address doesn't exist there, so nothing named was deleted (D-540). */
+  errorGeneric: boolean;
   /** Shows a build the dialog didn't start, such as a sync's failed build, unless a newer one is on screen (R8-01). */
   showBuild: (buildId: string) => void;
   /** Frees Docker's build cache, for a build that failed `disk_full` (R8-04). It never builds by itself. */
@@ -104,6 +107,8 @@ const RESTART_LOG_MS = 1000;
 type LastAction = { kind: "build"; revisionId: string } | { kind: "flash" } | { kind: "poll" } | { kind: "read" } | { kind: "show"; buildId: string };
 
 const codeOf = (e: unknown): string | null => (e instanceof ApiError ? e.code ?? null : null);
+// keyloom's catch-all `not_found`, not a route's own, so the dialog tells a version mismatch from a deleted build or layout (D-540).
+const genericOf = (e: unknown): boolean => e instanceof ApiError && e.generic;
 
 // Starts builds and flashes and follows them once a second until they finish. Nothing here
 // starts a flash by itself: flashNow only runs from an explicit click.
@@ -113,14 +118,15 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [starting, setStarting] = useState<Release["starting"]>(null);
   // The sentence and its code live together, so a code never outlives its sentence. `show`: a failed read of a sync's build, which a
   // later read of it that passes clears.
-  const [failure, setFailure] = useState<{ text: string; code: string | null; show?: true } | null>(null);
+  const [failure, setFailure] = useState<{ text: string; code: string | null; generic?: true; show?: true } | null>(null);
   const error = failure?.text ?? null;
   const errorCode = failure?.code ?? null;
-  const setError = useCallback((next: string | null | ((now: string | null) => string | null), code: string | null = null) => {
+  const errorGeneric = failure?.generic === true;
+  const setError = useCallback((next: string | null | ((now: string | null) => string | null), code: string | null = null, generic = false) => {
     setFailure((now) => {
       const text = typeof next === "function" ? next(now?.text ?? null) : next;
       if (text === (now?.text ?? null)) return now;
-      return text === null ? null : { text, code };
+      return text === null ? null : { text, code, ...(generic ? { generic: true as const } : {}) };
     });
   }, []);
   const [cachePrune, setCachePrune] = useState<{ running: boolean; outcome: CachePruneOutcome | null }>({ running: false, outcome: null });
@@ -198,7 +204,10 @@ export function useRelease(token: string, layoutRef: string): Release {
         .catch((e: unknown) => {
           // No keyboard to detect: not a failure, a question the panel asks next to the Build button. Only this code asks it (R2-01).
           if (e instanceof ApiError && e.code === "board_revision_needed") setNeeds(true);
-          else setError(e instanceof Error ? e.message : "The build could not start.", codeOf(e));
+          else {
+            const failed = startFailure("build", pageFailure(e, "The build could not start."));
+            setError(failed.text, failed.code, failed.generic);
+          }
         })
         .finally(() => setStarting(null));
     },
@@ -221,7 +230,10 @@ export function useRelease(token: string, layoutRef: string): Release {
       .catch((e: unknown) => {
         // The tool went missing since the build was read: the step shows its Install button once the build is read again.
         if (e instanceof ApiError && e.code === "flash_tool_missing") refreshBuild();
-        else setError(e instanceof Error ? e.message : "Flashing could not start.", codeOf(e));
+        else {
+          const failed = startFailure("flash", pageFailure(e, "Flashing could not start."));
+          setError(failed.text, failed.code, failed.generic);
+        }
       })
       .finally(() => setStarting(null));
   }, [token, build, refreshBuild]);
@@ -249,7 +261,7 @@ export function useRelease(token: string, layoutRef: string): Release {
         // A read that something newer replaced says nothing about what is on screen.
         if (read !== showRead.current) return;
         setLast({ kind: "show", buildId: id });
-        const failed = syncBuildReadFailure(codeOf(e));
+        const failed = syncBuildReadFailure(codeOf(e), genericOf(e));
         setFailure({ ...failed, show: true });
       });
   }, [token]);
@@ -403,7 +415,7 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token]);
 
   return {
-    build, flash, starting, error, errorCode, showBuild, freeCache, cachePrune, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
+    build, flash, starting, error, errorCode, errorGeneric, showBuild, freeCache, cachePrune, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
     cancelBuild: stopBuild, stoppingBuild, buildCancelProblem: buildRunning ? buildCancelProblemText : null,
     cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,

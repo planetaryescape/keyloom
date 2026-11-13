@@ -7,7 +7,9 @@ import { failure, isGone, removeOrGone, request } from "../../src/web/api-write.
 import { ApiError, fetchLayouts } from "../../src/web/api.ts";
 import { uploadLayout } from "../../src/web/import/api-import.ts";
 import { HistoryPanel } from "../../src/web/history/HistoryPanel.tsx";
-import { INTERNAL_WORDS, NOT_FOUND_WORDS, TOO_LARGE_WORDS, UNREADABLE_WORDS, failureCode, failureWords, unexpectedWayOut } from "../../src/web/shell/unexpected.ts";
+import { CONFIG_GONE } from "../../src/web/history/useVersions.ts";
+import { RetryOrRestart, UnexpectedWayOut } from "../../src/web/shell/UnexpectedWayOut.tsx";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, TOO_LARGE_WORDS, UNREADABLE_WORDS, failureCode, failureWords, pageFailure, unexpectedWayOut, wayOutFor } from "../../src/web/shell/unexpected.ts";
 
 let mock: ReturnType<typeof spyOn> | undefined;
 afterEach(() => mock?.mockRestore());
@@ -114,8 +116,15 @@ const historyProps = {
 };
 
 test("a history keyloom can't find offers Restart keyloom, never a Try again that would fail the same way (R7 sweep)", () => {
-  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: NOT_FOUND_WORDS, code: "not_found" }} />);
+  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: NOT_FOUND_WORDS, code: "not_found", generic: true }} />);
   expect(html).toContain("keyloom couldn&#x27;t find what this page asked for.");
+  expect(html).toContain("Restart keyloom");
+  expect(html).not.toContain("Try again");
+});
+
+test("a history whose config was deleted elsewhere says so, with Restart keyloom and no Try again (D-540)", () => {
+  const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: CONFIG_GONE, code: "not_found" }} />);
+  expect(html).toContain("keyloom no longer has this config.");
   expect(html).toContain("Restart keyloom");
   expect(html).not.toContain("Try again");
 });
@@ -130,4 +139,41 @@ test("a history read that lost its connection keeps its Try again alone", () => 
   const html = renderToStaticMarkup(<HistoryPanel {...historyProps} versions={{ status: "error", message: "keyloom stopped answering.", code: "unreachable" }} />);
   expect(html).toContain("Try again");
   expect(html).not.toContain("Restart keyloom");
+});
+
+test("a screen keeps a failure's code and whether it was keyloom's catch-all, so its buttons come from the code (R8-03)", async () => {
+  const catchAll = await failure(json({ error: { code: "not_found", message: "not found", generic: true } }, 404));
+  expect(pageFailure(catchAll, "x")).toEqual({ message: NOT_FOUND_WORDS, code: "not_found", generic: true });
+  expect(pageFailure(new ApiError(500, INTERNAL_WORDS, { code: "internal" }), "x")).toEqual({ message: INTERNAL_WORDS, code: "internal" });
+  expect(pageFailure(new Error("boom"), "x")).toEqual({ message: "boom" });
+  expect(pageFailure("not an error", "Couldn't load it.")).toEqual({ message: "Couldn't load it." });
+});
+
+test("a route's own not_found keeps the screen's buttons; keyloom's catch-all gets Restart keyloom alone (R8-03)", () => {
+  expect(wayOutFor({ message: "x", code: "not_found" }, true)).toBeNull();
+  expect(wayOutFor({ message: NOT_FOUND_WORDS, code: "not_found", generic: true }, true)).toEqual({ retry: false, restart: true });
+  expect(wayOutFor({ message: UNREADABLE_WORDS, code: "unreadable" }, true)).toEqual({ retry: false, restart: true });
+  expect(wayOutFor({ message: INTERNAL_WORDS, code: "internal" }, true)).toEqual({ retry: true, restart: true });
+  expect(wayOutFor({ message: "keyloom stopped answering.", code: "unreachable" }, true)).toBeNull();
+  expect(wayOutFor({ message: "x" }, true)).toBeNull();
+});
+
+test("RetryOrRestart never offers a Try again that fails the same way, and keeps it where it can pass (R8-03)", () => {
+  const html = (f: Parameters<typeof wayOutFor>[0]) => renderToStaticMarkup(<RetryOrRestart token="t" failure={f} onRetry={() => {}} />);
+  const catchAll = html({ message: NOT_FOUND_WORDS, code: "not_found", generic: true });
+  expect(catchAll).toContain("Restart keyloom");
+  expect(catchAll).not.toContain("Try again");
+  const unreadable = html({ message: UNREADABLE_WORDS, code: "unreadable" });
+  expect(unreadable).not.toContain("Try again");
+  const internal = html({ message: INTERNAL_WORDS, code: "internal" });
+  expect(internal).toContain("Try again");
+  expect(internal).toContain("Restart keyloom");
+  const lost = html({ message: "keyloom stopped answering.", code: "unreachable" });
+  expect(lost).toContain("Try again");
+  expect(lost).not.toContain("Restart keyloom");
+});
+
+test("UnexpectedWayOut with a kept failure leaves a route's own not_found to the screen (R8-03)", () => {
+  expect(renderToStaticMarkup(<UnexpectedWayOut token="t" failure={{ message: "no decision d1", code: "not_found" }} />)).toBe("");
+  expect(renderToStaticMarkup(<UnexpectedWayOut token="t" failure={{ message: NOT_FOUND_WORDS, code: "not_found", generic: true }} />)).toContain("Restart keyloom");
 });

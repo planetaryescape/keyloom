@@ -4,9 +4,8 @@ import { CollectionResponseSchema, CollectionKeyboardSchema, type CollectionKeyb
 import { SyncStatusResponseSchema, type BoardChoice } from "../../api/http.ts";
 import { isGone, request, failure } from "../api-write.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
-import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
-import type { UnexpectedCode } from "../shell/unexpected.ts";
-import { unexpectedCodeOf } from "./unexpected-code.ts";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import "./collection.css";
 
 const GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
@@ -26,7 +25,7 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
   const [busy, setBusy] = useState<string | null>(null);
   // A problem carries its Try again: the action that failed, not a reload of the list (R3-23). One no screen planned for keeps its code,
   // for Restart keyloom (R8-03).
-  const [problem, setProblemState] = useState<{ text: string; retry: () => void; code?: UnexpectedCode | undefined } | null>(null);
+  const [problem, setProblemState] = useState<{ text: string; retry: () => void; failure: PageFailure } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   // A restored keyboard stays paused until the person resumes it (restoreKeyboard): the note offers that here (R4-13).
   // Kept with the note it belongs to, so a later note (a download) doesn't carry the button.
@@ -37,9 +36,13 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
   }, [token]);
   const reload = useCallback(() => {
     setProblemState(null);
-    void load().catch((error) => setProblemState({ text: error instanceof Error ? error.message : "Couldn't load keyboards.", retry: reload, code: unexpectedCodeOf(error) }));
+    void load().catch((error) => {
+      const failure = pageFailure(error, "Couldn't load keyboards.");
+      setProblemState({ text: failure.message, retry: reload, failure });
+    });
   }, [load]);
-  const setProblem = (text: string | null, retry: () => void = reload, error?: unknown) => setProblemState(text === null ? null : { text, retry, code: unexpectedCodeOf(error) });
+  // The screen's own words, with the error's code beside them to pick the buttons.
+  const setProblem = (text: string | null, retry: () => void = reload, error?: unknown) => setProblemState(text === null ? null : { text, retry, failure: { ...pageFailure(error, text), message: text } });
   useEffect(() => {
     dialog.current?.showModal();
     const abort = new AbortController();
@@ -139,13 +142,11 @@ export function rowWayIn(keyboard: Pick<CollectionKeyboard, "layoutId" | "config
  * A failed read or action with its way on: Try again, which does the failed thing again. A failure no screen planned for gets Restart
  * keyloom in its place, with Try again only for an exception, which can pass on a second try (R8-03, D-534).
  */
-export function CollectionProblem({ token, problem, busy }: { token: string; problem: { text: string; retry: () => void; code?: UnexpectedCode | undefined }; busy: boolean }) {
+export function CollectionProblem({ token, problem, busy }: { token: string; problem: { text: string; retry: () => void; failure: PageFailure }; busy: boolean }) {
   return (
     <p role="alert" className="collection-message">
       {problem.text}
-      {problem.code === undefined
-        ? <button type="button" className="sheet-action" disabled={busy} onClick={problem.retry}>Try again</button>
-        : <UnexpectedWayOut token={token} code={problem.code} onRetry={problem.retry} retryDisabled={busy} className="sheet-action" />}
+      <RetryOrRestart token={token} failure={problem.failure} onRetry={problem.retry} retryDisabled={busy} className="sheet-action" />
     </p>
   );
 }

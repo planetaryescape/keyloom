@@ -11,8 +11,9 @@ import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
+import { RestartDialog } from "./shell/RestartDialog.tsx";
 import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
-import { unexpectedWayOut } from "./shell/unexpected.ts";
+import { type PageFailure, unexpectedWayOut, wayOutFor } from "./shell/unexpected.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
@@ -342,6 +343,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [selectMode, setSelectMode] = useState(false);
   const [quick, setQuick] = useState<readonly string[] | null>(null);
   const [pendingDrop, setPendingDrop] = useState<{ ops: ChangeOp[]; summary: string; lost: string[]; reason: string } | null>(null);
+  // A board change that hit a failure no screen planned for, opened from its toast's Restart keyloom (R8-03).
+  const [unexpected, setUnexpected] = useState<{ failure: PageFailure; retry?: () => void } | null>(null);
   const [changing, setChanging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
@@ -792,17 +795,25 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // One change set from the board or the tabs. A change that would drop the only copy of a function asks first (D-092).
   const change = useChange({ token, layoutRef, revisionId: revision.id, onChanged, onNotShown: showAppliedNotShown, onStale });
 
-  async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean } = {}): Promise<ChangeOutcome> {
+  // `onSuccess` is what the caller does once the change lands. It rides in the options, so the toast's Try again runs it too (PR #305 review).
+  async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean; onSuccess?: () => void } = {}): Promise<ChangeOutcome> {
     setChanging(true);
     const outcome = await change(ops, summary);
     setChanging(false);
     if (outcome.ok) {
+      options.onSuccess?.();
       // A change that landed but couldn't be shown already has its toast, with Show the new layout (R6-03).
       if (outcome.shown) toasts.show({ kind: "success", message: "Applied", detail: [summary, outcome.warnings[0]].filter(Boolean).join(". ") });
     } else if (outcome.lost.length > 0 && options.dropReason !== undefined) {
       setPendingDrop({ ops, summary, lost: outcome.lost, reason: options.dropReason });
     } else if (options.quiet !== true && !outcome.stale) {
-      toasts.show({ kind: "error", message: outcome.message, detail: outcome.problems.slice(0, 2).join(" ") });
+      // An answer that fails the same way every time, or an exception, needs Restart keyloom, which can't live in a toast (R8-03).
+      const failure = outcome.failure;
+      const way = failure === undefined ? null : wayOutFor(failure, true);
+      const restart = failure === undefined || way === null
+        ? {}
+        : { action: { label: "Restart keyloom", run: () => setUnexpected({ failure, ...(way.retry ? { retry: () => void perform(ops, summary, options) } : {}) }) } };
+      toasts.show({ kind: "error", message: outcome.message, detail: outcome.problems.slice(0, 2).join(" "), ...restart });
     }
     return outcome;
   }
@@ -837,10 +848,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           blockedReason: undoBlock,
           add: async () => {
             const added = addLayerChange(layout);
-            const outcome = await perform(added.ops, `Added ${added.name}`);
-            if (!outcome.ok) return;
-            setLayerId(added.layerId);
-            setRenamingId(added.layerId);
+            await perform(added.ops, `Added ${added.name}`, { onSuccess: () => { setLayerId(added.layerId); setRenamingId(added.layerId); } });
           },
           rename: async (id, name) => {
             if (layout.layers.some((candidate) => candidate.id !== id && candidate.name.toLowerCase() === name.toLowerCase())) {
@@ -852,8 +860,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           duplicate: async (id) => {
             const copy = duplicateLayerChange(layout, id);
             if (copy === null) return;
-            const outcome = await perform(copy.ops, `Duplicated ${layerNameOf(id)} as ${copy.name}`);
-            if (outcome.ok) setLayerId(copy.layerId);
+            await perform(copy.ops, `Duplicated ${layerNameOf(id)} as ${copy.name}`, { onSuccess: () => setLayerId(copy.layerId) });
           },
           move: async (id, toIndex) => {
             const ops = moveLayerOps(layout, id, toIndex);
@@ -1072,8 +1079,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const what = bindingSummary(clipboard.binding, layout);
     // The history line counts the keys that changed, not the ones that already had it.
     const changed = ops.flatMap((op) => (op.op === "setBinding" ? [op.at] : []));
-    const outcome = await perform(ops, pasteSummary(layout, clipboard.binding, changed), { dropReason: `Replaced by pasting ${what}` });
-    if (outcome.ok) setChatSelection(null);
+    await perform(ops, pasteSummary(layout, clipboard.binding, changed), { dropReason: `Replaced by pasting ${what}`, onSuccess: () => setChatSelection(null) });
   }
 
   async function finishSwap(index: number) {
@@ -1086,8 +1092,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
     const summaryText = swapSummary(layout, swapping, to);
     setSwapping(null);
-    const outcome = await perform(ops, summaryText);
-    if (outcome.ok) setApplied(to);
+    await perform(ops, summaryText, { onSuccess: () => setApplied(to) });
   }
 
   // A drag from one key onto another swaps them; with Option held it copies instead. Both are on the layer showing.
@@ -1101,8 +1106,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       return;
     }
     const what = bindingSummary(bindingAt(layout, a) ?? { kind: "none" }, layout);
-    const outcome = await perform(ops, copy ? copySummary(layout, a, b) : swapSummary(layout, a, b), { dropReason: `Replaced by a copy of ${what}` });
-    if (outcome.ok) setApplied(b);
+    await perform(ops, copy ? copySummary(layout, a, b) : swapSummary(layout, a, b), { dropReason: `Replaced by a copy of ${what}`, onSuccess: () => setApplied(b) });
   }
 
   // Quick assign: typed keys go to the selected keys in order and are applied together when the run ends.
@@ -1118,11 +1122,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (quick === null || quick.length === 0) return;
     const ops = quickAssignOps(quickTargets, quick);
     if (ops === null) return;
-    const outcome = await perform(ops, quickAssignSummary(layout, quickTargets, quick), { dropReason: "Replaced by typing the key" });
-    if (outcome.ok) {
-      setQuick(null);
-      setChatSelection(null);
-    }
+    await perform(ops, quickAssignSummary(layout, quickTargets, quick), {
+      dropReason: "Replaced by typing the key",
+      onSuccess: () => { setQuick(null); setChatSelection(null); },
+    });
   }
 
   // While a run is open the keyboard types into it, ahead of every other shortcut.
@@ -2468,6 +2471,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               onClose={() => setProposalsOpen(false)}
               onPlanRecovery={(proposal, reasons) => planRecovery({ kind: "proposal", proposalId: proposal.changeSetId }, proposalContext(proposal, reasons, []))}
               onOpenRelease={() => onOpenRelease()}
+              token={token}
             />
           </div>
         ) : null}
@@ -2566,6 +2570,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           onClose={() => setConfigDialog(null)}
         />
       ) : null}
+      {unexpected === null ? null : (
+        <RestartDialog token={token} title="keyloom couldn't make that change" failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
+      )}
       {pendingDrop === null ? null : (
         <DropConfirm
           summary={pendingDrop.summary}

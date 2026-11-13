@@ -34,6 +34,8 @@
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
 // KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way (codex_missing: locked to a Codex that isn't installed);
+// KEYLOOM_FAKE_CHAT=unreadable refuses each message with an answer the page can't read; KEYLOOM_FAKE_CHAT_STOP=internal, with
+// fail_after_accept, keeps each run going and makes Stop hit a server exception (PR #305 review).
 // KEYLOOM_FAKE_CHAT=fail_after_accept:<kind> accepts each message as a saved run and fails it after a moment with that provider failure
 // (auth, no_credits, permission, rate_limit, overloaded, server, connection or context_full, or Codex's usage_limit), stored with
 // the run (R4-02). And
@@ -98,6 +100,8 @@ const chat = new FakeChat(fake, "moonlander-daily", {
   // Started as if with --provider codex and no Codex CLI; the Install Codex button "installs" it in about four seconds (R3-24).
   codexLocked: chatMode === "codex_missing" ? { installed: () => installState("codex").status === "succeeded" } : null,
   failAfterAcceptance: failAfterAcceptance(chatMode),
+  refuseUnreadable: chatMode === "unreadable",
+  stopThrows: process.env.KEYLOOM_FAKE_CHAT_STOP === "internal",
   tokenDelayMs: Number(process.env.KEYLOOM_FAKE_TOKEN_MS ?? 35),
 });
 
@@ -238,7 +242,13 @@ const source = { ...fakeSource, get: async (ref: string) => {
 
 const sync = process.env.KEYLOOM_FAKE_SYNC === "build_failed" ? await fakeBuildFailedSync() : undefined;
 
-const server = startServer({ port, source, editor: fake, chat, system, ...(sync === undefined ? {} : { sync }), token: "dev-editor-token" });
+// KEYLOOM_FAKE_RESTART=1 answers /api/restart as the desktop app's server would, and /api/log with a log file, so Restart keyloom and Show
+// keyloom's log render as they do there. Neither restarts or opens anything.
+const desktop = process.env.KEYLOOM_FAKE_RESTART === "1" ? {
+  restart: { canRestart: true, command: "keyloom serve", restart: () => console.log("fake: restart asked for") },
+  log: { log: { kind: "file" as const, path: "/Users/you/Library/Logs/keyloom/keyloom.log", canShow: true }, show: async () => { console.log("fake: show log"); } },
+} : {};
+const server = startServer({ port, source, editor: fake, chat, system, ...desktop, ...(sync === undefined ? {} : { sync }), token: "dev-editor-token" });
 
 /** One Moonlander whose auto-sync builds the head now, with the fake build, and is behind once that build fails (R8-01). */
 async function fakeBuildFailedSync(): Promise<SyncBackend> {

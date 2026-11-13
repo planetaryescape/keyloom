@@ -16,6 +16,30 @@ export const UNREADABLE_WORDS = "keyloom sent an answer this page can't read, wh
 export type UnexpectedCode = "internal" | "not_found" | "unreadable";
 
 /**
+ * A failure as a screen keeps it (R8-03): the sentence to show, and what picks its buttons. Keep this, not `error.message` alone: a screen
+ * that drops the code can only offer a Try again, which fails the same way for every unexpected code but `internal`.
+ */
+export interface PageFailure {
+  message: string;
+  code?: string | undefined;
+  /** keyloom's catch-all `not_found`, or an answer with no code: the address doesn't exist there, so nothing named was deleted. */
+  generic?: boolean | undefined;
+}
+
+/** A caught error as a screen keeps it. It reads ApiError's fields by name, so this file stays free of the fetch code and pure. */
+export function pageFailure(error: unknown, fallback: string): PageFailure {
+  if (!(error instanceof Error)) return { message: fallback };
+  // SAFETY: both fields are read as unknown and checked below, so an Error without them yields neither.
+  const { code, generic } = error as { code?: unknown; generic?: unknown };
+  return { message: error.message === "" ? fallback : error.message, ...(typeof code === "string" ? { code } : {}), ...(generic === true ? { generic: true } : {}) };
+}
+
+/** A kept failure as an Error again, for code that must reject: `pageFailure` reads its code back, so it isn't lost on the way (R8-03). */
+export function failureError(failure: PageFailure): Error {
+  return Object.assign(new Error(failure.message), failure.code === undefined ? {} : { code: failure.code }, failure.generic === true ? { generic: true } : {});
+}
+
+/**
  * The code for a failed answer: the server's own when it sent one. Without one, a 404 is an address keyloom doesn't know, a 413 is a body
  * over the server's cap (Bun answers it before any route runs), a 5xx is an exception, and any other refusal is a request this keyloom
  * doesn't understand, which is a version mismatch.
@@ -51,4 +75,14 @@ export function unexpectedWayOut(code: string | undefined, repeatable: boolean):
   if (code === "internal") return { retry: repeatable, restart: true };
   if (code === "not_found" || code === "unreadable") return { retry: false, restart: true };
   return null;
+}
+
+/**
+ * The buttons for a failure a screen kept (R8-03), or null when they are the screen's own. A route's own `not_found` names something that
+ * was deleted, so the screen's own words and buttons say what to do (D-534); only keyloom's catch-all, an address it doesn't have, is the
+ * version mismatch a restart clears.
+ */
+export function wayOutFor(failure: PageFailure, repeatable: boolean): { retry: boolean; restart: true } | null {
+  if (failure.code === "not_found" && failure.generic !== true) return null;
+  return unexpectedWayOut(failure.code, repeatable);
 }

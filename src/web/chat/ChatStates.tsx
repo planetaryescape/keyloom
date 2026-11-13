@@ -5,6 +5,8 @@ import { ModelSetup } from "./ModelSetup.tsx";
 import { retryOffer } from "./provider-ready.ts";
 import { PROVIDER_NAMES, setupLead } from "./setup-words.ts";
 import type { Problem } from "./useChat.ts";
+import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
 
 export const EXAMPLE_PROMPTS = [
   "I can't press Option–Option because Option is on my S key",
@@ -34,7 +36,7 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-type Setup = { token: string; status: ChatProviderStatus | null; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
+type Setup = { token: string; status: ChatProviderStatus | null; reading?: boolean; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
 type ProviderId = ChatProviderStatus["providers"][number]["id"];
 /** The refused message: the provider its conversation is pinned to, and how to send it again or move it to a ready provider. */
 type Retry = { pinned: ProviderId | null; onRetry?: (() => void) | undefined; onSwitch?: ((id: ProviderId) => void) | undefined };
@@ -81,10 +83,12 @@ const TITLES: Record<Exclude<Problem["kind"], "missing_key">, string> = {
   other: "That message didn't go through",
 };
 
-// A refusal before the reply started. Your message is back in the box, so Try again is one click.
+// A refusal before the reply started. Your message is back in the box, so Try again is one click. An answer that fails the same way every
+// time offers Restart keyloom in its place, and an exception adds keyloom's log (R8-03, R8-09).
 export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: Problem; setup: Setup; retry: Retry; onDismiss: () => void }) {
   if (problem.kind === "missing_key") return <MissingKey setup={setup} retry={retry} />;
   const onRetry = retry.onRetry;
+  const unexpected = wayOutFor(problem, onRetry !== undefined) !== null;
   return (
     <div className="chat-problem" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
@@ -92,7 +96,7 @@ export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: P
         <strong>{TITLES[problem.kind]}</strong>
         <p>{problem.message}</p>
         <div className="chat-problem-actions">
-          {onRetry === undefined ? null : (
+          {unexpected ? <UnexpectedWayOut token={setup.token} failure={problem} onRetry={onRetry} /> : onRetry === undefined ? null : (
             <button type="button" className="button" onClick={onRetry}>
               <RefreshCw size={14} aria-hidden="true" />
               Try again
@@ -107,8 +111,11 @@ export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: P
   );
 }
 
-/** Choosing a provider was refused or never arrived (R4-18). The conversation and its provider are as they were; Try again asks once more. */
-export function SwitchFailed({ to, message, onRetry, onDismiss }: { to: ProviderId; message: string; onRetry: () => void; onDismiss: () => void }) {
+/**
+ * Choosing a provider was refused or never arrived (R4-18). The conversation and its provider are as they were; Try again asks once more,
+ * because saving the choice again is safe. An answer that fails the same way every time offers Restart keyloom instead (R8-03).
+ */
+export function SwitchFailed({ token, to, failure, onRetry, onDismiss }: { token: string; to: ProviderId; failure: PageFailure; onRetry: () => void; onDismiss: () => void }) {
   // The switch was pressed higher up the conversation, so the answer is brought into view where it is said: once per failure, not on every
   // render, which would pull the page back each time the conversation above it changed. Each failure brings its own `onRetry`.
   const box = useRef<HTMLDivElement>(null);
@@ -118,12 +125,9 @@ export function SwitchFailed({ to, message, onRetry, onDismiss }: { to: Provider
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="chat-problem-body">
         <strong>keyloom couldn&apos;t switch to {PROVIDER_NAMES[to]}</strong>
-        <p>{message} Your conversation and its model are unchanged.</p>
+        <p>{failure.message} Your conversation and its model are unchanged.</p>
         <div className="chat-problem-actions">
-          <button type="button" className="button" onClick={onRetry}>
-            <RefreshCw size={14} aria-hidden="true" />
-            Try again
-          </button>
+          <RetryOrRestart token={token} failure={failure} onRetry={onRetry} />
         </div>
       </div>
       <button type="button" className="icon-button" aria-label="Dismiss" onClick={onDismiss}>

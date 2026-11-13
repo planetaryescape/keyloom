@@ -4,7 +4,8 @@ import type { VersionHistoryResponse } from "../../api/configs.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
 import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
-import { unexpectedWayOut } from "../shell/unexpected.ts";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { wayOutFor } from "../shell/unexpected.ts";
 import { historyWords } from "./history-words.ts";
 import type { Versions } from "./useVersions.ts";
 import { changes, versionTitle, versionWhen } from "./version-words.ts";
@@ -54,10 +55,13 @@ export function HistoryPanel(props: Props) {
         ) : versions.status === "error" ? (
           <div className="sheet-empty" role="alert">
             <p>{versions.message}</p>
-            {/* A history keyloom can't find, or an answer this page can't read, fails the same way again: Restart keyloom, no Try again. */}
-            {unexpectedWayOut(versions.code, true) === null
-              ? <button type="button" className="sheet-action" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
-              : <div className="sheet-actions"><UnexpectedWayOut token={token} code={versions.code} onRetry={onReload} className="sheet-action" /></div>}
+            {/* A history keyloom can't find, or an answer this page can't read, fails the same way again: Restart keyloom, no Try again. A
+                config deleted elsewhere (the route's own not_found) can't come back from here either, so it gets Restart keyloom alone (D-540). */}
+            {wayOutFor(versions, true) !== null
+              ? <div className="sheet-actions"><UnexpectedWayOut token={token} failure={versions} onRetry={onReload} className="sheet-action" /></div>
+              : versions.code === "not_found"
+                ? <div className="sheet-actions"><RestartKeyloom token={token} primary /></div>
+                : <button type="button" className="sheet-action" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>}
           </div>
         ) : (
           <Timeline {...props} history={versions.history} />

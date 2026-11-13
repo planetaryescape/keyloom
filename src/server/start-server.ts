@@ -24,6 +24,7 @@ import type { SystemBackend } from "./system-backend.ts";
 import { type RemapperSetupBackend, handleRemapperSetupRoute } from "./system-remapper-routes.ts";
 import { notFoundPage } from "./not-found-page.ts";
 import { type RestartBackend, handleRestartRoute } from "./restart-routes.ts";
+import { type LogBackend, handleLogRoute } from "./log-routes.ts";
 import { loadWebAssets } from "./web-assets.ts";
 import { LayoutDetailSchema, LayoutListResponseSchema, type ApiErrorBody } from "../api/http.ts";
 
@@ -52,6 +53,8 @@ export interface ServerOptions {
   remapperSetup?: RemapperSetupBackend;
   /** Restarting keyloom from the page (R5-15). Without it /api/restart falls through to a 404. */
   restart?: RestartBackend;
+  /** Where keyloom's log is, and opening it (R8-09). Without it /api/log falls through to a 404. */
+  log?: LogBackend;
   /** `keyloom serve --board-dev`: reads the board folder afresh on every request, so edits to board.json show on reload. */
   boardDev?: () => Promise<BoardDevView>;
   token?: string;
@@ -75,7 +78,7 @@ const NO_IDLE_LIMIT = new Set(["/api/system/docker/start", "/api/system/docker/r
 
 // Binds 127.0.0.1 only. Pass port 0 to let the OS pick one; the returned url has the real port.
 // Every request, page and asset included, passes the Host check before anything else runs.
-export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, system, remapperSetup, restart, boardDev, token, open = false }: ServerOptions): RunningServer {
+export function startServer({ port, source, editor, chat, decisions, sync, configs, keyboards, review, lab, system, remapperSetup, restart, log, boardDev, token, open = false }: ServerOptions): RunningServer {
   const sessionToken = token ?? randomBytes(32).toString("base64url");
 
   const server = Bun.serve({
@@ -130,6 +133,10 @@ export function startServer({ port, source, editor, chat, decisions, sync, confi
       if (restart !== undefined) {
         const restartResponse = await handleRestartRoute(request, url.pathname, restart, sessionToken);
         if (restartResponse !== null) return restartResponse;
+      }
+      if (log !== undefined) {
+        const logResponse = await handleLogRoute(request, url.pathname, log, sessionToken);
+        if (logResponse !== null) return logResponse;
       }
       if (url.pathname === LIST_PATH || url.pathname === BOARD_DEV_PATH || url.pathname.startsWith(DETAIL_PREFIX) || isEditorPath(url.pathname)) {
         return api(request, url.pathname);

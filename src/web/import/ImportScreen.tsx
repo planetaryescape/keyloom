@@ -12,15 +12,14 @@ import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
 import { acceptsFile, firstFreeName, guideFor, importCommand, importIntro, offersStartBlank } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
-import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
-import type { UnexpectedCode } from "../shell/unexpected.ts";
-import { unexpectedCodeOf } from "../keyboards/unexpected-code.ts";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import type { ReviewActivity } from "../../api/review.ts";
 import "../review/review.css";
 import "./import.css";
 
-type Boards = { status: "loading" } | { status: "error"; message: string; code: UnexpectedCode | undefined } | { status: "ready"; boards: BoardChoice[] };
+type Boards = { status: "loading" } | ({ status: "error" } & PageFailure) | { status: "ready"; boards: BoardChoice[] };
 
 interface Props {
   token: string;
@@ -53,7 +52,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
     fetchBoards(token, controller.signal).then(
       (list) => setBoards({ status: "ready", boards: list }),
       (error: unknown) => {
-        if (!controller.signal.aborted) setBoards({ status: "error", message: error instanceof Error ? error.message : "Couldn't load the boards.", code: unexpectedCodeOf(error) });
+        if (!controller.signal.aborted) setBoards({ status: "error", ...pageFailure(error, "Couldn't load the boards.") });
       },
     );
     return () => controller.abort();
@@ -81,7 +80,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
       {boards.status === "loading" ? (
         <p className="loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading the boards…</p>
       ) : boards.status === "error" ? (
-        <BoardsFailed token={token} message={boards.message} code={boards.code} onRetry={() => setAttempt((n) => n + 1)} />
+        <BoardsFailed token={token} failure={boards} onRetry={() => setAttempt((n) => n + 1)} />
       ) : (
         <>
           <ul className="board-cards" aria-label="Supported keyboards">
@@ -103,14 +102,12 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
 }
 
 /** The board list couldn't be read: why, and Try again, or Restart keyloom for a failure no screen planned for (R8-03). */
-export function BoardsFailed({ token, message, code, onRetry }: { token: string; message: string; code: UnexpectedCode | undefined; onRetry: () => void }) {
+export function BoardsFailed({ token, failure, onRetry }: { token: string; failure: PageFailure; onRetry: () => void }) {
   return (
     <div className="import-error" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
-      <p>{message}</p>
-      {code === undefined
-        ? <button type="button" className="button" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
-        : <UnexpectedWayOut token={token} code={code} onRetry={onRetry} />}
+      <p>{failure.message}</p>
+      <RetryOrRestart token={token} failure={failure} onRetry={onRetry} />
     </div>
   );
 }

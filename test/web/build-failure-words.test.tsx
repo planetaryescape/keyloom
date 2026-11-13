@@ -7,7 +7,7 @@ import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
 import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
-import { syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
+import { LAYOUT_GONE, syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
 const lastBuilt = { revisionId: "rev_A", summary: "Moved Escape to the thumb" };
 
@@ -78,7 +78,7 @@ describe("buildQuestion", () => {
 const noop = () => {};
 function release(build: Build, over: Partial<Release> = {}): Release {
   return {
-    build, flash: null, starting: null, error: null, errorCode: null, showBuild: noop, freeCache: noop, cachePrune: { running: false, outcome: null }, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
+    build, flash: null, starting: null, error: null, errorCode: null, errorGeneric: false, showBuild: noop, freeCache: noop, cachePrune: { running: false, outcome: null }, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
     docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
@@ -170,17 +170,22 @@ describe("a build that ran out of Docker's disk", () => {
 // R8-03, R8-12: the dialog's own error keeps its code, so an answer no screen planned for gets Restart keyloom, and a file that is gone
 // gets Build again, never a Try again that fails the same way.
 describe("the dialog's error", () => {
-  const withError = (errorCode: string | null, error = "keyloom hit a problem it didn't expect. The details are in keyloom's log.") =>
-    failedStep(null, { status: "succeeded", error: null }, { error, errorCode });
+  const withError = (errorCode: string | null, error = "keyloom hit a problem it didn't expect. The details are in keyloom's log.", errorGeneric = false) =>
+    failedStep(null, { status: "succeeded", error: null }, { error, errorCode, errorGeneric });
   test("a server fault gets Try again and Restart keyloom; a missing route or an unreadable answer gets Restart keyloom alone", () => {
     const internal = withError("internal");
     expect(internal).toContain("Try again");
     expect(internal).toContain("Restart keyloom");
     for (const code of ["not_found", "unreadable"]) {
-      const html = withError(code, "keyloom sent an answer this page can't read.");
+      const html = withError(code, "keyloom sent an answer this page can't read.", code === "not_found");
       expect(html).toContain("Restart keyloom");
       expect(html).not.toContain("Try again");
     }
+    // A build whose layout was deleted elsewhere (the route's own not_found) gets its words and Restart keyloom alone (D-540).
+    const gone = withError("not_found", LAYOUT_GONE);
+    expect(gone).toContain("keyloom no longer has this layout.");
+    expect(gone).toContain("Restart keyloom");
+    expect(gone).not.toContain("Try again");
     // Any other refusal keeps its own sentence and Try again.
     expect(withError("usage", "flash flash_1 is already in progress; wait for it to finish")).toContain("Try again");
   });
@@ -219,6 +224,12 @@ describe("a failed read of the sync's build", () => {
       expect(failed).toEqual({ code, text: "keyloom couldn't read the build that failed. Try again to read it, or build the firmware again." });
       expect(failedStep(null, {}, { build: null, error: failed.text, errorCode: failed.code })).toContain(">Try again<");
     }
+    // keyloom's catch-all is not a build that is gone: Restart keyloom, and Build firmware.
+    const mismatch = syncBuildReadFailure("not_found", true);
+    expect(mismatch).toMatchObject({ code: "not_found", generic: true });
+    const mismatchHtml = failedStep(null, {}, { build: null, error: mismatch.text, errorCode: mismatch.code, errorGeneric: true });
+    expect(mismatchHtml).toContain("Restart keyloom");
+    expect(mismatchHtml).not.toContain("Try again");
     const unreadable = syncBuildReadFailure("unreadable");
     expect(unreadable.text).toBe("keyloom couldn't read the build that failed. Build the firmware again, or restart keyloom.");
     const html = failedStep(null, {}, { build: null, error: unreadable.text, errorCode: unreadable.code });

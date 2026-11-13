@@ -9,7 +9,7 @@ import "./keyboards.css";
 
 // A config's open proposals that no conversation shows (n5, D-336): the ones "Put my config on it" made, and any other made outside the
 // chat. The same card as the chat's, so pinning previews it on the board and Apply is the ordinary apply; applying one retires its sibling.
-export function OpenProposals({ proposals, readFailed = false, onReadAgain, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease, onPlanRecovery }: {
+export function OpenProposals({ proposals, readFailed = false, onReadAgain, layout, board, configName, firstFlash, pinnedId, onPin, onPreview, onApply, onClose, onOpenRelease, onPlanRecovery, token }: {
   proposals: readonly Proposal[] | null;
   /** The proposals could not be read: said with Try again, never as "nothing is waiting" (R4-08). */
   readFailed?: boolean;
@@ -26,6 +26,8 @@ export function OpenProposals({ proposals, readFailed = false, onReadAgain, layo
   onClose: () => void;
   onOpenRelease: () => void;
   onPlanRecovery: (proposal: Proposal, reasons: string[]) => void;
+  /** For the card's Restart keyloom beside a failure no screen planned for (R8-03). */
+  token?: string | undefined;
 }) {
   const open = proposals?.filter((p) => p.status === "proposed") ?? [];
   // One card at a time, the pinned option or the first, and the board shows it: a lone proposal needs no tabs and no "show it" button.
@@ -68,6 +70,7 @@ export function OpenProposals({ proposals, readFailed = false, onReadAgain, layo
               onApply={onApply}
               onAskAgain={onPlanRecovery}
               onOpenRelease={onOpenRelease}
+              token={token}
               onReadAgain={onReadAgain}
               compact
             />

@@ -7,6 +7,8 @@ import type { AgentModel } from "../app/index.ts";
 import type { LayoutSource } from "../server/layout-source.ts";
 import { type RunningServer, startServer } from "../server/start-server.ts";
 import type { RestartBackend } from "../server/restart-routes.ts";
+import type { LogBackend } from "../server/log-routes.ts";
+import { serverLog, showServerLog } from "../app/server-log.ts";
 import { appChatBackend } from "./chat-backend.ts";
 import { appConfigsBackend } from "./configs-backend.ts";
 import { appKeyboardsBackend } from "./keyboards-backend.ts";
@@ -84,6 +86,8 @@ export type ServeOptions = {
   keyboards?: AddDeps;
   /** Restarting keyloom from the page and the menu bar (R5-15); `keyloom serve` passes it. */
   restart?: RestartBackend;
+  /** Where keyloom's log is and how it opens (R8-09); from the desktop app's LOG_FILE_ENV and macOS's `open` when omitted. Tests pass a fake. */
+  log?: LogBackend;
 };
 
 // A path with anything but these characters is quoted for a POSIX shell. The CLI may not import the firmware's shellQuote (module table).
@@ -98,6 +102,12 @@ export function restartCommand(opts: { dataDir?: string | undefined; port: strin
     ...(opts.port === String(DEFAULT_PORT) ? [] : ["--port", shellWord(opts.port)]),
     ...(opts.provider === undefined ? [] : ["--provider", opts.provider]),
   ].join(" ");
+}
+
+/** keyloom's log as the desktop app named it, read once: the variable is set when the app starts the server. */
+function appLogBackend(): LogBackend {
+  const log = serverLog(process.env);
+  return { log, show: () => showServerLog(log) };
 }
 
 export function serve(app: App, opts: ServeOptions): RunningServer {
@@ -117,6 +127,7 @@ export function serve(app: App, opts: ServeOptions): RunningServer {
     port: opts.port, source: appLayoutSource(app), editor: appEditorBackend(app, { ...(opts.flash ?? {}), ...(opts.handsFree ? { handsFree: opts.handsFree } : {}) }, () => engine.notifyApplied()),
     chat: appChatBackend(app, opts.provider ? { provider: opts.provider } : {}), decisions: appDecisionsBackend(app), sync: appSyncBackend(engine, reviews, watcher), review: appReviewBackend(reviews), configs: appConfigsBackend(app, engine, opts.keyboards ?? {}), keyboards: appKeyboardsBackend(app, engine, opts.keyboards ?? {}), lab, system, remapperSetup: appRemapperSetupBackend(realSetupDeps(opts.handsFree?.remapper ?? {})), open: opts.open,
     ...(opts.restart ? { restart: opts.restart } : {}),
+    log: opts.log ?? appLogBackend(),
   });
   let drained: Promise<void> | undefined;
   return {

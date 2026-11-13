@@ -6,6 +6,8 @@ import { chooseProvider } from "./api-chat.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
 import { PROVIDER_NAMES, lockedProvider, setupProviders } from "./setup-words.ts";
 import type { Pinned } from "./transcript.ts";
+import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 type Provider = ChatProviderStatus["providers"][number];
 
@@ -29,7 +31,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const id = useId();
   const bar = useRef<HTMLDivElement>(null);
@@ -134,7 +136,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
       close();
       setSaved(next.active === null ? null : `Next conversation: ${PROVIDER_NAMES[next.active.provider]}, ${next.active.model}.`);
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "Couldn't save the choice.");
+      setProblem(pageFailure(error, "Couldn't save the choice."));
     } finally {
       setSaving(false);
     }
@@ -212,7 +214,8 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
             // Under a lock this is the locked provider's setup, with the reason only it is listed.
             <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={onReload} />
           )}
-          {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
+          {/* Save is the Try again; an answer that fails the same way every time adds Restart keyloom (R8-03). */}
+          {problem === null ? null : <FailureNote token={token} failure={problem} className="chat-inline-error" />}
           </div>
           <div className="provider-actions">
             <button type="button" className="button" onClick={close}>{locked === null ? "Cancel" : "Close"}</button>
