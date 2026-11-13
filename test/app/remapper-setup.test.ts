@@ -547,6 +547,29 @@ describe("starting kanata", () => {
     expect(await startKanataDaemon(MAC, deps(old.run, { kanata: () => world.kanataBin, remapper: world.over }))).toMatchObject({ ok: false, code: "failed" });
   });
 
+  test("keyloom's downloaded kanata that changed since the download is refused before it runs, with no password step (D-560)", async () => {
+    const world = (w = remapperWorld());
+    const r = recorder();
+    const was = process.env.KEYLOOM_TOOLS_DIR;
+    const kept = tempDir();
+    process.env.KEYLOOM_TOOLS_DIR = kept;
+    try {
+      // A program written over keyloom's copy that would pass the cmd check: its bytes aren't the pinned release, so the check never runs.
+      const planted = join(kept, "kanata");
+      writeFileSync(planted, readFileSync(writeFakeKanataBinary(tempDir(), "no_cmd")));
+      chmodSync(planted, 0o755);
+      const out = await startKanataDaemon(MAC, deps(r.run, { kanata: () => planted, remapper: world.over }));
+      expect(out).toEqual({ ok: false, code: "kanata_kept_changed", reason: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't set it up. Get kanata again to replace it." });
+      expect(r.calls).toEqual([]);
+      // The same file under another name is not keyloom's copy, so the usual checks decide it.
+      const elsewhere = writeFakeKanataBinary(tempDir(), "no_cmd");
+      expect(await startKanataDaemon(MAC, deps(r.run, { kanata: () => elsewhere, remapper: world.over }))).toEqual({ ok: true });
+    } finally {
+      if (was === undefined) delete process.env.KEYLOOM_TOOLS_DIR;
+      else process.env.KEYLOOM_TOOLS_DIR = was;
+    }
+  });
+
   test("with no kanata it asks for nothing", async () => {
     const world = (w = remapperWorld());
     const r = recorder();
@@ -570,6 +593,17 @@ describe("the checklist's read", () => {
     expect(status.findings.every((f) => !("fix" in f))).toBe(true);
     const noBrew = await remapperSetupStatus(MAC, deps(recorder().run, { brew: () => undefined, remapper: { ...world.over, probe: machine() } }));
     expect(noBrew.canInstall).toBe(false);
+  });
+
+  test("a changed copy of keyloom's downloaded kanata is named, so the checklist says why it offers Get kanata (D-560)", async () => {
+    const world = (w = remapperWorld());
+    const read = async (probe: DoctorProbe) => (await remapperSetupStatus(MAC, deps(recorder().run, { brew: () => undefined, remapper: { ...world.over, probe } }))).findings.map((f) => f.code);
+    const changed = await read(machine({ keptKanataChanged: () => true }));
+    expect(changed).toContain("kanata_missing");
+    expect(changed).toContain("kanata_kept_changed");
+    expect(await read(machine())).not.toContain("kanata_kept_changed");
+    // A kanata found elsewhere is the one keyloom uses, so keyloom's own copy doesn't matter then.
+    expect(await read(machine({ kanataBin: () => "/opt/homebrew/bin/kanata", keptKanataChanged: () => true }))).not.toContain("kanata_kept_changed");
   });
 
   test("the install job's state goes out as it is", async () => {

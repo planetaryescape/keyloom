@@ -2,16 +2,16 @@
 // builds itself, into a scratch folder, so no test reaches GitHub or the person's own folder. The one exception is the opt-in check of the
 // real pins at the end (KEYLOOM_DOWNLOAD_TESTS=1), which downloads into a scratch folder.
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zipSync } from "fflate";
-import { CMD_ALLOWED, KANATA, ZAPP, kanataZip, serving, testPins, zappTar } from "../helpers/tool-download.ts";
+import { CMD_ALLOWED, KANATA, ZAPP, kanataZip, redirecting, serving, testPins, zappTar } from "../helpers/tool-download.ts";
 import { showBoard } from "../../src/app/boards.ts";
 import { type Fetcher, PINNED_TOOLS, type PinnedTool, canDownload, downloadTool, pinnedAsset } from "../../src/app/tool-download.ts";
 import { kanataRevision } from "../../src/firmware/kanata/board-config.ts";
 import { findKanata } from "../../src/firmware/kanata/binary.ts";
-import { keptTool, keptToolsDir } from "../../src/firmware/toolchain/kept-tools.ts";
+import { findTool, keptTool, keptToolChanged, keptToolsDir } from "../../src/firmware/toolchain/kept-tools.ts";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "keyloom-tools-"));
 const pins = testPins;
@@ -67,15 +67,42 @@ describe("downloadTool", () => {
     expect(readdirSync(dir)).toEqual([]);
   });
 
-  test("GitHub's error answer, a lost connection and a redirect off HTTPS are download_failed, with nothing written", async () => {
+  test("GitHub's error answer and a lost connection are download_failed, with nothing written", async () => {
     const dir = scratch();
     const notFound = await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(new Uint8Array(), { status: 404 }).fetch, dir, pins: pins() });
     expect(notFound).toEqual({ ok: false, code: "download_failed", reason: "keyloom couldn't download kanata: GitHub answered 404. Check that this computer is online, then try again." });
     const offline = await downloadTool("kanata", () => undefined, { ...mac, fetch: async () => { throw new Error("Unable to connect"); }, dir, pins: pins() });
     expect(offline).toMatchObject({ ok: false, code: "download_failed", reason: "keyloom couldn't download kanata: Unable to connect. Check that this computer is online, then try again." });
-    const plainHttp = await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(kanataZip, { url: "http://example.com/k.zip" }).fetch, dir, pins: pins() });
-    expect(plainHttp).toMatchObject({ ok: false, code: "download_failed" });
     expect(readdirSync(dir)).toEqual([]);
+  });
+
+  test("follows GitHub's redirect to its storage host one hop at a time", async () => {
+    const dir = scratch();
+    const store = "https://release-assets.githubusercontent.com/github-production-release-asset/1/k";
+    const { fetch, asked } = redirecting({ "https://github.com/jtroo/kanata/releases/download/v1.12.0/k.zip": store }, kanataZip);
+    expect(await downloadTool("kanata", () => undefined, { ...mac, fetch, dir, pins: pins() })).toEqual({ ok: true, path: join(dir, "kanata") });
+    expect(asked).toEqual(["https://github.com/jtroo/kanata/releases/download/v1.12.0/k.zip", store]);
+  });
+
+  test("a redirect off HTTPS or off GitHub's hosts is refused before keyloom asks that place for anything", async () => {
+    const start = "https://github.com/jtroo/kanata/releases/download/v1.12.0/k.zip";
+    const cases = [
+      { to: "http://release-assets.githubusercontent.com/k", says: "GitHub sent the file over a connection that isn't encrypted" },
+      { to: "https://example.com/k.zip", says: "GitHub sent the file from example.com, which isn't one of GitHub's hosts" },
+    ];
+    for (const { to, says } of cases) {
+      const dir = scratch();
+      // The bad hop comes after a good one, so the check is on every hop, not only the last.
+      const { fetch, asked } = redirecting({ [start]: "https://objects.githubusercontent.com/k", "https://objects.githubusercontent.com/k": to }, kanataZip);
+      expect(await downloadTool("kanata", () => undefined, { ...mac, fetch, dir, pins: pins() }))
+        .toEqual({ ok: false, code: "download_failed", reason: `keyloom couldn't download kanata: ${says}. Check that this computer is online, then try again.` });
+      expect(asked).toEqual([start, "https://objects.githubusercontent.com/k"]);
+      expect(readdirSync(dir)).toEqual([]);
+    }
+    const loop = redirecting({ [start]: start }, kanataZip);
+    expect(await downloadTool("kanata", () => undefined, { ...mac, fetch: loop.fetch, dir: scratch(), pins: pins() }))
+      .toMatchObject({ ok: false, code: "download_failed", reason: expect.stringContaining("GitHub redirected the download too many times") });
+    expect(loop.asked).toHaveLength(6);
   });
 
   test("Cancel stops the download and keeps nothing", async () => {
@@ -180,11 +207,38 @@ describe("where keyloom keeps them", () => {
     await Bun.write(join(dir, "zapp", "x"), "");
     expect(keptTool("zapp", env)).toBeUndefined();
     await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(kanataZip).fetch, dir, pins: pins() });
-    expect(keptTool("kanata", env)).toBe(join(dir, "kanata"));
+    expect(keptTool("kanata", env, { ...mac, pins: pins() })).toBe(join(dir, "kanata"));
     // findKanata reads the same folder. PATH and Homebrew come first, so this holds only where neither has kanata.
     if (Bun.which("kanata") === null && !existsSync("/opt/homebrew/bin/kanata") && !existsSync("/usr/local/bin/kanata")) {
-      expect(findKanata(env)).toBe(join(dir, "kanata"));
+      expect(findKanata(env, { ...mac, pins: pins() })).toBe(join(dir, "kanata"));
     }
     expect(findKanata({ ...env, KEYLOOM_KANATA_BIN: join(dir, "kanata") })).toBe(join(dir, "kanata"));
+  });
+
+  test("a kept copy changed since the download is never found, so nothing runs it, and Get kanata or Get Zapp replaces it (D-560, D-561)", async () => {
+    const dir = scratch();
+    const env = { KEYLOOM_TOOLS_DIR: dir };
+    const pin = { ...mac, pins: pins() };
+    await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(kanataZip).fetch, dir, pins: pins() });
+    await downloadTool("zapp", () => undefined, { ...mac, fetch: serving(zappTar).fetch, dir, pins: pins() });
+    expect(keptTool("kanata", env, pin)).toBe(join(dir, "kanata"));
+    expect(keptToolChanged("kanata", env, pin)).toBe(false);
+    // Any program running as the person can write this folder.
+    writeFileSync(join(dir, "kanata"), CMD_ALLOWED);
+    writeFileSync(join(dir, "zapp"), CMD_ALLOWED);
+    expect(keptTool("kanata", env, pin)).toBeUndefined();
+    expect(keptToolChanged("kanata", env, pin)).toBe(true);
+    expect(keptTool("zapp", env, pin)).toBeUndefined();
+    if (Bun.which("kanata") === null && !existsSync("/opt/homebrew/bin/kanata") && !existsSync("/usr/local/bin/kanata")) {
+      expect(findKanata(env, pin)).toBeUndefined();
+    }
+    // With the real pins, a file that isn't the real release is never found: the Zapp flash looks here through findTool.
+    if (Bun.which("zapp") === null) expect(findTool("zapp", env)).toBeUndefined();
+    expect(keptTool("kanata", env, { platform: "darwin", arch: "arm64" })).toBeUndefined();
+    // Getting it again writes the pinned program over the changed one.
+    await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(kanataZip).fetch, dir, pins: pins() });
+    expect(keptTool("kanata", env, pin)).toBe(join(dir, "kanata"));
+    // A processor keyloom pins nothing for has no trusted copy.
+    expect(keptTool("kanata", env, { ...pin, arch: "ppc64" })).toBeUndefined();
   });
 });

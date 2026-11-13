@@ -1,67 +1,21 @@
 // Getting kanata or Zapp on a Mac without Homebrew (D-560, D-561). keyloom downloads the release it targets from the project's own GitHub
-// release over HTTPS, checks the file's SHA-256 against the value pinned here, takes the one program it needs out of the archive, checks that
+// release over HTTPS, checks the file's SHA-256 against the value pinned in keyloom's source (src/firmware/toolchain/tool-pins.ts), takes the one program it needs out of the archive, checks that
 // too, and only then writes it into its own folder (src/firmware/toolchain/kept-tools.ts). Nothing is written, and nothing runs, before both
-// checks pass. There is no "latest": a new version is a new pin in this file, checked by hand.
+// checks pass. There is no "latest": a new version is a new pin in that file, checked by hand.
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import { findKanata } from "../firmware/kanata/binary.ts";
 import { KEPT_TOOLS, type KeptTool, findTool, isKeptTool, keptToolsDir } from "../firmware/toolchain/kept-tools.ts";
+import { type DownloadArch, PINNED_TOOLS, type PinnedAsset, type PinnedTool, pinnedAsset } from "../firmware/toolchain/tool-pins.ts";
 import { writeFresh } from "../firmware/toolchain/write-fresh.ts";
 
-export { KEPT_TOOLS, type KeptTool, isKeptTool };
-
-export type DownloadArch = "arm64" | "x64";
-
-/** One release file: where it is, what it hashes to, and the program inside it with that program's own hash. */
-export type PinnedAsset = { url: string; size: number; sha256: string; archive: "zip" | "tar.gz"; member: string; binarySha256: string };
-
-export type PinnedTool = { name: string; version: string; assets: Partial<Record<DownloadArch, PinnedAsset>> };
-
-/**
- * The pins. Read from `gh release view` and from the files themselves on 2026-11-13: each archive was downloaded once, its SHA-256 compared
- * with GitHub's asset digest (and kanata's own `sha256sums`), and the program inside hashed with `shasum -a 256`. kanata's zips hold two
- * builds; keyloom takes the plain one, built without `cmd`, never `kanata_macos_cmd_allowed_*` (D-498).
- */
-export const PINNED_TOOLS: Record<KeptTool, PinnedTool> = {
-  kanata: {
-    name: "kanata",
-    version: "1.12.0",
-    assets: {
-      arm64: {
-        url: "https://github.com/jtroo/kanata/releases/download/v1.12.0/macos-binaries-arm64.zip", size: 2_367_443,
-        sha256: "839769d189911b5881e11550eaa2039705213fb725865d088f5a2e3a6c10de32", archive: "zip",
-        member: "kanata_macos_arm64", binarySha256: "ca1f6c52c66f1486e21eb31eb0aa4e0d5248239ff3eea887ecb7ebb80caa133b",
-      },
-      x64: {
-        url: "https://github.com/jtroo/kanata/releases/download/v1.12.0/macos-binaries-x64.zip", size: 2_377_539,
-        sha256: "bdb8b2f7ae2a648336a2561c7c6c00a736cd76e012035df651114b304c5ffb01", archive: "zip",
-        member: "kanata_macos_x64", binarySha256: "c98b4d2e9edccc26a405a55183de880ce15a8d9087803951e80d487bba14a7bf",
-      },
-    },
-  },
-  zapp: {
-    name: "Zapp",
-    version: "1.0.2",
-    assets: {
-      arm64: {
-        url: "https://github.com/zsa/zapp/releases/download/v1.0.2/zapp-macos-aarch64.tar.gz", size: 3_229_402,
-        sha256: "5028e38c9976097ba8950c5ec297d2901ba3aee30ed5b504bc2f827390f0ab15", archive: "tar.gz",
-        member: "zapp", binarySha256: "12dac6da8d31cacfcd60405e1323345f1b6319a2631bdf422be6ec6d155df642",
-      },
-      x64: {
-        url: "https://github.com/zsa/zapp/releases/download/v1.0.2/zapp-macos-x86_64.tar.gz", size: 3_539_635,
-        sha256: "e62a3c2cdabc7b2b2917e934499bcfad57610236d25a0333c8c30161b3167515", archive: "tar.gz",
-        member: "zapp", binarySha256: "b594fadc0ac33ef0923605c52ad741a41c97be4516722fd5d4005874033985f0",
-      },
-    },
-  },
-};
+export { KEPT_TOOLS, type KeptTool, isKeptTool, type DownloadArch, PINNED_TOOLS, type PinnedAsset, type PinnedTool, pinnedAsset };
 
 export type DownloadErrorCode = "unsupported_platform" | "no_asset" | "download_failed" | "checksum_mismatch" | "write_failed" | "cancelled";
 export type DownloadOutcome = { ok: true; path: string } | { ok: false; code: DownloadErrorCode; reason: string };
 
 /** `fetch`'s shape. Tests pass a fake, so no test downloads anything. */
-export type Fetcher = (url: string, init: { signal?: AbortSignal; redirect: "follow" }) => Promise<Response>;
+export type Fetcher = (url: string, init: { signal?: AbortSignal; redirect: "manual" }) => Promise<Response>;
 
 export type DownloadDeps = {
   fetch?: Fetcher;
@@ -78,15 +32,6 @@ const realFetch: Fetcher = (url, init) => {
   if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") return Promise.reject(new Error(`refusing to download ${url} in a test`));
   return fetch(url, init);
 };
-
-const archOf = (arch: string): DownloadArch | null => (arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : null);
-
-/** The file keyloom would download here, or null when there is none for this computer. */
-export function pinnedAsset(tool: KeptTool, deps: Pick<DownloadDeps, "platform" | "arch" | "pins"> = {}): PinnedAsset | null {
-  if ((deps.platform ?? process.platform) !== "darwin") return null;
-  const arch = archOf(deps.arch ?? process.arch);
-  return arch === null ? null : (deps.pins ?? PINNED_TOOLS)[tool].assets[arch] ?? null;
-}
 
 /** Whether keyloom can download this tool here: a Mac whose processor has a pinned release file. */
 export const canDownload = (tool: KeptTool, deps: Pick<DownloadDeps, "platform" | "arch"> = {}): boolean => pinnedAsset(tool, deps) !== null;
@@ -127,9 +72,8 @@ export async function downloadTool(tool: KeptTool, onLine: (line: string) => voi
   onLine(`keyloom: downloading ${pin.name} ${pin.version} from ${asset.url}`);
   let bytes: Uint8Array;
   try {
-    const response = await (deps.fetch ?? realFetch)(asset.url, { redirect: "follow", ...(signal === undefined ? {} : { signal }) });
-    // GitHub sends release files from its own storage host; a redirect that leaves HTTPS is refused before a byte is read.
-    if (response.url !== "" && !response.url.startsWith("https://")) return failed("GitHub sent the file over a connection that isn't encrypted");
+    const response = await fetchRelease(deps.fetch ?? realFetch, asset.url, signal);
+    if (typeof response === "string") return failed(response);
     if (!response.ok || response.body === null) return failed(`GitHub answered ${response.status}`);
     const read = await readCapped(response.body, asset.size, (got) => onLine(`keyloom: ${megabytes(got)} of ${megabytes(asset.size)} MB`));
     // Larger than the release file: it can't be the release file, so reading stops there.
@@ -164,6 +108,31 @@ export async function downloadTool(tool: KeptTool, onLine: (line: string) => voi
   }
   onLine(`keyloom: kept ${pin.name} ${pin.version} in ${dir}`);
   return { ok: true, path };
+}
+
+/** GitHub answers a release URL with a redirect to its storage host (release-assets.githubusercontent.com in 2026-11, objects. before). */
+const RELEASE_HOSTS: ReadonlySet<string> = new Set(["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"]);
+const MAX_REDIRECTS = 5;
+
+/**
+ * The release file's response, following GitHub's redirects one hop at a time, or why keyloom stopped. Every hop must be HTTPS and on
+ * GitHub's hosts before keyloom asks it for anything. The hashes, not this check, are what make the file trustworthy: a file from anywhere
+ * else could only fail them. The check keeps keyloom from fetching from an unencrypted or foreign place at all.
+ */
+async function fetchRelease(fetcher: Fetcher, url: string, signal: AbortSignal | undefined): Promise<Response | string> {
+  let at = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const where = new URL(at);
+    if (where.protocol !== "https:") return "GitHub sent the file over a connection that isn't encrypted";
+    if (!RELEASE_HOSTS.has(where.hostname)) return `GitHub sent the file from ${where.hostname}, which isn't one of GitHub's hosts`;
+    const response = await fetcher(at, { redirect: "manual", ...(signal === undefined ? {} : { signal }) });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    await response.body?.cancel();
+    if (location === null) return `GitHub answered ${response.status} without saying where the file is`;
+    at = new URL(location, at).href;
+  }
+  return "GitHub redirected the download too many times";
 }
 
 /**

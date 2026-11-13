@@ -30,6 +30,7 @@ export type InstallKanataRequest = z.infer<typeof InstallKanataRequestSchema>;
 export const SetupFindingCodeSchema = z.enum([
   "kanata_missing", "kanata_version", "driver_missing", "driver_mismatch", "karabiner_elements", "keyboard_name", "karabiner_config",
   "permissions", "daemon_missing", "port_closed", "kbd_file", "kanata_updated", "kanata_replaced", "daemon_outdated",
+  "kanata_kept_changed",
 ]);
 export type SetupFindingCode = z.infer<typeof SetupFindingCodeSchema>;
 

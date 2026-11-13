@@ -45,7 +45,7 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 | `src/boards/` | Load and check board definitions ([04](04-boards-and-contributions.md)) | `layout` |
 | `src/firmware/qmk/`, `src/firmware/zmk/` | Import, generate, build and flash per firmware ([05](05-firmware-qmk.md), [06](06-firmware-zmk.md)) | `layout`, `boards`, `firmware/toolchain` |
 | `src/firmware/kanata/` | Generate, check and apply the MacBook's kanata config ([21](21-macbook-keyboard.md)) | `layout`, `boards`, `firmware/toolchain` (where keyloom keeps a kanata it downloaded, D-560) |
-| `src/firmware/toolchain/` | Docker checks, pinned checkouts, subprocess runner with log capture, the folder of tools keyloom downloaded (D-560) | none of the above |
+| `src/firmware/toolchain/` | Docker checks, pinned checkouts, subprocess runner with log capture, the folder of tools keyloom downloaded and their pins (D-560) | none of the above |
 | `src/agent/` | Prompt assembly, tools, one agent turn ([03](03-agent.md)) | `layout`, `validation`, `boards`, `memory` (through interfaces) |
 | `src/lab/` | Recorded typing analysis and deterministic workload planning/accounting ([24](24-typing-lab.md)); app injects firmware replay | `layout`, `boards`, `firmware`, `validation` |
 | `src/memory/` | Decisions and priorities ([08](08-decision-memory.md)) | `layout`, `persistence` |

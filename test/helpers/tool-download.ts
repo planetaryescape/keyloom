@@ -26,14 +26,26 @@ export function testPins(over: { binary?: Uint8Array } = {}): Record<"kanata" | 
   };
 }
 
-/** A fetcher that serves `body` for every URL and records what it was asked. `url` is where the answer says it came from. */
-export function serving(body: Uint8Array, init: { status?: number; url?: string } = {}) {
+/** A fetcher that serves `body` for every URL with `status`, and records what it was asked. */
+export function serving(body: Uint8Array, init: { status?: number } = {}) {
   const asked: string[] = [];
   const fetch: Fetcher = async (url) => {
     asked.push(url);
-    const response = new Response(new Blob([body as Uint8Array<ArrayBuffer>]), { status: init.status ?? 200 });
-    Object.defineProperty(response, "url", { value: init.url ?? url });
-    return response;
+    return new Response(new Blob([body as Uint8Array<ArrayBuffer>]), { status: init.status ?? 200 });
+  };
+  return { fetch, asked };
+}
+
+/** A fetcher that answers each URL in `hops` with a 302 to its value, as GitHub does, and serves `body` everywhere else. */
+export function redirecting(hops: Record<string, string>, body: Uint8Array) {
+  const asked: string[] = [];
+  const fetch: Fetcher = async (url, init) => {
+    asked.push(url);
+    // keyloom follows redirects itself, so it can check each hop.
+    if (init.redirect !== "manual") throw new Error("expected redirect: manual");
+    const to = hops[url];
+    if (to !== undefined) return new Response(null, { status: 302, headers: { location: to } });
+    return new Response(new Blob([body as Uint8Array<ArrayBuffer>]));
   };
   return { fetch, asked };
 }

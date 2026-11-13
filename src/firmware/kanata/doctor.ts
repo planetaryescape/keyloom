@@ -9,6 +9,7 @@ import { fileSha256, findKanata, kanataVersion } from "./binary.ts";
 import { DAEMON_LABEL, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "./plist.ts";
 import type { RemapperPaths } from "./paths.ts";
 import { readHeader } from "./header.ts";
+import { keptToolChanged } from "../toolchain/kept-tools.ts";
 
 /** What a finding is about, so a screen can offer the one action that fixes it without reading the sentence (D-493). */
 export type FindingCode =
@@ -17,7 +18,9 @@ export type FindingCode =
   // The daemon runs keyloom's root-owned copy of kanata (D-498): `kanata_updated` compares it with the kanata on PATH, and
   // `daemon_outdated` is a daemon set up before the copy existed, which still runs kanata from a folder the person can change.
   // `kanata_replaced` is a kanata on PATH that differs from the copy without looking like a Homebrew update, which setup doesn't offer to copy.
-  | "kanata_updated" | "kanata_replaced" | "daemon_outdated";
+  | "kanata_updated" | "kanata_replaced" | "daemon_outdated"
+  // keyloom's own downloaded kanata (D-560) is there but isn't the release keyloom pinned, so no lookup finds it and setup never copies it.
+  | "kanata_kept_changed";
 
 export type Finding = {
   code: FindingCode;
@@ -39,6 +42,8 @@ export type DoctorProbe = {
   fileHash?(path: string): Promise<string | undefined>;
   /** Where a path's links lead, to see whether kanata is in Homebrew's Cellar. Without it the path is taken as it is. */
   realPath?(path: string): string;
+  /** Whether keyloom's downloaded kanata changed since the download (D-560). Without it the doctor doesn't say so. */
+  keptKanataChanged?(): boolean;
 };
 
 export function realProbe(): DoctorProbe {
@@ -58,6 +63,7 @@ export function realProbe(): DoctorProbe {
     readText: (p) => readFile(p, "utf8").catch(() => undefined),
     hello: (e) => hello(e),
     fileHash: fileSha256,
+    keptKanataChanged: () => keptToolChanged("kanata"),
     realPath: (p) => {
       try {
         return realpathSync(p);
@@ -139,6 +145,9 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
   let copyVersion: string | undefined;
   if (!bin) {
     add({ code: "kanata_missing", name: "kanata", status: "fail", detail: "kanata isn't installed", fix: `brew install kanata (keyloom targets ${rev.kanataVersion})` });
+    if (probe.keptKanataChanged?.()) {
+      add({ code: "kanata_kept_changed", name: "keyloom's kanata", status: "fail", detail: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't use it", fix: "run `keyloom doctor --download kanata` to replace it" });
+    }
   } else {
     version = await probe.kanataVersion(bin);
     if (version === rev.kanataVersion) add({ code: "kanata_version", name: "kanata", status: "ok", detail: `${version} at ${bin}` });

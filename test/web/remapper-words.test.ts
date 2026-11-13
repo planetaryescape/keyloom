@@ -85,6 +85,18 @@ describe("setupSteps", () => {
     expect(cancelled).toMatchObject({ problem: null, detail: "You cancelled the install. Nothing else changed.", actions: [{ id: { kind: "install_kanata" }, label: "Install kanata" }], link: null });
   });
 
+  test("keyloom's downloaded kanata changed since the download: the step says so and offers Get kanata, never a password step (D-560)", () => {
+    const changed = [...fresh, f("kanata_kept_changed", "fail")];
+    const steps = setupSteps(status(changed, { canInstall: false, canDownload: true }));
+    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "start", "permissions"]);
+    expect(steps[0]).toMatchObject({
+      key: "kanata", title: "Get kanata", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }],
+      detail: expect.stringMatching(/^keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't use it or set it up\. Homebrew isn't on this Mac/),
+    });
+    expect(steps.flatMap((s) => s.actions.map((a) => a.id.kind))).not.toContain("start_kanata");
+    expect(setupFailure("kanata_kept_changed", "x")).toEqual({ text: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't set it up. Get kanata again to replace it.", link: null });
+  });
+
   test("no Homebrew: Get kanata downloads, checks and keeps kanata itself, with its progress and Cancel, then the setup carries on (D-560)", () => {
     const noBrew = { canInstall: false, canDownload: true };
     const steps = setupSteps(status(fresh, noBrew));
