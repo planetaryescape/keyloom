@@ -4,6 +4,8 @@ Status update, 2026-11-13 round 11 (D-563): a keymap with another board's number
 
 Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-471); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
 
+Status, 2026-11-13: D-580 keeps Glove80 template downloads outside writable mounts. Each build gets a fresh copy without Git metadata or prior output. Downloads remain warm. West preparation is tracked separately.
+
 ## Per-layer encoder turns
 
 ZMK's `sensor-bindings` belongs to each layer, not the board as a whole. D-462's repeated board defaults were a keyloom limitation, not a firmware limitation. `setSensorBindings` replaces one layer's array. The Keebart module has four sensor slots for two knobs: `sensorPositions: [6, 6, 7, 7]` associates alternative footprints with the same editable press. The key card edits both footprints together. Old layouts retain their existing defaults until edited.

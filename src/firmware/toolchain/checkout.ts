@@ -1,9 +1,7 @@
-// Pinned firmware checkouts (01#firmware-toolchains): the repo at an exact SHA, with only the
-// submodules a build needs. keyloom clones on first use, verifies HEAD against the pin on every
-// use, and refuses to build from a checkout that doesn't match.
-import { existsSync } from "node:fs";
-import { mkdir, rename, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+// Trusted firmware downloads stay outside writable build mounts (D-580).
+import { constants, existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { type LogSink, capture, run } from "./run.ts";
 
 export type CheckoutSpec = {
@@ -24,7 +22,7 @@ export type CheckoutState =
 
 const git = (dir: string, ...args: string[]) => ["git", "-C", dir, ...args];
 
-export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> {
+async function sourceState(spec: CheckoutSpec): Promise<CheckoutState> {
   if (!existsSync(`${spec.dir}/.git`)) return { present: false };
   const head = await capture(git(spec.dir, "rev-parse", "HEAD"), { timeoutMs: 15_000 });
   if (head.exitCode !== 0) throw new CheckoutError(`${spec.dir} is not a usable git checkout: ${head.stderr.trim()}`);
@@ -66,12 +64,12 @@ async function step(cmd: string[], what: string, hooks: Hooks, cwd?: string): Pr
  * A first clone happens in a sibling directory and is renamed into place, so an interrupted one
  * leaves nothing that looks like a checkout.
  */
-export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<void> {
+async function ensureSource(spec: CheckoutSpec, hooks: Hooks): Promise<void> {
   const say = (line: string) => {
     hooks.log?.line(line);
     hooks.onLine?.(line);
   };
-  let state = await checkoutState(spec);
+  let state = await sourceState(spec);
   if (!state.present) {
     if (existsSync(spec.dir)) throw new CheckoutError(`${spec.dir} exists but is not a git checkout; move it away so keyloom can create one`);
     say(`keyloom: creating ${spec.dir} from ${spec.repo} at ${spec.sha}`);
@@ -89,7 +87,7 @@ export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Pro
       await rm(tmp, { recursive: true, force: true });
       throw err;
     }
-    state = await checkoutState(spec);
+    state = await sourceState(spec);
   }
   if (!state.present) throw new CheckoutError(`${spec.dir} was not created`);
   if (!state.pinned) {
@@ -101,9 +99,45 @@ export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Pro
   if (state.uninitialised.length > 0) {
     say(`keyloom: fetching submodules ${state.uninitialised.join(", ")}`);
     await step(git(spec.dir, "submodule", "update", "--init", "--depth", "1", "--progress", "--", ...state.uninitialised), "git submodule update", hooks);
-    const after = await checkoutState(spec);
+    const after = await sourceState(spec);
     if (after.present && (after.uninitialised.length > 0 || after.drifted.length > 0)) {
       throw new CheckoutError(`submodules are still not at the pinned commits after update: ${[...after.uninitialised, ...after.drifted].join(", ")}`);
     }
+  }
+}
+
+/** Never read Git configuration from a directory a build or emulator could write. */
+export function trustedCheckoutDir(spec: CheckoutSpec): string {
+  const identity = new Bun.CryptoHasher("sha256").update(JSON.stringify([spec.repo, spec.sha])).digest("hex");
+  return join(`${spec.dir}.sources-v1`, identity);
+}
+
+export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> {
+  return sourceState({ ...spec, dir: trustedCheckoutDir(spec) });
+}
+
+/**
+ * Keep downloads warm outside the writable mount. Recreate source and outputs for every run,
+ * including after interruption. No file from a previous container becomes a trusted input.
+ * The caller holds spec.dir's lock until the container exits.
+ */
+export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<void> {
+  const trusted = trustedCheckoutDir(spec);
+  await ensureSource({ ...spec, dir: trusted }, hooks);
+  const staging = await mkdtemp(`${spec.dir}.stage-`);
+  try {
+    await cp(trusted, staging, {
+      recursive: true,
+      // Reflinks keep copies cheap where supported. Hard links would expose the trusted source.
+      mode: constants.COPYFILE_FICLONE,
+      filter: (path) => basename(path) !== ".git",
+      verbatimSymlinks: true,
+    });
+    if (hooks.signal?.aborted) throw new CheckoutError("The checkout preparation was cancelled.");
+    // Do not run Git against the old workspace, including caches from earlier keyloom releases.
+    await rm(spec.dir, { recursive: true, force: true });
+    await rename(staging, spec.dir);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
   }
 }

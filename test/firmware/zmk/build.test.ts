@@ -162,9 +162,7 @@ describe("buildZmk (fake docker)", () => {
 
   test("Docker not able to see the checkout is called what it is, before the build's confusing failure", async () => {
     const s = await setup();
-    await s.build("ok");
-    await Bun.$`rm ${join(s.dir, "checkout", "config", "default.nix")}`;
-    await expect(s.build("ok")).rejects.toThrow(/Docker can't see .*home directory/);
+    await expect(s.build("ok", { FAKE_MOUNT: "missing" })).rejects.toThrow(/Docker can't see .*home directory/);
   });
 
   test("a build past its timeout is stopped, the container removed, and the message says so", async () => {

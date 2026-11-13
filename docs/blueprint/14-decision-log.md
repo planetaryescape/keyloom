@@ -11,6 +11,24 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 Firmware workspaces cannot change later builds
+
+### D-580: Keep trusted Git downloads outside writable build and emulation mounts. Replaces D-081's shared checkout reuse.
+
+The writable workspace is disposable. Host Git only reads the separate source cache, keyed by repository URL and full commit SHA.
+Each run copies pinned source and its requested submodules into a fresh workspace, without Git metadata or earlier output.
+Copies use filesystem reflinks where available. They never use hard links.
+An interrupted copy cannot replace the workspace. A later run retries from the trusted source.
+The caller holds the workspace lock through the run. Downloads remain available for later builds.
+
+Reason: A2/C1 reproduced changed Makefiles, changed submodule files, and host command execution through writable Git configuration.
+Checking HEAD or running Git status inside the old workspace cannot establish trust.
+The doctor reads the trusted cache too. Old writable checkout metadata is never opened by host Git.
+
+Verification: `test/firmware/toolchain/checkout.test.ts` covers contaminated source, submodule files, Git configuration, stale output, and warm downloads.
+The QMK, Glove80, and emulation checks cover callers. West workspace preparation is a separate follow-up.
+No keyboard was flashed. Persistent compiler output requires a separate trust design before reuse.
+
 ## 2026-11-13 generated names and import limits
 
 ### D-663: Conditional-layer IDs cannot introduce devicetree source.
