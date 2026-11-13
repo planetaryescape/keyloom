@@ -10,6 +10,7 @@ import { LOG_TAIL_LINES, type ServiceScriptTools, kanataLogScript, kanataRestart
 import { DAEMON_LABEL, DAEMON_LOG_PATH, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "../../src/firmware/kanata/plist.ts";
 import { MAC } from "../helpers/remapper-world.ts";
 import { tempDir } from "../helpers/tmp.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 /** Records every command and answers osascript with `answer`. */
 function recorder(answer: { code: number; out: string } = { code: 0, out: "" }) {
@@ -115,6 +116,7 @@ describe.skipIf(process.platform !== "darwin")("the scripts, run as this account
     expect(s.calledWith()).toEqual([`bootout system/${DAEMON_LABEL}`, `bootstrap system ${s.plist}`]);
   });
 
+  // Two native shell runs include the real bootstrap retry delay.
   test("a service launchd doesn't have loaded is bootstrapped from its plist; a bootstrap that fails twice says so", async () => {
     const s = service({ bootout: 113 });
     expect((await run(kanataRestartScript(s.tools))).code).toBe(0);
@@ -124,7 +126,7 @@ describe.skipIf(process.platform !== "darwin")("the scripts, run as this account
     expect(r.code).toBe(1);
     expect(rootScriptFailure(r.err)?.code).toBe("root_start_failed");
     expect(broken.calledWith()).toEqual([`bootout system/${DAEMON_LABEL}`, `bootstrap system ${broken.plist}`, `bootstrap system ${broken.plist}`]);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a plist that names another kanata, or a copy anyone else can change, restarts nothing", async () => {
     const other = service({ plistNames: "/opt/homebrew/bin/kanata" });
