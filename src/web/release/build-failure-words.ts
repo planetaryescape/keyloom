@@ -70,19 +70,21 @@ function engineRestartView(code: "stale_mount" | "stuck_container", engine: stri
  * Docker Desktop's user unit (Docker's own Linux docs start and stop it with `systemctl --user … docker-desktop`), and the system service
  * when readiness found it. Any other engine (Podman, Rancher Desktop, rootless Docker, Lima, a remote context, one keyloom can't name) is
  * named when known and restarted the way the person started it: a guessed command restarts nothing, or the wrong daemon (PR #318 review).
+ * The words say keyloom doesn't restart them yet, not that it can't: a user unit needs no root, and only hardware evidence is missing (D-563,
+ * R12-06).
  */
 function linuxRestart(engine: string | null, systemService: boolean) {
   const none = { button: null, busy: null, command: null };
   if (engine === "Docker Desktop") {
-    return { next: "Restarting Docker Desktop clears this, and keyloom can't restart it from here. Run this in a terminal, then build again. It stops anything else Docker Desktop is running.", button: null, busy: null, command: "systemctl --user restart docker-desktop" };
+    return { next: "Restarting Docker Desktop clears this, and keyloom doesn't restart Docker Desktop on Linux yet. Run this in a terminal, then build again. It stops anything else Docker Desktop is running.", button: null, busy: null, command: "systemctl --user restart docker-desktop" };
   }
   if (systemService) {
     return { next: "Restarting the Docker service clears this. It needs your password, so keyloom doesn't run it. Run this in a terminal, then build again. It stops anything else Docker is running.", button: null, busy: null, command: "sudo systemctl restart docker" };
   }
   if (engine !== null && engine !== "Docker") {
-    return { next: `Restarting ${engine} clears this, and keyloom can't restart it from here. Restart ${engine} the way you started it, then build again. It stops anything else ${engine} is running.`, ...none };
+    return { next: `Restarting ${engine} clears this, and keyloom doesn't restart ${engine} on Linux yet. Restart ${engine} the way you started it, then build again. It stops anything else ${engine} is running.`, ...none };
   }
-  return { next: "Restarting your Docker engine clears this, and keyloom can't restart it from here. Restart it the way you started it, then build again.", ...none };
+  return { next: "Restarting your Docker engine clears this, and keyloom doesn't restart it on Linux yet. Restart it the way you started it, then build again.", ...none };
 }
 
 const DISK_FULL_TEXT = "Docker ran out of disk space, so the build stopped.";

@@ -445,10 +445,15 @@ describe("a software remapper (the MacBook's keyboard)", () => {
       expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
       expect(notice?.detail).not.toContain("History");
       // kanata_setup with one version: the setup fix and Apply now, and no "Or …" with nowhere to go.
-      const setup = syncLine(mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_setup"), firstVersion: true }), "lay_1");
+      const firstSetup = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_setup"), firstVersion: true });
+      const setup = syncLine(firstSetup, "lay_1");
       expect(setup).toMatchObject({ action: null, second: { id: "sync_now", label: "Apply now" } });
       expect(setup.third).toBeUndefined();
       expect(setup.detail).not.toContain(" Or ");
+      // R12-03: its toast promises no way back either.
+      const toast = syncNotice(syncing, firstSetup);
+      expect(toast?.detail).toEndWith("The keyboard's status says how to fix it.");
+      expect(toast?.detail).not.toContain("go back");
       // With an earlier version, the count still decides: History for no count.
       const earlier = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_setup"), firstVersion: false });
       expect(syncLine(earlier, "lay_1").third).toEqual({ id: "open_history", label: "Open History" });

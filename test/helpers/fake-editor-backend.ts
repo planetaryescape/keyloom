@@ -30,8 +30,8 @@ export interface FakeOptions {
   failBuildStale?: boolean;
   /** Fail builds because Docker's disk is full (R8-04) until `diskFull` is set false, as freeing Docker's build cache does in the dev editor. */
   failBuildDisk?: boolean;
-  /** The engine a stale-mount build names as the one keyloom can restart (R6-09); Colima by default. */
-  restartEngine?: string;
+  /** The engine a stale-mount build names as the one keyloom can restart (R6-09); Colima by default, null for none (a Linux engine, R12-06). */
+  restartEngine?: string | null;
   /** Fail every build because the engine doesn't share the build folder, naming that engine, or null when it can't tell (R7-02). */
   failBuildFolder?: { engine: string | null } | null;
   /** What a flash of the build will need (D-489, D-490); Zapp installed by default. */

@@ -42,6 +42,8 @@ export type Install = {
   /** Reads the install at once, after it was lost; absent on hand-built ones. */
   checkAgain?: () => void;
   start: () => void;
+  /** Starts keyloom's own download of the tool's pinned release, after a failed Homebrew install (R12-01); absent on hand-built ones. */
+  download?: () => void;
   /** Stops the running install; it ends `cancelled` once Homebrew has exited. */
   cancel: () => void;
 };
@@ -134,12 +136,14 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   // A start or cancel the server answered is the install's state now, so it is taken as a read without ending it: the poll reports the end.
   const answered = useCallback((next: InstallState) => dispatch({ kind: "read", state: next }), []);
 
-  const start = useCallback(() => {
+  const begin = useCallback((via?: "download") => {
     dispatch({ kind: "sent" });
-    startInstall(token, tool)
+    startInstall(token, tool, via)
       .then(answered)
-      .catch((err: unknown) => dispatch({ kind: "command_failed", failure: pageFailure(err, "The install could not start.") }));
+      .catch((err: unknown) => dispatch({ kind: "command_failed", failure: pageFailure(err, via === "download" ? "The download could not start." : "The install could not start.") }));
   }, [token, tool, answered]);
+  const start = useCallback(() => begin(), [begin]);
+  const download = useCallback(() => begin("download"), [begin]);
 
   const cancel = useCallback(() => {
     dispatch({ kind: "sent" });
@@ -148,5 +152,5 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
       .catch((err: unknown) => dispatch({ kind: "command_failed", failure: pageFailure(err, "The install could not be stopped.") }));
   }, [token, tool, answered]);
 
-  return { state, problem, failure: shown, token, lost: lost?.failure ?? null, checkAgain, start, cancel };
+  return { state, problem, failure: shown, token, lost: lost?.failure ?? null, checkAgain, start, download, cancel };
 }

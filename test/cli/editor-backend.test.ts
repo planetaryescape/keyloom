@@ -165,6 +165,16 @@ describe("a Karabiner import's answer", () => {
     expect(JSON.parse(answer.karabinerEdit?.entry ?? "")).toEqual({ identifiers: { is_keyboard: true, product_id: 0, vendor_id: 0 }, ignore: true });
   });
 
+  // R12-07: the note offers Open Karabiner-Elements only where the app is installed.
+  test("says whether Karabiner-Elements is installed, so the note's Open button opens something", async () => {
+    const bytes = new Uint8Array(await Bun.file(new URL("../fixtures/karabiner/synthetic-karabiner.json", import.meta.url)).arrayBuffer());
+    for (const installed of [true, false]) {
+      app = openApp({ dataDir: tempDir() });
+      const answer = await appEditorBackend(app, {}, undefined, {}, () => installed).importUpload({ board: "apple/macbook-ansi", filename: "karabiner.json", bytes });
+      expect(answer.karabinerEdit?.appInstalled).toBe(installed);
+    }
+  });
+
   test("another board's import carries no Karabiner edit", async () => {
     const { app, backend } = await setup();
     const document = new TextEncoder().encode(JSON.stringify(layoutExportDocument(app, getLayout(app, "synchronized").layout.id)));

@@ -68,8 +68,19 @@ export function canInstall(deps: Pick<InstallDeps, "has" | "platform"> = {}): bo
  * this Mac. Homebrew stays first where it is: it keeps the tool up to date. The flash plan's Get Zapp and the install job both ask this.
  */
 export function downloadsHere(tool: InstallableTool, deps: Pick<InstallDeps, "has" | "platform" | "download"> = {}): boolean {
-  return isKeptTool(tool) && !canInstall(deps) && canDownload(tool, { ...deps.download, platform: deps.platform });
+  return isKeptTool(tool) && !canInstall(deps) && downloadable(tool, deps);
 }
+
+/**
+ * Whether keyloom could download the tool's pinned release here, Homebrew or not: a failed Homebrew install offers it as the other way on
+ * (R12-01), as kanata's step does (D-560).
+ */
+export function downloadable(tool: InstallableTool, deps: Pick<InstallDeps, "platform" | "download"> = {}): boolean {
+  return isKeptTool(tool) && canDownload(tool, { ...deps.download, platform: deps.platform });
+}
+
+/** How a job gets the tool: `download` asks for keyloom's own download even where Homebrew is, after a failed Homebrew install (R12-01). */
+export type InstallVia = "download";
 
 // A fresh Homebrew can update itself first, and Colima's first start downloads its VM image: both can take minutes.
 const BREW_TIMEOUT_MS = 20 * 60_000;
@@ -90,11 +101,12 @@ const CANCELLED: InstallOutcome = { ok: false, code: "cancelled", reason: "The i
 
 /**
  * Installs a tool with Homebrew, and for Docker starts Colima afterwards and waits for it to answer. `onPhase` says
- * when the install moves on to starting the engine. `signal` stops Homebrew or the start where it is (R2-08).
+ * when the install moves on to starting the engine. `signal` stops Homebrew or the start where it is (R2-08). `via: "download"` downloads a
+ * tool keyloom pins even where Homebrew is (R12-01); downloadTool refuses a computer with no release file in words.
  */
-export async function installTool(tool: InstallableTool, onLine: (line: string) => void, deps: InstallDeps = {}, onPhase?: (phase: "installing" | "downloading" | "starting") => void, signal?: AbortSignal): Promise<InstallOutcome> {
+export async function installTool(tool: InstallableTool, onLine: (line: string) => void, deps: InstallDeps = {}, onPhase?: (phase: "installing" | "downloading" | "starting") => void, signal?: AbortSignal, via?: InstallVia): Promise<InstallOutcome> {
   const runner = deps.runner ?? realRunner;
-  if (isKeptTool(tool) && downloadsHere(tool, deps)) {
+  if (isKeptTool(tool) && (via === "download" || downloadsHere(tool, deps))) {
     onPhase?.("downloading");
     const got = await downloadTool(tool, onLine, { ...deps.download, platform: deps.platform }, signal);
     if (got.ok) return { ok: true };
@@ -161,7 +173,7 @@ export function installJobs(deps: InstallDeps = {}) {
     const state = states.get(tool) ?? idle(tool);
     return { ...state, logTail: [...state.logTail] };
   };
-  const start = (tool: InstallableTool): InstallState => {
+  const start = (tool: InstallableTool, via?: InstallVia): InstallState => {
     if (states.get(tool)?.status === "running") return get(tool);
     const state: InstallState = { ...idle(tool), status: "running", phase: "installing" };
     states.set(tool, state);
@@ -172,7 +184,7 @@ export function installJobs(deps: InstallDeps = {}) {
       state.logTail.push(line);
       if (state.logTail.length > TAIL_LINES) state.logTail.splice(0, state.logTail.length - TAIL_LINES);
     };
-    const ended = installTool(tool, onLine, deps, (phase) => { if (!controller.signal.aborted) state.phase = phase; }, controller.signal)
+    const ended = installTool(tool, onLine, deps, (phase) => { if (!controller.signal.aborted) state.phase = phase; }, controller.signal, via)
       .catch((err: unknown): InstallOutcome => ({ ok: false, code: "brew_failed", reason: err instanceof Error ? err.message : String(err) }))
       .then((outcome) => {
         controllers.delete(tool);

@@ -352,8 +352,20 @@ describe("a build the engine's own state stopped", () => {
     for (const view of [linux("Docker"), linux("Docker", false), linux(null)]) {
       expect(view).toMatchObject({ kind: "restart_engine", button: null, command: null });
       if (view.kind !== "restart_engine") throw new Error("expected restart_engine");
-      expect(view.next).toBe("Restarting your Docker engine clears this, and keyloom can't restart it from here. Restart it the way you started it, then build again.");
+      expect(view.next).toBe("Restarting your Docker engine clears this, and keyloom doesn't restart it on Linux yet. Restart it the way you started it, then build again.");
     }
+  });
+
+  // R12-06: keyloom chooses not to restart these yet (D-563, no hardware evidence), so the words never say it can't.
+  test("on Linux, an engine keyloom doesn't restart says it doesn't yet, never that it can't", () => {
+    const linux = (engine: string | null) => buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine });
+    const desktop = linux("Docker Desktop");
+    if (desktop.kind !== "restart_engine") throw new Error("expected restart_engine");
+    expect(desktop.next).toBe("Restarting Docker Desktop clears this, and keyloom doesn't restart Docker Desktop on Linux yet. Run this in a terminal, then build again. It stops anything else Docker Desktop is running.");
+    const podman = linux("Podman Desktop");
+    if (podman.kind !== "restart_engine") throw new Error("expected restart_engine");
+    expect(podman.next).toStartWith("Restarting Podman Desktop clears this, and keyloom doesn't restart Podman Desktop on Linux yet.");
+    for (const view of [desktop, podman, linux(null)]) if (view.kind === "restart_engine") expect(view.next).not.toContain("can't restart");
   });
 
   test("the page tells a Linux browser from its user agent, never from the runtime that renders it", () => {

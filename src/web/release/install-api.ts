@@ -4,8 +4,9 @@ import { type InstallState, type InstallableTool, InstallStateSchema } from "../
 import { failure, request } from "../api-write.ts";
 import { ApiError } from "../api.ts";
 
-export function startInstall(token: string, tool: InstallableTool): Promise<InstallState> {
-  return request("POST", "/api/system/install", token, InstallStateSchema, undefined, { tool });
+/** `via: "download"` gets Zapp's pinned release even where Homebrew is, after a failed Homebrew install (R12-01). */
+export function startInstall(token: string, tool: InstallableTool, via?: "download"): Promise<InstallState> {
+  return request("POST", "/api/system/install", token, InstallStateSchema, undefined, via === undefined ? { tool } : { tool, via });
 }
 
 /** Stops a running install (R2-08); the state comes back in phase `stopping` until Homebrew has exited. */

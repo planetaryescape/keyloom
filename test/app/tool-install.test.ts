@@ -203,6 +203,29 @@ describe("Get Zapp, on a Mac without Homebrew (D-561)", () => {
     expect(dfu).toMatchObject({ ok: false, code: "no_brew" });
   });
 
+  // R12-01: a failed Homebrew install offers keyloom's own download, which runs even though Homebrew is here.
+  test("Download Zapp after a failed Homebrew install downloads the pinned release where Homebrew is, and runs no brew", async () => {
+    const dir = tempDir("keyloom-kept-");
+    const { runner, calls } = recorder({ brew: 1 });
+    const jobs = installJobs({ ...mac, runner, download: { fetch: serving(zappTar).fetch, dir, arch: "arm64", pins: testPins() } });
+    jobs.start("zapp");
+    for (let i = 0; i < 50 && jobs.get("zapp").status === "running"; i++) await Bun.sleep(5);
+    expect(jobs.get("zapp")).toMatchObject({ status: "failed", errorCode: "brew_failed" });
+    jobs.start("zapp", "download");
+    expect(jobs.get("zapp").phase).toBe("downloading");
+    for (let i = 0; i < 50 && jobs.get("zapp").status === "running"; i++) await Bun.sleep(5);
+    expect(jobs.get("zapp")).toMatchObject({ status: "succeeded", errorCode: null });
+    expect(calls).toEqual([["brew", "install", "zapp"]]);
+    expect(readdirSync(dir)).toEqual(["zapp"]);
+  });
+
+  test("a download asked for where there is no release file says so in words, with its code", async () => {
+    const out = await installTool("zapp", () => undefined, { ...mac, download: { arch: "ppc64", dir: tempDir("keyloom-kept-") } }, undefined, undefined, "download");
+    expect(out).toMatchObject({ ok: false, code: "no_asset", reason: expect.stringContaining("no download for this Mac's processor") });
+    const linux = await installTool("zapp", () => undefined, { platform: "linux", has: () => true, download: { arch: "x64" } }, undefined, undefined, "download");
+    expect(linux).toMatchObject({ ok: false, code: "unsupported_platform" });
+  });
+
   test("a processor with no Zapp release falls back to the Homebrew answer: keyloom can't install it here", async () => {
     const out = await installTool("zapp", () => undefined, { ...noBrew, download: { arch: "ppc64", dir: join(tempDir("keyloom-kept-"), "bin") } });
     expect(out).toMatchObject({ ok: false, code: "no_brew" });

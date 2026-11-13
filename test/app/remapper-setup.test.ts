@@ -2,7 +2,7 @@
 // brew, osascript or open. The quoting is checked against a real /bin/sh with printf, which only prints.
 import { afterEach, describe, expect, test } from "bun:test";
 import {
-  ADMIN_PROMPT, IDLE_INSTALL, type KanataInstall, ROOT_SCRIPT_ENV, SETTINGS_PANES, SETTINGS_PANE_NAMES, type Runner, type SetupDeps, type StreamRunner, adminCommand, appleScriptString,
+  ADMIN_PROMPT, IDLE_INSTALL, karabinerAppInstalled, type KanataInstall, ROOT_SCRIPT_ENV, SETTINGS_PANES, SETTINGS_PANE_NAMES, type Runner, type SetupDeps, type StreamRunner, adminCommand, appleScriptString,
   compareVersions, daemonInstallScript, installKanata, kanataInstaller, kanataUpdate, openSettingsPane, remapperSetupStatus, shellQuote, startKanataDaemon,
   streamRunner,
 } from "../../src/app/remapper-setup.ts";
@@ -63,8 +63,9 @@ function streamer(script: { lines?: string[]; code?: number; hold?: Promise<void
   return { calls, stream };
 }
 
+// kanata answers at once unless a test says otherwise, so Set up and start kanata's wait (R12-04) never asks a real port.
 const deps = (run: Runner, over: Partial<SetupDeps> = {}): SetupDeps => ({
-  run, stream: streamer().stream, platform: "darwin", brew: () => "/opt/homebrew/bin/brew", kanata: () => "/opt/homebrew/bin/kanata", ...over,
+  run, stream: streamer().stream, platform: "darwin", brew: () => "/opt/homebrew/bin/brew", kanata: () => "/opt/homebrew/bin/kanata", answers: async () => true, ...over,
 });
 
 const SHA = "a".repeat(64);
@@ -497,6 +498,17 @@ describe("the install job", () => {
   });
 });
 
+// R12-07: the import note's Open Karabiner-Elements opens the same bundle the checklist's button does, so it is offered only where that is.
+describe("karabinerAppInstalled", () => {
+  test("is the bundle Open Karabiner-Elements opens, on a Mac only", () => {
+    const asked: string[] = [];
+    expect(karabinerAppInstalled("darwin", (p) => (asked.push(p), true))).toBe(true);
+    expect(asked).toEqual([SETTINGS_PANES.karabiner_elements]);
+    expect(karabinerAppInstalled("darwin", () => false)).toBe(false);
+    expect(karabinerAppInstalled("linux", () => true)).toBe(false);
+  });
+});
+
 describe("starting kanata", () => {
   test("checks kanata can't run programs, then asks macOS for the password once to copy it and install the daemon (D-498)", async () => {
     const world = (w = remapperWorld());
@@ -575,6 +587,39 @@ describe("starting kanata", () => {
     const r = recorder();
     expect(await startKanataDaemon(MAC, deps(r.run, { kanata: () => undefined, remapper: world.over }))).toMatchObject({ ok: false, code: "no_kanata" });
     expect(r.calls).toEqual([]);
+  });
+
+  // R12-04: the root script ends before kanata answers, and the checklist reads again as soon as this returns.
+  test("waits for kanata to answer before it returns, so the checklist never reads a kanata still starting", async () => {
+    const world = (w = remapperWorld());
+    let asked = 0;
+    const slept: number[] = [];
+    const out = await startKanataDaemon(MAC, deps(recorder().run, { kanata: () => world.kanataBin, remapper: world.over, answers: async () => ++asked >= 3, sleep: async (ms) => { slept.push(ms); } }));
+    expect(out).toEqual({ ok: true });
+    expect(asked).toBe(3);
+    expect(slept).toEqual([500, 500]);
+  });
+
+  test("a kanata that doesn't answer by the deadline still counts as started: on a first run macOS's grants come next (D-559)", async () => {
+    const world = (w = remapperWorld());
+    let t = 0;
+    let asked = 0;
+    const out = await startKanataDaemon(MAC, deps(recorder().run, {
+      kanata: () => world.kanataBin, remapper: world.over, now: () => t,
+      answers: async (_board, timeoutMs) => { asked++; t += timeoutMs; return false; }, sleep: async (ms) => { t += ms; },
+    }));
+    expect(out).toEqual({ ok: true });
+    // The same 8 s deadline as Restart kanata's service: 1 s asks with half-second waits between them.
+    expect(t).toBe(8000);
+    expect(asked).toBe(6);
+  });
+
+  test("a start that failed doesn't wait for kanata", async () => {
+    const world = (w = remapperWorld());
+    let asked = 0;
+    const r = recorder({ osascript: { code: 1, out: "0:94: execution error: User canceled. (-128)" } });
+    expect(await startKanataDaemon(MAC, deps(r.run, { kanata: () => world.kanataBin, remapper: world.over, answers: async () => (asked++, true) }))).toMatchObject({ ok: false, code: "cancelled" });
+    expect(asked).toBe(0);
   });
 });
 

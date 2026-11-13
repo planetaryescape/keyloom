@@ -31,6 +31,14 @@ describe("importedNote", () => {
     expect(importedNote(result({ karabinerEdit: { entry: KARABINER_IGNORE_ENTRY, unimported: 2 } }))?.karabiner?.unimported).toStartWith("2 rules keyloom didn't import stop working");
   });
 
+  // R12-07: the checklist's Karabiner step has Open Karabiner-Elements; the note offers it too, only where the app is installed.
+  test("Open Karabiner-Elements is offered only where the server found the app", () => {
+    expect(importedNote(result({ karabinerEdit: { entry: KARABINER_IGNORE_ENTRY, unimported: 0, appInstalled: true } }))?.karabiner?.open).toBe(true);
+    expect(importedNote(result({ karabinerEdit: { entry: KARABINER_IGNORE_ENTRY, unimported: 0, appInstalled: false } }))?.karabiner?.open).toBe(false);
+    // An older server says nothing, so no button that might open nothing.
+    expect(importedNote(result({ karabinerEdit: { entry: KARABINER_IGNORE_ENTRY, unimported: 0 } }))?.karabiner?.open).toBe(false);
+  });
+
   test("another board's warnings show too, with no Karabiner words", () => {
     const note = importedNote(result({ name: "Daily", layers: 1, warnings: ["a warning"] }));
     expect(note).toMatchObject({ title: "Imported Daily, 1 layer", karabiner: null, warnings: ["a warning"], open: "Open Daily" });

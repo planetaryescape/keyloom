@@ -5,10 +5,13 @@ import type { Board } from "../boards/load.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import type { DfuTool } from "../firmware/qmk/dfu-flash.ts";
 import { findTool } from "../firmware/toolchain/kept-tools.ts";
-import { type InstallableTool, TOOL_PAGES, canInstall, downloadsHere } from "./tool-install.ts";
+import { type InstallableTool, TOOL_PAGES, canInstall, downloadable, downloadsHere } from "./tool-install.ts";
 
-/** `canDownload`: no Homebrew, and keyloom can fetch the tool's pinned release itself (Zapp only, D-561). */
-export type FlashTool = { name: InstallableTool; installed: boolean; canInstall: boolean; canDownload: boolean; url: string };
+/**
+ * `canDownload`: no Homebrew, and keyloom can fetch the tool's pinned release itself (Zapp only, D-561). `downloadable`: keyloom could fetch
+ * it here, Homebrew or not, so a failed Homebrew install offers the download beside Try again (R12-01).
+ */
+export type FlashTool = { name: InstallableTool; installed: boolean; canInstall: boolean; canDownload: boolean; downloadable: boolean; url: string };
 
 export type FlashPlan = {
   /** The board's own steps when keyloom can't flash it; null when keyloom flashes it. */
@@ -44,6 +47,7 @@ export function flashPlanFor(board: Board, boardRevision: string, deps: FlashPla
     tool: {
       name, installed: given !== undefined || has(name), canInstall: canInstall({ has, platform }),
       canDownload: downloadsHere(name, { has, platform, download: { arch: deps.arch } }),
+      downloadable: downloadable(name, { platform, download: { arch: deps.arch } }),
       url: TOOL_PAGES[name],
     },
     canReveal,

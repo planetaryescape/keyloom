@@ -46,6 +46,13 @@ export const SETTINGS_PANES = {
   docker_desktop: "/Applications/Docker.app",
 } as const;
 export type SettingsPane = keyof typeof SETTINGS_PANES;
+
+/**
+ * Whether Karabiner-Elements is where Open Karabiner-Elements opens it, so a Karabiner import's note offers that button only where it opens
+ * something (R12-07). The doctor reads the same bundle's Info.plist for the checklist's button.
+ */
+export const karabinerAppInstalled = (platform: NodeJS.Platform = process.platform, exists: (path: string) => boolean = existsSync): boolean =>
+  platform === "darwin" && exists(SETTINGS_PANES.karabiner_elements);
 export const SETTINGS_PANE_NAMES = Object.keys(SETTINGS_PANES) as [SettingsPane, ...SettingsPane[]];
 
 export type OpenSettingsResult = { ok: true } | { ok: false; code: "unsupported_platform" | "failed"; reason: string };
@@ -185,11 +192,14 @@ export type SetupDeps = {
   brew: () => string | undefined;
   kanata: () => string | undefined;
   remapper?: RemapperOverrides;
-  /** Whether kanata answers on its port within `timeoutMs`, after Restart kanata's service; a test describes it instead of asking a real kanata. */
+  /**
+   * Whether kanata answers on its port within `timeoutMs`, after Set up and start kanata or Restart kanata's service (R12-04); a test
+   * describes it instead of asking a real kanata.
+   */
   answers?: (boardId: string, timeoutMs: number) => Promise<boolean>;
-  /** The clock Restart kanata's service measures its wait with; a test passes one that its fake sleep moves. */
+  /** The clock those two measure their wait with; a test passes one that its fake sleep moves. */
   now?: () => number;
-  /** How Restart kanata's service waits between asks; a test passes one that doesn't. */
+  /** How those two wait between asks; a test passes one that doesn't. */
   sleep?: (ms: number) => Promise<void>;
   /** Where and how Get kanata downloads (D-560); tests pass a fake fetcher and a scratch folder. */
   download?: DownloadDeps;
@@ -349,7 +359,12 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   const setup = await setupRemapper(boardId, { ...deps.remapper, kanataBin: deps.kanata });
   if (setup.install === null) return { ok: false, code: setup.blocked?.code ?? "failed", reason: setup.blocked?.reason ?? "keyloom couldn't prepare kanata's setup." };
   const r = await deps.run(adminCommand(daemonInstallScript(setup.install), ADMIN_PROMPT));
-  return r.code === 0 ? { ok: true } : adminFailure(r, "You cancelled the password dialog, so kanata wasn't started.", "macOS couldn't start kanata");
+  if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so kanata wasn't started.", "macOS couldn't start kanata");
+  // The root script ends once launchd has the service, before kanata answers. The checklist reads again when this returns, so waiting here
+  // keeps it from saying "isn't answering" while kanata is still starting (R12-04). No answer is not a failure: on a first run kanata can't
+  // answer before macOS allows it, which is the next step (D-559).
+  await kanataAnswers(boardId, deps);
+  return { ok: true };
 }
 
 export const RESTART_PROMPT = "keyloom wants to restart kanata's background service, so your MacBook keyboard can type your layout.";
@@ -371,6 +386,12 @@ export async function restartKanataService(boardId: string, deps: SetupDeps): Pr
   if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "keyloom restarts kanata on macOS only." };
   const r = await deps.run(adminCommand(kanataRestartScript(), RESTART_PROMPT));
   if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so kanata's service wasn't restarted.", "macOS couldn't restart kanata's service");
+  if (await kanataAnswers(boardId, deps)) return { ok: true };
+  return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
+}
+
+/** Whether kanata answers within RESTART_WAIT_MS of now, after Set up and start kanata or Restart kanata's service started it. */
+async function kanataAnswers(boardId: string, deps: SetupDeps): Promise<boolean> {
   // One hello on kanata's port per ask: an answer is all the wait needs, not the layer names a full read fetches.
   const endpoint = remapperEnv(boardId, deps.remapper ?? {}).deps.endpoint;
   const answers = deps.answers ?? (async (_board: string, timeoutMs: number) => (await hello(endpoint, timeoutMs), true));
@@ -381,12 +402,12 @@ export async function restartKanataService(boardId: string, deps: SetupDeps): Pr
   const deadline = now() + RESTART_WAIT_MS;
   // No ask starts after the deadline, and none gets more than the time left (PR #319 CodeRabbit).
   for (let left = deadline - now(); left > 0; left = deadline - now()) {
-    if (await answers(boardId, Math.min(PROBE_MAX_MS, left)).catch(() => false)) return { ok: true };
+    if (await answers(boardId, Math.min(PROBE_MAX_MS, left)).catch(() => false)) return true;
     const rest = deadline - now();
     if (rest <= 0) break;
     await sleep(Math.min(RESTART_ASK_EVERY_MS, rest));
   }
-  return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
+  return false;
 }
 
 export type KanataLogResult = { ok: true; lines: string[] } | { ok: false; code: string; reason: string };

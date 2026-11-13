@@ -33,6 +33,16 @@ const realFetch: Fetcher = (url, init) => {
   return fetch(url, init);
 };
 
+/**
+ * Where a program the person gets from a release page by hand must go (R12-02): keyloom finds a tool on PATH (findTool, findKanata), and its
+ * own folder holds only what keyloom downloaded and checked, so a file left in Downloads is never found. kanata's release names its program
+ * after the processor (kanata_macos_arm64), and keyloom looks for `kanata`.
+ */
+export const HAND_PLACEMENT: Record<KeptTool, string> = {
+  zapp: "Put the zapp program in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.",
+  kanata: "Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.",
+};
+
 /** Whether keyloom can download this tool here: a Mac whose processor has a pinned release file. */
 export const canDownload = (tool: KeptTool, deps: Pick<DownloadDeps, "platform" | "arch"> = {}): boolean => pinnedAsset(tool, deps) !== null;
 
@@ -66,7 +76,7 @@ export async function downloadTool(tool: KeptTool, onLine: (line: string) => voi
   const failed = (detail: string): DownloadOutcome => ({ ok: false, code: "download_failed", reason: `keyloom couldn't download ${pin.name}: ${detail}. Check that this computer is online, then try again.` });
   const mismatch: DownloadOutcome = {
     ok: false, code: "checksum_mismatch",
-    reason: `The file keyloom downloaded isn't ${pin.name} ${pin.version} as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get ${pin.name} from its release page.`,
+    reason: `The file keyloom downloaded isn't ${pin.name} ${pin.version} as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get ${pin.name} from its release page. ${HAND_PLACEMENT[tool]}`,
   };
 
   onLine(`keyloom: downloading ${pin.name} ${pin.version} from ${asset.url}`);

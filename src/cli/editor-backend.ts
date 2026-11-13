@@ -5,6 +5,7 @@ import {
   ValidationResultSchema, getBuild, getFlash, importUpload, layoutExportDocument, listBoardDefinitions, listRevisions, startBuild, startFlash, undo, upgradeLayout,
   markOpened,
 } from "../app/index.ts";
+import { karabinerAppInstalled } from "../app/remapper-setup.ts";
 import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 
 type Build = Awaited<ReturnType<EditorBackend["startBuild"]>>;
@@ -64,8 +65,11 @@ async function orNull<T>(fn: () => Promise<T>): Promise<T | null> {
   }
 }
 
-/** `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait. */
-export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs" | "handsFree"> = {}, onApplied?: () => void, reveal: RevealDeps = {}): EditorBackend {
+/**
+ * `flash` carries what a flash needs beyond the build: tests point `volumesRoot` at a temporary directory and shorten the wait.
+ * `karabinerApp` says whether Karabiner-Elements is installed, for a Karabiner import's Open button (R12-07); tests describe it.
+ */
+export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoot" | "bootloaderWaitMs" | "handsFree"> = {}, onApplied?: () => void, reveal: RevealDeps = {}, karabinerApp: () => boolean = karabinerAppInstalled): EditorBackend {
   // Keyboard sync wakes at once on an Apply instead of at its next look; it would see the new head either way (it reads the database).
   const applied = <T>(value: T): T => {
     onApplied?.();
@@ -97,7 +101,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
       translate(async () => {
         const out = await importUpload(app, request);
         return { layoutId: out.layoutId, revisionId: out.revisionId, name: out.name, layers: out.report.layers, keysPerLayer: out.report.keysPerLayer, warnings: out.report.warnings,
-          ...(out.report.karabinerEdit === undefined ? {} : { karabinerEdit: out.report.karabinerEdit }) };
+          ...(out.report.karabinerEdit === undefined ? {} : { karabinerEdit: { ...out.report.karabinerEdit, appInstalled: karabinerApp() } }) };
       }),
     startBuild: (ref, request) =>
       translate(async () =>
