@@ -41,7 +41,7 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
     "rm -rf build",
     "[ -d .west ] || west init -l config",
     "export ZEPHYR_BASE=/work/zephyr",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
   ];
   return lines.join("\n");
 }

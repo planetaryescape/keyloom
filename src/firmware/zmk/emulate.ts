@@ -51,7 +51,7 @@ export function westEmulateScript(): string {
     ...READ_CONFIG,
     "[ -d .west ] || west init -l config",
     "export ZEPHYR_BASE=/work/zephyr",
-    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake`,
+    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache`,
     `echo ${RUN_MARKER}`,
     `${BUILD_DIR}/zephyr/zmk.exe -no-rt`,
     "",

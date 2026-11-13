@@ -28,7 +28,7 @@ Those old writable files are supporting observations. They do not establish trus
 The new cache fetches every project from its repository at the locked commit.
 
 Focused checks verify immutable revisions, module preservation, cache identity, discarded writable metadata, and read-only mount arguments.
-At candidate `2e847a8f`, both west recipes fetched every pinned input, then failed at `west zephyr-export`. The pinned export script writes `current_path.txt` beside itself, which a read-only source mount correctly rejects. Builds now set the pinned `ZEPHYR_BASE` and pass its exact `Zephyr_DIR` to CMake. They do not run package registration. A real CMake package lookup against the read-only pin succeeded with those explicit paths. Both firmware builds still need to pass after that correction.
+At candidate `2e847a8f`, both west recipes fetched every pinned input, then failed at `west zephyr-export`. The pinned export script writes `current_path.txt` beside itself, which a read-only source mount correctly rejects. Builds now set the pinned `ZEPHYR_BASE` and pass its exact `Zephyr_DIR` to CMake. They do not run package registration. A real CMake package lookup against the read-only pin succeeded with those explicit paths. The next real configure reached compiler capability checks, then exposed Zephyr's fallback cache under its source tree. `USER_CACHE_DIR` now points to `/tmp/keyloom-cache` inside the disposable container. Both firmware builds still need to pass after those corrections.
 No keyboard flash or hardware behavior is part of these checks.
 
 ## Update the lock with reviewed inputs

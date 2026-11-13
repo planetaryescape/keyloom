@@ -169,6 +169,7 @@ describe("the container scripts", () => {
     expect(westEmulateScript()).not.toContain("west update");
     expect(westEmulateScript()).not.toContain("git -C");
     expect(westEmulateScript()).not.toContain("west zephyr-export");
+    expect(westEmulateScript()).toContain("-DUSER_CACHE_DIR=/tmp/keyloom-cache");
     expect(westEmulateScript()).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
   });
 });
