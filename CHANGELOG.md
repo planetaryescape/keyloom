@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.78.1](https://github.com/planetaryescape/keyloom/compare/v0.78.0...v0.78.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* check for an open key when a failed undo is tried again, and assert the restart dialog opens ([11d90d1](https://github.com/planetaryescape/keyloom/commit/11d90d1e785f8dc983d7c13e09b86c77d1c0496b))
+* D-540's way out for the change check, Stop, Apply, the review read, History and the editor's toasts ([d45187b](https://github.com/planetaryescape/keyloom/commit/d45187b6bc9b175e2c4d8dccc4909eea69d0a5ed))
+* give a build whose Docker daemon stopped the docker_unavailable code ([33c0088](https://github.com/planetaryescape/keyloom/commit/33c00881cf93dd366dbd89064898e03719af8c00))
+* give the change check, a failed Stop, Apply, the review read, History and the editor's toasts D-540's way out ([9d1b380](https://github.com/planetaryescape/keyloom/commit/9d1b3807158fb60c701efb97dbfda487e5182e1c))
+* keep a failure's code in the config dialogs, import card, new-keyboard steps, welcome and mismatch page ([1ee57b9](https://github.com/planetaryescape/keyloom/commit/1ee57b92a344c5091c301159a08c833e17cfca9f))
+* keep the failure's code on Docker starts, installs and lab fixes ([512a6cf](https://github.com/planetaryescape/keyloom/commit/512a6cfe05c70f111d2bfdcda8c77a868771c2f8))
+* keyboards, configs and import keep a failure's code; Later doesn't reopen setup ([e123beb](https://github.com/planetaryescape/keyloom/commit/e123beba63aad8b70a84dad06e5e2c646a4185fe))
+* offer the fix for refused sync flashes, missing flash tools and Docker's build-cache outcomes ([bf79c7b](https://github.com/planetaryescape/keyloom/commit/bf79c7bf94a74edc5beefe2c31c44aaaff563a79))
+* offer the settings a sync's flash was refused for, and Build and flash for a missing flash tool ([b6bfc27](https://github.com/planetaryescape/keyloom/commit/b6bfc27acfd4c9da6d32a73e09450a2ecea287e5))
+* reread History after a gone version, name only the offer's features, and ignore a stop that fails after the reply ends ([3b9273d](https://github.com/planetaryescape/keyloom/commit/3b9273d74a91bb97266166aa299e0a6c72894441))
+* say what freeing Docker's build cache needs when it can't run ([5ed4287](https://github.com/planetaryescape/keyloom/commit/5ed42871e66711eeb3e53702aa23fa690ff12e4f))
+* show kanata's keyboard-name warning as a step, and keep the checklist's failure codes ([61d06da](https://github.com/planetaryescape/keyloom/commit/61d06da90abe173dc0bbe7c08303a8d1969bd560))
+* show the settings note only while the pill still offers that pane ([93d519e](https://github.com/planetaryescape/keyloom/commit/93d519e588ea6568228271c753fcc7fa1cfba62e))
+* stop a held run without a live view, say when Repeat's layout is gone, and close Compare after a retried go back ([0b86c12](https://github.com/planetaryescape/keyloom/commit/0b86c1267666ba40dcd65ce2a6cd91468562efdc))
+
 ## [0.78.0](https://github.com/planetaryescape/keyloom/compare/v0.77.0...v0.78.0) (2026-11-13)
 
 
