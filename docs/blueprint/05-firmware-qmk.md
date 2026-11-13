@@ -78,7 +78,7 @@ Board `keymapsDir` values must be relative paths without traversal. Before host 
 
 Status, 2026-11-13: D-580 separates trusted downloads from disposable build and emulation workspaces.
 
-The writable workspace lives at `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander/`. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. The identity hashes the repository URL and full commit SHA. Each run copies pinned source and requested submodules into the workspace, without Git metadata or previous output. Downloads remain warm. Host Git never reads the writable workspace. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
+The writable workspace lives at `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander/`. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. The identity hashes the repository URL, full commit SHA, and requested submodules. Each run copies pinned source and requested submodules into the workspace, without Git metadata or previous output. Downloads remain warm. Host Git never reads the writable workspace. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
 
 ```
 docker run --rm --user "$(id -u):$(id -g)" -w /qmk_firmware -v <checkout>:/qmk_firmware \

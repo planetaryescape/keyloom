@@ -67,7 +67,7 @@ await Bun.write(w("glove80.uf2"), combinedUf2());
 for (const board of [moonlanderBoard, glove]) {
   const rev = board.definition.revisions[0]!;
   const source = rev.build.kind === "zmk-moergo-template" ? rev.build.template : rev.source;
-  const dir = trustedCheckoutDir({ dir: checkoutDirFor(board), ...source, submodules: [] });
+  const dir = trustedCheckoutDir({ dir: checkoutDirFor(board), ...source, submodules: rev.build.kind === "qmk-docker" ? rev.build.submodules : [] });
   mkdirSync(join(dir, ".git"), { recursive: true });
   mkdirSync(join(dir, "config"), { recursive: true });
   writeFileSync(join(dir, "Makefile"), "all:\n");

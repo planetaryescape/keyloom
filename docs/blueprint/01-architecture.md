@@ -73,7 +73,7 @@ TypeScript, strict, ESM, on bun (D-029). One package. Folders are grouped by job
 
 Builds need Docker. That's a deliberate requirement (Q12). Both firmwares document Docker builds, and it keeps ARM toolchains, Python and Nix off BK's machine.
 
-- **Pinned checkouts** live in `$XDG_CACHE_HOME/keyloom/build/<board-slug>/`. The repo and SHA come from the board definition. keyloom clones on first build, verifies `git rev-parse HEAD` matches the pin, and refuses to build from a checkout that doesn't. `keyloom doctor` reports drift.
+- **Firmware inputs** use trusted Git caches beside the writable workspaces in `$XDG_CACHE_HOME/keyloom/build/` (D-580, D-581). QMK and Glove80 copy complete pinned snapshots without Git metadata into disposable workspaces. West mounts every locked project read-only. Host Git never opens old writable workspace metadata. Downloads remain warm, while each run discards earlier output. `keyloom doctor` checks the trusted snapshots.
 - **Runner:** `src/firmware/toolchain/run.ts` spawns subprocesses with `Bun.spawn`. It streams stdout and stderr to the log file and to progress events, and applies a timeout of 20 minutes for builds and 3 minutes per flash step.
 - **Flash tools:** `zapp` (Homebrew) for the Moonlander. For the Glove80, file copy to the boot volume. `keyloom doctor` checks both.
 
@@ -85,7 +85,7 @@ Builds need Docker. That's a deliberate requirement (Q12). Both firmwares docume
 | `$XDG_DATA_HOME/keyloom/keyloom.db` | The database ([02](02-layout-model.md#database)) |
 | `$XDG_DATA_HOME/keyloom/artifacts/` | Built `.bin` and `.uf2` files by build ID |
 | `$XDG_DATA_HOME/keyloom/logs/` | Build, flash and server logs |
-| `$XDG_CACHE_HOME/keyloom/build/` | Pinned firmware checkouts |
+| `$XDG_CACHE_HOME/keyloom/build/` | Trusted source caches and disposable firmware workspaces |
 | `$XDG_CACHE_HOME/keyloom/device-helper/<release>/<target>/<sha256>/` | Private verified helper executable; old versions coexist |
 
 On macOS the XDG defaults apply (`~/.config`, `~/.local/share`, `~/.cache`). That's the convention BK's CLIs use, and it keeps paths the same on Linux.

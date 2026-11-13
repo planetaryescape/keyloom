@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { CheckoutError, checkoutState, ensureCheckout, trustedCheckoutDir } from "../../../src/firmware/toolchain/checkout.ts";
 import { git, gitEnv, originRepo } from "../../helpers/git-fixture.ts";
-import { withPath } from "../../helpers/fake-bin.ts";
+import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
 // These tests spawn git clones and submodule fetches; loaded full runs have exceeded Bun's 5 s default.
@@ -32,14 +32,14 @@ describe("ensureCheckout", () => {
     expect(existsSync(`${dir}.partial-${process.pid}`)).toBe(false);
   });
 
-  test("a submodule that has not been fetched is fetched on the next use", async () => {
+  test("a new submodule set gets its own complete source snapshot", async () => {
     const origin = originRepo({ submodule: true });
     const dir = join(tempDir(), "board");
     await inFileProtocol(async () => {
       await ensureCheckout({ dir, repo: origin.url, sha: origin.sha, submodules: [] });
       expect(existsSync(join(dir, "lib/chibios/os.c"))).toBe(false);
       const spec = { dir, repo: origin.url, sha: origin.sha, submodules: ["lib/chibios"] };
-      expect((await checkoutState(spec) as { uninitialised: string[] }).uninitialised).toEqual(["lib/chibios"]);
+      expect(await checkoutState(spec)).toEqual({ present: false });
       await ensureCheckout(spec);
       expect(existsSync(join(dir, "lib/chibios/os.c"))).toBe(true);
     });
@@ -61,6 +61,24 @@ describe("ensureCheckout", () => {
     await expect(ensureCheckout({ dir, repo: origin.url, sha: "1".repeat(40), submodules: [] })).rejects.toBeInstanceOf(CheckoutError);
     expect(existsSync(dir)).toBe(false);
     expect(existsSync(`${dir}.partial-${process.pid}`)).toBe(false);
+  });
+
+  test("a failed submodule fetch does not publish a partial source cache", async () => {
+    const origin = originRepo({ submodule: true });
+    const dir = join(tempDir(), "workspace");
+    const spec = { dir, repo: origin.url, sha: origin.sha, submodules: ["lib/chibios"] };
+    const realGit = Bun.which("git");
+    if (!realGit) throw new Error("git is required");
+    const bin = fakeBinDir({ git: `if [ "$3" = submodule ] && [ "$4" = update ]; then exit 93; fi
+exec '${realGit}' "$@"` });
+    await withPath(bin, async () => {
+      await expect(ensureCheckout(spec)).rejects.toThrow(/git submodule update failed/);
+      expect(await checkoutState(spec)).toEqual({ present: false });
+    }, gitEnv);
+    await inFileProtocol(async () => {
+      await ensureCheckout(spec);
+      expect(await Bun.file(join(dir, "lib/chibios/os.c")).text()).toBe("int os;\n");
+    });
   });
 
   test("old writable Git configuration and tracked source never reach the next run", async () => {

@@ -34,10 +34,10 @@ See [the input-lock evidence](../research/west-input-lock.md) for provenance and
 
 ### D-580: Keep trusted Git downloads outside writable build and emulation mounts. Replaces D-081's shared checkout reuse.
 
-The writable workspace is disposable. Host Git only reads the separate source cache, keyed by repository URL and full commit SHA.
+The writable workspace is disposable. Host Git only reads the separate source cache, keyed by repository URL, full commit SHA, and requested submodules.
 Each run copies pinned source and its requested submodules into a fresh workspace, without Git metadata or earlier output.
 Copies use filesystem reflinks where available. They never use hard links.
-An interrupted copy cannot replace the workspace. A later run retries from the trusted source.
+A source snapshot publishes only after every requested submodule succeeds. An interrupted copy cannot replace the workspace. A later run retries from trusted source.
 The caller holds the workspace lock through the run. Downloads remain available for later builds.
 
 Reason: A2/C1 reproduced changed Makefiles, changed submodule files, and host command execution through writable Git configuration.

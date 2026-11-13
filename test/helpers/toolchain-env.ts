@@ -39,7 +39,7 @@ export async function toolchainEnv(opts: { zapp?: string } = {}) {
   const checkout = withPath(bin, async () => checkoutDirFor(showBoard("zsa/moonlander")), vars);
   const dir = await checkout;
   const rev = showBoard("zsa/moonlander").definition.revisions[0]!;
-  const trusted = trustedCheckoutDir({ dir, repo: rev.source.repo, sha: PIN, submodules: [] });
+  const trusted = trustedCheckoutDir({ dir, repo: rev.source.repo, sha: PIN, submodules: rev.build.kind === "qmk-docker" ? rev.build.submodules : [] });
   await Bun.$`mkdir -p ${join(trusted, ".git")}`;
   await Bun.write(join(trusted, "Makefile"), "all:\n");
   const app = openApp({ dataDir });
