@@ -272,8 +272,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       );
     },
   };
-  // A toast about another keyboard opens that keyboard's page, where its fix is, not this layout's Build and flash.
-  useSyncToasts(sync, toasts.show, refusalHandlers, { boardId: summary.boardId, openBoard });
+  // A toast about another keyboard, or another config of this one, opens that page, where its fix is, not this layout's Build and flash.
+  useSyncToasts(sync, toasts.show, refusalHandlers, { boardId: summary.boardId, layoutId: summary.id, openBoard, openConfig: (id) => switchLayout(id) });
   // A refused put-on says why in its dialog, with the same fix as the toast (R3-01). Restore and Replace it act on the config being put on.
   // Build and flash here builds this layout, so a put-on of another config opens that config, whose Build and flash builds it.
   const putOnProblem = (target: { id: string; name: string }) => (error: unknown) => {

@@ -141,7 +141,7 @@ describe("syncNotice", () => {
   test("a notice with no button is the same on any page", () => {
     const notice = syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: "zapp exited with code 1" }));
     if (notice === null) throw new Error("expected a notice");
-    expect(noticeOnPage(notice, at({ kind: "in_sync" }), "zsa/moonlander")).toBe(notice);
+    expect(noticeOnPage(notice, at({ kind: "in_sync" }), { boardId: "zsa/moonlander", layoutId: "lay_9" })).toBe(notice);
   });
 
   test("a failed sync says what failed", () => {
@@ -166,8 +166,8 @@ describe("syncNotice", () => {
     expect(JSON.stringify([notice, line])).not.toContain("Quit your Docker app");
     // Build and flash acts on the layout on screen: on the Glove80's page the notice keeps it, on another board's page it opens the Glove80.
     if (notice === null) throw new Error("expected a notice");
-    expect(noticeOnPage(notice, failed, "moergo/glove80")).toBe(notice);
-    expect(noticeOnPage(notice, failed, "zsa/moonlander")).toEqual({
+    expect(noticeOnPage(notice, failed, { boardId: "moergo/glove80", layoutId: "lay_1" })).toBe(notice);
+    expect(noticeOnPage(notice, failed, { boardId: "zsa/moonlander", layoutId: "lay_9" })).toEqual({
       kind: "error", message: "Docker isn't ready",
       detail: "keyloom couldn't build the change for your Glove80. Build and flash shows what Docker needs. Its page has Build and flash.",
       action: { id: "open_board", label: "Open Glove80" },
@@ -177,6 +177,21 @@ describe("syncNotice", () => {
     expect(syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: other.error }, other))).toEqual({
       kind: "error", message: "Couldn't build the change for your Glove80", detail: "The firmware build failed. Build and flash shows its log and can build it again.",
       action: { id: "open_release", label: "Build and flash…", buildId: "bld_1" },
+    });
+  });
+
+  // PR #306 review: the person moved to config B of the same Glove80 while A's sync built. Build and flash here would open B's dialog on
+  // A's build, which hides it as an older version; the toast opens A instead, whose pill has Build and flash on that build.
+  test("a failed sync of another config of this keyboard opens that config, never this config's Build and flash", () => {
+    const failedRun = { ...run("failed"), failure: "build", error: "build bld_A failed", errorCode: "disk_full", buildId: "bld_A" };
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: failedRun.error }, failedRun);
+    const notice = syncNotice(at(syncing), failed);
+    if (notice === null) throw new Error("expected a notice");
+    expect(notice.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_A" });
+    expect(noticeOnPage(notice, failed, { boardId: "moergo/glove80", layoutId: "lay_B" })).toEqual({
+      kind: "error", message: "Couldn't build the change for your Glove80",
+      detail: "Docker ran out of disk space, so the build stopped. Build and flash can free Docker's build cache. main's page has Build and flash.",
+      action: { id: "open_config", label: "Open main", layoutId: "lay_1" },
     });
   });
 

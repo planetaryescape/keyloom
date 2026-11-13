@@ -38,8 +38,8 @@ export function refusalProblem(error: { code?: string | undefined }, handlers: R
 /** The page that has a refusal's fix when this one doesn't: a config, by name. */
 export type Elsewhere = { name: string; open: () => void };
 
-/** The board on screen, and how to open another board's page, which a toast about that board offers. */
-export type SyncToastPage = { boardId: string; openBoard: (boardId: string) => void };
+/** The board and config on screen, and how to open another board's or config's page, which a toast about that one offers. */
+export type SyncToastPage = { boardId: string; layoutId: string; openBoard: (boardId: string) => void; openConfig: (layoutId: string) => void };
 
 // Says when a change reaches a keyboard, and when it doesn't. The first state after the page opens says nothing: it isn't news.
 export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, handlers: RefusalHandlers = {}, page?: SyncToastPage): void {
@@ -56,11 +56,13 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
       for (const board of sync.boards) {
         const raw = syncNotice(before.current.get(board.boardId), board);
         if (raw === null) continue;
-        const notice = noticeOnPage(raw, board, pageNow.current?.boardId);
-        const openBoard = pageNow.current?.openBoard;
-        const action = notice.action?.id === "open_board"
-          ? (openBoard === undefined ? undefined : { label: notice.action.label, run: () => openBoard(board.boardId) })
-          : buttonFor(notice.action === undefined ? undefined : { id: notice.action.id, label: notice.action.label, buildId: notice.action.buildId }, current);
+        const notice = noticeOnPage(raw, board, pageNow.current);
+        const page = pageNow.current;
+        const to = notice.action;
+        const action = to === undefined ? undefined
+          : to.id === "open_config" ? (page === undefined ? undefined : { label: to.label, run: () => page.openConfig(to.layoutId) })
+          : to.id === "open_board" ? (page === undefined ? undefined : { label: to.label, run: () => page.openBoard(board.boardId) })
+          : buttonFor({ id: to.id, label: to.label, buildId: to.buildId }, current);
         show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
       }
     }

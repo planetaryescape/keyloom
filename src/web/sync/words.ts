@@ -210,15 +210,23 @@ export function autoSyncLine(board: BoardSync): AutoSyncLine {
 const seconds = (ms: number | null): string | null => (ms === null ? null : `${Math.max(1, Math.round(ms / 1000))} s`);
 
 /** The toast for a board whose state just changed, or null when nothing needs saying. `action` is the toast's button. */
-export type SyncNotice = { kind: "success" | "error"; message: string; detail?: string; action?: { id: RefusalAction | "open_board"; label: string; buildId?: string } };
+export type SyncNotice = {
+  kind: "success" | "error"; message: string; detail?: string;
+  action?: { id: RefusalAction | "open_board"; label: string; buildId?: string } | { id: "open_config"; label: string; layoutId: string };
+};
 
 /**
  * A notice as the page on screen can act on it. Its button acts on the layout on screen, so a notice about another keyboard (its
- * auto-sync ran while this page was open) offers to open that keyboard instead, where its sync line has the same button.
+ * auto-sync ran while this page was open) offers to open that keyboard instead, where its sync line has the same button. A notice about
+ * another config of this keyboard (the person moved on while its build ran) opens that config the same way: Build and flash here would
+ * open this config's dialog on the other config's build (PR #306 review).
  */
-export function noticeOnPage(notice: SyncNotice, board: Pick<BoardSync, "boardId" | "boardName">, pageBoardId: string | undefined): SyncNotice {
-  if (notice.action === undefined || board.boardId === pageBoardId) return notice;
-  return { ...notice, detail: `${notice.detail ?? ""} Its page has ${notice.action.label.replace(/…$/, "")}.`.trim(), action: { id: "open_board", label: `Open ${board.boardName}` } };
+export function noticeOnPage(notice: SyncNotice, board: Pick<BoardSync, "boardId" | "boardName" | "layoutId" | "layoutName">, page: { boardId: string; layoutId: string } | undefined): SyncNotice {
+  if (notice.action === undefined || page === undefined) return notice;
+  const label = notice.action.label.replace(/…$/, "");
+  if (board.boardId !== page.boardId) return { ...notice, detail: `${notice.detail ?? ""} Its page has ${label}.`.trim(), action: { id: "open_board", label: `Open ${board.boardName}` } };
+  if (board.layoutId === page.layoutId) return notice;
+  return { ...notice, detail: `${notice.detail ?? ""} ${board.layoutName}'s page has ${label}.`.trim(), action: { id: "open_config", label: `Open ${board.layoutName}`, layoutId: board.layoutId } };
 }
 
 export function syncNotice(before: BoardSync | undefined, after: BoardSync): SyncNotice | null {
