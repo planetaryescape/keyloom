@@ -17,9 +17,11 @@ export function rereadToast({ message, lead, error, label, again, open, showOthe
 }): ToastInput {
   const failure = pageFailure(error, "");
   if (failure.code === "not_found" && failure.generic !== true) {
+    // Without the page's other layouts, restarting keyloom opens it on them. The dialog draws Restart keyloom only for a failure that keeps
+    // its code and is marked as one a second read can't pass (`generic`), so a codeless failure would leave it with Close alone.
     const action = showOthers !== undefined
       ? { label: "Show your other layouts", run: showOthers }
-      : { label: "Restart keyloom", run: () => open({ failure: { message: LAYOUT_GONE_REREAD }, title: message }) };
+      : { label: "Restart keyloom", run: () => open({ failure: { ...failure, message: LAYOUT_GONE_REREAD, generic: true }, title: message }) };
     return { kind: "error", message, detail: LAYOUT_GONE_REREAD, action };
   }
   const detail = [lead ?? "", failure.message.trim()].filter(Boolean).join(" ");

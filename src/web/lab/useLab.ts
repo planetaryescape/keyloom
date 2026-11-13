@@ -60,8 +60,10 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     setPhase({ kind: "start" });
   }, [open, token]);
 
+  // A later action's own failure replaces a failed list load's, so its code picks the button, not the load's Try again (#313 review).
   const say = (error: unknown) => {
     setFailedRead(null);
+    setLoadFailed(false);
     setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
     // Keeps whether a not_found is keyloom's catch-all, which names no session (R10-07).
     setProblemCode(labProblemCode(error));
@@ -71,6 +73,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     lastChoice.current = choice;
     setProblem(null);
     setProblemCode(null);
+    setLoadFailed(false);
     setFailedRead(null);
     try {
       const r = await api.startRecording(token, layoutRef, choice);
@@ -86,6 +89,7 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     setPhase({ kind: "reading" });
     setProblem(null);
     setProblemCode(null);
+    setLoadFailed(false);
     setFailedRead(null);
     try {
       const r = run ? await api.analyse(token, id) : await api.fetchReadout(token, id);
@@ -126,8 +130,10 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
       await api.cancelRecording(token);
       setProblem(null);
       setProblemCode(null);
+      setLoadFailed(false);
     } catch (error) {
       setFailedRead(null);
+      setLoadFailed(false);
       setProblem(error instanceof Error ? error.message : "The server didn't answer.");
       // A cancel that would fail the same way again gets Restart keyloom, not Stop again (R10-07).
       setProblemCode(labCancelCode(error));

@@ -190,3 +190,9 @@ test("a cancel that fails the same way again gets Restart keyloom; one that can 
     expect(labFixes(labCancelCode(error), false).map((f) => f.id)).toEqual(["stop_recording"]);
   }
 });
+
+// #313 review: a catch-all 404 on Start listening, while a list read had failed earlier, still offers Restart keyloom straight away.
+test("keyloom's catch-all 404 gets Restart keyloom even after a list failed to load", () => {
+  const code = labProblemCode(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true }));
+  expect(labFixes(code, true).map((f) => f.id)).toEqual(["restart"]);
+});

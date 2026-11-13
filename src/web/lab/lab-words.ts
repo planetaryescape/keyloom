@@ -25,7 +25,8 @@ export function labCancelCode(error: unknown): "cancel_failed" | "cancel_stuck" 
 
 export function labFixes(code: string | null, loadFailed: boolean): LabFix[] {
   // A list that couldn't be read because keyloom can't read its answers, or doesn't know the route, fails the same way: restart (R7-01).
-  if (loadFailed && (code === "unreadable" || code === "not_found")) return [{ id: "restart", label: "Restart keyloom" }];
+  // The page's own `unexpected_not_found` is that catch-all 404 too, wherever it came from (#313 review).
+  if (loadFailed && (code === "unreadable" || code === "not_found" || code === "unexpected_not_found")) return [{ id: "restart", label: "Restart keyloom" }];
   if (loadFailed) return [{ id: "reload", label: "Try again" }];
   // No keyboard to listen to, or the computer refused it: plug it in or allow it, then the same passage starts again (R7-07).
   if (code === "not_connected" || code === "permission_denied") return [{ id: "retry", label: "Try again" }];
@@ -112,12 +113,21 @@ export function labFixClosed(status: "proposed" | "applied" | "rejected" | "supe
 }
 
 /**
- * A fix keyloom's checks refused on the layout as it is now (R10-12). The check's own reason follows, when this keyloom stored one. The fix
- * can't be applied, so the screen hides Apply and offers Type again, which records on the layout as it is now. Pure.
+ * Why a fix has no proposal to apply (R10-12, #313 review). Only a refusal stores `problem`, so a string means keyloom's checks refused the
+ * fix on the layout as it is now, and the check's own reason follows. No `problem` means keyloom never tried to propose it, as after
+ * `keyloom lab analyse --no-propose`: no check ran, so the words never say one refused it. Pure.
  */
-export function refusedFixWords(problem: string | null | undefined): string {
+export function noProposalWords(problem: string | null | undefined): string {
+  if (typeof problem !== "string") return NOT_PROPOSED;
   const lead = "keyloom's checks refused this fix on your layout as it is now, so it can't be applied.";
-  if (problem == null || problem.trim() === "") return lead;
   const reason = problem.trim();
+  if (reason === "") return lead;
   return `${lead} ${reason.charAt(0).toUpperCase()}${reason.slice(1)}${/[.!?]$/.test(reason) ? "" : "."}`;
 }
+
+/** A fix keyloom read but never proposed, so Read it again with fixes, which proposes them, is its way on. */
+export const NOT_PROPOSED = "keyloom didn't propose this fix when it read this recording, so there is nothing to apply yet.";
+export const READ_WITH_FIXES = "Read it again with fixes";
+
+/** True for a fix keyloom never proposed (no stored refusal), which reading the recording again with fixes proposes. */
+export const notProposed = (s: { proposal: unknown; problem?: string | null | undefined }): boolean => s.proposal === null && typeof s.problem !== "string";

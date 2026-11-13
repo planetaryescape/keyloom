@@ -199,7 +199,6 @@ function sessionRow(app: App, id: string): TypingSessionRow {
 
 // --- analysing --------------------------------------------------------------------------------
 
-/** An analysis as it is stored: the engine's result, and the change sets made from its suggestions. */
 /** The validator's first error, from a refusal that carries its result: its words for the person (`plain`, D-101), else its message. */
 export function firstErrorOf(err: ValidationFailedError): string | null {
   // SAFETY: read as unknowns and checked below; a refusal without a validator result yields null.
@@ -209,6 +208,7 @@ export function firstErrorOf(err: ValidationFailedError): string | null {
   return null;
 }
 
+/** An analysis as it is stored: the engine's result, and the change sets made from its suggestions. */
 export type StoredAnalysis = Analysis & { proposals: Array<{ candidateId: string; changeSetId: string | null; problem?: string }> };
 
 export type AnalyseOptions = {
@@ -343,7 +343,6 @@ export function typingFindings(app: App, layoutId: string): TypingFindings {
   const stored = row.analysis as StoredAnalysis;
   const view = getLayout(app, layoutId, row.revisionId);
   const byCandidate = new Map(stored.proposals.map((p) => [p.candidateId, p.changeSetId]));
-  const problemOf = new Map(stored.proposals.map((p) => [p.candidateId, p.problem ?? null]));
   return {
     sessions: all.length,
     analysed: analysed.length,

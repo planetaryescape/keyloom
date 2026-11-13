@@ -23,7 +23,7 @@ import { chooseProvider, fetchConversation } from "./api-chat.ts";
 
 import { keyLabel, layerName } from "./proposal-facts.ts";
 import { ProposalCard as ProposalCardView } from "./ProposalCard.tsx";
-import { recheckFailure, repairWords } from "./repair-words.ts";
+import { type RecheckGone, recheckFailure, recheckGone, repairWords } from "./repair-words.ts";
 import { AssistantMessage, UserMessage } from "./Turns.tsx";
 import { madeConfigs } from "../configs/agent-made-configs.ts";
 import { useConfigCards } from "../configs/useConfigCards.ts";
@@ -197,8 +197,10 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // A failed recheck before a repair request is sent, kept with its code and the request it was for (R10-11).
   const [recheckProblem, setRecheckProblem] = useState<{ id: string; failure: PageFailure } | null>(null);
   const [invalidRecovery, setInvalidRecovery] = useState<string | null>(null);
+  // A request whose conversation or layout the send's recheck found gone, and which one: it can never be sent (#313 review).
+  const [goneRecovery, setGoneRecovery] = useState<{ id: string; what: RecheckGone } | null>(null);
   // A request the send found out of date (`invalidRecovery`) gets the out-of-date words and buttons too, not "check before sending" (R7-14).
-  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent && invalidRecovery !== repairDraft.id, checking: repairChecking, replying: streaming });
+  const repairView = repairDraft === null ? null : repairWords("source" in repairDraft ? "proposal" : "buildId" in repairDraft ? "build" : "finding", { sent: repairSent, current: repairCurrent && invalidRecovery !== repairDraft.id, checking: repairChecking, replying: streaming, gone: goneRecovery?.id === repairDraft.id ? goneRecovery.what : null });
   const recheck = recheckProblem !== null && recheckProblem.id === repairDraft?.id ? recheckProblem.failure : null;
   const repairGate = useRef<(id: string, request: string) => boolean>(() => false);
   useLayoutEffect(() => {
@@ -439,20 +441,29 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     setRecoveryNotice(null);
     setRecheckProblem(null);
     const unlock = () => { if (repairSubmitLock.current === repairDraft.id) repairSubmitLock.current = null; };
+    // The route's own `not_found` means what was being read is gone, so the request is out of date for good: Send goes off, Dismiss stays.
+    let reading: RecheckGone = "layout";
+    const failed = (error: unknown) => {
+      const gone = recheckGone(error, reading);
+      if (gone !== null) { setInvalidRecovery(repairDraft.id); setGoneRecovery({ id: repairDraft.id, what: gone }); } else setRecheckProblem({ id: repairDraft.id, failure: recheckFailure(error) });
+      unlock();
+    };
     if ("source" in repairDraft && repairDraft.source.conversationId) {
       try {
         const source = repairDraft.source;
+        reading = "conversation";
         const detail = await fetchConversation(token, source.conversationId!, new AbortController().signal);
+        reading = "layout";
         const head = await fetchLayout(token, layoutRef, new AbortController().signal);
         const current = detail.conversation.layoutId === layoutRef && head.revision.id === repairDraft.headRevisionId && (source.kind === "proposal" ? detail.proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed") : declinedProposalCodes(detail.presentations?.find((p) => p.userMessageId === source.userMessageId)).length > 0);
         if (!current) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or the proposal changed, so this request wasn't sent. It is kept below."); unlock(); return; }
-      } catch (error) { setRecheckProblem({ id: repairDraft.id, failure: recheckFailure(error) }); unlock(); return; }
+      } catch (error) { failed(error); return; }
     } else if ("source" in repairDraft && repairDraft.source.kind === "proposal") {
       try {
         const source = repairDraft.source;
         const [head, proposals] = await Promise.all([fetchLayout(token, layoutRef, new AbortController().signal), fetchOpenProposals(token, layoutRef)]);
         if (head.revision.id !== repairDraft.headRevisionId || !proposals.some((p) => p.changeSetId === source.proposalId && p.status === "proposed")) { setInvalidRecovery(repairDraft.id); setRecoveryNotice("The layout or the proposal changed, so this request wasn't sent. It is kept below."); unlock(); return; }
-      } catch (error) { setRecheckProblem({ id: repairDraft.id, failure: recheckFailure(error) }); unlock(); return; }
+      } catch (error) { failed(error); return; }
     }
     if (!repairGate.current(repairDraft.id, repairDraft.request)) { unlock(); return; }
     repairRunId.current = repairDraft.id;

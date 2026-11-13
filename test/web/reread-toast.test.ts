@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { ApiError, UNREACHABLE } from "../../src/web/api.ts";
 import { LAYOUT_GONE_REREAD, rereadToast } from "../../src/web/editor/reread-toast.ts";
 import type { UnexpectedDialog } from "../../src/web/shell/failed-toast.ts";
-import { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS } from "../../src/web/shell/unexpected.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS, wayOutFor } from "../../src/web/shell/unexpected.ts";
 
 function toast(error: unknown) {
   const opened: UnexpectedDialog[] = [];
@@ -52,4 +52,7 @@ test("a layout deleted elsewhere offers the page's other layouts, never a read t
   expect(alone.action?.label).toBe("Restart keyloom");
   alone.action?.run();
   expect(opened[0]?.retry).toBeUndefined();
+  // Its dialog keeps the failure's code, so it draws Restart keyloom, not only Close.
+  expect(opened[0]?.failure).toMatchObject({ code: "not_found", message: LAYOUT_GONE_REREAD });
+  expect(wayOutFor(opened[0]!.failure, false)).toEqual({ retry: false, restart: true });
 });

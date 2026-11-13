@@ -109,7 +109,7 @@ export const LabReadoutSchema = z.object({
     /** One misfire it removes, slowed down: the key held, the next key, the times. */
     example: z.object({ position: z.number().int(), held: z.string(), next: z.string().nullable(), heldMs: z.number(), overlapMs: z.number(), termMs: z.number().nullable() }).nullable(),
     proposal: ProposalCardSchema.nullable(),
-    /** Why keyloom's check refused to propose it on the layout as it is now (R10-12). Null when it was proposed; absent from older keyloom. */
+    /** Why keyloom's check refused to propose it on the layout as it is now (R10-12). Null when it was proposed, or never tried (`lab analyse --no-propose`). */
     problem: z.string().nullable().optional(),
   })),
   notes: z.array(z.string()),
