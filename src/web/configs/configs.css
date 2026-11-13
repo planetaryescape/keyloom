@@ -146,7 +146,8 @@
 /* Dialogs: the layer dialogs' shape, near the top so the board stays in view under them. */
 .config-dialog {
   width: min(440px, calc(100vw - 2 * var(--space-4)));
-  max-height: calc(100dvh - 2 * var(--space-5));
+  /* The top margin counts too, or a tall dialog's footer runs off a phone's screen (R10-15). */
+  max-height: calc(100dvh - 72px - var(--space-5));
   margin: 72px auto auto;
   padding: var(--space-5) var(--space-5) var(--space-4);
   border: 0;

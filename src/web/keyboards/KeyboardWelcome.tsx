@@ -6,7 +6,7 @@ import { CollectionResponseSchema, type CollectionKeyboard } from "../../api/key
 import { request } from "../api-write.ts";
 import type { SyncApi } from "../sync/useSync.ts";
 import { ImportScreen } from "../import/ImportScreen.tsx";
-import { keyboardKey, useNewKeyboard } from "./useNewKeyboard.ts";
+import { type CardMemory, keyboardKey, useNewKeyboard } from "./useNewKeyboard.ts";
 import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SearchFailed } from "./SearchFailed.tsx";
@@ -24,7 +24,7 @@ import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import "./collection.css";
 
-export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0 }: {
+export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0, cardMemory }: {
   token: string; choices: readonly BoardChoice[];
   /** Where the read of `choices` stands (R6-04): the list says it is reading, or that it couldn't, with Try again. */
   boardsRead?: BoardsRead; onRetryBoards?: () => void;
@@ -36,8 +36,10 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFa
   setup?: { id: string; name: string } | null; onSetupOpened?: () => void;
   sync: SyncApi; sources: readonly PutSource[];
   onMade: (id: string, proposals?: boolean) => void; onManage: (removed?: boolean) => void; onBack?: (() => void) | undefined; collectionVersion?: number;
+  /** App's memory of the cards already shown or put off, so the editor doesn't open them again (R10-08). */
+  cardMemory?: CardMemory | undefined;
 }) {
-  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded);
+  const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded, { memory: cardMemory });
   const chooseKnown = flow.chooseKnown;
   // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
   const [importing, setImporting] = useState<{ board: string | null } | null>(null);
@@ -94,7 +96,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFa
   const rows = choices.filter((board) => `${board.name} ${board.vendor} ${board.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const note = catalogueNote(boardsRead, collection !== null ? "ready" : collectionProblem !== null ? "failed" : "loading", rows.length, firmwareSearch);
   return <div className="keyboard-welcome">
-    <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen)}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
+    <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen, flow.step.kind === "idle")}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
       <section className="onboarding-stage" aria-label="Keyboard setup">
         {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={shownHalf} onSwipe={shownHalf === null ? undefined : (direction) => setHalf(direction === "left" ? "right" : "left")} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}

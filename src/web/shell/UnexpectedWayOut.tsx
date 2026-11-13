@@ -49,12 +49,15 @@ export function RetryOrRestart({ token, failure, onRetry, retryDisabled = false,
 /**
  * A failed action's line, where the control that failed stays and is the Try again (R8-03): the sentence, then Restart keyloom and the
  * log for a failure no screen planned for. Without a token it is the sentence alone.
+ *
+ * `primary`: the control that failed went off because it would fail the same way again (`failsAgain`), so Restart keyloom is the way on
+ * and the primary button (R10-05). Otherwise the control is still the Try again and keeps that place.
  */
-export function FailureNote({ token, failure, className }: { token: string | undefined; failure: PageFailure; className: string }) {
+export function FailureNote({ token, failure, className, primary = false }: { token: string | undefined; failure: PageFailure; className: string; primary?: boolean }) {
   return (
     <div className={className} role="alert">
       <p>{failure.message}</p>
-      {token === undefined ? null : <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={failure} primary={false} /></div>}
+      {token === undefined ? null : <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={failure} primary={primary} /></div>}
     </div>
   );
 }

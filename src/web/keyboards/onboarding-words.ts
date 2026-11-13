@@ -5,14 +5,18 @@ import type { BoardChoice } from "../../api/http.ts";
 
 type Firmware = BoardChoice["firmware"];
 
-/** The welcome's line under its heading. `chosen`: the firmware of the board being set up, or null before one is picked. */
-export function welcomeLead(chosen: Firmware | null): string {
+/**
+ * The welcome's line under its heading. `chosen`: the firmware of the board being set up, or null before one is picked or for a keyboard
+ * keyloom hasn't met. `listed`: the list of keyboards shows below; while a keyboard is being set up it doesn't, so "choose it below"
+ * would point at nothing (R10-04).
+ */
+export function welcomeLead(chosen: Firmware | null, listed: boolean = chosen === null): string {
   if (chosen === "kanata") return "keyloom remaps your MacBook's own keyboard through kanata. Setup changes nothing on this Mac.";
-  if (chosen === null) return "Connect a keyboard or choose it below. Setup never changes a keyboard.";
-  return "Connect a keyboard or choose it below. Setup never flashes it.";
+  if (listed) return "Connect a keyboard or choose it below. Setup never changes a keyboard.";
+  return "Setup never flashes your keyboard.";
 }
 
-/** The setup card's lead after "nothing of yours is on it": when a change first reaches the keyboard. */
+/** The end of the setup card's lead: when a change first reaches the keyboard. */
 export const setupWrites = (firmware: Firmware | undefined): string =>
   firmware === "kanata" ? "Nothing changes on your MacBook until you apply a change." : "Nothing is written to the keyboard until you apply a change.";
 

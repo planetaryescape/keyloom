@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import type { ApiCandidate, DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { PreviewResponse, PutPreviewResponse, PutResponse } from "../../api/keyboards.ts";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -73,6 +73,10 @@ export const addProblem = (error: unknown, step: AddContext, preview: Pick<Previ
   return words === null ? failure : { ...failure, message: words.text };
 };
 
+/** Add refused because keyloom already has the board (R10-13), such as one another tab added after the preview: that board, or null. */
+export const addedElsewhere = (error: unknown, step: AddContext): KnownBoardRef | null =>
+  error instanceof ApiError && error.code === "board_known" ? knownBoardOf(error, step.candidate.name) : null;
+
 /**
  * Add refused for a reason the same answers hit again (R7-11), such as a derived board that fails the boards check: the Review step shows
  * why with the contribution guide in place of Add. Null for a refusal that Add again can get past, which shows as a plain problem.
@@ -109,10 +113,39 @@ export function cardToOpen(offered: readonly DetectedKeyboard[], setupWaiting: r
 export const shownAfterClose = (step: NewBoardStep, shown: ReadonlySet<string>): ReadonlySet<string> =>
   step.kind === "put" && !shown.has(step.boardId) ? new Set([...shown, step.boardId]) : shown;
 
-/** `onAdded`: a board was just added, so whatever lists keyloom's boards reads them again, or it is missing until a reload (R8-06). */
-export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = [], onAdded?: () => void) {
-  const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
+/**
+ * What the plugged-in keyboards' cards remember (R10-08): the keyboards and boards put off with Not now (`dismissed`), and those whose card
+ * already opened by itself (`shown`). App keeps one for the whole page, because a config switch remounts the editor, and a memory of its
+ * own would open a card the person had already closed.
+ */
+export interface CardMemory {
+  dismissed: ReadonlySet<string>;
+  setDismissed: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  shown: MutableRefObject<ReadonlySet<string>>;
+}
+
+export function useCardMemory(): CardMemory {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const shown = useRef<ReadonlySet<string>>(new Set());
+  return { dismissed, setDismissed, shown };
+}
+
+/**
+ * Any dialog is open on the page, from this screen or another (Your keyboards, Build and flash). A card doesn't open by itself under one,
+ * where its backdrop would hide it (R10-08).
+ */
+const dialogOpen = (): boolean => typeof document !== "undefined" && document.querySelector("dialog[open]") !== null;
+
+/**
+ * `onAdded`: a board was just added, so whatever lists keyloom's boards reads them again, or it is missing until a reload (R8-06).
+ * `memory`: App's card memory, shared by every screen that mounts this (R10-08); without it the hook keeps its own. `hold`: a card must not
+ * open by itself now, such as while the board review is open. It opens once the hold ends.
+ */
+export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboard[], knownWithNoConfig: readonly DetectedKeyboard[] = [], onAdded?: () => void,
+  { memory, hold = false }: { memory?: CardMemory | undefined; hold?: boolean } = {}) {
+  const [step, setStep] = useState<NewBoardStep>({ kind: "idle" });
+  const ownMemory = useCardMemory();
+  const { dismissed, setDismissed, shown } = memory ?? ownMemory;
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [putPreview, setPutPreview] = useState<PutPreviewResponse | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -137,8 +170,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   // The Put step's map that failed replaces "Mapping it…"; Try again reads it again (R6-05).
   const [putFailure, setPutFailure] = useState<PutProblem | null>(null);
   const [putAttempt, setPutAttempt] = useState(0);
-  // A failed QMK and ZMK search, apart from other problems, so its alert carries Search again (R6-19).
-  const [searchProblem, setSearchProblem] = useState<string | null>(null);
+  // A failed QMK and ZMK search, apart from other problems, so its alert carries Search again (R6-19). Kept whole, so one that fails the
+  // same way every time offers Restart keyloom in place of Search again (R10-07).
+  const [searchProblem, setSearchProblem] = useState<PageFailure | null>(null);
   // A config refused because its keyboard was removed (R6-08): the page offers Restore, then does this again.
   const [removed, setRemoved] = useState<"blank" | "make" | null>(null);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
@@ -147,17 +181,29 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
-  const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
+  // Every known board with no config: the board switch's chip, which stays after Not now (D-336), as the chip for `waiting` does.
+  const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null);
+  const setupOffered = setupWaiting.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
 
-  // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch.
-  const shown = useRef<ReadonlySet<string>>(new Set());
+  // A dialog closed, such as Build and flash by its Close button. Its host closes it in an effect that runs after the card's, and nothing
+  // else may re-render the page after that, so a held card would wait for an unrelated change. `close` doesn't bubble, so it is caught on
+  // the way down.
+  const [, setDialogsClosed] = useState(0);
   useEffect(() => {
-    if (step.kind !== "idle") return;
-    const open = cardToOpen(offered, setupWaiting, shown.current);
+    const onClose = () => setDialogsClosed((n) => n + 1);
+    document.addEventListener("close", onClose, true);
+    return () => document.removeEventListener("close", onClose, true);
+  }, []);
+
+  // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch. The effect runs on
+  // every render (`offered` is a new list each time), so a card held back opens on the first render after the hold or the dialog ends.
+  useEffect(() => {
+    if (step.kind !== "idle" || hold || dialogOpen()) return;
+    const open = cardToOpen(offered, setupOffered, shown.current);
     if (open === null) return;
     shown.current = new Set([...shown.current, open.shown]);
     setStep(open.step);
-  }, [offered, setupWaiting, step.kind]);
+  }, [offered, setupOffered, step.kind, hold, shown]);
 
   // The card's keyboard was unplugged: the card goes with it, unless BK is already past choosing.
   useEffect(() => {
@@ -240,7 +286,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setFoundFor(text.trim());
       }
     } catch (e) {
-      if (searchSequence.current === sequence) setSearchProblem(message(e));
+      if (searchSequence.current === sequence) setSearchProblem(pageFailure(e, "That didn't work."));
     }
   }, [token]);
 
@@ -344,8 +390,12 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
         onAdded?.();
       } catch (e) {
+        // Another tab or the CLI added this board after the preview (R10-13). Say so as the preview does, with Put a config on it, never
+        // the server's sentence, which names CLI flags.
+        const known = addedElsewhere(e, step);
         const blocked = blockedAdd(e, step, preview);
-        if (blocked !== null && confirmKey !== null) setAddRefusal({ key: confirmKey, problem: blocked });
+        if (known !== null) { setPreviewProblemCode("board_known"); setPreviewProblemBoard(known); }
+        else if (blocked !== null && confirmKey !== null) setAddRefusal({ key: confirmKey, problem: blocked });
         else setProblem(addProblem(e, step, preview));
       } finally {
         setBusy(false);

@@ -16,6 +16,7 @@ import { putProblem } from "../../src/web/keyboards/put-words.ts";
 import { RestoreKeyboard, keyboardRemoved, removedWords, restoreThenRetry } from "../../src/web/keyboards/RestoreKeyboard.tsx";
 import { SearchFailed } from "../../src/web/keyboards/SearchFailed.tsx";
 import { knownBoardOf, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { INTERNAL_WORDS, UNREADABLE_WORDS } from "../../src/web/shell/unexpected.ts";
 
 const board = (id: string, name: string, importers: string[], firmware: BoardChoice["firmware"] = "zmk"): BoardChoice => ({ id, name, vendor: "v", firmware, keyCount: 42, importers });
 const glove = board("moergo/glove80", "Glove80", ["zmk-layout-editor-keymap"]);
@@ -119,8 +120,10 @@ describe("R6-08: a config refused because its keyboard was removed", () => {
     expect(retried).toBe(1);
     expect(await restoreThenRetry(async () => ({}), retry, () => false)).toBeNull();
     expect(retried).toBe(1);
-    expect(await restoreThenRetry(async () => { throw new Error("keyloom stopped answering."); }, retry, () => true)).toBe("keyloom stopped answering.");
+    expect(await restoreThenRetry(async () => { throw new Error("keyloom stopped answering."); }, retry, () => true)).toEqual({ message: "keyloom stopped answering." });
     expect(retried).toBe(1);
+    // R10-07: the code stays, so the buttons can say a restore that fails the same way again.
+    expect(await restoreThenRetry(async () => { throw new ApiError(200, UNREADABLE_WORDS, { code: "unreadable" }); }, retry, () => true)).toEqual({ message: UNREADABLE_WORDS, code: "unreadable" });
   });
 
   test("on the Put step offers Restore, which makes the config again", () => {
@@ -205,9 +208,21 @@ describe("R6-18 and R6-25: the import cards", () => {
 
 describe("R6-19: a failed QMK and ZMK search", () => {
   test("says so with Search again", () => {
-    const html = renderToStaticMarkup(<SearchFailed flow={{ searchProblem: "keyloom stopped answering.", retrySearch: () => {} }} />);
+    const html = renderToStaticMarkup(<SearchFailed flow={{ token: "t", searchProblem: { message: "keyloom stopped answering.", code: "unreachable" }, retrySearch: () => {} }} />);
     expect(html).toContain("keyloom couldn&#x27;t search QMK and ZMK. keyloom stopped answering.");
     expect(html).toMatch(/Search again<\/button>/);
+    expect(html).not.toContain("Restart keyloom");
+  });
+
+  // R10-07: a search keyloom answers with an unreadable answer fails the same way again, so Search again goes.
+  test("an answer that fails the same way every time offers Restart keyloom, not Search again", () => {
+    const html = renderToStaticMarkup(<SearchFailed flow={{ token: "t", searchProblem: { message: UNREADABLE_WORDS, code: "unreadable" }, retrySearch: () => {} }} />);
+    expect(html).toContain("Restart keyloom");
+    expect(html).toContain("button-primary");
+    expect(html).not.toContain("Search again");
+    const exception = renderToStaticMarkup(<SearchFailed flow={{ token: "t", searchProblem: { message: INTERNAL_WORDS, code: "internal" }, retrySearch: () => {} }} />);
+    expect(exception).toMatch(/Search again<\/button>/);
+    expect(exception).toContain("Restart keyloom");
   });
 });
 

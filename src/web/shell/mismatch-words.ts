@@ -29,3 +29,14 @@ export function lookupFailedWords(failure: PageFailure): string {
 export function mismatchUnexpected(refused: PageFailure | null, lookupFailed: PageFailure | null): PageFailure | null {
   return [refused, lookupFailed].find((failure): failure is PageFailure => failure !== null && wayOutFor(failure, true) !== null) ?? null;
 }
+
+/** The mismatch page's buttons that send a request of their own. */
+export type MismatchAction = "go_back" | "archive";
+
+/**
+ * Whether `action`'s button is off (R10-05): the last refusal answered that button and a second identical request meets it again, such as
+ * keyloom's catch-all `not_found` or an `unreadable` answer. Restart keyloom beside the sentence is then the way on and the primary
+ * button. The page's other buttons send other requests, so they stay.
+ */
+export const mismatchActionOff = (refused: PageFailure | null, by: MismatchAction | null, action: MismatchAction): boolean =>
+  by === action && failsAgain(refused);

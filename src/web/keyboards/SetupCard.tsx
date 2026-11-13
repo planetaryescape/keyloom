@@ -39,8 +39,9 @@ export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
         <button type="button" className="sheet-close" aria-label="Not now" onClick={flow.notNow}><X size={16} aria-hidden="true" /></button>
       </header>
       <p className="nb-lead">
-        keyloom knows this keyboard, but nothing of yours is on it. {hasConfigs ? "Put one of your configs on it, import" : "Import"} the layout you
-        already use, or start from a blank one. {setupWrites(firmware)}
+        {/* The heading says keyloom has no config for it. Never "nothing of yours is on it": the person's own layout often runs on it,
+            from Oryx or their own ZMK (R10-04). */}
+        {hasConfigs ? "Put one of your configs on it, import" : "Import"} the layout you already use, or start from a blank one. {setupWrites(firmware)}
       </p>
       <div className="nb-list nb-setup-list">
         {hasConfigs ? (
@@ -63,7 +64,7 @@ export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
         </div>
       </div>
       {flow.removed === null ? null : (
-        <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
+        <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
       )}
       <FlowProblem flow={flow} />
       <footer className="nb-foot">
