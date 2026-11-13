@@ -180,7 +180,7 @@ export const emulateZmk: Emulator = async (input) => {
         try {
           image = (await ensureImage(rev.source.sha, input.imageContextDir, { log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}) })).tag;
         } catch (err) {
-          if (err instanceof ImageBuildError) throw new BuildFailure(err.message);
+          if (err instanceof ImageBuildError) throw new BuildFailure(err.message, err.code);
           throw err;
         }
         await mkdir(input.workDir, { recursive: true });

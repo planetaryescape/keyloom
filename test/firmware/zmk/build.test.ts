@@ -148,6 +148,14 @@ describe("buildZmk (fake docker)", () => {
     expect((await failed("zmk-docker-disk-full.log")).code).toBe("disk_full");
   });
 
+  test("a firmware image build that fills Docker's disk carries disk_full, so the page offers to free the build cache (R8-04)", async () => {
+    const s = await setup();
+    const failure = await failureOf(s.build("ok", { FAKE_IMAGE: "missing", FAKE_IMAGE_BUILD: "disk" }));
+    expect(failure).toBeInstanceOf(BuildFailure);
+    expect(failure.code).toBe("disk_full");
+    expect(failure.message).toMatch(/Docker ran out of disk space/);
+  });
+
   test("Docker not able to see the checkout is called what it is, before the build's confusing failure", async () => {
     const s = await setup();
     await s.build("ok");

@@ -70,7 +70,7 @@ export async function buildZmk(input: ZmkBuildInput): Promise<ZmkBuildResult> {
       try {
         image = (await ensureImage(rev.source.sha, input.imageContextDir, hooks)).tag;
       } catch (err) {
-        if (err instanceof ImageBuildError) throw new BuildFailure(err.message);
+        if (err instanceof ImageBuildError) throw new BuildFailure(err.message, err.code);
         throw err;
       }
 
