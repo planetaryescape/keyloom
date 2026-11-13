@@ -73,6 +73,10 @@ export const addProblem = (error: unknown, step: AddContext, preview: Pick<Previ
   return words === null ? failure : { ...failure, message: words.text };
 };
 
+/** Add refused because keyloom already has the board (R10-13), such as one another tab added after the preview: that board, or null. */
+export const addedElsewhere = (error: unknown, step: AddContext): KnownBoardRef | null =>
+  error instanceof ApiError && error.code === "board_known" ? knownBoardOf(error, step.candidate.name) : null;
+
 /**
  * Add refused for a reason the same answers hit again (R7-11), such as a derived board that fails the boards check: the Review step shows
  * why with the contribution guide in place of Add. Null for a refusal that Add again can get past, which shows as a plain problem.
@@ -344,8 +348,12 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setStep({ kind: "put", boardId: out.boardId, boardName: out.displayName, source: null, choices: {}, origin: "new" });
         onAdded?.();
       } catch (e) {
+        // Another tab or the CLI added this board after the preview (R10-13). Say so as the preview does, with Put a config on it, never
+        // the server's sentence, which names CLI flags.
+        const known = addedElsewhere(e, step);
         const blocked = blockedAdd(e, step, preview);
-        if (blocked !== null && confirmKey !== null) setAddRefusal({ key: confirmKey, problem: blocked });
+        if (known !== null) { setPreviewProblemCode("board_known"); setPreviewProblemBoard(known); }
+        else if (blocked !== null && confirmKey !== null) setAddRefusal({ key: confirmKey, problem: blocked });
         else setProblem(addProblem(e, step, preview));
       } finally {
         setBusy(false);

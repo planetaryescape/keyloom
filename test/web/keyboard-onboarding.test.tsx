@@ -12,7 +12,7 @@ import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 import { NewBoardPanel, type PutSource } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { setupFoot, setupWrites, welcomeLead } from "../../src/web/keyboards/onboarding-words.ts";
 import { SetupCard } from "../../src/web/keyboards/SetupCard.tsx";
-import { blankBoardFor, blockedAdd, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
+import { addedElsewhere, blankBoardFor, blockedAdd, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 
 const candidate = { id: "qmk:zsa/moonlander", name: "Moonlander Mark I", firmware: "qmk" } as ApiCandidate;
 // SAFETY: the panels read only these fields of the hook's result while rendering; the rest of its API is never called.
@@ -96,6 +96,23 @@ describe("R7-11: a derived board that fails the boards check", () => {
     expect(html).toMatch(/Pick another keyboard<\/button>/);
     expect(html).toMatch(/>Back<\/button>/);
     expect(html).not.toContain("Add the Atomic");
+  });
+  // R10-13: another tab or the CLI added the same board between the preview and Add.
+  test("Add refused because the board is already there offers Put a config on it, as the preview does, never the CLI's sentence", () => {
+    const race = new ApiError(400, "Atomic is already a board: local/atomic (derived earlier; pass --force to derive it again). Put a config on it with `keyloom keyboard put <layout> --on local/atomic`", { code: "board_known", board: "local/atomic", boardName: "Atomic" });
+    expect(addedElsewhere(race, step)).toEqual({ id: "local/atomic", name: "Atomic" });
+    expect(addedElsewhere(new ApiError(400, "x", { code: "board_check_failed" }), step)).toBeNull();
+    const board = { name: "Atomic", keys: [], hands: { left: [], right: [] }, fingers: {}, thumbs: [], rows: 5, homeRow: 3, flash: { kind: "manual", manualReason: null, steps: [] }, assumedController: null };
+    const html = render(flow({
+      step: { kind: "review", keyboard: null, candidate: step.candidate, homeRow: 3, controller: null, layout: null },
+      preview: { displayName: "Atomic", layouts: [], controllers: [], rows: [], board } as unknown as PreviewResponse,
+      previewProblemCode: "board_known", previewProblemBoard: { id: "local/atomic", name: "Atomic" },
+    }), [daily]);
+    expect(html).toContain("keyloom knows this keyboard, so there is nothing to add.");
+    expect(html).toMatch(/Put a config on it<\/button>/);
+    expect(html).not.toContain("Add the Atomic");
+    expect(html).not.toContain("--force");
+    expect(html).not.toContain("keyboard put");
   });
 });
 
