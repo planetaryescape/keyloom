@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts, D-486): the Docker a build needs, and starting it. Over a fake backend,
 // so nothing here looks for a daemon.
 import { afterAll, describe, expect, test } from "bun:test";
-import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../../src/api/system.ts";
+import { DockerPruneResponseSchema, DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../../src/api/system.ts";
 import { InstallStateSchema } from "../../src/api/tool-install.ts";
 import { handleSystemRoute } from "../../src/server/system-routes.ts";
 import type { SystemBackend } from "../../src/server/system-backend.ts";
@@ -125,6 +125,26 @@ describe("the Docker routes", () => {
     expect((await call("/api/system/docker/fix-colima-files", { method: "POST", body: "{}", headers: { "content-type": "text/plain" } })).status).toBe(415);
     expect((await call("/api/system/docker/fix-colima-files")).status).toBe(405);
     expect(fixes).toBe(1);
+  });
+
+  test("freeing Docker's build cache is a POST of {} behind the same guard, and a server without it says so (R8-04)", async () => {
+    const { call, post } = await serve();
+    expect((await post("/api/system/docker/prune-build-cache")).status).toBe(404);
+    let prunes = 0;
+    backend.pruneBuildCache = async () => { prunes += 1; return { ok: true, freed: "1.2GB" }; };
+    try {
+      const response = await post("/api/system/docker/prune-build-cache");
+      expect(response.status).toBe(200);
+      expect(DockerPruneResponseSchema.parse(await response.json())).toEqual({ ok: true, freed: "1.2GB" });
+      expect((await call("/api/system/docker/prune-build-cache", { method: "POST", body: "{}", headers: { "content-type": "application/json" } }, null)).status).toBe(401);
+      expect((await call("/api/system/docker/prune-build-cache", { method: "POST", body: "{\"all\":true}", headers: { "content-type": "application/json" } })).status).toBe(400);
+      expect((await call("/api/system/docker/prune-build-cache")).status).toBe(405);
+      expect(prunes).toBe(1);
+      backend.pruneBuildCache = async () => ({ ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it." });
+      expect(await (await post("/api/system/docker/prune-build-cache")).json()).toEqual({ ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it." });
+    } finally {
+      delete backend.pruneBuildCache;
+    }
   });
 
   test("the guard: a token on every route, JSON on the write, and the method named when it is wrong", async () => {

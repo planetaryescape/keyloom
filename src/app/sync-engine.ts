@@ -55,6 +55,8 @@ export type SyncRunView = {
   error: string | null;
   /** Why a failed build failed, as its code (D-501), such as "docker_unavailable"; the page maps it to the fix instead of showing `error`. */
   errorCode: string | null;
+  /** The build this sync made, or null before it started one: Build and flash opens on it after a failed build (R8-01). */
+  buildId: string | null;
   startedAt: number;
   finishedAt: number | null;
   timings: SyncTimings;
@@ -472,6 +474,7 @@ export class SyncEngine {
     return {
       id: s.id, trigger: s.trigger, status: s.status, step: s.step, revisionId: s.revisionId, failure: s.failure, error: s.error,
       errorCode: s.failure === "build" && s.buildId !== null ? this.buildCodeOf(s.buildId) : this.replaceable(s) ? "foreign_file" : null,
+      buildId: s.buildId,
       startedAt: s.startedAt, finishedAt: s.finishedAt, timings: this.timingsOf(s),
     };
   }

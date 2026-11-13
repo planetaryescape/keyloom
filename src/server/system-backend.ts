@@ -1,6 +1,6 @@
 // What the server needs from the computer it runs on (src/api/system.ts lists the routes). The adapter that
 // fills this in is src/cli/system-backend.ts, so the server itself never looks for Docker.
-import type { DockerReadinessResponse, DockerRestartLogResponse, DockerStartResponse } from "../api/system.ts";
+import type { DockerPruneResponse, DockerReadinessResponse, DockerRestartLogResponse, DockerStartResponse } from "../api/system.ts";
 import type { KarabinerConfig } from "../app/karabiner-config.ts";
 import type { InstallState, InstallableTool } from "../api/tool-install.ts";
 
@@ -29,4 +29,9 @@ export interface SystemBackend {
    * account. Refused while a build or flash runs; repeated calls share one attempt.
    */
   fixColimaFiles: () => Promise<DockerStartResponse>;
+  /**
+   * Frees Docker's build cache, for a build that ran out of disk (R8-04). Refused while a build, flash or container run is under way, and
+   * while keyloom starts, restarts or fixes the engine; repeated calls share one attempt. Absent where the server can't.
+   */
+  pruneBuildCache?: () => Promise<DockerPruneResponse>;
 }

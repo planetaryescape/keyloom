@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { BuildFailure, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
+import { BuildFailure, DISK_FULL_MESSAGE, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
 import { type CheckoutSpec, ensureCheckout } from "../toolchain/checkout.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -39,7 +39,7 @@ const idFor = (qmkTarget: string): string => qmkTarget.replaceAll("/", "_");
 
 function hint(lines: readonly string[]): string | undefined {
   const text = lines.join("\n");
-  if (/No space left on device/i.test(text)) return "Docker ran out of disk space. Free some with `docker system prune` or raise the disk limit in Docker Desktop, then build again.";
+  if (/No space left on device/i.test(text)) return DISK_FULL_MESSAGE;
   if (/Cannot connect to the Docker daemon/i.test(text)) return "Docker isn't running. Start Docker Desktop and build again.";
   return undefined;
 }

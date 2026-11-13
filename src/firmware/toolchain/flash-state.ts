@@ -23,8 +23,9 @@ export type FlashResult = {
   /**
    * Why it failed, as a code the UI acts on (D-501): a permission the person can grant, or `not_confirmed` when the write finished and
    * only the check that the keyboard came back as the new build failed, so keyloom can read the keyboard again instead of flashing.
+   * `write_timeout`: the write didn't finish in time and was stopped, so the keyboard may be left in its bootloader (R8-11).
    */
-  errorCode?: FlashPermissionCode | "not_confirmed";
+  errorCode?: FlashPermissionCode | "not_confirmed" | "write_timeout";
   /** True when keyloom restarted every part of the keyboard itself and the flash was verified: the proof that auto-sync can reach this board (D-160). */
   handsFree?: boolean;
 };

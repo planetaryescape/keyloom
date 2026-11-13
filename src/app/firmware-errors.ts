@@ -71,6 +71,14 @@ export class FlashNotCancellableError extends UsageError {
   }
 }
 
+/**
+ * A successful build whose firmware file is no longer on disk, found when a flash starts. Flashing again fails the same way, so the page
+ * offers Build again (R8-12). Still a usage error to the CLI (exit 2).
+ */
+export class BuildFileGoneError extends UsageError {
+  override name = "BuildFileGoneError";
+}
+
 /** A build that has already finished, or runs in another keyloom process, can't be stopped from here (R3-10). */
 export class BuildNotCancellableError extends UsageError {
   override name = "BuildNotCancellableError";

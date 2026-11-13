@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { COLIMA_SCAN_INCOMPLETE_HELD, colimaLinkedFileHeld, dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
+import { COLIMA_SCAN_INCOMPLETE_HELD, colimaLinkedFileHeld, dockerAccessFix, dockerAutoStart, dockerReadiness, engineActionNow, ensureDocker, forcedRestartEngine, freeBuildCache, restartDocker, startDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
@@ -165,12 +165,15 @@ describe("a daemon that refuses this account (D-497)", () => {
 
   test("doctor says why Colima's command is held back for a linked file, not what the missing command does (#300 third review)", () => {
     const held = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, linkedFile: "/Users/someone/.colima/x" });
-    expect(held).toBe(`Docker is running, but this account can't open its socket. ${colimaLinkedFileHeld("/Users/someone/.colima/x")}`);
+    // The terminal is told where Fix Colima's files is, and given the stop on its own, which changes no owners (R8-10).
+    const terminal = " Fix Colima's files is in Build and flash, in `keyloom serve` or the desktop app. If a copy of Colima started with sudo still runs, `sudo env HOME=\"$HOME\" colima stop` stops it without changing any file's owner.";
+    expect(held).toBe(`Docker is running, but this account can't open its socket. ${colimaLinkedFileHeld("/Users/someone/.colima/x")}${terminal}`);
     expect(held).not.toContain("This stops that copy");
     // A look that didn't finish holds the command back too, and says so (D-533).
     const unread = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, scanIncomplete: true });
-    expect(unread).toBe(`Docker is running, but this account can't open its socket. ${COLIMA_SCAN_INCOMPLETE_HELD}`);
+    expect(unread).toBe(`Docker is running, but this account can't open its socket. ${COLIMA_SCAN_INCOMPLETE_HELD}${terminal}`);
     expect(unread).not.toContain("chown");
+    expect(unread).not.toMatch(/keyloom (fix|colima)/);
   });
 
   test("Colima, which has no app to reopen, gets the commands that give its socket back, for its own profile", async () => {
@@ -182,6 +185,48 @@ describe("a daemon that refuses this account (D-497)", () => {
     if (!colima.ok) expect(colima.access?.note).not.toContain("Quit");
     const work = dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start", "--profile", "work"] });
     expect(work.command).toBe('sudo env HOME="$HOME" colima stop --profile work; sudo chown -R "$USER" ~/.colima && colima start --profile work');
+    // The stop on its own, which changes no owners, for a copy still running while the full command is held (R8-05).
+    expect(work.stopCommand).toBe('sudo env HOME="$HOME" colima stop --profile work');
+    expect(dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }).stopCommand).toBe('sudo env HOME="$HOME" colima stop');
+    expect(dockerAccessFix("darwin", { name: "OrbStack", command: ["open", "-a", "OrbStack"] }).stopCommand).toBeUndefined();
+  });
+
+  describe("freeing Docker's build cache (R8-04)", () => {
+    const colima = { kind: "engine" as const, engine: { name: "Colima", command: ["colima", "start"] } };
+    const gate = () => {
+      let open!: () => void;
+      const opened = new Promise<void>((resolve) => (open = resolve));
+      return { open, opened };
+    };
+    test("it prunes only when nothing runs, asking inside the lock, and is refused without a check", async () => {
+      let prunes = 0;
+      const pruneCache = async () => (prunes++, { ok: true as const, freed: "2.1GB" });
+      expect(await freeBuildCache({ blocker: () => null, overrides: { pruneCache } })).toEqual({ ok: true, freed: "2.1GB" });
+      const running = "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.";
+      expect(await freeBuildCache({ blocker: () => running, overrides: { pruneCache } })).toEqual({ ok: false, reason: running, code: "build_running" });
+      expect(await freeBuildCache({ overrides: { pruneCache } })).toMatchObject({ ok: false, code: "build_running" });
+      expect(prunes).toBe(1);
+    });
+
+    test("it holds the engine: a restart is refused while it runs, it is refused while a restart runs, and a build waits for it", async () => {
+      const held = gate();
+      const order: string[] = [];
+      const pruning = freeBuildCache({ blocker: () => null, overrides: { pruneCache: async () => (await held.opened, order.push("docker builder prune -f"), { ok: true as const, freed: "0B" }) } });
+      await Bun.sleep(10);
+      expect(engineActionNow()).toBe("prune");
+      // Readiness never shows a prune as an engine action: it runs only on a Docker that answers.
+      expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ engineAction: null });
+      expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima } })).toMatchObject({ ok: false, code: "engine_busy", reason: expect.stringContaining("freeing Docker's build cache") });
+      expect(await freeBuildCache({ blocker: () => null, overrides: { pruneCache: async () => ({ ok: true as const, freed: null }) } })).toMatchObject({ ok: false, code: "engine_busy" });
+      const building = ensureDocker({ onProgress: (line) => order.push(line), overrides: { env: {}, status: async () => ({ ok: true as const, version: "29" }) } }).then((r) => (order.push(`build proceeds ok=${r.ok}`), r));
+      await Bun.sleep(20);
+      expect(order).toEqual(["keyloom: waiting for keyloom to finish freeing Docker's build cache"]);
+      held.open();
+      expect(await pruning).toEqual({ ok: true, freed: "0B" });
+      expect(await building).toMatchObject({ ok: true });
+      expect(order).toEqual(["keyloom: waiting for keyloom to finish freeing Docker's build cache", "docker builder prune -f", "build proceeds ok=true"]);
+      expect(engineActionNow()).toBeNull();
+    });
   });
 
   test("a build says why and starts nothing", async () => {

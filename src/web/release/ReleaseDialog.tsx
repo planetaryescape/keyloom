@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, ExternalLink, Hammer, LoaderCircle, MessageCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, Undo2, X, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Eraser, ExternalLink, Hammer, LoaderCircle, MessageCircle, Pause, Play, RefreshCw, Settings, TriangleAlert, Undo2, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Build, Flash, RevisionInfo } from "../../api/http.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -11,11 +11,13 @@ import { DockerCallout } from "./DockerCallout.tsx";
 import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
-import { checkOutcome, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
+import { BUILD_FILE_GONE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
 import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import "./release.css";
 
 interface Props {
+  token: string;
   open: boolean;
   onClose: () => void;
   release: Release;
@@ -81,7 +83,7 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-export function ReleaseDialog({ open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, boardRevisions, status, now, onGoBack, onShowLatest, onAskAboutBuild }: Props) {
+export function ReleaseDialog({ token, open, onClose, release, head, earlierRevision = false, autoSync = null, boardName, boardRevisions, status, now, onGoBack, onShowLatest, onAskAboutBuild }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
   // Go back to the last version that built (R5-02): while it runs, what the server refused, and the revision it went back to. Both
@@ -200,12 +202,30 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
         </header>
         <p className="sr-only" role="status">{status.label}</p>
 
-        {error === null ? null : (
+        {error === null ? null : errorWayOut(release.errorCode) === "try_again" ? (
           <div className="callout callout-error" role="alert">
             <CircleAlert size={18} aria-hidden="true" />
             <p>{error}</p>
             <button type="button" className="button" onClick={release.retry}>Try again</button>
           </div>
+        ) : (
+          <>
+            <div className="callout callout-error" role="alert">
+              <CircleAlert size={18} aria-hidden="true" />
+              <p>{release.errorCode === "build_file_gone" ? BUILD_FILE_GONE : error}</p>
+            </div>
+            <div className="step-actions">
+              {release.errorCode === "build_file_gone" ? (
+                <button type="button" className="button button-primary" disabled={starting !== null || blocked !== null} onClick={() => release.buildNow(head.id)}>
+                  <Hammer size={14} aria-hidden="true" />
+                  Build again
+                </button>
+              ) : (
+                // Repeating a start or a read that hit a server fault is safe: a flash already running refuses a second one.
+                <UnexpectedWayOut token={token} code={release.errorCode ?? undefined} onRetry={release.retry} />
+              )}
+            </div>
+          </>
         )}
 
         {!earlierRevision || autoSync === null ? null : autoSync.on ? (
@@ -321,6 +341,19 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                       <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
                     )}
                   </>
+                ) : failure?.kind === "disk_full" ? (
+                  // The build's sentence names `docker builder prune`, which stays the CLI's; the page runs it (R8-04).
+                  <>
+                    <div className="callout callout-error" role="alert">
+                      <CircleAlert size={18} aria-hidden="true" />
+                      <p>{failure.text}</p>
+                    </div>
+                    <p>{failure.next}</p>
+                    {release.cachePrune.outcome === null ? null : (
+                      <p className={release.cachePrune.outcome.again ? "blocked-reason" : "muted"} role="status">{release.cachePrune.outcome.text}</p>
+                    )}
+                    <LogTail label="Build log, last lines" lines={engineRestartLog(build.logTail)} />
+                  </>
                 ) : failure?.kind === "folder_not_shared" ? (
                   // The build's sentence names XDG_CACHE_HOME, which stays the CLI's; the page names the folder and where it is shared (R7-02).
                   <>
@@ -363,6 +396,24 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                         Go back to the last version that built
                       </button>
                     )
+                  ) : failure?.kind === "disk_full" ? (
+                    // Freeing the cache comes first, then Build again; once the prune has ended, Build again is the one thing to do.
+                    <>
+                      {release.cachePrune.outcome !== null && !release.cachePrune.outcome.again ? null : (
+                        <button type="button" className="button button-primary" disabled={release.cachePrune.running || starting !== null} onClick={release.freeCache}>
+                          {release.cachePrune.running ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <Eraser size={14} aria-hidden="true" />}
+                          {release.cachePrune.running ? "Freeing Docker's build cache…" : "Free Docker's build cache"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={release.cachePrune.outcome?.build === true ? "button button-primary" : "button"}
+                        disabled={starting !== null || blocked !== null || release.cachePrune.running}
+                        onClick={() => release.buildNow(head.id)}
+                      >
+                        Build again
+                      </button>
+                    </>
                   ) : failure?.kind === "restart_engine" && failure.button !== null && release.engineRestart.waitingFor !== null ? (
                     // Waiting for running work to end: the restart starts by itself, and Cancel stops waiting (R7-04).
                     <button type="button" className="button" onClick={release.cancelRestartWait}>
@@ -380,7 +431,8 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
                       Build again
                     </button>
                   )}
-                  {failure?.kind === "docker" ? null : (
+                  {/* A full disk is Docker's, not the layout's: there is nothing in the build for keyloom to explain. */}
+                  {failure?.kind === "docker" || failure?.kind === "disk_full" ? null : (
                     <button type="button" className="button" onClick={() => onAskAboutBuild(build)}>
                       <MessageCircle size={14} aria-hidden="true" />
                       Ask keyloom about this build

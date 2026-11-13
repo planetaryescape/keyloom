@@ -137,7 +137,7 @@ describe("buildZmk (fake docker)", () => {
     await expect((await setup()).build("disk")).rejects.toThrow(/Docker ran out of disk space/);
   });
 
-  test("a key name the devicetree doesn't know, and a firmware too big, carry their codes; a full disk carries none (R5-02)", async () => {
+  test("a key name the devicetree doesn't know, a firmware too big and a full disk carry their codes (R5-02, R8-04)", async () => {
     const s = await setup();
     const logs = join(import.meta.dir, "../../fixtures/build-logs");
     const failed = (log: string) => failureOf(s.build("log", { FAKE_LOG: join(logs, log) }));
@@ -145,7 +145,7 @@ describe("buildZmk (fake docker)", () => {
     const big = await failed("ld-region-overflow.log");
     expect(big.code).toBe("too_large");
     expect(big.message).toContain("by 228 bytes");
-    expect((await failed("zmk-docker-disk-full.log")).code).toBeNull();
+    expect((await failed("zmk-docker-disk-full.log")).code).toBe("disk_full");
   });
 
   test("Docker not able to see the checkout is called what it is, before the build's confusing failure", async () => {

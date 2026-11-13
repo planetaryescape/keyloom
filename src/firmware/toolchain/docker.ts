@@ -64,6 +64,26 @@ export async function dockerFreeSpace(images: readonly string[], timeoutMs = 30_
   return { unknown: "no image is local yet to measure with; it is checked after the first build" };
 }
 
+/** What freeing Docker's build cache did: `freed` is Docker's own total ("1.2GB", "0B"), or null when it printed none (R8-04). */
+export type BuildCachePrune = { ok: true; freed: string | null } | { ok: false; reason: string };
+
+/**
+ * Frees Docker's build cache with `docker builder prune -f`. That is BuildKit's cache only: no image, container or volume is removed, so
+ * the next build takes longer but nothing the person made goes (R8-04). Refused under `bun test`, so a forgotten fake fails its test.
+ */
+export async function pruneBuildCache(timeoutMs = 5 * 60_000): Promise<BuildCachePrune> {
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to prune Docker's build cache in a test");
+  const r = await capture(["docker", "builder", "prune", "-f"], { timeoutMs });
+  if (r.exitCode === 0) return { ok: true, freed: pruneTotal(r.stdout) };
+  const why = (r.stderr || r.stdout).trim().split("\n").at(-1) || (r.timedOut ? "it didn't finish in time" : `it exited with code ${r.exitCode}`);
+  return { ok: false, reason: `Docker couldn't free its build cache: ${why.replace(/\.$/, "")}.` };
+}
+
+/** The total `docker builder prune` prints: "Total:\t1.2GB" from BuildKit, or "Total reclaimed space: 1.2GB" from older clients. */
+export function pruneTotal(output: string): string | null {
+  return /Total(?: reclaimed space)?:\s*([0-9.]+\s*[kKMGTP]?i?B)\b/.exec(output)?.[1]?.replace(/\s+/g, "") ?? null;
+}
+
 /** `df -Pk /` output to available bytes. */
 export function parseDfFreeBytes(output: string): number | undefined {
   const row = output.trim().split("\n").at(-1)?.trim().split(/\s+/);

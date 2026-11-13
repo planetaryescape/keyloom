@@ -105,6 +105,8 @@ interface Props {
   onTuned: (summary: string) => Promise<void>;
   /** The layout moved on under this panel; the parent reloads and closes it. */
   onStale: () => void;
+  /** Reads the layout again, for a check answered against a head that has moved on (R8-13). The draft stays open. */
+  onShowLatest?: () => void;
   onShowLayer: (layerId: string) => void;
   /** Icon actions in the card's header that act on this key outside its draft: swap, copy, paste, colour (16#moving-and-copying-keys). */
   actions?: ReactNode;
@@ -128,7 +130,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 export function KeyPanel(props: Props) {
   const {
     token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, resume, placements, placing,
-    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLayer, actions, actionsNote = null, notice, keycap, led, reach, onPointAt, handle,
+    onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLatest, onShowLayer, actions, actionsNote = null, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
   const layer = layout.layers[layerIndex];
@@ -774,7 +776,7 @@ export function KeyPanel(props: Props) {
         )}
         {/* Only what needs saying: problems, warnings, or a check that couldn't run. A clean change says nothing; Apply is enough. */}
         {binding === null || !(check.state.status === "error" || (check.state.status === "done" && (!check.state.result.ok || check.state.result.warnings.length > 0))) ? null : (
-          <Validation layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost />
+          <Validation layout={layout} slot={slot} idleNote="" state={check.state} onRecheck={check.recheck} hideLost {...(onShowLatest === undefined ? {} : { onShowLatest })} />
         )}
         {binding === null || !(reasonOpen || reason !== "") ? null : (
           <div className="card-reason">

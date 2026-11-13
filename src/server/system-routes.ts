@@ -1,7 +1,7 @@
 // The system routes (src/api/system.ts lists them). startServer calls `handleSystemRoute` for every /api request
 // after its Host check, and serves the Response when one comes back.
 import { z } from "zod";
-import { DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerRestartRequestSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
+import { DockerPruneResponseSchema, DockerReadinessResponseSchema, DockerRestartLogResponseSchema, DockerRestartRequestSchema, DockerStartResponseSchema, KarabinerConfigResponseSchema } from "../api/system.ts";
 import type { ApiErrorBody } from "../api/http.ts";
 import { InstallRequestSchema, InstallStateSchema, InstallableToolSchema } from "../api/tool-install.ts";
 import { checkToken } from "./guard.ts";
@@ -11,7 +11,7 @@ const EmptyBody = z.object({}).strict();
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "restartLog" | "fixColimaFiles" | "karabinerConfig";
+type Action = "docker" | "startDocker" | "install" | "installState" | "cancelInstall" | "restartDocker" | "restartLog" | "fixColimaFiles" | "pruneBuildCache" | "karabinerConfig";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/docker", action: "docker" },
   { method: "POST", path: "/api/system/docker/start", action: "startDocker" },
@@ -22,6 +22,7 @@ const ROUTES: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; path: string; a
   { method: "POST", path: "/api/system/docker/restart", action: "restartDocker" },
   { method: "GET", path: "/api/system/docker/restart", action: "restartLog" },
   { method: "POST", path: "/api/system/docker/fix-colima-files", action: "fixColimaFiles" },
+  { method: "POST", path: "/api/system/docker/prune-build-cache", action: "pruneBuildCache" },
 ];
 
 /** Null when the request is not a system route, so startServer carries on with its own. */
@@ -71,6 +72,10 @@ export async function handleSystemRoute(request: Request, pathname: string, back
     const parsed = EmptyBody.safeParse(body);
     if (!parsed.success) return errorResponse(400, "schema", "The request body must be an empty object.");
     if (route.action === "fixColimaFiles") return Response.json(DockerStartResponseSchema.parse(await backend.fixColimaFiles()));
+    if (route.action === "pruneBuildCache") {
+      if (backend.pruneBuildCache === undefined) return errorResponse(404, "prune_unavailable", "This keyloom can't free Docker's build cache.");
+      return Response.json(DockerPruneResponseSchema.parse(await backend.pruneBuildCache()));
+    }
     return Response.json(DockerStartResponseSchema.parse(await backend.startDocker()));
   } catch (err) {
     console.error("keyloom: system request failed", err);

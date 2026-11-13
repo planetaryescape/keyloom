@@ -122,7 +122,8 @@ interface ViewerProps {
   /** Fetches the layout again after a change, resolving once the new one is on screen. */
   onChanged: () => Promise<void>;
   /** Opens the Build and flash dialog, which the chat points at after an apply. With a revision, it builds that one instead of the head (History's "Flash this"). */
-  onOpenRelease: (revision?: { id: string; summary: string }) => void;
+  /** `failedBuildId`: a sync's failed build, which the dialog opens on (R8-01). */
+  onOpenRelease: (revision?: { id: string; summary: string }, failedBuildId?: string) => void;
   repairDraft: FindingRepairDraft | null;
   onRepairDraft: (id: string, draft: FindingRepairDraft | null, replace?: boolean) => void;
   /** "Ask keyloom about this build" from Build and flash (R5-02): a new one opens the chat with the question in it to check and send. */
@@ -243,7 +244,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     open_status: openStatus,
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
-    open_release: () => onOpenRelease(),
+    open_release: (buildId?: string) => onOpenRelease(undefined, buildId),
     replace_foreign: () => sync.setReplaceAsk(summary.id),
     // The exit chord is kanata's, and the MacBook is the one board that runs it.
     check_exit_chord: () => {
@@ -1916,6 +1917,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onApplied={onApplied}
                 onTuned={onTuned}
                 onStale={onStale}
+                onShowLatest={() => showLatest(STALE_UNDO)}
                 onShowLayer={(id) => {
                   if (!draft.dirty) setLayerId(id);
                 }}
@@ -1986,7 +1988,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
               <ReplaceForeignHost sync={sync} boardId={summary.boardId} />
             </>
           ) : (
-            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={() => onOpenRelease()} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
+            <SyncStatus sync={sync} layoutId={summary.id} layoutName={summary.name} boardId={summary.boardId} onOpenRelease={(buildId) => onOpenRelease(undefined, buildId)} onPutOn={(target) => setConfigDialog({ kind: "put-on", target })} />
           )
         }
         ask={{ open: chatOpen, onToggle: toggleChat }}

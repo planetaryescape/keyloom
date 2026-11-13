@@ -15,6 +15,9 @@ import { z } from "zod";
 //   POST /api/system/docker/fix-colima-files -> DockerStartResponse (for `access.fixFiles`: macOS's password dialog, then root gives
 //                                       ~/.colima back to this account, and Colima stops and starts as it (D-533).
 //                                       Body `{}`. `cancelled` when the person closes the dialog; `build_running` and `engine_busy` as above)
+//   POST /api/system/docker/prune-build-cache -> DockerPruneResponse (for a build that failed `disk_full`: `docker builder prune -f`, which
+//                                       removes Docker's build cache and no image, container or volume. Body `{}`. `build_running` and
+//                                       `engine_busy` as above, because it would take the cache a running build reads; R8-04)
 // `no-access`: the daemon runs but refuses this account its socket; `access` then says the way out (D-497).
 export const DockerProblemSchema = z.enum(["not-installed", "cli-missing", "daemon-down", "slow", "no-access"]);
 export type DockerProblem = z.infer<typeof DockerProblemSchema>;
@@ -51,6 +54,8 @@ export const DockerReadinessResponseSchema = z.discriminatedUnion("ok", [
     access: z.object({
       command: z.string().min(1).nullable(), note: z.string().min(1), restartApp: z.string().min(1).nullable(), fixFiles: z.boolean().optional(),
       linkedFile: z.string().min(1).optional(), scanIncomplete: z.boolean().optional(),
+      // Colima's stop on its own, which changes no owners, for another account's copy that is still running while `command` is held (R8-05).
+      stopCommand: z.string().min(1).optional(),
     }).nullable(),
     // The engine keyloom can stop and start from scratch (POST /api/system/docker/restart) when a start fails: Colima (R3-04). Optional
     // so an older server's answer still reads.
@@ -78,6 +83,13 @@ export const DockerStartResponseSchema = z.discriminatedUnion("ok", [
     code: z.enum(["engine_busy", "build_running", "cancelled", "linked_file", "vm_running"]).optional(), file: z.string().min(1).optional(),
   }),
 ]);
+
+// Freeing Docker's build cache (R8-04). `freed` is Docker's own total, such as "1.2GB" or "0B", or null when it printed none.
+export const DockerPruneResponseSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), freed: z.string().min(1).nullable() }),
+  z.object({ ok: z.literal(false), reason: z.string().min(1), code: z.enum(["engine_busy", "build_running"]).optional() }),
+]);
+export type DockerPruneResponse = z.infer<typeof DockerPruneResponseSchema>;
 
 // A forced restart's state (R7-04). `running`: one runs here now. `lines`: its progress (the last few, oldest first), kept after it ends
 // until the next one starts. `waitingFor`: the work a forced restart would wait for now, named for the person ("a build", "a lab

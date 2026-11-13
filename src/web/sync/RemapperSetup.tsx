@@ -2,7 +2,7 @@ import { CircleCheck, Circle, ExternalLink, Info, LoaderCircle, RefreshCw } from
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RemapperSetupResponse } from "../../api/system-remapper.ts";
 import type { SyncApi } from "./useSync.ts";
-import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, setupFailure, setupSteps } from "./remapper-words.ts";
+import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, recheckAfter, setupFailure, setupSteps } from "./remapper-words.ts";
 
 type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; message: string };
 
@@ -22,6 +22,8 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const [busy, setBusy] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [problem, setProblem] = useState<SetupFailure | null>(null);
+  // A pane was opened for the person to change something there: the list reads the machine again when keyloom's window is back in front.
+  const [awaitingReturn, setAwaitingReturn] = useState(false);
   const { status: readStatus, installKanata, cancelInstall, startKanata, openSettings } = sync.remapperSetup;
 
   const check = useCallback(async () => {
@@ -60,17 +62,40 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const run = async (id: SetupActionId) => {
     setBusy(actionKey(id));
     setProblem(null);
+    let opened = false;
     try {
       const r = await act(id);
       if (!r.ok) setProblem(setupFailure(r.code, r.reason));
+      opened = r.ok;
     } catch (error) {
       setProblem({ text: error instanceof Error ? error.message : "That didn't work.", link: null });
     } finally {
       setBusy(null);
-      // Opening a pane changes nothing keyloom can read; everything else is checked again at once.
-      if (id.kind !== "open_settings") await check();
+      // Opening a pane changes nothing keyloom can read yet; the change is made there, so the list is read when the person comes back
+      // (R8-17). Everything else is checked again at once.
+      if (recheckAfter(id) === "now") await check();
+      else if (opened) setAwaitingReturn(true);
     }
   };
+  useEffect(() => {
+    if (!awaitingReturn) return;
+    const back = () => {
+      if (document.visibilityState !== "visible") return;
+      setAwaitingReturn(false);
+      void check();
+    };
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [awaitingReturn, check]);
+  const recheck = (
+    <button type="button" className="button sync-setup-recheck" disabled={checking} onClick={() => void check()}>
+      <RefreshCw size={14} className={checking ? "spin" : undefined} aria-hidden="true" /> Check again
+    </button>
+  );
 
   // A read that failed says so with Check again, in either mode: the attention steps vanishing would hide an update kanata needs (R6-22).
   const readFailed = load.kind !== "error" ? null : (
@@ -88,6 +113,8 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
       <div className="sync-setup">
         <Steps steps={steps} busy={busy} installing={installing} onRun={run} />
         <ProblemLine problem={problem} />
+        {/* A step done elsewhere (System Settings, Karabiner, Terminal) shows as done once the list is read again (R8-17). */}
+        {recheck}
       </div>
     );
   }
@@ -100,9 +127,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
       <Steps steps={setupSteps(load.status)} busy={busy} installing={installing} onRun={run} />
       <ProblemLine problem={problem} />
       {/* Usable while Homebrew runs: an install finished elsewhere, or a pane allowed meanwhile, shows up at once. */}
-      <button type="button" className="button sync-setup-recheck" disabled={checking} onClick={() => void check()}>
-        <RefreshCw size={14} className={checking ? "spin" : undefined} aria-hidden="true" /> Check again
-      </button>
+      {recheck}
     </div>
   );
 }

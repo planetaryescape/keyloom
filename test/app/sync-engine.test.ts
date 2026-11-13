@@ -183,6 +183,8 @@ describe("failures leave the keyboard alone and say why", () => {
     w.apply();
     await waitFor(() => w.stateOf(e)?.kind === "behind" && (w.stateOf(e) as { error: string | null }).error !== null, "the failure");
     expect(e.views()[0]?.last).toMatchObject({ failure: "build", errorCode: "docker_unavailable" });
+    // The failed build itself, so Build and flash opens on it with its buttons (R8-01).
+    expect(e.views()[0]?.last?.buildId).toBe(w.calls.builds.at(-1)?.buildId);
   });
 
   test("a flash that fails is behind with the error and is not repeated by itself", async () => {

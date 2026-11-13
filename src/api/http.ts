@@ -203,7 +203,8 @@ export const BuildSchema = z.object({
   // "stale_mount" and "stuck_container" fail on the engine's own state, so the page offers a forced restart of it, then the build (R6-09).
   // "source_error" (the layout can't be written as source) fails the same way every time, like compile_error. "folder_not_shared" is a
   // build folder the engine doesn't share, so the page says where and offers the engine's settings (R7-02).
-  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared"]).nullable(),
+  // "disk_full" is a full Docker disk; the page offers to free Docker's build cache, then Build again (R8-04).
+  errorCode: z.enum(["docker_unavailable", "cancelled", "compile_error", "too_large", "stale_mount", "stuck_container", "source_error", "folder_not_shared", "disk_full"]).nullable(),
   // For compile_error and too_large: the newest earlier revision in this one's history that built, or null. Absent on older senders.
   lastBuilt: z.object({ revisionId: z.string().min(1), summary: z.string() }).nullable().optional(),
   // For stale_mount and stuck_container: the engine keyloom can restart (Colima or a Mac app), or null. Absent on older senders.
@@ -221,7 +222,8 @@ export type Build = z.infer<typeof BuildSchema>;
 export const FlashPermissionCodeSchema = z.enum(["permission_files_and_folders", "permission_input_monitoring"]);
 export type FlashPermissionCode = z.infer<typeof FlashPermissionCodeSchema>;
 // `not_confirmed`: the write finished, but keyloom couldn't confirm the keyboard came back as this build, so it can be checked again.
-export const FlashErrorCodeSchema = z.enum(["cancelled", "not_confirmed", "permission_files_and_folders", "permission_input_monitoring"]);
+// `write_timeout`: the write didn't finish in time and keyloom stopped it, so the keyboard may be in its bootloader; the page offers Flash again (R8-11).
+export const FlashErrorCodeSchema = z.enum(["cancelled", "not_confirmed", "write_timeout", "permission_files_and_folders", "permission_input_monitoring"]);
 export type FlashErrorCode = z.infer<typeof FlashErrorCodeSchema>;
 
 export const FlashSchema = z.object({
@@ -668,6 +670,8 @@ export const SyncRunSchema = z.object({
   error: z.string().nullable(),
   /** A failed build's code, such as "docker_unavailable" (R3-05). Absent on older senders. */
   errorCode: z.string().nullable().optional(),
+  /** The build this sync made, so Build and flash can open on it (R8-01). Absent on older senders. */
+  buildId: z.string().min(1).nullable().optional(),
   startedAt: z.number().finite(),
   finishedAt: z.number().finite().nullable(),
   timings: z.object({

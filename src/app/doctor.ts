@@ -146,8 +146,19 @@ function unavailableOnWindows(name: string): DoctorCheck {
 export function dockerAccessDetail(access: DockerAccessFix): string {
   const how = access.command === null ? "" : ` Run \`${access.command}\`.`;
   const restart = access.restartApp === null ? "" : ` \`keyloom doctor --restart-docker\` does that for you.`;
+  const held = access.linkedFile !== undefined || access.scanIncomplete === true;
   const note = access.linkedFile !== undefined ? colimaLinkedFileHeld(access.linkedFile) : access.scanIncomplete === true ? COLIMA_SCAN_INCOMPLETE_HELD : access.note;
-  return `Docker is running, but this account can't open its socket.${how} ${note}${restart}`;
+  return `Docker is running, but this account can't open its socket.${how} ${note}${restart}${held ? heldInTerminal(access) : ""}`;
+}
+
+/**
+ * The held sentence names Fix Colima's files, which is a button in the app, not a command (R8-10). The terminal is told where that button
+ * is, and given Colima's stop on its own, which changes no owners, for a copy started with sudo that still runs.
+ */
+function heldInTerminal(access: DockerAccessFix): string {
+  const where = access.fixFiles ? " Fix Colima's files is in Build and flash, in `keyloom serve` or the desktop app." : "";
+  const stop = access.stopCommand === undefined ? "" : ` If a copy of Colima started with sudo still runs, \`${access.stopCommand}\` stops it without changing any file's owner.`;
+  return `${where}${stop}`;
 }
 
 /** Docker, its disk, Zapp and the pinned checkouts. A missing Zapp is a warning: building works without it. */

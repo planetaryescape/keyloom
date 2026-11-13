@@ -5,12 +5,15 @@ import type { ConfirmProblem } from "../configs/ConfigDialogs.tsx";
 import type { SyncApi } from "./useSync.ts";
 import { type RefusalAction, knownRefusal, noticeOnPage, refusalNotice, syncNotice } from "./words.ts";
 
-/** What a refusal's button does on this page. An action the page can't take leaves the toast without a button. */
-export type RefusalHandlers = Partial<Record<RefusalAction, () => void>>;
+/**
+ * What a refusal's button does on this page. An action the page can't take leaves the toast without a button. `open_release` takes the
+ * sync's failed build, which the dialog opens on (R8-01).
+ */
+export type RefusalHandlers = Partial<Record<RefusalAction, (buildId?: string) => void>>;
 
 /** A notice's button, when this page has a handler for it. Read at press time, so the button acts on the page as it is then. */
-const buttonFor = (action: { id: RefusalAction; label: string } | undefined, handlers: () => RefusalHandlers): { label: string; run: () => void } | undefined =>
-  action !== undefined && handlers()[action.id] !== undefined ? { label: action.label, run: () => handlers()[action.id]?.() } : undefined;
+const buttonFor = (action: { id: RefusalAction; label: string; buildId?: string | undefined } | undefined, handlers: () => RefusalHandlers): { label: string; run: () => void } | undefined =>
+  action !== undefined && handlers()[action.id] !== undefined ? { label: action.label, run: () => handlers()[action.id]?.(action.buildId) } : undefined;
 
 /**
  * A refused request (its server code) as words and the button that fixes it, for a dialog that shows it in place of a toast (R3-01).
@@ -57,7 +60,7 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
         const openBoard = pageNow.current?.openBoard;
         const action = notice.action?.id === "open_board"
           ? (openBoard === undefined ? undefined : { label: notice.action.label, run: () => openBoard(board.boardId) })
-          : buttonFor(notice.action === undefined ? undefined : { id: notice.action.id, label: notice.action.label }, current);
+          : buttonFor(notice.action === undefined ? undefined : { id: notice.action.id, label: notice.action.label, buildId: notice.action.buildId }, current);
         show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
       }
     }

@@ -101,12 +101,11 @@ function layerSection(query: PickerQuery, text: string): PickerSection[] {
   const items = query.layout.layers
     .map((layer) => ({ layer }))
     .filter(({ layer }) => text === "" || norm(layer.name).includes(text) || "layer".includes(text))
-    .map(({ layer }): PickerItem => ({
-      id: `layer-${layer.id}`,
-      label: layer.name,
-      pick: { t: "layer", action: query.layerAction, layerId: layer.id },
-      disabled: query.slot === "hold" && layer.id === query.layerId,
-    }));
+    .map(({ layer }): PickerItem => {
+      // Holding a key for its own layer would switch to the layer it is already on, so the tile is off and says why (R8-14).
+      const own = query.slot === "hold" && layer.id === query.layerId;
+      return { id: `layer-${layer.id}`, label: layer.name, pick: { t: "layer", action: query.layerAction, layerId: layer.id }, disabled: own, ...(own ? { detail: "This key's own layer" } : {}) };
+    });
   return items.length === 0 ? [] : [{ id: "layers", title: "Layers", items }];
 }
 

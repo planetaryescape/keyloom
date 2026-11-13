@@ -48,6 +48,9 @@ function conflictsWithHead(app: App, view: LayoutView, baseRevisionId: string, o
   return staleConflicts(baseDocument(app, view, baseRevisionId), view.document, ops);
 }
 
+/** What the page says for a draft checked against a head that has moved on, while it reads the newer one (R8-13). */
+export const STALE_CHECK_PLAIN = "This layout changed. Showing the latest version…";
+
 const staleMessage = (baseRevisionId: string, conflicts: StaleConflict[]) =>
   `the layout changed since ${baseRevisionId} at ${conflicts.map((c) => c.label).join("; ")}; propose the change again against the head`;
 
@@ -61,7 +64,8 @@ export function checkChange(app: App, ref: string, input: { baseRevisionId?: str
     const conflicts = conflictsWithHead(app, view, input.baseRevisionId, input.ops);
     if (conflicts.length > 0) {
       const slots = conflicts.flatMap((c) => (c.slot ? [c.slot] : []));
-      const error = { code: "stale_base", message: staleMessage(input.baseRevisionId, conflicts), ...(slots.length ? { slots } : {}) };
+      // The page re-reads the layout when it hears of the newer head, so its sentence says that is under way (R8-13); the CLI keeps `message`.
+      const error = { code: "stale_base", message: staleMessage(input.baseRevisionId, conflicts), plain: STALE_CHECK_PLAIN, ...(slots.length ? { slots } : {}) };
       return { ok: false, errors: [error], warnings: [], diff: NO_DIFF };
     }
   }

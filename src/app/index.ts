@@ -49,7 +49,7 @@ export {
   autoSyncStatus, createSyncEngine, pauseAutoSync, runSync, runUseConfig, setAutoSync, syncStatus,
 } from "./sync.ts";
 export {
-  BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, EmulateFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError,
+  BoardRevisionNeededError, BuildFailedError, BuildFileGoneError, BuildNotCancellableError, EmulateFailedError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError, RebootFailedError, ToolchainUnavailableError,
 } from "./firmware-errors.ts";
 export { type BuildArtifact, type RevealDeps, buildArtifact, revealBuildArtifact } from "./firmware-artifact.ts";
 export type { FlashPlan, FlashTool } from "./firmware-flash-plan.ts";

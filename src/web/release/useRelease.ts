@@ -9,13 +9,15 @@ import { downloadArtifact, revealArtifact } from "./install-api.ts";
 import { cancelShownFlash } from "./cancel-shown-flash.ts";
 import { cancelBuild, cancelFlash, checkFlash, openSettings } from "./flash-api.ts";
 import { type FileProblem, buildCancelProblem, fileProblem as fileProblemOf } from "./flash-words.ts";
-import { fetchRestartLog, restartDockerApp } from "../system.ts";
+import { fetchRestartLog, pruneDockerBuildCache, restartDockerApp } from "../system.ts";
+import { type CachePruneOutcome, cachePruneOutcome } from "./build-failure-words.ts";
 
 const POLL_MS = 1000;
 // A server that has gone quiet for this many polls in a row is said to be gone; polling goes on, and the line clears when it answers (R2-13).
 const MAX_MISSES = 3;
 const POLL_LOST = "keyloom stopped answering. Check that it is still running, then try again.";
 const BUILD_READ_FAILED = "keyloom couldn't read this build again. Try again to read it.";
+const SYNC_BUILD_READ_FAILED = "keyloom couldn't read the build that failed. Try again to read it.";
 
 export interface Release {
   build: Build | null;
@@ -23,6 +25,17 @@ export interface Release {
   starting: "build" | "flash" | null;
   /** Why starting a build or flash failed, or why polling gave up. */
   error: string | null;
+  /**
+   * The server's code for `error`, kept so the dialog picks its buttons from it (R8-03, R8-12): `internal`, `not_found` and `unreadable` get
+   * Restart keyloom, and `build_file_gone` gets Build again. Null for the page's own errors.
+   */
+  errorCode: string | null;
+  /** Shows a build the dialog didn't start, such as a sync's failed build, unless a newer one is on screen (R8-01). */
+  showBuild: (buildId: string) => void;
+  /** Frees Docker's build cache, for a build that failed `disk_full` (R8-04). It never builds by itself. */
+  freeCache: () => void;
+  /** That prune: running, and how it ended for the build on screen. */
+  cachePrune: { running: boolean; outcome: CachePruneOutcome | null };
   /** True once the server has asked which board revision to build for. */
   needsBoardRevision: boolean;
   /** The revision chosen this session, such as "reva"; kept until the page is reloaded. */
@@ -89,7 +102,9 @@ const RESTART_WAIT_MS = 5000;
 const RESTART_LOG_MS = 1000;
 
 // What Try again repeats. A start that failed is sent again; a poll that gave up starts polling again; a build read that failed is read again.
-type LastAction = { kind: "build"; revisionId: string } | { kind: "flash" } | { kind: "poll" } | { kind: "read" };
+type LastAction = { kind: "build"; revisionId: string } | { kind: "flash" } | { kind: "poll" } | { kind: "read" } | { kind: "show"; buildId: string };
+
+const codeOf = (e: unknown): string | null => (e instanceof ApiError ? e.code ?? null : null);
 
 // Starts builds and flashes and follows them once a second until they finish. Nothing here
 // starts a flash by itself: flashNow only runs from an explicit click.
@@ -97,7 +112,18 @@ export function useRelease(token: string, layoutRef: string): Release {
   const [build, setBuild] = useState<Build | null>(null);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [starting, setStarting] = useState<Release["starting"]>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The sentence and its code live together, so a code never outlives its sentence.
+  const [failure, setFailure] = useState<{ text: string; code: string | null } | null>(null);
+  const error = failure?.text ?? null;
+  const errorCode = failure?.code ?? null;
+  const setError = useCallback((next: string | null | ((now: string | null) => string | null), code: string | null = null) => {
+    setFailure((now) => {
+      const text = typeof next === "function" ? next(now?.text ?? null) : next;
+      if (text === (now?.text ?? null)) return now;
+      return text === null ? null : { text, code };
+    });
+  }, []);
+  const [cachePrune, setCachePrune] = useState<{ running: boolean; outcome: CachePruneOutcome | null }>({ running: false, outcome: null });
   const [resumes, setResumes] = useState(0);
   const [last, setLast] = useState<LastAction>({ kind: "poll" });
   const [fileProblem, setFileProblem] = useState<FileProblem | null>(null);
@@ -171,7 +197,7 @@ export function useRelease(token: string, layoutRef: string): Release {
         .catch((e: unknown) => {
           // No keyboard to detect: not a failure, a question the panel asks next to the Build button. Only this code asks it (R2-01).
           if (e instanceof ApiError && e.code === "board_revision_needed") setNeeds(true);
-          else setError(e instanceof Error ? e.message : "The build could not start.");
+          else setError(e instanceof Error ? e.message : "The build could not start.", codeOf(e));
         })
         .finally(() => setStarting(null));
     },
@@ -193,18 +219,53 @@ export function useRelease(token: string, layoutRef: string): Release {
       .catch((e: unknown) => {
         // The tool went missing since the build was read: the step shows its Install button once the build is read again.
         if (e instanceof ApiError && e.code === "flash_tool_missing") refreshBuild();
-        else setError(e instanceof Error ? e.message : "Flashing could not start.");
+        else setError(e instanceof Error ? e.message : "Flashing could not start.", codeOf(e));
       })
       .finally(() => setStarting(null));
   }, [token, build, refreshBuild]);
+
+  // The build and flash on screen, read by showBuild when its answer comes, so it never replaces a newer one.
+  const shown = useRef<{ build: Build | null; flashActive: boolean }>({ build: null, flashActive: false });
+  shown.current = { build, flashActive };
+  const showBuild = useCallback((id: string) => {
+    if (!mayShowBuild(shown.current, { id })) return;
+    fetchBuild(token, id, new AbortController().signal)
+      .then((next) => {
+        if (!mayShowBuild(shown.current, next)) return;
+        setBuild(next);
+        setFlash(null);
+        setError((was) => (was === SYNC_BUILD_READ_FAILED ? null : was));
+      })
+      .catch((e: unknown) => {
+        setLast({ kind: "show", buildId: id });
+        setError(SYNC_BUILD_READ_FAILED, codeOf(e));
+      });
+  }, [token, setError]);
 
   const retry = useCallback(() => {
     setError(null);
     if (last.kind === "build") buildNow(last.revisionId);
     else if (last.kind === "flash") flashNow();
     else if (last.kind === "read") refreshBuild();
+    else if (last.kind === "show") showBuild(last.buildId);
     else setResumes((n) => n + 1);
-  }, [last, buildNow, flashNow, refreshBuild]);
+  }, [last, buildNow, flashNow, refreshBuild, showBuild, setError]);
+
+  // Each build gets its own prune outcome; a prune that answers after another build is on screen says nothing under it.
+  const pruneFor = useRef<string | null>(null);
+  const freeCache = useCallback(() => {
+    if (buildId === undefined) return;
+    const asked = buildId;
+    pruneFor.current = asked;
+    setCachePrune({ running: true, outcome: null });
+    const done = (outcome: CachePruneOutcome) => {
+      if (pruneFor.current === asked) setCachePrune({ running: false, outcome });
+    };
+    pruneDockerBuildCache(token).then(
+      (result) => done(cachePruneOutcome(result)),
+      (e: unknown) => done(cachePruneOutcome(codeOf(e) === "unreachable" || !(e instanceof Error) ? { ok: false, unreachable: true } : { ok: false, reason: e.message })),
+    );
+  }, [token, buildId]);
 
   const restartAndBuild = useCallback((revisionId: string, shown: () => string) => {
     restartWait.current?.abort();
@@ -227,6 +288,8 @@ export function useRelease(token: string, layoutRef: string): Release {
   // A new build starts the step afresh, and a restart still waiting for work stops waiting, as it does when the page goes.
   useEffect(() => {
     setEngineRestart(RESTART_IDLE);
+    pruneFor.current = null;
+    setCachePrune({ running: false, outcome: null });
     return () => restartWait.current?.abort();
   }, [buildId]);
   // While the restart runs, its progress shows in the build log tail (R7-04). A server without the route gives no lines. Once a request
@@ -328,12 +391,24 @@ export function useRelease(token: string, layoutRef: string): Release {
   }, [token]);
 
   return {
-    build, flash, starting, error, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
+    build, flash, starting, error, errorCode, showBuild, freeCache, cachePrune, needsBoardRevision, boardRevision, chooseBoardRevision: setBoardRevision, buildNow, flashNow, retry, docker,
     dockerInstall, toolInstall, download, reveal, checkBuild: refreshBuild, fileProblem,
     cancelBuild: stopBuild, stoppingBuild, buildCancelProblem: buildRunning ? buildCancelProblemText : null,
     cancelFlash: cancel, cancelling, cancelNote: flashActive ? cancelNoteText : null, checkKeyboard, check, openSettings: open, settingsProblem,
     restartAndBuild, engineRestart: { ...engineRestart, log: restartLog }, cancelRestartWait,
   };
+}
+
+/**
+ * Whether the dialog may replace what it shows with another build, such as a sync's failed one (R8-01): never over a build that runs or a
+ * flash under way, and never over a newer build, which says more about the layout than an older one. `startedAt` is known once read.
+ */
+export function mayShowBuild(shown: { build: Pick<Build, "id" | "status" | "startedAt"> | null; flashActive: boolean }, next: { id: string; startedAt?: number }): boolean {
+  const now = shown.build;
+  if (shown.flashActive) return false;
+  if (now === null) return true;
+  if (now.id === next.id || now.status === "running") return false;
+  return next.startedAt === undefined || next.startedAt >= now.startedAt;
 }
 
 /** How long a restart waits for running work before it stops waiting and offers the button again (R7-04). */

@@ -115,6 +115,8 @@ describe("stale bases", () => {
     const stale = checkChange(app, ref, { baseRevisionId: base, ops: setKey(6, "F18") });
     expect(stale.ok).toBe(false);
     expect(stale.errors).toMatchObject([{ code: "stale_base", slots: [{ layerId: "layer-0", position: 6 }] }]);
+    // The page shows its own sentence while it reads the newer head; the CLI keeps the precise message (R8-13).
+    expect(stale.errors[0]).toMatchObject({ plain: "This layout changed. Showing the latest version…", message: expect.stringContaining("propose the change again against the head") });
     expect(checkChange(app, ref, { baseRevisionId: base, ops: setKey(1, "F5") }).ok).toBe(true);
     expect(checkChange(app, ref, { ops: setKey(6, "F18") }).ok).toBe(true);
     expect(attempt(() => checkChange(app, ref, { baseRevisionId: "rev_ghost", ops: setKey(6, "F18") }))).toBeInstanceOf(NotFoundError);

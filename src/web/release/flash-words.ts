@@ -2,6 +2,7 @@
 // Pure, so the wording is tested without a browser.
 import type { BoardSync, FlashCheckResponse, FlashErrorCode } from "../../api/http.ts";
 import type { SettingsPaneName } from "../../api/system-remapper.ts";
+import { unexpectedWayOut } from "../shell/unexpected.ts";
 
 /**
  * Why the firmware file couldn't be saved or shown in Finder, in the server's words. `gone`: keyloom has no file for this build any more
@@ -12,6 +13,18 @@ export type FileProblem = { text: string; gone: boolean };
 export function fileProblem(error: unknown, fallback: string): FileProblem {
   if (!(error instanceof Error)) return { text: fallback, gone: false };
   return { text: error.message, gone: "code" in error && error.code === "not_found" };
+}
+
+/** A build whose firmware file went between Build and Flash: flashing again fails the same way, so the way on is a new build (R8-12). */
+export const BUILD_FILE_GONE = "This build's firmware file is gone, so keyloom can't flash it. Build again to make a new one.";
+
+/**
+ * The buttons beside the dialog's own error (R8-03, R8-12): Build again for a file that is gone, Restart keyloom (with Try again for a
+ * server fault) for an answer no screen planned for, and Try again for anything else, which repeats what failed.
+ */
+export function errorWayOut(code: string | null): "build_again" | "unexpected" | "try_again" {
+  if (code === "build_file_gone") return "build_again";
+  return unexpectedWayOut(code ?? undefined, true) === null ? "try_again" : "unexpected";
 }
 
 /**
@@ -40,10 +53,13 @@ export function permissionFix(code: FlashErrorCode | null | undefined): Permissi
 }
 
 /**
- * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is never dropped. A write
+ * A failed flash's message: plain words for its code when it has one, then the server's sentence, which is dropped only for a write that
+ * timed out, whose sentence names a CLI flag (R8-11). A write
  * that finished but couldn't be confirmed says so first, because the keyboard may well run the new build.
  */
 export function failedFlashText(code: FlashErrorCode | null | undefined, error: string | null): { lead: string | null; detail: string } {
+  // The server's sentence names a CLI flag for an earlier build; the page's way on is the step's own Try again (R8-11).
+  if (code === "write_timeout") return { lead: "Flashing didn't finish within 3 minutes, so keyloom stopped it.", detail: "The keyboard may be left in its bootloader, where it doesn't type. Try again to put this build on it." };
   const lead = code === "not_confirmed" ? "keyloom wrote the firmware, but couldn't confirm the keyboard runs it." : (permissionFix(code)?.failed ?? null);
   return { lead, detail: error ?? "Flashing failed." };
 }

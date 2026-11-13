@@ -26,7 +26,7 @@ import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
 import { NotFoundError, UsageError, ValidationFailedError } from "./errors.ts";
 import { type GeneratedSource, type HandsFreeOverrides, SourceError, driverFor } from "./firmware-drivers.ts";
-import { BoardRevisionNeededError, BuildFailedError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
+import { BoardRevisionNeededError, BuildFailedError, BuildFileGoneError, BuildNotCancellableError, FlashFailedError, FlashNotCancellableError, FlashToolMissingError } from "./firmware-errors.ts";
 import { type LayoutView, getLayout } from "./layouts.ts";
 import { type FlashPlan, flashPlanFor } from "./firmware-flash-plan.ts";
 import { containerWorkRunning, ensureDocker, forcedRestartEngine } from "./toolchain.ts";
@@ -96,7 +96,7 @@ export type FlashView = {
 };
 
 /** Why a flash failed, as the UI acts on it (D-501). */
-export type FlashErrorCode = FlashPermissionCode | "cancelled" | "not_confirmed";
+export type FlashErrorCode = FlashPermissionCode | "cancelled" | "not_confirmed" | "write_timeout";
 
 const LOG_TAIL_LINES = 30;
 const WRITING_INSTRUCTION = "Don't unplug the keyboard. Flashing takes a few seconds.";
@@ -498,6 +498,7 @@ function flashErrorCode(code: string | null): FlashErrorCode | null {
   switch (code) {
     case "cancelled":
     case "not_confirmed":
+    case "write_timeout":
     case "permission_files_and_folders":
     case "permission_input_monitoring":
       return code;
@@ -572,7 +573,7 @@ export async function startFlash(app: App, opts: FlashOptions): Promise<FlashVie
       throw new UsageError(`build ${build.id} is ${build.status}${build.error ? ` (${build.error})` : ""}; only a successful build can be flashed`);
     }
     const artifact = absolute(app, build.artifactPath);
-    if (!(await Bun.file(artifact).exists())) throw new UsageError(`build ${build.id}'s file ${artifact} is gone; build it again`);
+    if (!(await Bun.file(artifact).exists())) throw new BuildFileGoneError(`build ${build.id}'s file ${artifact} is gone; build it again`);
 
     const busy = activeFlashes(app.db).map((f) => reapFlash(app, f)).find((f) => f.status === "waiting_for_bootloader" || f.status === "writing");
     if (busy) throw new UsageError(`flash ${busy.id} is already in progress; wait for it to finish`);

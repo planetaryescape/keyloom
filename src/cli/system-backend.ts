@@ -1,9 +1,9 @@
 // The server's system interface over the app (rung 25). Starting Docker takes up to about two minutes, and a
 // second click should join the attempt already running rather than launch a second engine.
 import { readKarabinerConfig } from "../app/karabiner-config.ts";
-import { COLIMA_FIX_UNGUARDED, FORCED_RESTART_UNGUARDED, dockerReadiness, engineActionNow, fixColimaFiles, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
+import { BUILD_CACHE_UNGUARDED, COLIMA_FIX_UNGUARDED, FORCED_RESTART_UNGUARDED, dockerReadiness, engineActionNow, fixColimaFiles, freeBuildCache, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
 import { type InstallDeps, installJobs } from "../app/tool-install.ts";
-import type { DockerStartResponse } from "../api/system.ts";
+import type { DockerPruneResponse, DockerStartResponse } from "../api/system.ts";
 import type { SystemBackend } from "../server/system-backend.ts";
 
 // How many of a forced restart's progress lines the page's log tail gets (R7-04).
@@ -22,7 +22,7 @@ const restartResponse = (r: Awaited<ReturnType<typeof restartDocker | typeof fix
 export function appSystemBackend(
   installDeps: InstallDeps = {},
   docker: {
-    restart?: typeof restartDocker; start?: typeof startDocker; fixFiles?: typeof fixColimaFiles; restartBlocker?: () => string | null;
+    restart?: typeof restartDocker; start?: typeof startDocker; fixFiles?: typeof fixColimaFiles; prune?: typeof freeBuildCache; restartBlocker?: () => string | null;
     /** What a forced restart waits for, named for the person; serve passes `engineRestartWork` (R7-04). */
     restartWork?: () => string[];
   } = {},
@@ -34,12 +34,13 @@ export function appSystemBackend(
   let forcedLines: string[] = [];
   // A start, restart or Colima files fix holding the engine refuses a forced restart as engine_busy, so it is waited for like the work the
   // blocker names.
-  const engineWork = { start: "a Docker start", restart: "a Docker restart", "fix-files": "Fix Colima's files" } as const;
+  const engineWork = { start: "a Docker start", restart: "a Docker restart", "fix-files": "Fix Colima's files", prune: "a build cache cleanup" } as const;
   const waitingFor = (): string[] => {
     const action = engineActionNow();
     return [...(action === null ? [] : [engineWork[action]]), ...(docker.restartWork?.() ?? [])];
   };
   let fixing: Promise<DockerStartResponse> | null = null;
+  let pruning: Promise<DockerPruneResponse> | null = null;
   const installs = installJobs(installDeps);
   return {
     docker: () => dockerReadiness(),
@@ -78,6 +79,14 @@ export function appSystemBackend(
       if (blocker === undefined) return { ok: false, reason: COLIMA_FIX_UNGUARDED, engine: null, code: "build_running" };
       fixing = (docker.fixFiles ?? fixColimaFiles)({ blocker }).then(restartResponse).finally(() => { fixing = null; });
       return fixing;
+    },
+    // A prune takes the cache a running build reads, so it asks the same blocker as a forced restart, inside the lock (R8-04).
+    pruneBuildCache: async () => {
+      if (pruning !== null) return pruning;
+      const blocker = docker.restartBlocker;
+      if (blocker === undefined) return { ok: false, reason: BUILD_CACHE_UNGUARDED, code: "build_running" };
+      pruning = (docker.prune ?? freeBuildCache)({ blocker }).finally(() => { pruning = null; });
+      return pruning;
     },
   };
 }

@@ -261,10 +261,11 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
     return fail(`No Moonlander in bootloader mode was found within ${waitText(input.bootloaderWaitMs ?? BOOTLOADER_WAIT_MS)}. Nothing was flashed. Press the reset button and flash again.`, output);
   }
   if (abortedFor === "write") {
-    return fail(
-      "Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.",
-      output,
-    );
+    // The page shows its own words for the code, with Flash again; the CLI keeps its flag (R8-11).
+    return {
+      ...fail("Flashing didn't finish within 3 minutes and was stopped. The keyboard may be left in its bootloader: flash again, or `keyloom flash --build <an earlier build>`.", output),
+      errorCode: "write_timeout",
+    };
   }
   if (result.exitCode === 0) {
     input.log.line("keyloom: zapp exited 0");
