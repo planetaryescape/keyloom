@@ -5,6 +5,7 @@
 import { type KeptCall, type KeptDefinition, parseCalls } from "./kept-behaviours.ts";
 import { MOD_ORDER, type LightingOp, type Reading, type Step } from "./native-meaning.ts";
 import type { LayerRef, Mod } from "./schema.ts";
+import { modAction } from "./kanata/names.ts";
 
 export type NativeSource = { firmware: "qmk" | "zmk" | "kanata"; source: string; layerRefs?: readonly LayerRef[] | undefined };
 export type KeptMap = ReadonlyMap<string, KeptDefinition | null>;
@@ -64,7 +65,16 @@ const ZMK_RGB = new Map<string, LightingOp>([
 export function readNative(native: NativeSource, kept: KeptMap, forWarning = false): Reading {
   if (native.firmware === "qmk") return readQmk(spaced(native.source, "qmk"));
   if (native.firmware === "zmk") return readZmk(native, kept, forWarning);
-  return { kind: "unknown" };
+  return readKanata(native.source.trim());
+}
+
+// Read only the timeout keyloom writes. Other timings stay native so editing cannot reset a custom timeout.
+const KANATA_MOD = new Map<string, Mod>(MOD_ORDER.map((m) => [modAction([m]), m]));
+const KANATA_ONE_SHOT = /^\(one-shot 2000 (\w+)\)$/;
+
+function readKanata(source: string): Reading {
+  const mod = KANATA_MOD.get(KANATA_ONE_SHOT.exec(source)?.[1] ?? "");
+  return mod === undefined ? { kind: "unknown" } : { kind: "steps", steps: [{ kind: "oneShot", mods: [mod] }] };
 }
 
 /**

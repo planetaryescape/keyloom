@@ -3,7 +3,7 @@
 // here asks for a kind. Pure, so the rules are tested without a browser.
 import { KEYCODES, type KeyCodeInfo } from "../../layout/keycodes.ts";
 import type { HoldTapProfile, Layout, Mod } from "../../layout/schema.ts";
-import { sortMods, switchKind, toggleMod, type Draft, type LayerAction } from "../editor/draft.ts";
+import { isDance, sortMods, switchKind, toggleMod, type Draft, type LayerAction } from "../editor/draft.ts";
 
 const MOD_OF_KEY: Readonly<Record<string, Mod>> = {
   LEFT_CTRL: "LCTL",
@@ -26,6 +26,8 @@ export type TapPick =
   | { t: "macro"; macroId: string }
   /** An existing tap dance, to use on this key too. */
   | { t: "dance"; danceId: string }
+  /** Modifiers held for the next key only (D-568). */
+  | { t: "oneShot"; mods: Mod[] }
   | { t: "transparent" }
   | { t: "none" };
 
@@ -78,13 +80,16 @@ export function pickTap(draft: Draft, pick: TapPick): Draft {
   switch (pick.t) {
     case "key": {
       const mod = modOfKey(pick.code);
-      // A lone modifier key is a `modifier` binding, the way both importers read one.
-      if (mod !== undefined) return { ...draft, kind: "modifier", modifier: [mod] };
+      // A lone modifier key is a `modifier` binding, the way both importers read one. Picked from the keys, it is a plain one.
+      if (mod !== undefined) return { ...draft, kind: "modifier", modifier: [mod], oneShot: false };
       // Modifiers already on the slot go with the new key: Ctrl, then A, is Ctrl+A.
       const mods = draft.kind === "modifier" ? draft.modifier : draft.kind === "key" ? draft.key.mods : [];
       const key = { code: pick.code, mods: sortMods(mods) };
       return { ...draft, kind: "key", key, tap: { ...key } };
     }
+    case "oneShot":
+      if (isDance(draft) || draft.kind === "tapDance") return draft;
+      return { ...draft, kind: "modifier", modifier: sortMods(pick.mods), oneShot: true };
     case "layer":
       return { ...draft, kind: "layer", layerAction: pick.action, layerId: pick.layerId };
     case "macro":
@@ -100,10 +105,19 @@ export function pickTap(draft: Draft, pick: TapPick): Draft {
   }
 }
 
-/** A hold fits a key, a lone modifier key, or a macro (which the hold-tap then taps). */
+/** Whether the tap slot holds modifiers for the next key only (D-568). */
+export const isOneShotMod = (draft: Draft): boolean => draft.kind === "modifier" && draft.oneShot === true;
+
+/** Turns the tap slot's modifiers into ones held for the next key only, or back into plain ones. */
+export const setOneShot = (draft: Draft, on: boolean): Draft => (draft.kind === "modifier" ? { ...draft, oneShot: on } : draft);
+
+/**
+ * A hold fits a key, a lone modifier key, or a macro (which the hold-tap then taps). A one-shot modifier is a firmware key with no
+ * hold, as a layer key is.
+ */
 export const canAddHold = (draft: Draft): boolean =>
   (draft.kind === "key" && draft.key.code !== null) ||
-  (draft.kind === "modifier" && draft.modifier.length === 1) ||
+  (draft.kind === "modifier" && draft.modifier.length === 1 && draft.oneShot !== true) ||
   (draft.kind === "macro" && draft.macroId !== null);
 
 const MODIFIER_KEY_OF: Readonly<Record<Mod, string>> = {

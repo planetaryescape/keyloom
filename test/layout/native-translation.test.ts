@@ -246,8 +246,10 @@ describe("reading a native binding", () => {
     expect(readNative(zmk("&__proto__ LSHFT"), kept())).toEqual({ kind: "unknown" });
   });
 
-  test("the reading only ever answers for QMK and ZMK; a kanata binding is its own source", () => {
-    expect(readNative({ firmware: "kanata", source: "(one-shot 2000 lshift)" }, kept())).toEqual({ kind: "unknown" });
+  test("kanata reads the one-shot modifiers keyloom writes and leaves other source unknown", () => {
+    expect(readNative({ firmware: "kanata", source: "(one-shot 2000 lshift)" }, kept())).toEqual({ kind: "steps", steps: [{ kind: "oneShot", mods: ["LSFT"] }] });
+    expect(readNative({ firmware: "kanata", source: "(one-shot 500 lshift)" }, kept())).toEqual({ kind: "unknown" });
+    expect(readNative({ firmware: "kanata", source: "(one-shot 2000 nonexistent-key)" }, kept())).toEqual({ kind: "unknown" });
   });
 });
 

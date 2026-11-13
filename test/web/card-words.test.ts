@@ -19,7 +19,7 @@ describe("the key card's words", () => {
     expect(cardTitle({ kind: "layer", action: "oneShot", layerId: "nav" }, layout)).toBe("Navigate for one key");
     expect(cardTitle({ kind: "macro", macroId: "m" }, layout)).toBe("A macro");
     expect(cardTitle({ kind: "tapDance", tapDanceId: "d" }, layout)).toBe("Option + Space, twice for [");
-    expect(cardTitle({ kind: "native", firmware: "qmk", source: "OSM(MOD_LSFT)", label: "OS⇧" }, layout)).toBe("⇧ for one key");
+    expect(cardTitle({ kind: "native", firmware: "qmk", source: "OSM(MOD_LSFT)", label: "OS⇧" }, layout)).toBe("Shift for one key");
     expect(cardTitle({ kind: "native", firmware: "qmk", source: "RGB_HUD", label: "Hue-" }, layout)).toBe("Hue− (lights)");
   });
 

@@ -77,7 +77,7 @@ export function cardTitle(binding: Binding, layout: Pick<Layout, "layers" | "mac
       const print = nativeLegend(binding, layout);
       if (print.hold === undefined) return print.tap;
       // Only a layer is held; other front words name what kind of key it is ("lights", "mouse", "flash").
-      if (print.hold === "once") return `${print.tap} for one key`;
+      if (print.hold === "once") return `${[...print.tap].map((mark) => MOD_WORD[mark] ?? mark).join(" + ")} for one key`;
       return print.layerId === undefined ? `${print.tap} (${print.hold})` : `${print.tap}, or hold for ${print.hold}`;
     }
     case "transparent": return "Falls through";
@@ -109,8 +109,10 @@ export function applyWords(before: Binding, after: Binding, layout: Pick<Layout,
       return "Let it fall through";
     case "none":
       return "Make it do nothing";
-    case "native":
-      return "Apply";
+    case "native": {
+      // A one-shot modifier says what it becomes (D-568): "Make it Shift for one key".
+      return nativeLegend(after, layout).hold === "once" ? `Make it ${cardTitle(after, layout)}` : "Apply";
+    }
   }
 }
 

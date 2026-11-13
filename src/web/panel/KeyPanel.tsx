@@ -27,7 +27,7 @@ import { advancedLegend } from "../keyboard/advanced-legend.ts";
 import type { BoardDefinition, KeycapColour } from "../../boards/schema.ts";
 import { EncoderTurns } from "./EncoderTurns.tsx";
 import { layerDisplayName } from "../../layout/cap-words.ts";
-import { applyWords, cardTitle, keyPhrase, macMeaning, slotPhrase } from "../card/card-words.ts";
+import { applyWords, cardTitle, keyPhrase, macMeaning, modWords, slotPhrase } from "../card/card-words.ts";
 import { layerLight } from "../light/layer-light.ts";
 import { capMods } from "../../layout/cap-words.ts";
 import { tapSlotAction } from "./dance.ts";
@@ -40,11 +40,12 @@ import {
   canAddExtraSlot, canToggleSlotMods, clearExtraSlot, danceUsers, setExtraSlot, slotFromPick, slotMods, slotWords, toggleSlotMod, type ExtraSlot,
 } from "./dance.ts";
 import { MacroPane } from "./MacroPane.tsx";
-import { isExtraSlot, openingTab, type PickerTab, type SlotName } from "./picker-items.ts";
+import { isExtraSlot, oneShotItemId, openingTab, type PickerTab, type SlotName } from "./picker-items.ts";
+import { OneShotChoice } from "./OneShotChoice.tsx";
 import { SlotPicker } from "./SlotPicker.tsx";
 import {
-  addHold, canAddHold, canToggleTapMods, clearHold, hasHold, keyForChar, modOfKey, pickHold, pickTap, profileFor, tapKind, tapMods, toggleHoldMod,
-  toggleTapMod, type TapPick,
+  addHold, canAddHold, canToggleTapMods, clearHold, hasHold, isOneShotMod, keyForChar, modOfKey, pickHold, pickTap, profileFor, setOneShot, tapKind, tapMods,
+  toggleHoldMod, toggleTapMod, type TapPick,
 } from "./slots.ts";
 import { whereElse, whereElseSentence } from "./where-else.ts";
 import "./panel.css";
@@ -347,7 +348,8 @@ export function KeyPanel(props: Props) {
   const result = check.state.status === "done" ? check.state.result : null;
   const canApply = binding !== null && result !== null && result.ok && !applying;
   const warnings = result?.warnings.length ?? 0;
-  const replacesNative = original.kind === "native" && binding !== null && binding.kind !== "native";
+  // A one-shot modifier keyloom reads opens as a modifier (D-568), so changing it drops nothing keyloom can't rebuild.
+  const replacesNative = original.kind === "native" && initial?.kind === "native" && binding !== null && binding.kind !== "native";
   const profile = layout.holdTapProfiles.find((candidate) => candidate.id === draft.profileId);
 
   async function apply() {
@@ -500,6 +502,7 @@ export function KeyPanel(props: Props) {
           layout={layout}
           layerId={layerId}
           keysOnly={which === "hold" ? true : which === "tap" ? keysOnly : false}
+          hasExtraSlots={isDance(draft) || draft.kind === "tapDance"}
           advanced={advanced}
           selectedIds={selected}
           initialLayerAction={which === "tap" ? draft.layerAction : which === "hold" ? "momentary" : extra?.kind === "layer" ? extra.action : "toggle"}
@@ -591,7 +594,8 @@ export function KeyPanel(props: Props) {
           return { momentary: `Hold for ${name}.`, toggle: `Tap to turn ${name} on or off.`, to: `Tap to go to ${name}.`, oneShot: `Tap for ${name}, for the next key only.` }[draft.layerAction];
         })()
       : null;
-  const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : dance !== null ? dance : layerLine !== null ? layerLine : meaning !== null ? meaning : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
+  const oneShotLine = isOneShotMod(draft) && draft.modifier.length > 0 && !isDance(draft) ? `Tap for ${modWords(draft.modifier)}, for the next key only.` : null;
+  const sentence = dirty && binding !== null ? (restSentence === null ? `Before: ${lowered}` : "") : dance !== null ? dance : layerLine !== null ? layerLine : oneShotLine !== null ? oneShotLine : meaning !== null ? meaning : restSentence !== null ? restSentence : draft.kind === "key" || draft.kind === "holdTap" || draft.kind === "transparent" || draft.kind === "none" ? (picker === null ? "Press a key on your keyboard to put it here." : "") : (current?.headline ?? "");
   // One chip per place, named by where it is; two functions on the same other key, or two keys on the same other layer, are one chip.
   const chipName = (other: Slot) => (other.layerId === layerId ? keyIn(layout, other).replace(/ on .*$/, "") : `on ${layerDisplayName(layout.layers.find((candidate) => candidate.id === other.layerId)?.name ?? "")}`);
   const also = where
@@ -690,6 +694,9 @@ export function KeyPanel(props: Props) {
               </button>
             ) : null}
           </div>
+        ) : null}
+        {draft.kind === "modifier" && !isDance(draft) && picker === null && draft.modifier.length > 0 ? (
+          <OneShotChoice mods={draft.modifier} on={isOneShotMod(draft)} firmware={layout.firmware} passthrough={layout.passthrough} onChange={(on) => update((previous) => setOneShot(previous, on))} />
         ) : null}
         {sentence === "" || (draft.kind === "macro" && picker === null && !dirty) ? null : <p className="card-sentence" aria-live="polite">{sentence}</p>}
         {draft.kind === "macro" && picker === null && !dirty ? <MacroSteps macro={layout.macros.find((macro) => macro.id === draft.macroId)} /> : null}
@@ -912,7 +919,7 @@ function selectedIdsFor(slot: SlotName, draft: Draft): string[] {
       if (draft.macroId !== null && draft.tap.code === null) return [`macro-${draft.macroId}`];
       return draft.tap.code === null ? [] : [`key-${draft.tap.code}`];
     case "modifier":
-      return draft.modifier.map((mod) => `key-${MODIFIER_KEY[mod]}`);
+      return isOneShotMod(draft) ? [oneShotItemId(draft.modifier)] : draft.modifier.map((mod) => `key-${MODIFIER_KEY[mod]}`);
     case "layer":
       return draft.layerId === null ? [] : [`layer-${draft.layerId}`];
     case "macro":

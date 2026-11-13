@@ -6,6 +6,8 @@ import type { Binding, Layout, Macro, Mod, SlotAction, TapDance, SensorBinding }
 import { modsWords } from "../../layout/describe.ts";
 import { keyCodeLabel } from "../../layout/keycodes.ts";
 import { keyOn } from "../../validation/words.ts";
+import { keptDefinitions } from "../../layout/kept-behaviours.ts";
+import { oneShotModsOf, oneShotRefusal, writeOneShot } from "../../layout/one-shot-mods.ts";
 
 export type LayerAction = Extract<Binding, { kind: "layer" }>["action"];
 export type NativeBinding = Extract<Binding, { kind: "native" }>;
@@ -19,6 +21,8 @@ export type Draft = {
   kind: Binding["kind"];
   key: KeyChoice;
   modifier: Mod[];
+  /** The modifier is held for the next key only (D-568); the binding is then the firmware's own one-shot, a `native`. */
+  oneShot?: boolean;
   tap: KeyChoice;
   holdType: "mods" | "layer";
   holdMods: Mod[];
@@ -120,9 +124,13 @@ export function draftFromBinding(binding: Binding, layout: Layout, currentLayerI
     case "macro":
       draft.macroId = binding.macroId;
       break;
-    case "native":
+    case "native": {
       draft.native = binding;
+      // A one-shot modifier in the layout's own firmware is edited as the modifier it holds; the native stays so an unchanged key is kept as written.
+      const mods = binding.firmware === layout.firmware ? oneShotModsOf(binding, keptDefinitions(layout.passthrough)) : null;
+      if (mods !== null) Object.assign(draft, { kind: "modifier", modifier: mods, holdMods: [...mods], oneShot: true });
       break;
+    }
     case "tapDance": {
       const entry = layout.tapDances.find((candidate) => candidate.id === binding.tapDanceId);
       const expanded = entry === undefined ? null : expandDance(draft, entry);
@@ -194,7 +202,8 @@ export function incompleteReason(draft: Draft, layout: Layout): string | null {
     case "key":
       return draft.key.code === null ? "Pick a key." : null;
     case "modifier":
-      return draft.modifier.length === 0 ? "Turn on at least one modifier." : null;
+      if (draft.modifier.length === 0) return "Turn on at least one modifier.";
+      return draft.oneShot === true && !isDance(draft) ? oneShotRefusal(draft.modifier, layout.firmware, keptDefinitions(layout.passthrough)) : null;
     case "holdTap":
       if (draft.tap.code === null && draft.macroId === null) return "Pick the key or macro to send on a tap.";
       if (draft.holdType === "mods" && draft.holdMods.length === 0) return "Turn on at least one modifier for the hold.";
@@ -232,8 +241,13 @@ export function bindingFromDraft(draft: Draft, layout: Layout): Binding | null {
   switch (draft.kind) {
     case "key":
       return { kind: "key", ...withMods(draft.key as KeyChoice & { code: string }) };
-    case "modifier":
-      return { kind: "modifier", mods: sortMods(draft.modifier) };
+    case "modifier": {
+      if (draft.oneShot !== true) return { kind: "modifier", mods: sortMods(draft.modifier) };
+      // The key as it was, when its modifiers haven't changed, so an imported spelling (`&sk LEFT_SHIFT`) isn't rewritten.
+      if (draft.native?.firmware === layout.firmware && JSON.stringify(oneShotModsOf(draft.native, keptDefinitions(layout.passthrough))) === JSON.stringify(sortMods(draft.modifier))) return draft.native;
+      const written = writeOneShot(sortMods(draft.modifier), layout.firmware, keptDefinitions(layout.passthrough));
+      return "binding" in written ? written.binding : null;
+    }
     case "holdTap":
       return {
         kind: "holdTap",

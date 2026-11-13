@@ -17,6 +17,6 @@ describe("functionLabel", () => {
     // A firmware-only function is said as its cap prints it, never as its source (D-270).
     expect(functionLabel("native:qmk:TD(0)", layout)).toBe("A custom key");
     expect(functionLabel("native:zmk:&layer_td", layout)).toBe("A custom key");
-    expect(functionLabel("native:qmk:OSM(MOD_LSFT)", layout)).toBe("⇧ for one key");
+    expect(functionLabel("native:qmk:OSM(MOD_LSFT)", layout)).toBe("Shift for one key");
   });
 });
