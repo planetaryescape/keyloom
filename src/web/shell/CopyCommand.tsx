@@ -2,10 +2,13 @@ import { Check, Copy } from "lucide-react";
 import { useRef, useState } from "react";
 
 /** What a refused copy says (R5-17): the command is selected, so the keyboard's own copy finishes the job. */
-export const copyFailedWords = (mac: boolean): string => `keyloom couldn't copy it. The command is selected: press ${mac ? "⌘C" : "Ctrl+C"} to copy it.`;
+export const copyFailedWords = (mac: boolean, noun = "command"): string => `keyloom couldn't copy it. The ${noun} is selected: press ${mac ? "⌘C" : "Ctrl+C"} to copy it.`;
 
-/** A command to run in a terminal, with a Copy button. Only for the terminal case: the app runs what it can itself. */
-export function CopyCommand({ command }: { command: string }) {
+/**
+ * A command to run in a terminal, with a Copy button. Only for the terminal case: the app runs what it can itself. `noun` names other
+ * text to copy, such as the Karabiner entry keyloom can't add itself (R11-01).
+ */
+export function CopyCommand({ command, noun = "command" }: { command: string; noun?: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const code = useRef<HTMLElement>(null);
   function copy() {
@@ -28,12 +31,12 @@ export function CopyCommand({ command }: { command: string }) {
     <>
     <span className="command">
       <code ref={code}>{command}</code>
-      <button type="button" className="button" onClick={copy} aria-label={`Copy ${command}`}>
+      <button type="button" className="button" onClick={copy} aria-label={noun === "command" ? `Copy ${command}` : `Copy the ${noun}`}>
         {state === "copied" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
         {state === "copied" ? "Copied" : "Copy"}
       </button>
     </span>
-    {state === "failed" ? <span className="command-failed" role="alert">{copyFailedWords(mac)}</span> : null}
+    {state === "failed" ? <span className="command-failed" role="alert">{copyFailedWords(mac, noun)}</span> : null}
     </>
   );
 }

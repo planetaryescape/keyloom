@@ -21,7 +21,11 @@ const ROOT_DEST: DaemonInstallDest = { plist: DAEMON_PLIST_PATH, kanata: ROOT_KA
  * Why the root script stopped. It prints `keyloom setup stopped (<code>): <reason>` to stderr before it exits 1, so the CLI's `sudo sh -c` shows the
  * reason and the app reads the code from osascript's "execution error" line (`rootScriptFailure`).
  */
-export const ROOT_FAILURE_CODES = ["kanata_swapped", "root_copy_failed", "root_plist_failed", "root_log_failed", "root_start_failed"] as const;
+export const ROOT_FAILURE_CODES = [
+  "kanata_swapped", "root_copy_failed", "root_plist_failed", "root_log_failed", "root_start_failed",
+  // The restart and log scripts for an installed service (daemon-service.ts, R11-02).
+  "service_missing", "service_outdated", "log_missing",
+] as const;
 export type RootFailureCode = (typeof ROOT_FAILURE_CODES)[number];
 
 /** The last `keyloom setup stopped (<code>): <reason>` line the root script printed, or null when it printed none (it didn't run, or ran an old copy). */

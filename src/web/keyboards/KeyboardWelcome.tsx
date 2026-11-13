@@ -24,7 +24,7 @@ import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import "./collection.css";
 
-export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0, cardMemory }: {
+export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFailure = null, onRetryBoards, onBoardAdded, setup = null, onSetupOpened, sync, sources, onMade, onManage, onBack, collectionVersion = 0, cardMemory, onImportHold }: {
   token: string; choices: readonly BoardChoice[];
   /** Where the read of `choices` stands (R6-04): the list says it is reading, or that it couldn't, with Try again. */
   boardsRead?: BoardsRead; onRetryBoards?: () => void;
@@ -36,6 +36,8 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFa
   setup?: { id: string; name: string } | null; onSetupOpened?: () => void;
   sync: SyncApi; sources: readonly PutSource[];
   onMade: (id: string, proposals?: boolean) => void; onManage: (removed?: boolean) => void; onBack?: (() => void) | undefined; collectionVersion?: number;
+  /** The import screen's hold (R11-01): App keeps this screen up while an import's note is still to show. */
+  onImportHold?: ((holding: boolean) => void) | undefined;
   /** App's memory of the cards already shown or put off, so the editor doesn't open them again (R10-08). */
   cardMemory?: CardMemory | undefined;
 }) {
@@ -76,7 +78,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", boardsFa
     return () => window.clearTimeout(timer);
   }, [query, firmwareSearch, search, collection]);
   // The import screen's way back names this screen, and its title is a first layout's on a first run (R6-25).
-  if (importing !== null) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onStartedBlank={onMade} onBack={() => setImporting(null)} backLabel="Back to choosing a keyboard" first={sources.length === 0} only={importing.board} />;
+  if (importing !== null) return <ImportScreen token={token} onImported={(result) => onMade(result.layoutId)} onStartedBlank={onMade} onBack={() => setImporting(null)} backLabel="Back to choosing a keyboard" first={sources.length === 0} only={importing.board} onHold={onImportHold} />;
   const targetId = flow.step.kind === "put" ? flow.step.boardId : null;
   const chosenId = flow.step.kind === "put" || flow.step.kind === "setup" ? flow.step.boardId : null;
   const chosen = choices.find((board) => board.id === chosenId)?.firmware ?? null;

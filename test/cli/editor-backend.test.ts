@@ -151,3 +151,24 @@ describe("import refusals the page acts on", () => {
     expect(refused).toMatchObject({ status: 400, code: "keyboard_removed", board: "zsa/moonlander" });
   });
 });
+
+// R11-01: the page shows the Karabiner edit and the warnings the CLI prints, so the import answer carries them.
+describe("a Karabiner import's answer", () => {
+  test("carries the edit that frees the built-in keyboard and the importer's warnings", async () => {
+    const { backend } = await setup();
+    const bytes = new Uint8Array(await Bun.file(new URL("../fixtures/karabiner/synthetic-karabiner.json", import.meta.url)).arrayBuffer());
+    const answer = await backend.importUpload({ board: "apple/macbook-ansi", filename: "karabiner.json", bytes });
+    expect(answer.karabinerEdit?.entry).toBe('{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }');
+    expect(answer.karabinerEdit?.unimported).toBeGreaterThanOrEqual(0);
+    expect(answer.warnings.length).toBeGreaterThan(0);
+    // The entry is valid JSON, so it pastes into karabiner.json as it is.
+    expect(JSON.parse(answer.karabinerEdit?.entry ?? "")).toEqual({ identifiers: { is_keyboard: true, product_id: 0, vendor_id: 0 }, ignore: true });
+  });
+
+  test("another board's import carries no Karabiner edit", async () => {
+    const { app, backend } = await setup();
+    const document = new TextEncoder().encode(JSON.stringify(layoutExportDocument(app, getLayout(app, "synchronized").layout.id)));
+    const answer = await backend.importUpload({ board: "zsa/moonlander", filename: "layout.json", bytes: document });
+    expect(answer.karabinerEdit).toBeUndefined();
+  });
+});

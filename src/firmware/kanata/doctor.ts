@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { type KanataEndpoint, hello } from "./client.ts";
 import { type KanataBoardRevision } from "./board-config.ts";
 import { fileSha256, findKanata, kanataVersion } from "./binary.ts";
-import { DAEMON_LABEL, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "./plist.ts";
+import { DAEMON_LABEL, DAEMON_LOG_PATH, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "./plist.ts";
 import type { RemapperPaths } from "./paths.ts";
 import { readHeader } from "./header.ts";
 
@@ -235,7 +235,7 @@ export async function runRemapperDoctor(input: DoctorInput, probe: DoctorProbe =
     port = await probe.hello({ port: input.port ?? rev.tcpPort });
     add({ code: "port_closed", name: "kanata TCP port", status: "ok", detail: `kanata ${port.version} is answering on 127.0.0.1:${input.port ?? rev.tcpPort}` });
   } catch (err) {
-    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${input.port ?? rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl kickstart -k system/${DAEMON_LABEL}` : "install the LaunchDaemon first" });
+    add({ code: "port_closed", name: "kanata TCP port", status: plistInstalled ? "warn" : "fail", detail: `nothing answers on 127.0.0.1:${input.port ?? rev.tcpPort} (${(err as Error).message})`, fix: plistInstalled ? `sudo launchctl kickstart -k system/${DAEMON_LABEL}; read kanata's log with sudo tail ${DAEMON_LOG_PATH}` : "install the LaunchDaemon first" });
   }
 
   const file = await probe.readText(paths.kbd);

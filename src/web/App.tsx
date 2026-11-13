@@ -82,6 +82,8 @@ export function App({ token }: { token: string }) {
   const [managing, setManaging] = useState(false);
   const [manageRemoved, setManageRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
+  // A first-run import whose card still has the Karabiner edit or warnings to show (R11-01): the welcome stays up though a layout now exists.
+  const [importHold, setImportHold] = useState(false);
   // Bumping this refetches the list; it backs the "Check again" and "Try again" buttons.
   const [attempt, setAttempt] = useState(0);
   // Where each keyboard stands against its layout's head; the server's engine does the work and this follows it (17).
@@ -208,13 +210,14 @@ export function App({ token }: { token: string }) {
       </Shell>
     );
   }
-  if (layouts.length === 0 || adding) {
+  if (layouts.length === 0 || adding || importHold) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: openImport }}>
         <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} boardsFailure={boardsFailure} onRetryBoards={readBoardsAgain} onBoardAdded={readBoardsAgain}
           setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
-          onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
+          onImportHold={setImportHold}
+          onMade={(id, proposals = false) => { setAdding(false); setImportHold(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
           onManage={(removed = false) => { setManageRemoved(removed); setManaging(true); }} onBack={layouts.length === 0 ? undefined : () => setAdding(false)} cardMemory={cardMemory} />
       </Shell>
     );

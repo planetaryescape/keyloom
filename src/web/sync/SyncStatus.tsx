@@ -102,6 +102,7 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
             </div>
             {line.action === null ? null : <ActionItem action={line.action} primary onPress={(a) => press(a, close)} />}
             {line.second === undefined ? null : <ActionItem action={line.second} primary={false} onPress={(a) => press(a, close)} />}
+            {line.third === undefined ? null : <ActionItem action={line.third} primary={false} onPress={(a) => press(a, close)} />}
             {paneProblem === null ? null : <p className="sync-note sync-note-problem" role="alert">{paneProblem}</p>}
             {board.remapper === true ? <RemapperSetup sync={sync} boardId={board.boardId} mode={remapperDown ? "setup" : "attention"} /> : null}
             {board.auto.proven ? (

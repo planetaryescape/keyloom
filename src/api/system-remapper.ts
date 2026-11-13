@@ -6,6 +6,9 @@ import { z } from "zod";
 //                                                                                     the status read follows it; a second press joins it)
 //   POST   /api/system/remapper/install-kanata/cancel  {}     -> SetupActionResponse  (cancels it; `not_running` when none runs)
 //   POST /api/system/remapper/start  StartKanata    -> SetupActionResponse     (installs and starts the daemon through macOS's password dialog)
+//   POST /api/system/remapper/restart  StartKanata  -> SetupActionResponse     (restarts the installed daemon through the password dialog, then
+//                                                                               waits for kanata to answer; R11-02)
+//   POST /api/system/remapper/log  {}               -> KanataLogResponse       (kanata's last log lines, read as root through the password dialog)
 //   POST /api/system/open-settings   OpenSettings   -> SetupActionResponse     (400 schema for a pane not on the list; macOS only)
 
 /** The panes keyloom opens. A name, never a URL: the server maps it (src/app/remapper-setup.ts). */
@@ -69,6 +72,8 @@ export const RemapperSetupResponseSchema = z.object({
   }),
   driverVersion: z.string().nullable(),
   findings: z.array(SetupFindingSchema),
+  /** The karabiner.json "devices" entry that frees the built-in keyboard, shown with Copy in the Karabiner step (R11-01). Absent from older senders. */
+  karabinerEntry: z.string().min(1).optional(),
 });
 export type RemapperSetupResponse = z.infer<typeof RemapperSetupResponseSchema>;
 
@@ -78,3 +83,10 @@ export const SetupActionResponseSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(false), code: z.string().min(1), reason: z.string().min(1) }),
 ]);
 export type SetupActionResponse = z.infer<typeof SetupActionResponseSchema>;
+
+/** kanata's last log lines (R11-02), or why keyloom couldn't read them: `cancelled`, `log_missing`, or `failed`. */
+export const KanataLogResponseSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), lines: z.array(z.string()) }),
+  z.object({ ok: z.literal(false), code: z.string().min(1), reason: z.string().min(1) }),
+]);
+export type KanataLogResponse = z.infer<typeof KanataLogResponseSchema>;

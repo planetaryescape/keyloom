@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateKanataSource } from "../../../src/firmware/kanata/generate.ts";
-import { KarabinerImportError, importKarabiner, karabinerKey } from "../../../src/firmware/kanata/karabiner.ts";
+import { KARABINER_IGNORE_ENTRY, KarabinerImportError, importKarabiner, karabinerKey } from "../../../src/firmware/kanata/karabiner.ts";
 import { validate } from "../../../src/validation/validate.ts";
 import { kanataBinary, kanataCheck } from "../../helpers/kanata-bin.ts";
 import { at, macbook } from "../../helpers/macbook.ts";
@@ -84,6 +84,9 @@ describe("importing a Karabiner file", () => {
     expect(imported.disableEdit).toContain("karabiner_cli --list-connected-devices");
     expect(imported.disableEdit).toContain("Rules keyloom did not import (1)");
     expect(imported.report.instructions).toBe(imported.disableEdit);
+    // The same edit for the page (R11-01): the entry the text shows, and the count of rules left behind.
+    expect(imported.report.karabinerEdit).toEqual({ entry: KARABINER_IGNORE_ENTRY, unimported: 1 });
+    expect(JSON.parse(KARABINER_IGNORE_ENTRY)).toEqual({ identifiers: { is_keyboard: true, product_id: 0, vendor_id: 0 }, ignore: true });
   });
 
   test("the layout passes keyloom's own validator on the MacBook board, with Esc and Control reachable", () => {

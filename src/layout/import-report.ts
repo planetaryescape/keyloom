@@ -21,4 +21,9 @@ export type ImportReport = {
   warnings: string[];
   /** Steps the person has to take outside keyloom, as text to read and apply: the Karabiner edit that frees the built-in keyboard (21). */
   instructions?: string;
+  /**
+   * The same Karabiner edit for a page (R11-01): the entry to add to the profile's "devices" list, and how many rules keyloom didn't
+   * import, which stop applying to the built-in keyboard once Karabiner ignores it.
+   */
+  karabinerEdit?: { entry: string; unimported: number };
 };

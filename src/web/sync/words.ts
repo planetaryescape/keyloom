@@ -32,6 +32,8 @@ export interface SyncLine {
   action: SyncAction | null;
   /** A second, plain button after the filled one: Sync now beside the settings a flash was refused for (R9-01). */
   second?: SyncAction;
+  /** A third, plain button: the way back beside kanata's setup fix and Apply now (R11-04). */
+  third?: SyncAction;
 }
 
 // A software remapper has no build or flash: the words say what it does instead (21).
@@ -231,25 +233,30 @@ export function undoReachesKanata(board: BoardSync): boolean {
   return board.state.kind === "behind" && board.state.changes === 1 && board.last?.revisionId === board.headRevisionId;
 }
 
-/** How to go back, in words that match the button: Undo for one step, otherwise History, which marks the version kanata runs. */
-function wayBack(board: BoardSync): { text: string; action: SyncAction & { id: "undo_change" | "open_history" } } {
+/**
+ * How to go back, in words that match the button: Undo for one step, otherwise History, which marks the version kanata runs. A config with
+ * one version has nothing earlier (R11-04), so it gets no button: the way on is a change to the layout.
+ */
+function wayBack(board: BoardSync): { text: string; action: (SyncAction & { id: "undo_change" | "open_history" }) | null } {
   if (undoReachesKanata(board)) return { text: "Undo this change to go back to the layout kanata runs.", action: UNDO_CHANGE };
   const marked = board.state.kind === "behind" && board.state.changes !== null;
-  return {
-    text: marked ? `Open History and press Go back to this on the version marked “On your ${board.boardName}”, the one kanata runs.` : "Open History to go back to an earlier version.",
-    action: OPEN_HISTORY,
-  };
+  if (marked) return { text: `Open History and press Go back to this on the version marked “On your ${board.boardName}”, the one kanata runs.`, action: OPEN_HISTORY };
+  if (board.firstVersion === true) return { text: "This config has no earlier version to go back to, so change the layout, then Apply now.", action: null };
+  return { text: "Open History to go back to an earlier version.", action: OPEN_HISTORY };
 }
+
+/** "Undo this change…" as the end of a sentence that starts "Or ", for the way back beside kanata's setup fix (R11-04). */
+const orWayBack = (back: { text: string }): string => `Or ${back.text.charAt(0).toLowerCase()}${back.text.slice(1)}`;
 
 /**
  * What to say about a config kanata didn't take, and what kanata or keyloom said (for Details). `way`: `setup` is fixed in the keyboard's
  * status, `back` by going back to a layout kanata runs (`back` is that button), and `again` by another Apply.
  */
-function kanataRefusal(board: BoardSync): { text: string; way: "setup" | "back" | "again"; reason: string | null; back: SyncAction & { id: "undo_change" | "open_history" } } {
+function kanataRefusal(board: BoardSync): { text: string; way: "setup" | "back" | "again"; reason: string | null; back: (SyncAction & { id: "undo_change" | "open_history" }) | null; backText: string } {
   const code = board.last?.errorCode;
   const reason = board.last?.error ? plain(board.last.error) : null;
   const back = wayBack(board);
-  const said = { reason, back: back.action };
+  const said = { reason, back: back.action, backText: back.text };
   if (code === "kanata_setup") return { text: KANATA_SETUP, way: "setup", ...said };
   if (code === "kanata_reload_failed") return { text: KANATA_RELOAD_FAILED, way: "again", ...said };
   const lead = code === "kanata_unwritable" ? KANATA_UNWRITABLE : code === "kanata_refused" ? KANATA_REFUSED : KANATA_NOT_ON;
@@ -274,10 +281,12 @@ function remapperLine(board: BoardSync, name: string, s: BoardSync["state"]): Sy
       if (s.why === "failed" && kanataRefused(board)) {
         // A setup cause: the popover's checklist, right below this line, has the step that fixes it, and Apply now is for after it.
         const refused = kanataRefusal(board);
-        const detail = refused.way === "setup" ? `${refused.text} Fix that in the steps below, then Apply now.` : refused.way === "again" ? `${refused.text} Apply now to try again.` : refused.text;
+        // kanata_setup also offers the way back (R11-04): the layout itself may be what kanata refused, and going back keeps this kanata.
+        const detail = refused.way === "setup" ? `${refused.text} Fix that in the steps below, then Apply now.${refused.back === null ? "" : ` ${orWayBack({ text: refused.backText })}`}`
+          : refused.way === "again" ? `${refused.text} Apply now to try again.` : refused.text;
         return {
           label, short: "Behind", detail, ...(refused.reason === null ? {} : { more: refused.reason }), tone: "error",
-          ...(refused.way === "setup" ? { action: null, second: APPLY_NOW } : refused.way === "again" ? { action: APPLY_NOW } : { action: refused.back }),
+          ...(refused.way === "setup" ? { action: null, second: APPLY_NOW, ...(refused.back === null ? {} : { third: refused.back }) } : refused.way === "again" ? { action: APPLY_NOW } : { action: refused.back }),
         };
       }
       const detail =
@@ -372,8 +381,9 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
     // The toast has no Apply now of its own; the keyboard's status has it, beside the step a setup cause needs.
     return {
       kind: "error", message: `Couldn't put the change on your ${after.boardName}`,
-      detail: refused.way === "setup" ? `${refused.text} The keyboard's status says how to fix it.` : refused.way === "again" ? `${refused.text} Apply now in the keyboard's status to try again.` : refused.text,
-      action: refused.way === "back" ? refused.back : OPEN_STATUS,
+      detail: refused.way === "setup" ? `${refused.text} The keyboard's status says how to fix it, or how to go back.` : refused.way === "again" ? `${refused.text} Apply now in the keyboard's status to try again.` : refused.text,
+      // With no earlier version, the keyboard's status is the way on: its steps fix a setup cause (R11-04).
+      action: refused.way === "back" && refused.back !== null ? refused.back : OPEN_STATUS,
     };
   }
   if (was === "syncing" && now.kind === "behind" && now.why === "failed") {

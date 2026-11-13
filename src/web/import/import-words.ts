@@ -1,6 +1,7 @@
 // What an import card says when keyloom refuses the file for a reason it can act on (R6-08, R6-18), from the server's code and the board
-// it names, never from its sentence, which is the CLI's ("pass --board …", "keyloom keyboard restore …").
-import type { BoardChoice } from "../../api/http.ts";
+// it names, never from its sentence, which is the CLI's ("pass --board …", "keyloom keyboard restore …"); and what it says once an import
+// has something to tell (R11-01).
+import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import type { ReviewActivity } from "../../api/review.ts";
 import { ApiError } from "../api.ts";
 import { keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
@@ -49,3 +50,31 @@ export function otherBoardWords(filename: string, refusal: Extract<ImportRefusal
 /** kanata has no firmware to test on, so a MacBook import takes no activity tests (R6-25), whatever is ticked above the cards. */
 export const activitiesFor = (board: Pick<BoardChoice, "firmware">, activities: readonly ReviewActivity[]): ReviewActivity[] =>
   board.firmware === "kanata" ? [] : [...activities];
+
+/**
+ * What an import card says once the layout is saved, when the import has something to tell (R11-01): the Karabiner edit the card promised,
+ * and the importer's warnings. Null when there is nothing, so the layout opens at once as before.
+ */
+export type ImportedNote = {
+  title: string;
+  karabiner: { text: string; entry: string; unimported: string | null } | null;
+  warnings: string[];
+  open: string;
+};
+
+export function importedNote(result: ImportResponse): ImportedNote | null {
+  const edit = result.karabinerEdit;
+  if (edit === undefined && result.warnings.length === 0) return null;
+  const layers = `${result.layers} ${result.layers === 1 ? "layer" : "layers"}`;
+  return {
+    title: `Imported ${result.name}, ${layers}`,
+    karabiner: edit === undefined ? null : {
+      text: "Karabiner-Elements still takes the built-in keyboard, so it and kanata would both grab it. keyloom never edits karabiner.json, so add this entry to the \"devices\" list of your profile there. Your rules stay in the file, and removing the entry turns them back on.",
+      entry: edit.entry,
+      unimported: edit.unimported === 0 ? null
+        : `${edit.unimported === 1 ? "1 rule keyloom didn't import stops" : `${edit.unimported} rules keyloom didn't import stop`} working on the built-in keyboard once Karabiner leaves it alone. ${edit.unimported === 1 ? "It's" : "They're"} listed below.`,
+    },
+    warnings: result.warnings,
+    open: `Open ${result.name}`,
+  };
+}

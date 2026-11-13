@@ -408,9 +408,12 @@ describe("a software remapper (the MacBook's keyboard)", () => {
       expect(line.detail).toContain("isn't the one keyloom writes for");
       expect(line.action).toBeNull();
       expect(line.second).toEqual({ id: "sync_now", label: "Apply now" });
+      // R11-04: the layout itself may be what kanata refused, so the way back is offered too, as for kanata_refused.
+      expect(line.third).toEqual({ id: "undo_change", label: "Undo this change" });
+      expect(line.detail).toContain("Or undo this change to go back to the layout kanata runs.");
       const notice = syncNotice(syncing, behind("kanata_setup"));
       expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
-      expect(notice?.detail).toContain("The keyboard's status says how to fix it.");
+      expect(notice?.detail).toContain("The keyboard's status says how to fix it, or how to go back.");
     });
 
     // PR #315 review: one undo reaches kanata's layout only when the refused head is the one change since it; Undo is never promised past that.
@@ -429,6 +432,26 @@ describe("a software remapper (the MacBook's keyboard)", () => {
       const newer = mac({ kind: "behind", changes: 1, why: "failed", error: cli }, { headRevisionId: "rev_2", last: failedLast(null) });
       expect(syncLine(newer, "lay_1").action?.id).toBe("open_history");
       expect(undoReachesKanata(behind(null))).toBe(true);
+    });
+
+    // R11-04: "Open History to go back to an earlier version." is never said where there is no earlier version.
+    test("a config with one version says there is nothing earlier, and the toast offers the keyboard's status, where its setup steps are", () => {
+      const only = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_refused"), firstVersion: true });
+      const line = syncLine(only, "lay_1");
+      expect(line.detail).toBe("kanata refused the config keyloom wrote, so your MacBook keyboard still runs the previous one. This config has no earlier version to go back to, so change the layout, then Apply now.");
+      expect(line.action).toBeNull();
+      expect(line.detail).not.toContain("History");
+      const notice = syncNotice(syncing, only);
+      expect(notice).toMatchObject({ action: { id: "open_status", label: "Open keyboard status" } });
+      expect(notice?.detail).not.toContain("History");
+      // kanata_setup with one version: the setup fix and Apply now, and no "Or …" with nowhere to go.
+      const setup = syncLine(mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_setup"), firstVersion: true }), "lay_1");
+      expect(setup).toMatchObject({ action: null, second: { id: "sync_now", label: "Apply now" } });
+      expect(setup.third).toBeUndefined();
+      expect(setup.detail).not.toContain(" Or ");
+      // With an earlier version, the count still decides: History for no count.
+      const earlier = mac({ kind: "behind", changes: null, why: "failed", error: cli }, { last: failedLast("kanata_setup"), firstVersion: false });
+      expect(syncLine(earlier, "lay_1").third).toEqual({ id: "open_history", label: "Open History" });
     });
 
     test("a layout keyloom can't write for kanata says so, not that kanata refused it", () => {

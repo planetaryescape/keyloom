@@ -4,6 +4,7 @@ import type { RemapperSetupResponse } from "../../api/system-remapper.ts";
 import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import type { SyncApi } from "./useSync.ts";
+import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, recheckAfter, setupFailure, setupSteps } from "./remapper-words.ts";
 
 // A failure keeps its code, so one no screen planned for offers Restart keyloom, never only Check again (R9-05, D-540).
@@ -27,7 +28,10 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   const [problem, setProblem] = useState<(SetupFailure & { failure?: PageFailure }) | null>(null);
   // A pane was opened for the person to change something there: the list reads the machine again when keyloom's window is back in front.
   const [awaitingReturn, setAwaitingReturn] = useState(false);
-  const { status: readStatus, installKanata, cancelInstall, startKanata, openSettings } = sync.remapperSetup;
+  // kanata's last log lines, once Show kanata's log has read them through the password dialog (R11-02). Kept until a restart, which makes
+  // them old.
+  const [kanataLog, setKanataLog] = useState<string[] | null>(null);
+  const { status: readStatus, installKanata, cancelInstall, startKanata, restartKanata, kanataLog: readKanataLog, openSettings } = sync.remapperSetup;
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -52,13 +56,21 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     return () => window.clearInterval(timer);
   }, [installing, check]);
 
-  const act = (id: SetupActionId) => {
+  const act = async (id: SetupActionId): Promise<{ ok: true } | { ok: false; code: string; reason: string }> => {
     switch (id.kind) {
       case "install_kanata": return installKanata("install");
       case "update_kanata": return installKanata("upgrade");
       case "reinstall_kanata": return installKanata("reinstall");
       case "cancel_install": return cancelInstall();
       case "start_kanata": return startKanata(boardId);
+      case "restart_kanata":
+        setKanataLog(null);
+        return restartKanata(boardId);
+      case "show_kanata_log": {
+        const r = await readKanataLog();
+        if (r.ok) setKanataLog(r.lines);
+        return r.ok ? { ok: true } : r;
+      }
       case "open_settings": return openSettings(id.pane);
     }
   };
@@ -72,7 +84,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     if (onReturn) setAwaitingReturn(true);
     try {
       const r = await act(id);
-      if (!r.ok) setProblem(setupFailure(r.code, r.reason));
+      if (!r.ok) setProblem(setupFailure(r.code, r.reason, id.kind));
       if (!r.ok && onReturn) setAwaitingReturn(false);
     } catch (error) {
       const failure = pageFailure(error, "That didn't work.");
@@ -125,7 +137,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     return (
       <div className="sync-setup">
         <Steps steps={steps} busy={busy} installing={installing} onRun={run} />
-        <ProblemLine problem={problem} token={sync.token} />
+        <ProblemLine problem={problem} token={sync.token} busy={busy !== null} onRun={run} />
         {/* A step done elsewhere (System Settings, Karabiner, Terminal) shows as done once the list is read again (R8-17). */}
         {recheck}
       </div>
@@ -137,8 +149,8 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   if (load.kind === "error") return readFailed;
   return (
     <div className="sync-setup">
-      <Steps steps={setupSteps(load.status)} busy={busy} installing={installing} onRun={run} />
-      <ProblemLine problem={problem} token={sync.token} />
+      <Steps steps={setupSteps(load.status, { kanataLog })} busy={busy} installing={installing} onRun={run} />
+      <ProblemLine problem={problem} token={sync.token} busy={busy !== null} onRun={run} />
       {/* Usable while Homebrew runs: an install finished elsewhere, or a pane allowed meanwhile, shows up at once. */}
       {recheck}
     </div>
@@ -147,7 +159,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
 
 function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: string | null; installing: boolean; onRun: (id: SetupActionId) => void }) {
   // While Homebrew runs, only Cancel and the Settings panes stay pressable: another install or a setup would race it.
-  const disabled = (id: SetupActionId) => busy !== null || (installing && id.kind !== "cancel_install" && id.kind !== "open_settings");
+  const disabled = (action: SetupStep["actions"][number]) => action.off === true || busy !== null || (installing && action.id.kind !== "cancel_install" && action.id.kind !== "open_settings");
   return (
     <ol className="sync-setup-steps">
       {steps.map((step) => (
@@ -156,12 +168,13 @@ function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: s
           <div className="sync-setup-body">
             <span className="sync-setup-title">{step.title}{step.state === "done" ? <span className="sr-only"> (done)</span> : null}</span>
             {step.detail === null ? null : <span className="sync-setup-detail">{step.detail}</span>}
-            {step.log === null || step.log.length === 0 ? null : <LogTail lines={step.log} />}
+            {step.copy === null ? null : <CopyCommand command={step.copy.text} noun={step.copy.noun} />}
+            {step.log === null || step.log.length === 0 ? null : <LogTail lines={step.log} label={step.logLabel} />}
             {step.problem === null ? null : <span className="sync-setup-problem" role="alert">{step.problem}</span>}
             {step.actions.length === 0 && step.link === null ? null : (
               <span className="sync-setup-actions">
                 {step.actions.map((action) => (
-                  <button key={actionKey(action.id)} type="button" className="button" disabled={disabled(action.id)} onClick={() => onRun(action.id)}>
+                  <button key={actionKey(action.id)} type="button" className="button" disabled={disabled(action)} onClick={() => onRun(action.id)}>
                     {busy === actionKey(action.id) ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
                     {action.label}
                   </button>
@@ -180,18 +193,19 @@ function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: s
   );
 }
 
-/** Homebrew's last lines, kept scrolled to the end so the newest is the one in view. */
-function LogTail({ lines }: { lines: string[] }) {
+/** Homebrew's or kanata's last lines, kept scrolled to the end so the newest is the one in view. */
+function LogTail({ lines, label }: { lines: string[]; label: string }) {
   const box = useRef<HTMLPreElement>(null);
   const text = lines.join("\n");
   useLayoutEffect(() => {
     if (box.current !== null) box.current.scrollTop = box.current.scrollHeight;
   }, [text]);
-  return <pre ref={box} className="sync-setup-log" aria-label="What Homebrew printed last">{text}</pre>;
+  return <pre ref={box} className="sync-setup-log" aria-label={label}>{text}</pre>;
 }
 
-function ProblemLine({ problem, token }: { problem: (SetupFailure & { failure?: PageFailure }) | null; token: string }) {
+function ProblemLine({ problem, token, busy, onRun }: { problem: (SetupFailure & { failure?: PageFailure }) | null; token: string; busy: boolean; onRun: (id: SetupActionId) => void }) {
   if (problem === null) return null;
+  const action = problem.action;
   // The step's own button repeats it; a failure no screen planned for adds Restart keyloom, and the log for an exception (R9-05).
   const unexpected = problem.failure !== undefined && wayOutFor(problem.failure, false) !== null ? problem.failure : null;
   return (
@@ -205,6 +219,12 @@ function ProblemLine({ problem, token }: { problem: (SetupFailure & { failure?: 
           </>
         )}
       </p>
+      {/* A failure a step's own button gets past, such as Set up and start kanata after a restart refused (R11-02). */}
+      {action === undefined ? null : (
+        <span className="sync-setup-actions">
+          <button type="button" className="button" disabled={busy} onClick={() => onRun(action.id)}>{action.label}</button>
+        </span>
+      )}
       {unexpected === null ? null : <span className="sync-setup-actions"><UnexpectedWayOut token={token} failure={unexpected} primary={false} /></span>}
     </>
   );

@@ -23,8 +23,13 @@
 // (R9-10, pair it with KEYLOOM_FAKE_FLASH=no-zapp); =kanata_keyboard shows kanata's checklist with a keyboard keyloom doesn't know by name
 // (R9-12). =kanata_refused|kanata_setup|kanata_unwritable|kanata_reload_failed end the MacBook's apply as a config kanata refused, one kanata refused because
 // it is older than keyloom writes for, one keyloom couldn't write, or a reload keyloom couldn't finish (R10-01), one change past kanata's layout, or
-// KEYLOOM_FAKE_SYNC_CHANGES (a number, or "null" for none counted) past it, which offers History, not Undo; =kanata_first_run is the checklist before Set up and start
-// kanata (R10-03); =kanata_no_builtin is a Mac with no built-in keyboard (R10-14); =kanata_foreign offers Replace it, which
+// KEYLOOM_FAKE_SYNC_CHANGES (a number, or "null" for none counted) past it, which offers History, not Undo, and KEYLOOM_FAKE_SYNC_FIRST=1 a
+// config with one version, which offers neither (R11-04); =kanata_first_run is the checklist before Set up and start
+// kanata (R10-03); =kanata_no_driver is that checklist with the driver still to install, so Start is off (R11-02); =kanata_not_answering is
+// a service that is installed while kanata doesn't answer, with Restart kanata's service and Show kanata's log (R11-02): the restart
+// answers that kanata still doesn't answer, or KEYLOOM_FAKE_KANATA_RESTART=cancel|outdated a closed dialog or a service setup didn't
+// make; the log answers some lines, or KEYLOOM_FAKE_KANATA_LOG=cancel|missing|empty. =kanata_karabiner adds the Karabiner step with its
+// entry to copy (R11-01). =kanata_no_builtin is a Mac with no built-in keyboard (R10-14); =kanata_foreign offers Replace it, which
 // KEYLOOM_FAKE_REPLACE=internal fails with a server exception (R10-05). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
 // Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine a ready Docker reports
 // (KEYLOOM_FAKE_RESTART_ENGINE, or Colima, by default; R10-06).
@@ -268,7 +273,7 @@ if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw 
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
-const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign"] as const;
+const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign", "kanata_no_driver", "kanata_not_answering", "kanata_karabiner"] as const;
 // The checklist's findings for each kanata mode (D-493): a keyboard keyloom doesn't know by name (R9-12), a kanata older than keyloom writes
 // for (R10-01), a first run before Set up and start kanata (R10-03), and a Mac with no built-in keyboard (R10-14).
 const kanataFindings = (): RemapperSetupResponse["findings"] => {
@@ -278,6 +283,9 @@ const kanataFindings = (): RemapperSetupResponse["findings"] => {
     case "kanata_setup": return [{ code: "kanata_version", name: "kanata", status: "warn", detail: "1.10.0 at /opt/homebrew/bin/kanata; keyloom writes configs for 1.12.0" }, ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
     case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
     case "kanata_no_builtin": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "fail", detail: "this Mac has no built-in keyboard" }, ok("port_closed", "kanata answers")];
+    case "kanata_no_driver": return [ok("kanata_version", "1.12.0"), { code: "driver_missing", name: "Karabiner VirtualHID driver", status: "fail", detail: "the driver kanata needs isn't installed" }, { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
+    case "kanata_not_answering": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, ok("daemon_missing", "installed"), ok("kanata_updated", "the same kanata"), { code: "port_closed", name: "kanata's port", status: "warn", detail: "nothing answers" }];
+    case "kanata_karabiner": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), { code: "karabiner_elements", name: "Karabiner-Elements", status: "warn", detail: "15.7.0 is installed" }, { code: "karabiner_config", name: "Karabiner config", status: "warn", detail: "it doesn't ignore the built-in keyboard" }, ok("port_closed", "kanata answers")];
     default: return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
   }
 };
@@ -292,10 +300,27 @@ const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined
       : { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: "1.12.0" },
     driverVersion: "6.2.0",
     findings: kanataFindings(),
+    karabinerEntry: '{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }',
   }),
   installKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't install kanata." }),
   cancelInstall: async () => ({ ok: true }),
   startKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't start kanata." }),
+  // Nothing restarts and no dialog opens: a fixed answer after the time a real restart waits for kanata, so the button shows its progress.
+  restartKanata: async () => {
+    await Bun.sleep(1500);
+    const mode = process.env.KEYLOOM_FAKE_KANATA_RESTART;
+    if (mode === "cancel") return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata's service wasn't restarted." };
+    if (mode === "outdated") return { ok: false, code: "service_outdated", reason: "The background service does not run the copy of kanata that only macOS can change, so keyloom restarted nothing. Set kanata up again." };
+    return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
+  },
+  kanataLog: async () => {
+    const mode = process.env.KEYLOOM_FAKE_KANATA_LOG;
+    if (mode === "cancel") return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so keyloom didn't read kanata's log." };
+    if (mode === "missing") return { ok: false, code: "log_missing", reason: "kanata has no log yet. Its background service writes one once it starts." };
+    if (mode === "empty") return { ok: true, lines: [] };
+    // Made-up lines in kanata's shape; what a real first start writes was not observed (S30).
+    return { ok: true, lines: ["fake kanata log line 1: starting", "fake kanata log line 2: the dev editor has no real kanata"] };
+  },
   openSettings: async (pane) => {
     console.log(`fake: open settings pane ${pane}`);
     return process.env.KEYLOOM_FAKE_OPEN_SETTINGS === "fail" ? { ok: false, code: "failed", reason: "macOS didn't open System Settings: open exited 1" } : { ok: true };
@@ -344,14 +369,17 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
     // The MacBook's modes stand on this page's board, named as the MacBook so the words read as they do there.
     const mac = { ...base, boardName: "MacBook", remapper: true };
     if (mode === "kanata_keyboard" || mode === "kanata_no_builtin") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
-    if (mode === "kanata_first_run") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
+    if (mode === "kanata_first_run" || mode === "kanata_no_driver" || mode === "kanata_not_answering") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
+    if (mode === "kanata_karabiner") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
     if (mode === "kanata_foreign") return [{ ...mac, state: { kind: "not_keyloom", detail: "kanata runs /Users/you/kanata.kbd" }, last: null }];
     if (mode === "kanata_refused" || mode === "kanata_setup" || mode === "kanata_unwritable" || mode === "kanata_reload_failed") {
       const code = mode;
       if (running) return [{ ...mac, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: { ...last("build", "", null), buildId: null } }];
       const counted = process.env.KEYLOOM_FAKE_SYNC_CHANGES;
       const changes = counted === undefined ? 1 : counted === "null" ? null : Number(counted);
-      return [{ ...mac, state: { kind: "behind", changes, why: "failed", error: kanataSentence[code] }, last: { ...last("build", kanataSentence[code], code), buildId: null } }];
+      // KEYLOOM_FAKE_SYNC_FIRST=1 makes the config one version long, so the line has no earlier version to offer (R11-04).
+      const firstVersion = process.env.KEYLOOM_FAKE_SYNC_FIRST === "1" ? { firstVersion: true } : {};
+      return [{ ...mac, ...firstVersion, state: { kind: "behind", changes, why: "failed", error: kanataSentence[code] }, last: { ...last("build", kanataSentence[code], code), buildId: null } }];
     }
     if (running) return [{ ...base, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: last("flash", "", null) }];
     switch (mode) {
