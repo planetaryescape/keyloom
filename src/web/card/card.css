@@ -193,6 +193,30 @@
   flex: none;
 }
 
+.card-hero:has(> .hero-source) {
+  flex-wrap: wrap;
+}
+
+.hero-source {
+  flex-basis: 100%;
+  order: 1;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.hero-tap .hero-fit-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .hero-cap .cap-body {
   overflow: visible;
 }
@@ -256,20 +280,27 @@
 .hero-tap {
   top: calc(var(--u) * 0.04);
   right: calc(var(--u) * 0.075);
-  bottom: calc(var(--u) * 0.2);
+  bottom: max(calc(var(--u) * 0.2), 26px);
   left: calc(var(--u) * 0.075);
+  min-width: 0;
+}
+
+.hero-cap .cap-body[data-corners="true"] .hero-tap {
+  top: max(calc(var(--u) * 0.34), 32px);
 }
 
 .hero-tap .cap-tap {
   color: var(--legend);
   font-weight: 450;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .hero-front {
   right: calc(var(--u) * 0.04);
   bottom: calc(var(--u) * 0.01);
   left: calc(var(--u) * 0.04);
-  height: calc(var(--u) * 0.18);
+  height: max(calc(var(--u) * 0.18), 24px);
 }
 
 .hero-front-static {
@@ -291,6 +322,11 @@
   font-size: 12px;
   font-stretch: 75%;
   font-weight: 600;
+  min-height: 24px;
+  max-width: 40%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .hero-corner-start {

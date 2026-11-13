@@ -574,7 +574,7 @@ export function KeyPanel(props: Props) {
   const holdRegion = draft.kind === "native" ? null : hasHold(draft) ? (draft.holdType === "mods" ? draft.holdMods.length === 0 : draft.holdLayerId === null) ? { text: null, ghost: "hold…", name: "When held" } : { text: shownLegend.hold ?? holdText, name: "When held" } : canAddHold(draft) ? { text: null, ghost: "hold…", name: "When held" } : null;
   const extras = draft.kind !== "macro" && draft.kind !== "native" && (canAddExtraSlot(draft) || isDance(draft));
   const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
-  const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: "tap+hold ●", name: "When tapped, then held" };
+  const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: slotPhrase(draft.tapThenHold, drawn), name: "When tapped, then held" };
   const isEncoder = props.board?.sensorPositions?.includes(position) === true;
   const title = isEncoder ? `${props.board?.hands.left.includes(position) ? "Left" : "Right"} encoder` : cardTitle(shownBinding ?? original, drawn);
   const where2 = [finger === undefined ? undefined : `${finger.replace("-", " ")} finger`, layerDisplayName(layer.name)].filter(Boolean).join(" · ");
@@ -643,6 +643,7 @@ export function KeyPanel(props: Props) {
         <div className="card-hero">
           <HeroCap
             legend={advancedText ?? shownLegend}
+            compactTap={shownLegend.tap}
             tone={shownTone}
             keycap={keycap}
             led={led}
