@@ -10,6 +10,12 @@ import { type EditorBackend, EditorError } from "../server/editor-backend.ts";
 type Build = Awaited<ReturnType<EditorBackend["startBuild"]>>;
 type Flash = Awaited<ReturnType<EditorBackend["startFlash"]>>;
 
+/** A zmk-config board's keymap file, `config/<keymapName>.keymap` (boards/recipes.ts), which its import card names (R7-13). */
+function keymapFileOf(definition: ReturnType<typeof listBoardDefinitions>[number]["definition"]): { keymapFile?: string } {
+  const build = definition.revisions[0]?.build;
+  return build?.kind === "zmk-west-docker" ? { keymapFile: `config/${build.keymapName}.keymap` } : {};
+}
+
 const toBuild = (b: BuildView): Build => ({
   id: b.id, revisionId: b.revisionId, status: b.status, error: b.error, errorCode: b.errorCode, lastBuilt: b.lastBuilt, restartEngine: b.restartEngine, folderNotShared: b.folderNotShared, flashPlan: b.flashPlan, startedAt: b.startedAt, finishedAt: b.finishedAt, logTail: b.logTail,
 });
@@ -82,6 +88,7 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     exportLayout: (ref, revisionId) => translate(() => layoutExportDocument(app, ref, revisionId)),
     boards: async () => listBoardDefinitions().map((b) => ({
       id: b.definition.id, name: b.definition.name, vendor: b.definition.vendor, firmware: b.definition.firmware, keyCount: b.definition.keyCount, importers: b.definition.importers,
+      ...keymapFileOf(b.definition),
       keys: b.geometry.keys, display: b.definition.display, hands: b.definition.hands, fingers: b.definition.fingers, rows: b.definition.rows,
     })),
     importUpload: (request) =>

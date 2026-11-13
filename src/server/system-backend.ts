@@ -24,4 +24,9 @@ export interface SystemBackend {
   restartDocker: (opts?: { force?: boolean }) => Promise<DockerStartResponse>;
   /** The forced restart's progress lines, for the build log tail (R7-04). Absent where the server doesn't keep them. */
   restartLog?: () => Promise<DockerRestartLogResponse>;
+  /**
+   * Fix Colima's files (D-533): the administrator password dialog, then root gives ~/.colima back, and Colima stops and starts as this
+   * account. Refused while a build or flash runs; repeated calls share one attempt.
+   */
+  fixColimaFiles: () => Promise<DockerStartResponse>;
 }

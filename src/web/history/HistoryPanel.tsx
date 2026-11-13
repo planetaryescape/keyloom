@@ -3,6 +3,8 @@ import { useState } from "react";
 import type { VersionHistoryResponse } from "../../api/configs.ts";
 import type { Layout } from "../../layout/schema.ts";
 import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { unexpectedWayOut } from "../shell/unexpected.ts";
 import { historyWords } from "./history-words.ts";
 import type { Versions } from "./useVersions.ts";
 import { changes, versionTitle, versionWhen } from "./version-words.ts";
@@ -13,6 +15,7 @@ type Brief = VersionHistoryResponse["pending"][number];
 export type Milestone = VersionHistoryResponse["versions"][number];
 
 interface Props {
+  token: string;
   versions: Versions;
   /** The layout on screen, so an old row's key can be drawn as the cap it is now. */
   layout: Pick<Layout, "layers" | "macros" | "tapDances">;
@@ -35,7 +38,7 @@ interface Props {
 // History as versions (D-315, 25): what isn't on the keyboard yet, then each version that went on it, newest first, with the changes
 // made while it was there folded under it. Every revision is still here, so going back to any of them works as before (D-102).
 export function HistoryPanel(props: Props) {
-  const { versions, configName, boardName, onClose, onReload, blockedReason } = props;
+  const { token, versions, configName, boardName, onClose, onReload, blockedReason } = props;
   return (
     <section className="history-panel" aria-label="History">
       <SheetHead
@@ -51,7 +54,10 @@ export function HistoryPanel(props: Props) {
         ) : versions.status === "error" ? (
           <div className="sheet-empty" role="alert">
             <p>{versions.message}</p>
-            <button type="button" className="sheet-action" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+            {/* A history keyloom can't find, or an answer this page can't read, fails the same way again: Restart keyloom, no Try again. */}
+            {unexpectedWayOut(versions.code, true) === null
+              ? <button type="button" className="sheet-action" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+              : <div className="sheet-actions"><UnexpectedWayOut token={token} code={versions.code} onRetry={onReload} className="sheet-action" /></div>}
           </div>
         ) : (
           <Timeline {...props} history={versions.history} />

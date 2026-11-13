@@ -8,6 +8,7 @@ import { CodexInstall } from "./CodexInstall.tsx";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { KEY_PAGES, type KeyProvider, PROVIDER_NAMES, failureReloads, lockWords, setupProviders, setupView, storeFallback } from "./setup-words.ts";
 import "./setup.css";
+import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 
 type Provider = ChatProviderStatus["providers"][number];
 
@@ -30,6 +31,8 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The failure's code, for Restart keyloom beside one no screen planned for; Save is its Try again (R7-01, R7-09).
+  const [problemCode, setProblemCode] = useState<string | undefined>(undefined);
   // The store itself refused (not the key): Save stays as the Try again, and the environment variable is offered beside it.
   const [storeRefused, setStoreRefused] = useState(false);
   async function save() {
@@ -43,6 +46,7 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       setProblem(error instanceof Error ? error.message : "keyloom couldn't save the key.");
+      setProblemCode(code);
       if (code === "key_store_failed") setStoreRefused(true);
       if (failureReloads(code)) onReload();
     } finally {
@@ -78,6 +82,7 @@ function PasteKey({ token, id, note, onSaved, onReload, onCancel }: {
         </button>
       </div>
       {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
+      {problem === null ? null : <UnexpectedWayOut token={token} code={problemCode} />}
       {storeRefused ? <StoreFallback id={id} /> : null}
       <p id={`${field}-note`} className="muted">
         {note} <KeyPageLink href={KEY_PAGES[id]} name={PROVIDER_NAMES[id]} />
@@ -103,6 +108,7 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
   const view = setupView(provider, status, replacing, inDesktopApp());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [problemCode, setProblemCode] = useState<string | undefined>(undefined);
   const [replace, setReplace] = useState(replacing);
   const [saved, setSaved] = useState<string | null>(null);
   const name = PROVIDER_NAMES[provider.id];
@@ -114,6 +120,7 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
       onChanged(await run());
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "That didn't work.");
+      setProblemCode(error instanceof ApiError ? error.code : undefined);
       onReload();
     } finally {
       setBusy(false);
@@ -201,6 +208,7 @@ function ProviderSetup({ token, provider, status, onChanged, onReload, replacing
       <strong>{name}</strong>
       {body}
       {problem === null ? null : <p className="chat-inline-error" role="alert">{problem}</p>}
+      {problem === null ? null : <UnexpectedWayOut token={token} code={problemCode} />}
     </li>
   );
 }

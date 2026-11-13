@@ -89,7 +89,7 @@ function StartCard({ lab, boardName, phone, onClose, fixes }: { lab: Lab; boardN
       {lab.problem === null ? null : labNeedsDocker(lab.problemCode) ? (
         // The same Install, Start or Open as Build and flash, then Read it again for the recording that stopped (R6-02).
         <div role="alert"><NeedsDocker token={lab.token} busy={false} onRetry={() => lab.readAgain?.()} words={LAB_NEEDS_DOCKER} /></div>
-      ) : <p className="lab-problem" role="alert">{labProblemText(lab.problemCode, lab.problem)}</p>}
+      ) : <p className="lab-problem" role="alert">{lab.loadFailed ? lab.problem : labProblemText(lab.problemCode, lab.problem, boardName)}</p>}
       {lab.problem === null ? null : (() => {
         const shown = labFixes(lab.problemCode, lab.loadFailed).filter((fix) => fix.id !== "read_again" || lab.readAgain !== null);
         if (shown.length === 0) return null;

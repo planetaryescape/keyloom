@@ -31,12 +31,16 @@ interface Props {
   backLabel?: string;
   /** No layout yet: the title is the first layout's, even with a way back to choosing a keyboard. */
   first?: boolean;
+  /** Opened from one board's setup card: only that board's card shows, with a way to show every card (R7-13). */
+  only?: string | null | undefined;
 }
 
 // What the app shows with no layouts, and from the layout menu's "Import a layout" (18#states): one card per board, each
 // saying which file to export and taking it by drop, so no terminal is needed. The CLI command stays underneath.
-export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLabel = "Back to your layouts", first = onBack === undefined }: Props) {
+export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLabel = "Back to your layouts", first = onBack === undefined, only = null }: Props) {
   const [boards, setBoards] = useState<Boards>({ status: "loading" });
+  const [showAll, setShowAll] = useState(false);
+  const shown = boards.status === "ready" ? cardsFor(boards.boards, showAll ? null : only) : [];
   const [attempt, setAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
 
@@ -65,7 +69,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
         <p>Export your layout from your keyboard's own editor and drop the file on its card. Every layer shows up here, and nothing reaches the keyboard until you apply a change.</p>
       </header>
       {/* Tests replay a firmware build, so they are offered only beside a QMK or ZMK card; the MacBook's kanata has none (R6-25). */}
-      {boards.status === "ready" && boards.boards.some((board) => board.firmware !== "kanata") ? (
+      {shown.some((board) => board.firmware !== "kanata") ? (
         <div className="br-workloads">
           <ActivityChoices value={activities} onChange={setActivities} />
           <p className="muted">Optional, for keyboards with QMK or ZMK firmware: test short US-ANSI samples after import and independently check suggestions. Needs Docker, may download firmware, and can take several minutes. Tests never flash your keyboard.</p>
@@ -80,16 +84,32 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
           <button type="button" className="button" onClick={() => setAttempt((n) => n + 1)}><RefreshCw size={14} aria-hidden="true" />Try again</button>
         </div>
       ) : (
-        <ul className="board-cards" aria-label="Supported keyboards">
-          {inOrder(boards.boards).map((board) => (
-            <li key={board.id}>
-              <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="board-cards" aria-label="Supported keyboards">
+            {shown.map((board) => (
+              <li key={board.id}>
+                <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} />
+              </li>
+            ))}
+          </ul>
+          {shown.length < boards.boards.length ? (
+            <p className="muted import-only">
+              Your file is for another keyboard? <button type="button" className="link-button" onClick={() => setShowAll(true)}>Show every keyboard</button>
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );
+}
+
+/**
+ * The cards to show: `only`'s card when the screen opened from that board's setup (R7-13), or every card in order. A board the list
+ * doesn't have shows every card, so the screen is never empty.
+ */
+export function cardsFor(boards: readonly BoardChoice[], only: string | null): BoardChoice[] {
+  const one = only === null ? undefined : boards.find((board) => board.id === only);
+  return one === undefined ? inOrder(boards) : [one];
 }
 
 // The boards BK has, in the order the blueprint names them; any others follow by name.

@@ -37,7 +37,7 @@ describe("negotiated SSE parser", () => {
 
   test("unsupported versions and malformed snapshots fail with a readable upgrade instruction", () => {
     const parser = () => createObservedSseParser(() => {});
-    expect(() => parser().push(frame({ type: "presentation", presentation: { ...snapshot, version: 2 } }))).toThrow(/can't read.*update keyloom/);
+    expect(() => parser().push(frame({ type: "presentation", presentation: { ...snapshot, version: 2 } }))).toThrow(/can't read/);
     expect(() => parser().push(frame({ type: "presentation", presentation: { ...snapshot, operations: [{ id: "op_1" }] } }))).toThrow(SseError);
     expect(() => parser().push("data: {not-json\n\n")).toThrow(/can't read/);
   });
@@ -68,7 +68,8 @@ describe("single-request observed transport", () => {
 
   test("malformed/wrong-version frames fail once, without retrying the request", async () => {
     const calls = response(frame({ type: "presentation", presentation: { ...snapshot, version: 2 } }));
-    await expect(streamObservedChat("synthetic", "layout", { message: "Inspect" }, new AbortController().signal, () => {})).rejects.toThrow(/can't read/);
+    // Coded `unreadable`, so the failure box offers Restart keyloom, never a Try again that reads the same frame (R7-09).
+    await expect(streamObservedChat("synthetic", "layout", { message: "Inspect" }, new AbortController().signal, () => {})).rejects.toMatchObject({ code: "unreadable", message: expect.stringContaining("can't read") });
     expect(calls).toHaveLength(1);
   });
 

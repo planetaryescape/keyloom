@@ -90,9 +90,11 @@ describe("a session through the routes", () => {
     expect((await call(`/api/lab/sessions/${stopped.session.id}`)).status).toBe(404);
   });
 
-  test("stopping with nothing running is a usage error, and cancel saves nothing", async () => {
+  test("stopping with nothing running is refused with its own code, and cancel saves nothing", async () => {
     const { layoutId, call, post } = await serve();
-    expect((await post("/api/lab/recording/stop", { typedText: "x" })).status).toBe(400);
+    const stopped = await post("/api/lab/recording/stop", { typedText: "x" });
+    expect(stopped.status).toBe(409);
+    expect((await stopped.json()).error.code).toBe("not_recording");
     expect((await post("/api/lab/recording/cancel")).status).toBe(200);
     expect((await post("/api/lab/recording/cancel")).status).toBe(200);
     expect((await post(`/api/lab/${layoutId}/recording`, {})).status).toBe(201);

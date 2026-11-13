@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { fetchLayouts } from "../../src/web/api.ts";
 import type { LayoutSummary } from "../../src/api/http.ts";
+import { INTERNAL_WORDS } from "../../src/web/shell/unexpected.ts";
 
 interface LayoutListBody {
   layouts: LayoutSummary[];
@@ -39,9 +40,11 @@ describe("fetchLayouts", () => {
     const logged = spyOn(console, "error").mockImplementation(() => {});
     try {
       // The anchored pattern rules out the raw ZodError text, which the page must never show.
-      await expect(fetchLayouts("tok", controller.signal)).rejects.toThrow(
-        /^keyloom sent a layout this page can't read\. Restart keyloom and reload\.$/,
-      );
+      // Coded `unreadable`, so the page offers Restart keyloom beside it (R7-09).
+      await expect(fetchLayouts("tok", controller.signal)).rejects.toMatchObject({
+        code: "unreadable",
+        message: expect.stringMatching(/^keyloom sent an answer this page can't read, which happens when keyloom and this page are different versions\./),
+      });
       expect(logged).toHaveBeenCalledTimes(1);
     } finally {
       logged.mockRestore();
@@ -72,6 +75,11 @@ describe("why a layout read failed, as a code the page acts on (R1-08)", () => {
   });
 
   test("any other failure carries the server's own sentence when it sent one", async () => {
-    expect(await read(new Response(JSON.stringify({ error: { code: "internal", message: "internal error" } }), { status: 500 }))).toMatchObject({ status: 500, message: "internal error" });
+    expect(await read(new Response(JSON.stringify({ error: { code: "busy", message: "A recording is running." } }), { status: 409 }))).toMatchObject({ status: 409, code: "busy", message: "A recording is running." });
+  });
+
+  test("a server exception gets the page's own words, never \"internal error\" or a status number (R7-01)", async () => {
+    expect(await read(new Response(JSON.stringify({ error: { code: "internal", message: "internal error" } }), { status: 500 }))).toMatchObject({ status: 500, code: "internal", message: INTERNAL_WORDS });
+    expect(await read(new Response("", { status: 500 }))).toMatchObject({ status: 500, code: "internal", message: INTERNAL_WORDS });
   });
 });

@@ -21,7 +21,10 @@
 // sets what Check the keyboard again finds (this_build by default; absent, other_build, bootloader...) (D-501).
 // KEYLOOM_FAKE_DOCKER=no-access-linux|no-access-mac makes Docker refuse this account (D-497); colima-broken makes Colima fail to start,
 // and its Restart Colima succeed after a few seconds; colima-dead makes the restart fail too (R3-04); colima-busy holds a start for
-// something else for 6 s, so a restart then is refused as engine_busy (R4-04).
+// something else for 6 s, so a restart then is refused as engine_busy (R4-04). With no-access-mac, Fix Colima's files succeeds after
+// about 3 s; KEYLOOM_FAKE_COLIMA_FIX=cancel makes its password dialog cancelled the first time, =fail makes it fail, =linked stops it at a
+// linked file, =linked-cancel stops it at a linked file and then has every later dialog cancelled, =busy refuses it as build_running,
+// =vm refuses it before the dialog because another account's Colima VM runs (D-533).
 // KEYLOOM_FAKE_FLASH=manual gives the board no flash recipe (D-490); KEYLOOM_FAKE_FLASH=no-zapp leaves Zapp off the computer, and
 // its Install button installs a fake one in about four seconds (D-489).
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
@@ -39,6 +42,7 @@ import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
+import { COLIMA_VM_RUNNING } from "../src/app/colima-files.ts";
 import { dockerAccessFix } from "../src/app/toolchain.ts";
 import { type ShownFailureKind, isShownFailureKind } from "../test/helpers/model-failures.ts";
 
@@ -102,6 +106,8 @@ const installState = (tool: InstallState["tool"]): InstallState => {
 const dockerMode = process.env.KEYLOOM_FAKE_DOCKER;
 const colimaBroken = dockerMode === "colima-broken" || dockerMode === "colima-dead" || dockerMode === "colima-busy";
 let colimaRestarted = false;
+let colimaFilesFixed = false;
+let colimaFixTries = 0;
 // colima-busy: a start for something else (a build) holds the engine for 6 s from the first readiness; a restart meanwhile is refused (R4-04).
 let busyUntil: number | null = null;
 const engineAction = (): "start" | null => {
@@ -118,7 +124,7 @@ let appLeftDown = false;
 const system: SystemBackend = {
   docker: async () => appLeftDown
     ? { ok: false, problem: "daemon-down", reason: `${restartEngineName} isn't running.`, engine: restartEngineName, canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null }
-    : dockerMode === "no-access-linux" || dockerMode === "no-access-mac"
+    : (dockerMode === "no-access-linux" || dockerMode === "no-access-mac") && !colimaFilesFixed
     ? {
         ok: false, problem: "no-access", reason: "Docker is running, but your account isn't allowed to use it.", engine: dockerMode === "no-access-mac" ? "Colima" : "the Docker service",
         canStart: false, autoStart: true, install: null, access: dockerAccessFix(dockerMode === "no-access-mac" ? "darwin" : "linux", dockerMode === "no-access-mac" ? { name: "Colima", command: ["colima", "start"] } : { name: "the Docker service", command: ["systemctl", "start", "docker"] }),
@@ -174,6 +180,19 @@ const system: SystemBackend = {
     await Bun.sleep(3000);
     if (dockerMode === "colima-dead") return { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" };
     colimaRestarted = true;
+    return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
+  },
+  fixColimaFiles: async () => {
+    const mode = process.env.KEYLOOM_FAKE_COLIMA_FIX;
+    if (mode === "busy") return { ok: false, code: "build_running", reason: "A build or flash is running, and restarting Docker now would stop it. Restart it once that has finished.", engine: null };
+    if (mode === "vm") return { ok: false, code: "vm_running", reason: COLIMA_VM_RUNNING, engine: "Colima" };
+    colimaFixTries += 1;
+    if (mode === "linked-cancel" && colimaFixTries > 1) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so Colima's files didn't change.", engine: "Colima" };
+    await Bun.sleep(mode === "cancel" && colimaFixTries === 1 ? 1500 : 3000);
+    if (mode === "cancel" && colimaFixTries === 1) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so Colima's files didn't change.", engine: "Colima" };
+    if (mode === "fail") return { ok: false, reason: "macOS didn't let keyloom give all of Colima's files back to you.", engine: "Colima" };
+    if (mode === "linked" || mode === "linked-cancel") return { ok: false, code: "linked_file", reason: "A file in Colima's folder is also linked from somewhere else, so keyloom didn't give the files back: /Users/you/.colima/default/disk", engine: "Colima" };
+    colimaFilesFixed = true;
     return { ok: true, version: "29.0.0", engine: "Colima", waitedMs: 3000 };
   },
 };

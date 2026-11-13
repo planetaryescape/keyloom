@@ -102,7 +102,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
     if (wentBackTo !== null && wentBackTo.toHead === null && head.id !== wentBackTo.fromHead) setWentBackTo({ ...wentBackTo, toHead: head.id });
   }, [head.id, wentBackTo]);
   const wentBack = wentBackSummary(wentBackTo, lastBuildId, head.id);
-  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction);
+  const dockerNow = dockerView(docker.readiness, docker.starting, docker.problem, release.dockerInstall.state, docker.lastAction, docker.problemCode, docker.linkedFile);
   const blocked = buildBlockedReason(dockerNow);
   const buildOff = buildDisabledReason(blocked, release.needsBoardRevision, release.boardRevision, boardName);
   // While Docker is missing, the dialog asks again by itself, so installing it elsewhere needs no click here (D-488).
@@ -406,7 +406,7 @@ export function ReleaseDialog({ open, onClose, release, head, earlierRevision = 
               !canFlash ? (
                 <p className="muted">Available once the build succeeds.</p>
               ) : flashPlan?.kind === "manual" ? (
-                <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} problem={release.fileProblem} />
+                <ManualFlash view={flashPlan} boardName={boardName} onDownload={release.download} onReveal={release.reveal} onBuildAgain={() => release.buildNow(head.id)} problem={release.fileProblem} />
               ) : flashPlan?.kind === "needs-tool" ? (
                 <ToolCallout view={flashPlan} boardName={boardName} install={release.toolInstall} onCheck={release.checkBuild} />
               ) : confirming ? (

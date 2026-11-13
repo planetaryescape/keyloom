@@ -237,3 +237,11 @@ button.sheet-row:focus-visible {
   color: var(--ink-3);
   font-size: var(--text-xs);
 }
+
+/* The buttons under a sheet's failure: Try again and Restart keyloom side by side, wrapping on a phone (R7-01). */
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}

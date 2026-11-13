@@ -78,7 +78,7 @@ const noop = () => {};
 function release(build: Build, over: Partial<Release> = {}): Release {
   return {
     build, flash: null, starting: null, error: null, needsBoardRevision: false, boardRevision: null, chooseBoardRevision: noop, buildNow: noop, flashNow: noop, retry: noop,
-    docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop },
+    docker: { readiness: { ok: true, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     dockerInstall: { state: null, problem: null, start: noop, cancel: noop }, toolInstall: { state: null, problem: null, start: noop, cancel: noop },
     download: noop, reveal: noop, checkBuild: noop, fileProblem: null, cancelBuild: noop, stoppingBuild: false, buildCancelProblem: null,
     cancelFlash: noop, cancelling: false, cancelNote: null, checkKeyboard: noop, check: { running: false, found: null, problem: null }, openSettings: noop, settingsProblem: null,
@@ -168,7 +168,7 @@ describe("a build the engine's own state stopped", () => {
     const down = { ok: false as const, problem: "daemon-down" as const, reason: "Docker isn't answering.", engine: "Docker Desktop", canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null };
     const html = failedStep("stale_mount", { error: stale, restartEngine: "Docker Desktop" }, {
       engineRestart: { running: false, problem: "Docker Desktop didn't come back.", again: false, waitingFor: null, log: [] },
-      docker: { readiness: down, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop },
+      docker: { readiness: down, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     });
     expect(html).toContain("Build again starts Docker Desktop if it isn&#x27;t running.");
     expect(html).toContain("Start it now");

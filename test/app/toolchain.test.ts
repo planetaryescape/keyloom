@@ -1,7 +1,7 @@
 // What a person sees when the Docker a build needs isn't up (D-486, D-487): readiness names the engine and
 // whether keyloom may start it, says where a remote one lives, and offers an install when there is none.
 import { describe, expect, test } from "bun:test";
-import { dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
+import { COLIMA_LINKED_FILE_HELD, dockerAccessFix, dockerAutoStart, dockerReadiness, ensureDocker, forcedRestartEngine, restartDocker, startDocker } from "../../src/app/toolchain.ts";
 import { dockerAccessDetail } from "../../src/app/doctor.ts";
 import { type DockerStatus, findDockerEngine, startDockerEngine } from "../../src/firmware/toolchain/docker.ts";
 import { buildBlockedReason, dockerView } from "../../src/web/release/release-words.ts";
@@ -161,6 +161,12 @@ describe("a daemon that refuses this account (D-497)", () => {
     expect(app).toContain("Quit OrbStack and open it again");
     expect(app).toContain("keyloom doctor --restart-docker");
     expect(dockerAccessDetail(dockerAccessFix("linux", null))).toContain("Run `sudo usermod -aG docker $USER`");
+  });
+
+  test("doctor says why Colima's command is held back for a linked file, not what the missing command does (#300 third review)", () => {
+    const held = dockerAccessDetail({ ...dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }), command: null, linkedFile: true });
+    expect(held).toBe(`Docker is running, but this account can't open its socket. ${COLIMA_LINKED_FILE_HELD}`);
+    expect(held).not.toContain("This stops that copy");
   });
 
   test("Colima, which has no app to reopen, gets the commands that give its socket back, for its own profile", async () => {

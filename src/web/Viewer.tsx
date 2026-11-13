@@ -11,6 +11,8 @@ import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
+import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
+import { unexpectedWayOut } from "./shell/unexpected.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
@@ -135,7 +137,8 @@ interface ViewerProps {
     selectedId: string;
     onSelect: (id: string) => void;
     onHome?: (() => void) | undefined;
-    onImport: () => void;
+    /** `boardId`: show only that board's card, for that board's setup (R7-13). */
+    onImport: (boardId?: string | null) => void;
     /** What a switch carries to the next layout (D-317): the layer by name, and the chat if it was open. */
     arrival?: Arrival | null;
     /** Opens another layout with what the switch carries; without it, a switch is a plain `onSelect`. */
@@ -431,7 +434,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       // Archived and experiment configs are not a sensible thing to put on a new keyboard; the ones on a keyboard come first.
       .filter((l) => l.boardId !== target && (l.archivedAt ?? null) === null)
       .sort((a, b) => Number(onKeyboard.has(b.id)) - Number(onKeyboard.has(a.id)) || b.updatedAt - a.updatedAt)
-      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, note: onKeyboard.has(l.id) ? "on it now" : null }));
+      .map((l) => ({ id: l.id, name: l.name, boardName: names.get(l.boardId) ?? l.boardId, boardId: l.boardId, note: onKeyboard.has(l.id) ? "on it now" : null }));
   }, [chrome.layouts, chrome.boardChoices, sync.boards, newBoard.step]);
   // This config's proposals that no conversation shows, such as a put's (D-336); opened by itself when the put brought the page here.
   const proposalsOpen = sidebar === "proposals";
@@ -439,13 +442,16 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [waiting, setWaiting] = useState<ProposalCard[] | null>(null);
   // A read that failed is said, with Try again, never shown as "nothing is waiting" (R4-08); bumping `waitingRead` reads again.
   const [waitingFailed, setWaitingFailed] = useState(false);
+  // The failed read's code: a read keyloom can't answer the same way again gets Restart keyloom, not Try again (R7-01).
+  const [waitingCode, setWaitingCode] = useState<string | undefined>(undefined);
   const [waitingRead, setWaitingRead] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, () => {
+    fetchOpenProposals(token, layoutRef, controller.signal).then((cards) => { setWaiting(cards); setWaitingFailed(false); }, (error: unknown) => {
       if (controller.signal.aborted) return;
       setWaiting([]);
       setWaitingFailed(true);
+      setWaitingCode(error instanceof ApiError ? error.code : undefined);
     });
     return () => controller.abort();
   }, [token, layoutRef, revision.id, waitingRead]);
@@ -1555,6 +1561,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     chrome.onReload?.(configId);
   }
 
+  /** The new-keyboard steps' Import: the import screen at that board's card when the board is known (R7-13), or at every card. */
+  function importForBoard(boardId: string | null) {
+    if (editing !== null) closeEditor(false);
+    setSidebar(null);
+    chrome.onImport(boardId);
+  }
+
   // ⌘K commands (D-315): the typing lab and the config commands, offered above "Ask keyloom" when the text names them.
   // `find` keeps its identity while the configs don't change, so the bar's highlighted row survives a re-render.
   const findCommands = useCallback(
@@ -2051,7 +2064,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             layerName={layer.name}
             light={light}
             reach={reachWords(view, layerIndex, board.fingers, (position) => describeKey(view, 0, position)?.legend.tap ?? "")}
-            notice={offer ?? (proposalsOpen ? null : waitingFailed ? (
+            notice={offer ?? (proposalsOpen ? null : waitingFailed && unexpectedWayOut(waitingCode, true)?.retry === false ? (
+              <span className="nb-waiting-failed" role="alert">Couldn&apos;t read proposals. <RestartKeyloom token={token} /></span>
+            ) : waitingFailed ? (
               // A read that failed is not "nothing waiting": the slot says so and reads again (R5-11).
               <button type="button" className="sheet-action nb-waiting" onClick={() => { setWaiting(null); setWaitingRead((read) => read + 1); }}>
                 Couldn&apos;t read proposals · Try again
@@ -2148,11 +2163,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             setSidebar(null);
             newBoard.confirmCandidate();
           } }} />
-          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={() => {
-            if (editing !== null) closeEditor(false);
-            setSidebar(null);
-            chrome.onImport();
-          }} onMade={openMadeConfig} />
+          <SetupCard flow={newBoard} boards={chrome.boardChoices} hasConfigs={putSources.length > 0} onImport={importForBoard} onMade={openMadeConfig} />
           {/* A phone shows one half of the new board too, with its own Left and Right, since the caption that holds them steps aside. */}
           {newBoardDrawn !== null && shownHalf !== null ? (
             <div className="nb-half"><HalfSwitcher value={half} onChange={setHalf} hands={newBoardDrawn.hands} /></div>
@@ -2160,7 +2171,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           {/* A phone has no column: the new keyboard's questions are a sheet at the stage's foot, as the lab's read-out is (D-336). */}
           {narrow && newBoardPanel ? (
             <div className="lab-sheet nb-sheet">
-              <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+              <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} onImport={importForBoard} />
             </div>
           ) : null}
           {labOpen ? <LabStage lab={lab} boardName={boardDisplayName(board.name)} phone={narrow} onClose={() => toggleLab()} onType={labType} fixes={{ onSync: () => void sync.syncNow(summary.id), onOpenRelease: () => onOpenRelease(), onOpenInputMonitoring: openInputMonitoring }} /> : null}
@@ -2322,6 +2333,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 />
               ) : (
                 <HistoryPanel
+                  token={token}
                   layout={layout}
                   versions={history.versions}
                   configName={summary.name}
@@ -2379,7 +2391,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
             from the panel takes its place and the conversation waits, still mounted. */}
         {newBoardPanel && !narrow ? (
           <div className="nb-column">
-            <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} />
+            <NewBoardPanel flow={newBoard} sources={putSources} onMade={openMadeConfig} onImport={importForBoard} />
           </div>
         ) : reviewShown ? (
           <div className={narrow ? "lab-sheet br-sheet" : "nb-column"}>

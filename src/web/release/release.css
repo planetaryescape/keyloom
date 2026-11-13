@@ -249,6 +249,10 @@
   background: color-mix(in srgb, var(--color-text) 10%, transparent);
   white-space: nowrap;
 }
+/* A long command to copy (Colima's, D-533) wraps inside its box instead of running past the callout and hiding its Copy button. */
+.callout .command code {
+  white-space: normal;
+}
 
 .callout > svg {
   flex: none;

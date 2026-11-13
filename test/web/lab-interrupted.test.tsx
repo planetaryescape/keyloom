@@ -119,3 +119,44 @@ test("a Cancel that failed, or a start refused because a recording runs, offers 
   expect(html).toContain("Stop and discard that recording");
   expect(html).not.toContain("Try again");
 });
+
+test("no keyboard to listen to says to plug it in, with Try again (R7-07)", () => {
+  expect(labFixes("not_connected", false)).toEqual([{ id: "retry", label: "Try again" }]);
+  const text = labProblemText("not_connected", "no ZSA keyboard is connected", "Moonlander");
+  expect(text).toBe("keyloom can't find your Moonlander. Plug it into this computer with a USB cable, then try again.");
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "no ZSA keyboard is connected", problemCode: "not_connected" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("Plug it into this computer");
+  expect(html).toContain("Try again");
+  expect(html).not.toContain("no ZSA keyboard is connected");
+});
+
+test("a computer that refused the keyboard says so with the platform's step and Try again (R7-07)", () => {
+  expect(labFixes("permission_denied", false)).toEqual([{ id: "retry", label: "Try again" }]);
+  expect(labProblemText("permission_denied", "Join the group owning the port, log out and back in, then try again.", "Corne"))
+    .toBe("Your computer didn't let keyloom read your Corne. Join the group owning the port, log out and back in, then try again.");
+});
+
+test("a Stop after another tab ended the recording says the passage was lost and offers Start listening again (R7-07)", () => {
+  expect(labFixes("not_recording", false)).toEqual([{ id: "retry", label: "Start listening again" }]);
+  expect(labProblemText("not_recording", "No recording is running.")).toContain("the passage you typed was lost");
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "No recording is running.", problemCode: "not_recording" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("Start listening again");
+});
+
+test("a lab failure no screen planned for offers Restart keyloom, never a bare \"internal error\" (R7-01)", () => {
+  expect(labFixes("internal", false)).toEqual([{ id: "restart", label: "Restart keyloom" }]);
+  expect(labFixes("unreadable", false)).toEqual([{ id: "restart", label: "Restart keyloom" }]);
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "keyloom hit a problem it didn't expect. The details are in keyloom's log.", problemCode: "internal" })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("Restart keyloom");
+  expect(html).not.toContain("internal error");
+  // A list keyloom can't read the same way again gets the restart, not a Try again; any other failed load keeps Try again.
+  expect(labFixes("unreadable", true)).toEqual([{ id: "restart", label: "Restart keyloom" }]);
+  expect(labFixes("internal", true)).toEqual([{ id: "reload", label: "Try again" }]);
+});
+
+test("a session another tab deleted reads the sessions again, and the load failure keeps its own sentence", () => {
+  expect(labFixes("not_found", false)).toEqual([{ id: "reload", label: "Read the sessions again" }]);
+  const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "keyloom couldn't load the typing lab. keyloom hit a problem it didn't expect.", problemCode: "not_found", loadFailed: true })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
+  expect(html).toContain("keyloom couldn&#x27;t load the typing lab.");
+  expect(html).not.toContain("find that session");
+});

@@ -39,6 +39,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     const failed = (error: unknown) => {
       if (controller.signal.aborted) return;
       setLoadFailed(true);
+      // The code picks the button: Restart keyloom for an answer that fails the same way again (R7-01), Try again otherwise.
+      setProblemCode(error instanceof ApiError ? (error.code ?? null) : null);
       setProblem(error instanceof Error ? `keyloom couldn't load the typing lab. ${error.message}` : "keyloom couldn't load the typing lab.");
     };
     void api.fetchPassages(token, layoutRef, controller.signal).then((r) => {

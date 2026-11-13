@@ -68,7 +68,8 @@ export function appLabBackend(app: App, deps: LabDeps): LabBackend {
     stop: (typedText) => {
       const operation = translate(async () => {
         const rec = recording;
-        if (rec === null) throw new UsageError("no recording is running");
+        // Another tab's Stop or Cancel, or a closed lab, ended it first. Its own code, so the page says the passage was lost (R7-07).
+        if (rec === null) throw new LabError(409, "not_recording", "No recording is running. Another tab may have stopped it.");
         recording = null;
         const { session } = await endRecording(app, rec, typedText);
         return sessionView(session);

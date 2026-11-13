@@ -34,3 +34,8 @@ export function restartDockerApp(token: string, signal?: AbortSignal, force = fa
 export function fetchRestartLog(token: string, signal?: AbortSignal): Promise<DockerRestartLogResponse> {
   return request("GET", `${DOCKER_PATH}/restart`, token, DockerRestartLogResponseSchema, signal);
 }
+
+/** Fix Colima's files (D-533): the server asks macOS for the password, gives ~/.colima back and starts Colima; answers like a start. */
+export function fixColimaFiles(token: string, signal?: AbortSignal): Promise<DockerStartResponse> {
+  return request("POST", `${DOCKER_PATH}/fix-colima-files`, token, DockerStartResponseSchema, signal, {});
+}

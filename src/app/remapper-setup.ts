@@ -3,7 +3,7 @@
 // `osascript` or `open` runs under `bun test`.
 import { existsSync, realpathSync } from "node:fs";
 import { findKanata } from "../firmware/kanata/binary.ts";
-import { daemonInstallScript, rootScriptFailure } from "../firmware/kanata/daemon-install.ts";
+import { daemonInstallScript, rootScriptFailure, shellQuote } from "../firmware/kanata/daemon-install.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
 
@@ -58,12 +58,21 @@ export async function openSettingsPane(pane: SettingsPane, deps: { run: Runner; 
 /** An AppleScript string literal: backslash and double quote are the only characters it escapes. */
 export const appleScriptString = (s: string): string => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
+/** The whole environment a root script starts with: a PATH of folders only root can change. Every root script needs nothing else. */
+export const ROOT_SCRIPT_ENV = "PATH=/usr/bin:/bin:/usr/sbin:/sbin";
+
 /**
  * The `osascript` call that runs `shell` as root through macOS's own password dialog, which names what it does. `osascript` gets the
  * script as one argument, so the only quoting is AppleScript's around the shell text and the shell's around each path in it.
+ *
+ * Nothing from keyloom's environment reaches root (#300 re-review). macOS's /bin/sh is bash, which takes exported functions from the
+ * environment (`BASH_FUNC_cd%%`) and runs them in place of `cd` or `echo`, and runs `PS4` under `SHELLOPTS=xtrace`; whoever starts
+ * keyloom chooses that environment. So osascript starts from an empty one, and so does the script: `do shell script`'s own shell runs
+ * only `/usr/bin/env` by its full path, and the script runs in a shell that `env -i` gave nothing but ROOT_SCRIPT_ENV.
  */
 export function adminCommand(shell: string, prompt: string): string[] {
-  return ["osascript", "-e", `do shell script ${appleScriptString(shell)} with prompt ${appleScriptString(prompt)} with administrator privileges`];
+  const clean = `/usr/bin/env -i ${ROOT_SCRIPT_ENV} /bin/sh -c ${shellQuote(shell)}`;
+  return ["/usr/bin/env", "-i", ROOT_SCRIPT_ENV, "/usr/bin/osascript", "-e", `do shell script ${appleScriptString(clean)} with prompt ${appleScriptString(prompt)} with administrator privileges`];
 }
 
 export const ADMIN_PROMPT = "keyloom wants to copy kanata to a folder only macOS can change, install kanata's background service and start it, so your MacBook keyboard can type your layout.";
@@ -313,6 +322,6 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   return { ok: false, code: "failed", reason: `macOS couldn't start kanata: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
 }
 
-function lastLine(out: string): string {
+export function lastLine(out: string): string {
   return out.trim().split("\n").filter((l) => l.trim() !== "").at(-1)?.trim() ?? "";
 }
