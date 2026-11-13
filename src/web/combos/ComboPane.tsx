@@ -7,7 +7,9 @@ import { applyChange } from "../api-write.ts";
 import { bindingFromDraft, bindingSummary, draftFromBinding, type Draft } from "../editor/draft.ts";
 import { CardMods } from "../card/CardMods.tsx";
 import { useOpsCheck } from "../editor/useCheck.ts";
+import { ApplyProblem, applyProblem, applyStopped } from "../editor/ApplyProblem.tsx";
 import { Validation } from "../editor/Validation.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
 import type { PickerTab } from "../panel/picker-items.ts";
 import { SlotPicker } from "../panel/SlotPicker.tsx";
 import { canToggleTapMods, pickTap, tapMods, toggleTapMod, type TapPick } from "../panel/slots.ts";
@@ -160,7 +162,8 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
   // Esc, Tab, Backspace and Enter are what combos usually send, and they live on Navigation, so the picker opens there.
   const [tab, setTab] = useState<PickerTab>("navigation");
   const [applying, setApplying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // A failed Apply keeps its code, so the pane offers Restart keyloom and turns Apply off where pressing it fails the same way (R10-07).
+  const [error, setError] = useState<PageFailure | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const root = useRef<HTMLElement>(null);
   const nameId = useId();
@@ -200,7 +203,7 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
   const check = useOpsCheck({ token, layoutRef, revisionId, ops });
   const result = check.state.status === "done" ? check.state.result : null;
   const same = combo !== null && !draft.isNew && JSON.stringify(layout.combos.find((candidate) => candidate.id === draft.id)) === JSON.stringify(combo);
-  const canApply = combo !== null && problem === null && result !== null && result.ok && !applying && !same;
+  const canApply = combo !== null && problem === null && result !== null && result.ok && !applying && !same && !applyStopped(error);
   const why =
     draft.output === null ? "Pick what the keys send." : problem ?? (same ? "Nothing has changed." : check.state.status === "checking" ? "Checking the change." : result !== null && !result.ok ? "Fix the errors above first." : null);
 
@@ -212,10 +215,10 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
       await onApplied(change.summary);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409 && caught.code?.startsWith("stale")) onStale();
-      else if (caught instanceof ApiError) {
-        if (caught.validation !== undefined) check.show(caught.validation);
-        setError(caught.validation === undefined ? caught.message : "This change has problems, listed above. Nothing was saved.");
-      } else setError("The change could not be applied.");
+      else {
+        if (caught instanceof ApiError && caught.validation !== undefined) check.show(caught.validation);
+        setError(applyProblem(caught, "This change has problems, listed above. Nothing was saved."));
+      }
     } finally {
       setApplying(false);
     }
@@ -394,8 +397,8 @@ export function ComboEditor({ token, layoutRef, revisionId, layout, layerId, dra
 
       {same && error === null ? null : (
         <footer className="card-foot">
-          {error !== null || (why !== null && draft.output !== null) ? (
-            <p className="card-foot-note" role={error === null ? undefined : "alert"}>{error ?? why}</p>
+          {error !== null ? <ApplyProblem token={token} failure={error} className="apply-problem" /> : why !== null && draft.output !== null ? (
+            <p className="card-foot-note">{why}</p>
           ) : null}
           <div className="card-foot-row">
             <button type="button" className="card-discard" disabled={applying} onClick={onBack}>

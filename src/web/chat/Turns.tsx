@@ -1,5 +1,6 @@
 import { ArrowRight, ArrowRightLeft, Check, CheckCircle2, CircleAlert, ExternalLink, History, Keyboard, KeyRound, MapPin, MessageSquarePlus, RefreshCw, ShieldCheck } from "lucide-react";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { ShowLog } from "../shell/ShowLog.tsx";
 import type { ChatSelection, ProposalCard as Proposal } from "../../api/http.ts";
 import type { AgentArtifact } from "../../api/artifacts.ts";
 import type { BoardDefinition } from "../../boards/schema.ts";
@@ -457,6 +458,7 @@ function FailureBox({ view, prepared, busy, onRetry, switchTo, onSwitch, onSetUp
             </button>
           ) : null}
           {offers("restart") && token !== undefined ? <RestartKeyloom token={token} primary={!offers("retry")} /> : null}
+          {offers("log") && token !== undefined ? <ShowLog token={token} /> : null}
         </div>
       </div>
     </div>
