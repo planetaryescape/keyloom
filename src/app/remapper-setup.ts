@@ -358,9 +358,8 @@ export const LOG_PROMPT = "keyloom wants to show the last lines of kanata's log,
 // kanata waits about two seconds after it starts before it takes the keyboard (S30 step 5); this leaves room for that and a slow start.
 const RESTART_WAIT_MS = 8000;
 const RESTART_ASK_EVERY_MS = 500;
-// Each ask waits at most this long for kanata's hello, and at least long enough for a local answer.
+// Each ask waits at most this long for kanata's hello.
 const PROBE_MAX_MS = 1000;
-const PROBE_MIN_MS = 200;
 
 /**
  * Restart kanata's service (R11-02, D-559): for a service that is installed but where kanata doesn't answer, such as after the first start,
@@ -380,11 +379,12 @@ export async function restartKanataService(boardId: string, deps: SetupDeps): Pr
   // One deadline for the asks and the waits between them: a kanata that takes the connection but never says hello costs a probe's own
   // timeout, so each probe gets only what is left, and the whole wait stays near RESTART_WAIT_MS (PR #319 CodeRabbit).
   const deadline = now() + RESTART_WAIT_MS;
-  for (;;) {
-    const left = deadline - now();
-    if (await answers(boardId, Math.max(PROBE_MIN_MS, Math.min(PROBE_MAX_MS, left))).catch(() => false)) return { ok: true };
-    if (deadline - now() <= 0) break;
-    await sleep(Math.min(RESTART_ASK_EVERY_MS, Math.max(0, deadline - now())));
+  // No ask starts after the deadline, and none gets more than the time left (PR #319 CodeRabbit).
+  for (let left = deadline - now(); left > 0; left = deadline - now()) {
+    if (await answers(boardId, Math.min(PROBE_MAX_MS, left)).catch(() => false)) return { ok: true };
+    const rest = deadline - now();
+    if (rest <= 0) break;
+    await sleep(Math.min(RESTART_ASK_EVERY_MS, rest));
   }
   return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
 }

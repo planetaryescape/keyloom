@@ -215,9 +215,11 @@ describe("restartKanataService", () => {
     const answers = async (_board: string, timeoutMs: number) => (given.push(timeoutMs), clock.spend(timeoutMs), false);
     const result = await restartKanataService(MAC, deps(r.run, { answers, now: clock.now, sleep: clock.sleep }));
     expect(result).toMatchObject({ ok: false, code: "still_not_answering" });
-    // About the 8 s wait, never the minute that 3 s probes between 500 ms sleeps used to take.
-    expect(clock.elapsed).toBeLessThanOrEqual(8_000 + 1_000);
+    // The 8 s wait exactly, never the minute that 3 s probes between 500 ms sleeps used to take: no ask starts after the deadline, and
+    // none gets more than the time left.
+    expect(clock.elapsed).toBeLessThanOrEqual(8_000);
     expect(Math.max(...given)).toBeLessThanOrEqual(1_000);
+    expect(given.every((ms) => ms > 0)).toBe(true);
   });
 
   test("a closed dialog, a refusal from the script, and any other failure keep their codes; nothing waits after them", async () => {
