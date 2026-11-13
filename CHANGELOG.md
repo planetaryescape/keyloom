@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.79.2](https://github.com/planetaryescape/keyloom/compare/v0.79.1...v0.79.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* no dead ends round 13: a failed kanata start, its wait, and Download Zapp after a cancel ([886ef02](https://github.com/planetaryescape/keyloom/commit/886ef02d77815bdecaa989f6263c823cb890a749))
+* offer the way on after a failed kanata start, say what a setup press waits for, and keep Download Zapp beside Install ([08b6c82](https://github.com/planetaryescape/keyloom/commit/08b6c82a529c9dff28dc4bcad09ef67783f395b3))
+
 ## [0.79.1](https://github.com/planetaryescape/keyloom/compare/v0.79.0...v0.79.1) (2026-11-13)
 
 
