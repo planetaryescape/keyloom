@@ -142,7 +142,7 @@ function Tuner({ token, layoutRef, layout, revisionId, slot, binding, profile, o
         )}
 
         {built.ok ? null : <p className="tuner-problem" role="alert">{built.problem}</p>}
-        <Validation layout={layout} slot={slot} idleNote="Change a value and keyloom checks it here before anything is saved." state={check.state} onRecheck={check.recheck} />
+        <Validation token={token} layout={layout} slot={slot} idleNote="Change a value and keyloom checks it here before anything is saved." state={check.state} onRecheck={check.recheck} />
 
         {ops === null ? null : (
           <div className="editor-reason">

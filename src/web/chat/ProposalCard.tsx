@@ -66,7 +66,10 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
   // History describes the saved operation, not an attempt to replay non-idempotent ops on today's head.
   const currentValidation = useMemo(() => open ? evaluate(board, layout, proposal.ops).result : proposal.validation, [open, board, layout, proposal.ops, proposal.validation]);
   const effectiveValidation = currentValidation.ok ? proposal.validation : currentValidation;
-  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true && failure?.closed !== true;
+  // Restart keyloom, and the log for an exception, where a failure is one no screen planned for. Apply or Read proposals again is the card's
+  // own Try again, so it is never repeated here; after an answer that fails the same way every time, Apply is off (R9-04).
+  const way = failure === null ? null : proposalFailureWay(failure);
+  const canApply = open && !applying && proposal.validation.ok && currentValidation.ok && failure?.stale !== true && failure?.closed !== true && way?.apply !== false;
   const recoveryReasons = failure?.reasons.length ? failure.reasons : validationReasons(effectiveValidation.errors, layout);
   const recoverable = proposal.status === "proposed" && failure?.closed !== true && (failure?.stale === true || recoveryReasons.length > 0);
   const recovery = recoverable ? <button type="button" className="bar-link" onClick={() => onAskAgain(proposal, recoveryReasons.length ? recoveryReasons : [failure?.message ?? "The proposal no longer applies cleanly.", `Proposal targets: ${proposal.validation.diff.changed.map((slot) => keyIn(layout, slot)).join("; ") || "no key target recorded"}.`])}>Plan a revised proposal</button> : null;
@@ -135,9 +138,6 @@ export function ProposalCard({ proposal, option, layout, board, pinned, onPrevie
       },
     );
   }
-  // Restart keyloom, and the log for an exception, where a failure is one no screen planned for. Apply or Read proposals again is the card's
-  // own Try again, so it is never repeated here.
-  const way = failure === null ? null : proposalFailureWay(failure);
   const restart = failure !== null && way?.restart === true && token !== undefined ? <UnexpectedWayOut token={token} failure={failure} className="bar-link" primary={false} /> : null;
   // A closed proposal's one way on: read the proposals, so the card shows what happened to it. Not after a read that fails the same way
   // every time.

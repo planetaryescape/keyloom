@@ -17,7 +17,7 @@ import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type Assi
 type TurnFailure = NonNullable<AssistantTurn["failure"]>;
 
 /** A refusal before the reply started, or a history/provider request problem. It keeps the failure's code, so the box picks its buttons (R8-03). */
-export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other" } & PageFailure;
+export type Problem = { kind: "missing_key" | "busy" | "rate_limit" | "unreachable" | "other" | "stop" } & PageFailure;
 
 export type History =
   | { status: "idle" }
@@ -34,6 +34,14 @@ export function classify(error: unknown): Problem {
     if (error.status === 0) return { kind: "unreachable", ...failure };
   }
   return { kind: "other", ...failure };
+}
+
+/**
+ * A Stop that didn't go through (R9-03). The message was sent and the reply is still coming, so this is never "That message didn't go
+ * through", and its way on is Stop again, never a Try again that sends the box's draft.
+ */
+export function stopProblem(error: unknown): Problem {
+  return { kind: "stop", ...pageFailure(error, "The reply is still running.") };
 }
 
 /** A Try again the server refused keeps the server's code, so a signed-out provider offers the model setup, not only Try again (R5-05). */
@@ -90,6 +98,10 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
   const streaming = isStreaming(transcript);
 
   useEffect(() => () => { viewLife.current?.abort(); controller.current?.abort(); }, [layoutRef]);
+  // A reply that ended has nothing left to stop, so a failed Stop's box goes with it (R9-03).
+  useEffect(() => {
+    if (!streaming) setProblem((current) => (current?.kind === "stop" ? null : current));
+  }, [streaming]);
 
   const observe = useCallback(async (id: string, mine: AbortController, finished?: (presentation: ChatPresentation | null) => void, handleView?: (snapshot: AgentRunSnapshot) => void) => {
     let completed: ChatPresentation | null = null;
@@ -260,18 +272,26 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
 
   const stop = useCallback(() => {
     viewLife.current?.abort();
-    if (controller.current === null) return;
+    // A cancel that fails after the reply has ended (or a new one has started) has nothing left to stop, so it shows nothing (PR #310 review).
+    const failedStop = (still: () => boolean) => (error: unknown) => {
+      if (still()) setProblem(stopProblem(error));
+    };
     if (pendingAcceptance.current !== null) {
       const pending = pendingAcceptance.current;
       pending.stopped = true;
-      void cancelSavedRequest(token, pending.id).catch((error: unknown) => setProblem(classify(error)));
+      void cancelSavedRequest(token, pending.id).catch(failedStop(() => pendingAcceptance.current === pending));
       return;
     }
+    // A run the server holds is cancelled there even when this page's view of it has dropped: only the local abort needs a controller
+    // (PR #310 CodeRabbit).
     if (savedRun.current !== null) {
-      void cancelSavedRun(token, savedRun.current).catch((error: unknown) => setProblem(classify(error)));
+      const run = savedRun.current;
+      void cancelSavedRun(token, run).catch(failedStop(() => savedRun.current === run));
       return;
     }
-    controller.current.abort();
+    const stopping = controller.current;
+    if (stopping === null) return;
+    stopping.abort();
     dispatch({ type: "stopped" });
   }, [token]);
 

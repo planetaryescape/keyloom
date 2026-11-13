@@ -44,7 +44,10 @@
 // KEYLOOM_FAKE_CHAT=fail_after_accept:<kind> accepts each message as a saved run and fails it after a moment with that provider failure
 // (auth, no_credits, permission, rate_limit, overloaded, server, connection or context_full, or Codex's usage_limit), stored with
 // the run (R4-02). And
-// KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35). With missing_key, a pasted key containing "bad"
+// KEYLOOM_FAKE_TOKEN_MS sets the delay between streamed words (default 35).
+// KEYLOOM_FAKE_UNEXPECTED, a comma list, makes requests fail the way no screen planned for (R9-02, R9-05, R9-09): check=internal or
+// check=gone fails every change check with a server exception or as a layout deleted elsewhere; upgrade=refused offers Update layout and
+// has keyloom's check turn it down; undo=internal fails Undo and Go back. With missing_key, a pasted key containing "bad"
 // is refused and any other is "saved"; KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the pretend Codex sign-in that long (default 1500).
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
 import { FakeChat } from "../test/helpers/fake-chat-backend.ts";
@@ -56,6 +59,7 @@ import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
 import type { RemapperSetupBackend } from "../src/server/system-remapper-routes.ts";
 import { type SyncBackend, SyncError } from "../src/server/sync-backend.ts";
+import { EditorError } from "../src/server/editor-backend.ts";
 import type { BoardSync } from "../src/api/http.ts";
 import { COLIMA_VM_RUNNING } from "../src/app/colima-files.ts";
 import { dockerAccessFix } from "../src/app/toolchain.ts";
@@ -239,14 +243,21 @@ fake.apply = async (...args) => {
   readFailures = readFailsAfterApply;
   return applied;
 };
+const unexpected = new Map((process.env.KEYLOOM_FAKE_UNEXPECTED ?? "").split(",").filter(Boolean).map((pair) => pair.split("=") as [string, string]));
 const fakeSource = fake.source();
 const source = { ...fakeSource, get: async (ref: string) => {
   if (readFailures > 0) {
     readFailures -= 1;
     throw new Error("database is locked");
   }
-  return fakeSource.get(ref);
+  const found = await fakeSource.get(ref);
+  return found !== null && unexpected.get("upgrade") === "refused" ? { ...found, upgrade: { colours: true, tapDances: false } } : found;
 } };
+// A plain Error is the server's exception (500 internal); an EditorError is a route's own answer.
+if (unexpected.get("check") === "internal") fake.check = async () => { throw new Error("database is locked"); };
+if (unexpected.get("check") === "gone") fake.check = async (ref: string) => { throw new EditorError(404, "not_found", `no layout ${ref}`); };
+if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw new EditorError(409, "validation_failed", "the upgrade was not saved: the upgraded layout doesn't parse"); };
+if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
 const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard"] as const;

@@ -1,4 +1,4 @@
-import { ArrowRightLeft, KeyRound, MessageSquareText, RefreshCw, Send, TriangleAlert, X } from "lucide-react";
+import { ArrowRightLeft, KeyRound, MessageSquareText, RefreshCw, Send, Square, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { ChatProviderStatus } from "../../api/http.ts";
 import { ModelSetup } from "./ModelSetup.tsx";
@@ -81,14 +81,18 @@ const TITLES: Record<Exclude<Problem["kind"], "missing_key">, string> = {
   rate_limit: "The model is busy",
   unreachable: "Can't reach keyloom",
   other: "That message didn't go through",
+  stop: "keyloom couldn't stop the reply",
 };
 
 // A refusal before the reply started. Your message is back in the box, so Try again is one click. An answer that fails the same way every
-// time offers Restart keyloom in its place, and an exception adds keyloom's log (R8-03, R8-09).
-export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: Problem; setup: Setup; retry: Retry; onDismiss: () => void }) {
+// time offers Restart keyloom in its place, and an exception adds keyloom's log (R8-03, R8-09). A Stop that failed has its own way on:
+// Stop again while the reply runs, never a Try again that sends the box's draft (R9-03).
+export function ProblemNotice({ problem, setup, retry, onStop, onDismiss }: { problem: Problem; setup: Setup; retry: Retry; onStop?: (() => void) | undefined; onDismiss: () => void }) {
   if (problem.kind === "missing_key") return <MissingKey setup={setup} retry={retry} />;
-  const onRetry = retry.onRetry;
+  const stopping = problem.kind === "stop";
+  const onRetry = stopping ? onStop : retry.onRetry;
   const unexpected = wayOutFor(problem, onRetry !== undefined) !== null;
+  const label = stopping ? "Stop again" : "Try again";
   return (
     <div className="chat-problem" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
@@ -96,10 +100,10 @@ export function ProblemNotice({ problem, setup, retry, onDismiss }: { problem: P
         <strong>{TITLES[problem.kind]}</strong>
         <p>{problem.message}</p>
         <div className="chat-problem-actions">
-          {unexpected ? <UnexpectedWayOut token={setup.token} failure={problem} onRetry={onRetry} /> : onRetry === undefined ? null : (
+          {unexpected ? <UnexpectedWayOut token={setup.token} failure={problem} onRetry={onRetry} retryLabel={label} /> : onRetry === undefined ? null : (
             <button type="button" className="button" onClick={onRetry}>
-              <RefreshCw size={14} aria-hidden="true" />
-              Try again
+              {stopping ? <Square size={14} aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+              {label}
             </button>
           )}
         </div>

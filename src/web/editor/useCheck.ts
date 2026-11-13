@@ -4,12 +4,26 @@ import type { Binding } from "../../layout/schema.ts";
 import type { ValidationResult } from "../../validation/result.ts";
 import { ApiError } from "../api.ts";
 import { checkChange } from "../api-write.ts";
+import { LAYOUT_GONE } from "../release/flash-words.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 export type CheckState =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "done"; result: ValidationResult }
-  | { status: "error"; message: string; stale: boolean };
+  | ({ status: "error"; stale: boolean } & PageFailure);
+
+/**
+ * A check that failed, as the box shows it (R9-02). It keeps the failure's code, so the box picks its buttons with `wayOutFor`: an
+ * answer that fails the same way every time never gets Check again alone. The route's own `not_found` is a layout deleted in another
+ * window, which the box says in its own words, because checking again can't bring it back (D-540).
+ */
+export function checkFailed(error: unknown): Extract<CheckState, { status: "error" }> {
+  const stale = error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale") === true;
+  const failure = pageFailure(error, "The check failed.");
+  const gone = failure.code === "not_found" && failure.generic !== true;
+  return { status: "error", ...failure, ...(gone ? { message: LAYOUT_GONE } : {}), stale };
+}
 
 const DEBOUNCE_MS = 250;
 
@@ -39,9 +53,7 @@ export function useOpsCheck({ token, layoutRef, revisionId, ops }: OpsCheckInput
       checkChange(token, layoutRef, { baseRevisionId: revisionId, ops: JSON.parse(key) as ChangeOp[] }, controller.signal)
         .then((result) => setState({ status: "done", result }))
         .catch((error: unknown) => {
-          if (controller.signal.aborted) return;
-          const stale = error instanceof ApiError && error.status === 409 && error.code?.startsWith("stale") === true;
-          setState({ status: "error", message: error instanceof Error ? error.message : "The check failed.", stale });
+          if (!controller.signal.aborted) setState(checkFailed(error));
         });
     }, DEBOUNCE_MS);
     return () => {

@@ -40,11 +40,14 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
   const auto = autoSyncLine(board);
   // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
   const target = selected && layoutId !== board.layoutId ? { id: layoutId, name: layoutName } : { id: board.layoutId, name: board.layoutName };
-  // System Settings that didn't open says so in the popover, which stays open for it (R9-01).
-  const [paneProblem, setPaneProblem] = useState<string | null>(null);
+  // System Settings that didn't open says so in the popover, which stays open for it (R9-01). The note belongs to the pane: once the pill
+  // no longer offers that pane (the person allowed it by hand and the sync went through, say), it goes (PR #312 review).
+  const [paneFailure, setPaneFailure] = useState<{ pane: SettingsPaneName; text: string } | null>(null);
+  const offersPane = (a: SyncAction | null | undefined) => a?.id === "open_settings" && a.pane === paneFailure?.pane;
+  const paneProblem = paneFailure !== null && (offersPane(line.action) || offersPane(line.second)) ? paneFailure.text : null;
   const openPane = (pane: SettingsPaneName, close: () => void) => {
-    setPaneProblem(null);
-    const failed = (reason: string) => setPaneProblem(settingsOpenFailure(pane, reason));
+    setPaneFailure(null);
+    const failed = (reason: string) => setPaneFailure({ pane, text: settingsOpenFailure(pane, reason) });
     sync.remapperSetup.openSettings(pane).then((r) => (r.ok ? close() : failed(r.reason)), (e: unknown) => failed(e instanceof Error ? e.message : "System Settings didn't open."));
   };
   const press = (action: SyncAction, close: () => void) => {

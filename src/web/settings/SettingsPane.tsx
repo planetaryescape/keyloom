@@ -170,7 +170,7 @@ export function SettingsPane(props: Props) {
       {ops === null ? null : (
         <footer className="settings-foot">
           <p className="settings-summary" aria-live="polite">{problem ?? summary}</p>
-          <Validation layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} />
+          <Validation token={token} layout={layout} idleNote="" state={check.state} onRecheck={check.recheck} />
           <div className="settings-actions">
             <button type="button" className="sheet-action" disabled={applying} onClick={reset}>Undo these</button>
             <button type="button" className="bar-apply" disabled={!canApply} onClick={() => void apply()}>

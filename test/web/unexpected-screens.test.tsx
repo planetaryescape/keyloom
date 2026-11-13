@@ -129,11 +129,15 @@ test("a failed forget, outcome answer or model choice adds Restart keyloom besid
 });
 
 test("a proposal card keeps Read proposals again only where a read can pass, and adds Restart keyloom for the unexpected", () => {
-  expect(proposalFailureWay({ message: CLOSED_WORDS, closed: true })).toEqual({ readAgain: true, restart: false });
-  expect(proposalFailureWay({ message: "x", closed: true, code: "internal" })).toEqual({ readAgain: true, restart: true });
-  expect(proposalFailureWay({ message: "x", closed: true, code: "unreadable" })).toEqual({ readAgain: false, restart: true });
-  expect(proposalFailureWay({ message: "x", closed: true, code: "not_found", generic: true })).toEqual({ readAgain: false, restart: true });
-  expect(proposalFailureWay({ message: "x", closed: false, code: "internal" })).toEqual({ readAgain: false, restart: true });
+  expect(proposalFailureWay({ message: CLOSED_WORDS, closed: true })).toEqual({ apply: true, readAgain: true, restart: false });
+  expect(proposalFailureWay({ message: "x", closed: true, code: "internal" })).toEqual({ apply: true, readAgain: true, restart: true });
+  expect(proposalFailureWay({ message: "x", closed: true, code: "unreadable" })).toEqual({ apply: false, readAgain: false, restart: true });
+  expect(proposalFailureWay({ message: "x", closed: true, code: "not_found", generic: true })).toEqual({ apply: false, readAgain: false, restart: true });
+  expect(proposalFailureWay({ message: "x", closed: false, code: "internal" })).toEqual({ apply: true, readAgain: false, restart: true });
+  // R9-04: after an answer that fails the same way every time, Apply is off, with the sentence and Restart keyloom beside it.
+  expect(proposalFailureWay({ message: UNREADABLE_WORDS, closed: false, code: "unreadable" }).apply).toBe(false);
+  expect(proposalFailureWay({ message: NOT_FOUND_WORDS, closed: false, code: "not_found", generic: true }).apply).toBe(false);
+  expect(proposalFailureWay({ message: "Can't reach keyloom.", closed: false, code: "unreachable" }).apply).toBe(true);
   // keyloom's catch-all on Apply is a version mismatch, not a proposal that was closed elsewhere.
   expect(proposalApplyFailure({ code: "not_found", generic: true, message: NOT_FOUND_WORDS }).closed).toBe(false);
   expect(proposalApplyFailure({ code: "not_found", message: "no change set cs1" }).closed).toBe(true);

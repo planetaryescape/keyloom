@@ -23,9 +23,12 @@ export function proposalApplyFailure(error: { code?: string | undefined; generic
 
 /**
  * The card's buttons beside its failure (R8-03). Apply, or Read proposals again for a closed one, is the card's own Try again; it stays
- * unless the last answer fails the same way every time. `restart`: Restart keyloom, for a failure no screen planned for.
+ * unless the last answer fails the same way every time. `apply`: false turns Apply off, with the failure's sentence beside it as the
+ * reason, because pressing it again repeats a request that can't pass (R9-04). `restart`: Restart keyloom, for a failure no screen planned
+ * for.
  */
-export function proposalFailureWay(failure: PageFailure & { closed: boolean }): { readAgain: boolean; restart: boolean } {
+export function proposalFailureWay(failure: PageFailure & { closed: boolean }): { apply: boolean; readAgain: boolean; restart: boolean } {
   const way = wayOutFor(failure, true);
-  return { readAgain: failure.closed && (way === null || way.retry), restart: way !== null };
+  const repeatable = way === null || way.retry;
+  return { apply: repeatable, readAgain: failure.closed && repeatable, restart: way !== null };
 }
