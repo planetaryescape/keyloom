@@ -1,10 +1,12 @@
 import { RefreshCw } from "lucide-react";
 import { RestartKeyloom } from "./RestartKeyloom.tsx";
+import { ShowLog } from "./ShowLog.tsx";
 import { type PageFailure, unexpectedWayOut, wayOutFor } from "./unexpected.ts";
 
 /**
  * The buttons beside a failure no screen planned for (R7-01, R7-09): Try again when the caller passes `onRetry` (repeating is safe there)
- * and the failure can pass on a second try, then Restart keyloom. Renders nothing for any other code, so a screen's own mapping stays.
+ * and the failure can pass on a second try, then Restart keyloom, and for an exception the way to keyloom's log (R8-09). Renders nothing
+ * for any other code, so a screen's own mapping stays.
  *
  * Pass `failure` (from `pageFailure`) where the screen kept the whole failure: a route's own `not_found` then keeps the screen's buttons
  * (R8-03). `code` alone treats every `not_found` as unexpected.
@@ -22,6 +24,8 @@ export function UnexpectedWayOut({ token, code, failure, onRetry, className = "b
         <button type="button" className={className} onClick={onRetry}><RefreshCw size={14} aria-hidden="true" />Try again</button>
       ) : null}
       <RestartKeyloom token={token} primary={primary ?? !way.retry} />
+      {/* "The details are in keyloom's log." gets a way to read it (R8-09). Only an exception's words name the log. */}
+      {code === "internal" || failure?.code === "internal" ? <ShowLog token={token} /> : null}
     </>
   );
 }

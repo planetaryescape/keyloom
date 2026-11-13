@@ -4,6 +4,10 @@ use crate::{AppState, Server};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
+// Names the shell's log file to the server it starts (src/app/server-log.ts `LOG_FILE_ENV`). An optional input, so no protocol bump: an
+// older server ignores it, and a newer one without it says its log is the terminal.
+const LOG_FILE_ENV: &str = "KEYLOOM_LOG_FILE";
+
 // What this shell depends on from `keyloom serve`, as one integer: the flags below, the stderr marker lines, the `menuBar` object in
 // /api/events frames, POST /api/sync and the x-keyloom-token header. It is passed as `--client-protocol`, and the CLI refuses to start,
 // or to attach to a server, that speaks another (D-454). It must equal DESKTOP_PROTOCOL in src/api/desktop-protocol.ts, which says when
@@ -133,6 +137,8 @@ async fn launch(app: &AppHandle, port: u16, env: &crate::login_path::LoginEnviro
         // settings the shell exports (D-443). Values are never logged.
         .env("PATH", &env.path)
         .envs(env.variables.iter().map(|(name, value)| (name.as_str(), value.as_str())))
+        // The file this shell writes the server's output to, so the page's Show keyloom's log opens it (R8-09, src/app/server-log.ts).
+        .envs(crate::log::path(app).map(|file| (LOG_FILE_ENV, file)))
         .spawn()
         .map_err(|e| other(&e))?;
 
