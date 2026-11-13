@@ -88,7 +88,7 @@ Status update, 2026-11-11 (D-523): a compile error in the generated source, a ke
 
 Status update, 2026-11-13 (D-549): a Docker daemon that stops during the build fails with `docker_unavailable`, as ZMK's builds now do, so Build and flash shows its Docker callout; the sentence says "Start it and build again", not Docker Desktop. Checked with a fake docker that prints the client's daemon error.
 
-Status update, 2026-11-13 round 11 (D-563): on Linux, a build stopped by a stale mount or a stuck container names the engine and the line that restarts it, with Copy (`sudo systemctl restart docker`, or `systemctl --user restart docker-desktop`), because keyloom restarts no Linux engine but Colima. Applies to ZMK builds too.
+Status update, 2026-11-13 round 11 (D-563): on Linux, a build stopped by a stale mount or a stuck container names the engine, because keyloom restarts no Linux engine but Colima. It gives the line that restarts it, with Copy, only for the system Docker service readiness found (`sudo systemctl restart docker`) and Docker Desktop (`systemctl --user restart docker-desktop`); any other engine is restarted the way the person started it. Applies to ZMK builds too.
 
 ## Emulate runs the generated keymap on QMK's own core
 

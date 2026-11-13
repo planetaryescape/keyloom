@@ -23,7 +23,7 @@ function Switcher() {
   return (
     <ConfigMenu live={configs.live} archived={configs.archived} selectedId="lay_daily" selectedName="Daily" boardName="Moonlander" onSelect={() => {}}
       onNew={() => {}} onRename={() => {}} onArchive={() => {}} onRestore={() => {}} onDelete={() => {}} onImport={() => {}}
-      failure={configs.failure} onReadAgain={configs.reload} token="t" />
+      failure={configs.failure} onReadAgain={configs.reload} loaded={configs.loaded} token="t" />
   );
 }
 
@@ -57,6 +57,19 @@ describe("the config switcher after a failed list read", () => {
     expect(document.body.textContent).toContain(CONFIG_LIST_FAILED);
     expect(button("Read them again")).toBeUndefined();
     expect(button("Restart keyloom")?.className).toContain("button-primary");
+  });
+
+  // PR #318 review: before the first read answers the list is unknown too, and Archive was on for the config on the keyboard.
+  test("keeps Archive off with its reason while the first read is still loading", async () => {
+    await mount(
+      <ConfigMenu live={[]} archived={[]} selectedId="lay_daily" selectedName="Daily" boardName="Moonlander" onSelect={() => {}}
+        onNew={() => {}} onRename={() => {}} onArchive={() => {}} onRestore={() => {}} onDelete={() => {}} onImport={() => {}}
+        failure={null} loaded={false} token="t" />,
+    );
+    await press("Daily");
+    expect(archive()?.disabled).toBe(true);
+    expect(archive()?.textContent).toContain("keyloom is still reading your configs, to see which one is on your Moonlander.");
+    expect(document.body.textContent).not.toContain(CONFIG_LIST_FAILED);
   });
 
   test("the words add keyloom's sentence only for a failure no screen planned for", () => {

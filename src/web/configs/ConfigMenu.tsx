@@ -27,6 +27,8 @@ interface Props {
   /** The list couldn't be read (R11-07): the menu says so with a way to read it again, and Archive waits until it is read. */
   failure?: PageFailure | null;
   onReadAgain?: () => void;
+  /** Whether the first read of the list has answered; until then the list is unknown too, and Archive waits with its reason. */
+  loaded?: boolean;
   token?: string;
 }
 
@@ -38,14 +40,14 @@ export function configLine(config: ApiConfig, now: number): string {
 
 // The config switcher (D-315): the caption's layout menu, now this board's configs only (other boards are in the top bar's board
 // switch). The one on the keyboard is marked green; New, Rename, Archive and the archived ones follow, then Import.
-export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onDelete, onImport, failure = null, onReadAgain, token }: Props) {
+export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onDelete, onImport, failure = null, onReadAgain, loaded = true, token }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const now = Date.now();
   const selected = live.find((c) => c.id === selectedId);
   // The one on the keyboard first, then the rest newest edited first (the API's order).
   const ordered = [...live.filter((c) => c.onKeyboard), ...live.filter((c) => !c.onKeyboard)];
   const onKeyboard = selected?.onKeyboard === true;
-  const archiveWhy = onKeyboard ? `Put another on your ${boardName} first` : archiveWaits(failure, boardName);
+  const archiveWhy = onKeyboard ? `Put another on your ${boardName} first` : archiveWaits(failure, boardName, loaded);
   return (
     <Menu
       label="Choose a config"

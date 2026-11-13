@@ -41,6 +41,22 @@ export async function importZmkSource(path: string, board: BoardDefinition): Pro
   return importZmk(await readZmkSource(path), board);
 }
 
+/**
+ * Refuses a keymap whose layers don't each have the board's number of keys, naming the boards as the person knows them, never by id
+ * (R11-09). Only a keymap whose layers all agree has a count of its own, so only that refusal carries `found` for the caller to name a
+ * board that fits; layers that disagree fit no board, and saying so is the refusal (PR #318 review).
+ */
+function keyCountCheck(layers: ReadonlyArray<{ name: string; keys: number }>, board: BoardDefinition): void {
+  if (layers.every((l) => l.keys === board.keyCount)) return;
+  const counts = new Set(layers.map((l) => l.keys));
+  if (counts.size === 1) {
+    const found = layers[0]?.keys ?? 0;
+    throw new ZmkKeyCountError(found, `This keymap has ${found} keys, and the ${board.vendor} ${board.name} has ${board.keyCount}.`);
+  }
+  const each = layers.map((l) => `${l.name} has ${l.keys}`).join(", ");
+  throw new ZmkImportError(`This keymap's layers don't have the same number of keys (${each}), and the ${board.vendor} ${board.name} has ${board.keyCount} on every layer.`);
+}
+
 export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): Promise<ZmkImportResult> {
   if (board.firmware !== "zmk") throw new ZmkImportError(`board ${board.id} is ${board.firmware}, not zmk`);
   const warnings: string[] = [];
@@ -151,15 +167,12 @@ export async function importZmk(files: ZmkSourceFiles, board: BoardDefinition): 
   const native: NativeItem[] = [];
   const usedProfiles = new Set<string>();
   const keymapCalls: BehaviorCall[] = [];
+  const layerCalls = layerNodes.map((n) => cellsOf(n, "bindings").flatMap((c) => parseCalls(c).calls));
+  keyCountCheck(layerNodes.map((n, li) => ({ name: n.name, keys: (layerCalls[li] as BehaviorCall[]).length })), board);
   const layers = layerNodes.map((n, li) => {
     const layerId = layerIds[li] as string;
-    const calls = cellsOf(n, "bindings").flatMap((c) => parseCalls(c).calls);
+    const calls = layerCalls[li] as BehaviorCall[];
     keymapCalls.push(...calls);
-    if (calls.length !== board.keyCount) {
-      // Named as the person knows the boards, never by id (R11-09). The first layer stands for the keymap; a later one is named.
-      const which = li === 0 ? "This keymap has" : `Layer ${n.name} of this keymap has`;
-      throw new ZmkKeyCountError(calls.length, `${which} ${calls.length} keys, and the ${board.vendor} ${board.name} has ${board.keyCount}.`);
-    }
     for (const p of n.props) {
       if (!["bindings", "sensor-bindings", "display-name", "label"].includes(p.name)) warnings.push(`layer ${n.name}: ${p.name} isn't imported and will be dropped`);
     }

@@ -2,7 +2,7 @@
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
   type BuildCachePrune, COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus,
-  type EngineFinding, answeringEngine, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
+  type EngineFinding, answeringEngine, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, systemDockerService,
 } from "../firmware/toolchain/docker.ts";
 import { PROFILE, adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
@@ -12,7 +12,8 @@ export { type DockerStatus, dockerStatus, reasonWithHint };
 
 /** What the UI and `doctor` show: whether a build can run now, and what would fix it if not. */
 export type DockerReadiness =
-  | { ok: true; version: string; engine: string; autoStart: boolean }
+  /** `systemService`: the daemon is Linux's system Docker service, whose restart needs root (R11-10); absent otherwise. */
+  | { ok: true; version: string; engine: string; autoStart: boolean; systemService?: true }
   | {
       ok: false; problem: DockerProblem; reason: string;
       /** The engine keyloom would start, or null when it found none it knows how to start. */
@@ -88,6 +89,8 @@ export type ToolchainOverrides = {
   detect?: () => Promise<EngineFinding>;
   /** Names the engine behind a daemon that answers, or null; the real one asks `docker info`, then the context. */
   identify?: () => Promise<string | null>;
+  /** Whether a daemon that answers on Linux is the system Docker service; the real one reads the context and systemd (R11-10). */
+  systemService?: () => Promise<boolean>;
   startEngine?: (opts: Parameters<typeof startDockerEngine>[0]) => Promise<DockerStartResult>;
   /** Quits and reopens a Mac engine app; the real one runs osascript and `open -a`. */
   restartApp?: typeof restartDockerApp;
@@ -132,7 +135,12 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   if (now.ok) {
     const identify = over.identify ?? (over.status === undefined ? () => answeringEngine() : undefined);
     const named = identify === undefined ? null : await identify().catch(() => null);
-    return { ok: true, version: now.version, engine: named ?? "Docker", autoStart };
+    // Only the system service's restart needs root, so a Linux page shows that command only on this evidence, never for "Docker" alone.
+    const service = named === null && (over.platform ?? process.platform) === "linux"
+      ? over.systemService ?? (over.status === undefined ? () => systemDockerService() : undefined)
+      : undefined;
+    const systemService = service === undefined ? false : await service().catch(() => false);
+    return { ok: true, version: now.version, engine: named ?? "Docker", autoStart, ...(systemService ? { systemService: true } : {}) };
   }
 
   // An install or a missing link needs no engine hunt: there is nothing here to start. A missing link names its app, which a click opens.

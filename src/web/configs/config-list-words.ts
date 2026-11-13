@@ -10,8 +10,10 @@ export function configListWords(failure: PageFailure): string {
 
 /**
  * Why Archive is off while the list is unknown, or null. The list says which config is on the keyboard, and the server refuses to archive
- * that one (R3-06), so an unread list can't tell whether Archive would work.
+ * that one (R3-06), so an unread list can't tell whether Archive would work: before the first read answers (`loaded` false, PR #318
+ * review), or after a read failed.
  */
-export function archiveWaits(failure: PageFailure | null, boardName: string): string | null {
-  return failure === null ? null : `keyloom can't tell whether this config is on your ${boardName} until it reads your configs again.`;
+export function archiveWaits(failure: PageFailure | null, boardName: string, loaded = true): string | null {
+  if (failure !== null) return `keyloom can't tell whether this config is on your ${boardName} until it reads your configs again.`;
+  return loaded ? null : `keyloom is still reading your configs, to see which one is on your ${boardName}.`;
 }

@@ -449,6 +449,27 @@ export async function answeringEngine(over: AnsweringEngineLookup = {}): Promise
   return context === null ? null : engineOfContext(context);
 }
 
+/** What `systemDockerService` reads; each is injected so a test never runs docker or systemctl. */
+export type SystemServiceLookup = {
+  context?: () => Promise<DockerContext | null>;
+  /** Whether systemd's system `docker` unit is active; the real one runs `systemctl is-active --quiet docker`, which needs no root. */
+  active?: () => Promise<boolean>;
+  has?: (command: string) => boolean;
+};
+
+/**
+ * Whether the daemon that answers is Linux's system Docker service (R11-10), from two pieces of evidence: the context talks to the system
+ * socket, /var/run/docker.sock, and systemd's system `docker` unit is active. Rootless Docker, Docker Desktop, Lima and a remote context
+ * use another socket; Podman's Docker socket can sit at the same path, but then no `docker` unit runs. Anything unread is false.
+ */
+export async function systemDockerService(over: SystemServiceLookup = {}): Promise<boolean> {
+  const has = over.has ?? hasCommand;
+  const context = await (over.context ?? (() => readContext(has)))().catch(() => null);
+  if (context?.host !== "unix:///var/run/docker.sock") return false;
+  const active = over.active ?? (async () => has("systemctl") && (await capture(["systemctl", "is-active", "--quiet", "docker"], { timeoutMs: 5_000 })).exitCode === 0);
+  return active().catch(() => false);
+}
+
 export type StartDockerOptions = {
   /** The one deadline for the whole start: the launch command and the wait after it share it. A cold Docker Desktop takes 15-40 s. */
   timeoutMs?: number;

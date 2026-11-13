@@ -162,13 +162,19 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
 }
 
 /**
- * A ZMK keymap with another board's number of keys (R11-09). When one ZMK board keyloom knows has that many, the refusal names it, so the
- * import card offers to import the file as that board's config; otherwise the sentence alone says what doesn't match.
+ * A ZMK keymap with another board's number of keys (R11-09). When exactly one other ZMK board keyloom knows has that many, the refusal
+ * names it, so the import card offers to import the file as that board's config. When several do, none is offered over the others: the
+ * sentence names each, and the person picks a card (PR #318 review). Otherwise the sentence alone says what doesn't match.
  */
-function keyCountRefusal(err: ZmkKeyCountError, board: Board): UsageError {
-  const fits = listBoardDefinitions().map((b) => b.definition).find((d) => d.id !== board.definition.id && d.firmware === "zmk" && d.keyCount === err.found);
-  if (fits === undefined) return new UsageError(err.message);
-  return new BoardRefusal("keymap_for_other_board", fits.id, `${err.message} It fits the ${fits.vendor} ${fits.name}: pass --board ${fits.id}.`);
+export function keyCountRefusal(err: ZmkKeyCountError, board: Board, boards: readonly Board[] = listBoardDefinitions()): UsageError {
+  const fits = boards.map((b) => b.definition).filter((d) => d.id !== board.definition.id && d.firmware === "zmk" && d.keyCount === err.found);
+  const [only] = fits;
+  if (only === undefined) return new UsageError(err.message);
+  if (fits.length > 1) {
+    const names = fits.map((d) => `the ${d.vendor} ${d.name}`);
+    return new UsageError(`${err.message} It fits ${names.slice(0, -1).join(", ")} or ${names.at(-1)}.`);
+  }
+  return new BoardRefusal("keymap_for_other_board", only.id, `${err.message} It fits the ${only.vendor} ${only.name}: pass --board ${only.id}.`);
 }
 
 export function listLayouts(app: App): LayoutRow[] {

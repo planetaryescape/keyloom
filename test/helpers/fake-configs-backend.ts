@@ -30,17 +30,20 @@ const fail = (how: ConfigsReadFailure, ref: string): never => {
  * dev editor keeps one config in memory.
  */
 export function fakeConfigsBackend(source: LayoutSource, options: FakeConfigsOptions): ConfigsBackend {
-  const list = async (): Promise<ApiConfig[]> => {
-    if (options.failList !== undefined) fail(options.failList, "configs");
-    return (await source.list()).map((layout, index) => ({
+  const rows = async (): Promise<ApiConfig[]> =>
+    (await source.list()).map((layout, index) => ({
       id: layout.id, name: layout.name, boardId: layout.boardId, boardName: options.boardName, headRevisionId: layout.revisionId,
       createdAt: layout.createdAt, updatedAt: layout.updatedAt, onKeyboard: index === 0, archivedAt: null, copiedFrom: null,
     }));
+  const list = async (): Promise<ApiConfig[]> => {
+    if (options.failList !== undefined) fail(options.failList, "configs");
+    return rows();
   };
+  // The versions and proposals reads look the config up without the list switch, so configs= fails only the list (PR #318 review).
   const known = async (ref: string): Promise<ApiConfig> => {
     const found = (await source.list()).find((layout) => layout.id === ref || layout.name === ref);
     if (found === undefined) throw new ConfigsError(404, "not_found", `no config "${ref}"`);
-    const config = (await list()).find((candidate) => candidate.id === found.id);
+    const config = (await rows()).find((candidate) => candidate.id === found.id);
     if (config === undefined) throw new ConfigsError(404, "not_found", `no config "${ref}"`);
     return config;
   };

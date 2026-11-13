@@ -32,6 +32,21 @@ describe("readiness", () => {
     expect(await dockerReadiness({ status: up, identify: async () => { throw new Error("docker info failed"); }, env: {} })).toMatchObject({ ok: true, engine: "Docker" });
   });
 
+  // R11-10 (PR #318 review): only the system Docker service gets `sudo systemctl restart docker`, so readiness says when it found that one.
+  test("a Linux daemon that is up says it is the system Docker service only on that evidence", async () => {
+    const up = async () => ({ ok: true as const, version: "27.4.0" });
+    const linux = { status: up, identify: async () => null, env: {}, platform: "linux" as const };
+    expect(await dockerReadiness({ ...linux, systemService: async () => true })).toEqual({ ok: true, version: "27.4.0", engine: "Docker", autoStart: true, systemService: true });
+    expect(await dockerReadiness({ ...linux, systemService: async () => false })).not.toHaveProperty("systemService");
+    expect(await dockerReadiness({ ...linux, systemService: async () => { throw new Error("systemctl failed"); } })).not.toHaveProperty("systemService");
+    // A named engine, or a Mac, is never the system service, and isn't asked.
+    let asked = false;
+    const ask = async () => ((asked = true), true);
+    expect(await dockerReadiness({ ...linux, identify: async () => "Podman Desktop", systemService: ask })).not.toHaveProperty("systemService");
+    expect(await dockerReadiness({ ...linux, platform: "darwin", systemService: ask })).not.toHaveProperty("systemService");
+    expect(asked).toBe(false);
+  });
+
   // PR #315 review: an installed app proves nothing about who answers. Naming Docker Desktop for OrbStack's daemon would open and start
   // an app that doesn't run it.
   test("a daemon that is up is never named after an engine app that only happens to be installed", async () => {

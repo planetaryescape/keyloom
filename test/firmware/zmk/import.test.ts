@@ -184,6 +184,18 @@ describe("what it refuses", () => {
     expect(refused).toMatchObject({ found: 2, message: "This keymap has 2 keys, and the MoErgo Glove80 has 80." });
   });
 
+  // PR #318 review: a keymap whose layers disagree has no count of its own, so it names no board that "fits" it.
+  test("layers that disagree on their number of keys are refused as that, with no count for a board to fit", async () => {
+    const eighty = Array(80).fill("&none").join(" ");
+    const refused = await importZmk({ name: "x", keymap: small({ bindings: eighty, layers: "nav { bindings = <&kp A &kp B>; };" }) }, board).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(ZmkImportError);
+    expect(refused).not.toBeInstanceOf(ZmkKeyCountError);
+    expect((refused as Error).message).toBe("This keymap's layers don't have the same number of keys (base has 80, nav has 2), and the MoErgo Glove80 has 80 on every layer.");
+    // Layers that agree with each other, but not the board, keep the keymap's count.
+    const two = await importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B", layers: "nav { bindings = <&kp C &kp D>; };" }) }, board).then(() => null, (err: unknown) => err);
+    expect(two).toMatchObject({ found: 2, message: "This keymap has 2 keys, and the MoErgo Glove80 has 80." });
+  });
+
   test("no keymap node, a syntax error and a non-devicetree file are errors a person can act on", async () => {
     await expect(importZmk({ name: "x", keymap: "/ { };" }, board)).rejects.toThrow(/no keymap node/);
     await expect(importZmk({ name: "x", keymap: small({ extra: "oops {" }) }, board)).rejects.toThrow(/isn't a devicetree file keyloom can read \(line \d+/);

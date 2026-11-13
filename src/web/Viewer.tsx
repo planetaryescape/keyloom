@@ -2117,6 +2117,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 onImport={chrome.onImport}
                 failure={configs.failure}
                 onReadAgain={configs.reload}
+                loaded={configs.loaded}
                 token={token}
               />
             }

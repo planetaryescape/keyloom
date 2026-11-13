@@ -139,7 +139,8 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
   // On Linux, an engine keyloom can't restart gets the line that does (R11-10). The page runs on the computer keyloom serves.
-  const host = { linux: typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent), engine: docker.readiness?.ok === true ? docker.readiness.engine : null };
+  const ready = docker.readiness?.ok === true ? docker.readiness : null;
+  const host = { linux: typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent), engine: ready?.engine ?? null, systemService: ready?.systemService === true };
   const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision, !release.engineRestart.again, host) : null;
   // A failed read of the latest version keeps "Show the latest version" with its reason.
   const showLatest = (failed: string) =>
