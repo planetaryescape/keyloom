@@ -1,6 +1,6 @@
 # Desktop packaging accepted a sidecar without checking its checksum
 
-Status: fixed in candidate commit `fc3766a728053cedc1928d7d2ffe2398952cd416`, pending merge and release. Observed on main `054d416922af8c65f70a6e993a0a1ae6da45667d`, 2026-11-13. Security finding SEC-C3.
+Status: fixed by merge commit `3499376af34d1c9348f9f6477df5d6a48a59efe6`, pending release. Observed on main `054d416922af8c65f70a6e993a0a1ae6da45667d`, 2026-11-13. Security finding SEC-C3.
 
 `desktop/tauri/scripts/fetch-sidecar.sh` downloaded or copied a CLI executable directly into the desktop bundle inputs. Neither branch verified `SHA256SUMS`. The release workflow passed a downloaded local file through the same unchecked path.
 
