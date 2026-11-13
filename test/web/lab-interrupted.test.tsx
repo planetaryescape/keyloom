@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LabStage } from "../../src/web/lab/LabScreens.tsx";
 import type { Lab } from "../../src/web/lab/useLab.ts";
-import { labApplyFailure, labFixClosed, labFixes, labProblemText } from "../../src/web/lab/lab-words.ts";
+import { labApplyFailure, labCancelCode, labFixClosed, labFixes, labProblemCode, labProblemText } from "../../src/web/lab/lab-words.ts";
+import { ApiError, UNREACHABLE } from "../../src/web/api.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS } from "../../src/web/shell/unexpected.ts";
 
 const fixes = { onSync: () => {}, onOpenRelease: () => {}, onOpenInputMonitoring: () => {} };
 const baseLab = (over: Partial<Lab>): Lab => ({
@@ -163,4 +165,34 @@ test("a session another tab deleted reads the sessions again, and the load failu
   const html = renderToStaticMarkup(<LabStage lab={baseLab({ problem: "keyloom couldn't load the typing lab. keyloom hit a problem it didn't expect.", problemCode: "not_found", loadFailed: true })} boardName="Moonlander" phone={false} onClose={() => {}} onType={() => {}} fixes={fixes} />);
   expect(html).toContain("keyloom couldn&#x27;t load the typing lab.");
   expect(html).not.toContain("find that session");
+});
+
+// R10-07: keyloom's catch-all 404 names no session, so it never says one was deleted in another tab, and a cancel that would fail the same
+// way again offers Restart keyloom, not Stop again.
+test("keyloom's catch-all 404 gets Restart keyloom, never 'deleted in another tab'", () => {
+  const code = labProblemCode(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true }));
+  expect(labFixes(code, false).map((f) => f.id)).toEqual(["restart"]);
+  expect(labProblemText(code, NOT_FOUND_WORDS)).toBe(NOT_FOUND_WORDS);
+  expect(labProblemText(code, NOT_FOUND_WORDS)).not.toContain("another tab");
+  // A session deleted elsewhere keeps its own words and Read the sessions again.
+  const own = labProblemCode(new ApiError(404, "no session", { code: "not_found" }));
+  expect(labProblemText(own, "no session")).toContain("deleted in another tab");
+  expect(labFixes(own, false).map((f) => f.id)).toEqual(["reload"]);
+});
+
+test("a cancel that fails the same way again gets Restart keyloom; one that can pass keeps Stop and discard", () => {
+  const stuck = labCancelCode(new ApiError(400, UNREADABLE_WORDS, { code: "unreadable" }));
+  expect(stuck).toBe("cancel_stuck");
+  expect(labFixes(stuck, false).map((f) => f.id)).toEqual(["restart"]);
+  expect(labProblemText(stuck, UNREADABLE_WORDS)).toContain("couldn't stop listening");
+  expect(labProblemText(stuck, UNREADABLE_WORDS)).not.toContain("Stopping it discards");
+  for (const error of [new ApiError(0, UNREACHABLE, { code: "unreachable" }), new ApiError(500, INTERNAL_WORDS, { code: "internal" })]) {
+    expect(labFixes(labCancelCode(error), false).map((f) => f.id)).toEqual(["stop_recording"]);
+  }
+});
+
+// #313 review: a catch-all 404 on Start listening, while a list read had failed earlier, still offers Restart keyloom straight away.
+test("keyloom's catch-all 404 gets Restart keyloom even after a list failed to load", () => {
+  const code = labProblemCode(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true }));
+  expect(labFixes(code, true).map((f) => f.id)).toEqual(["restart"]);
 });

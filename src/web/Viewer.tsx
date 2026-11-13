@@ -100,6 +100,8 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { boardLight, openKeyboardStatus, ReplaceForeignHost, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
 import { AfterApplyContext, type AfterApplyKeyboard, afterApplyRun } from "./release/AfterApply.tsx";
+import { OtherLayoutsContext } from "./editor/LayoutGone.tsx";
+import { rereadToast } from "./editor/reread-toast.ts";
 import { afterApply } from "./release/flash-words.ts";
 import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
@@ -1027,12 +1029,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // fails again says so the same way, with the same button (R5-08, R5-09).
   function showAppliedNotShown(error: unknown) {
     setNotShownOn(revision.id);
-    toasts.show({
-      kind: "error",
-      message: APPLIED_NOT_SHOWN.words,
-      ...(error instanceof Error && error.message.trim() !== "" ? { detail: error.message } : {}),
-      action: { label: "Show the new layout", run: () => void onChanged().catch(showAppliedNotShown) },
-    });
+    // An answer that fails the same way again gets Restart keyloom, not a button that reads again for ever (R10-07).
+    toasts.show(rereadToast({ message: APPLIED_NOT_SHOWN.words, error, label: "Show the new layout", again: () => void onChanged().catch(showAppliedNotShown), open: setUnexpected, showOthers: chrome.onHome }));
   }
 
   function toggleLibrary() {
@@ -1501,12 +1499,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   function showLatest(words: { words: string; shown: string }) {
     const notShown = (error: unknown) =>
-      toasts.show({
-        kind: "error",
-        message: words.words,
-        detail: [LATEST_NOT_SHOWN, error instanceof Error ? error.message.trim() : ""].filter(Boolean).join(" "),
-        action: { label: "Show the latest version", run: () => showLatest(words) },
-      });
+      toasts.show(rereadToast({ message: words.words, lead: LATEST_NOT_SHOWN, error, label: "Show the latest version", again: () => showLatest(words), open: setUnexpected, showOthers: chrome.onHome }));
     void readAfterApply(onChanged, notShown).then((shown) => {
       if (shown) toasts.show({ kind: "error", message: words.words, detail: words.shown });
     });
@@ -1996,6 +1989,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   return (
     <AfterApplyContext.Provider value={afterApplyKeyboard}>
+    <OtherLayoutsContext.Provider value={chrome.onHome ?? null}>
     <div className="workspace">
       <TopBar
         onHome={chrome.onHome}
@@ -2622,6 +2616,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       )}
     </div>
+    </OtherLayoutsContext.Provider>
     </AfterApplyContext.Provider>
   );
 }

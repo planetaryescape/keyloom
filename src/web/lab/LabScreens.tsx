@@ -1,10 +1,10 @@
-import { ArrowLeft, LoaderCircle, Play, Trash2, X } from "lucide-react";
+import { ArrowLeft, LoaderCircle, Play, RotateCw, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { FingerReadout, LabReadout } from "../../api/lab.ts";
 import type { ProposalCard } from "../../api/http.ts";
 import { formatWhen } from "../history/words.ts";
 import type { Lab } from "./useLab.ts";
-import { LAB_NEEDS_DOCKER, labApplyFailure, labFixClosed, labFixes, labNeedsDocker, labProblemText } from "./lab-words.ts";
+import { LAB_NEEDS_DOCKER, labApplyFailure, labFixClosed, labFixes, labNeedsDocker, labProblemText, noProposalWords, notProposed, READ_WITH_FIXES } from "./lab-words.ts";
 import { NeedsDocker } from "../review/WorkloadTests.tsx";
 import { ApiError } from "../api.ts";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
@@ -237,12 +237,16 @@ export function LabPanel({ lab, heat, onHeat, onTry, onApply, onClose }: {
               <div key={s.title} className="lab-fix">
                 <p><strong>{s.title}</strong></p>
                 <p className="lab-note">{s.removed} of {s.before} misfires gone, {s.introduced === 0 ? "none new" : `${s.introduced} new`}</p>
-                {/* A fix the layout's checks refused can't be applied, so it says so instead of offering a dead button; the reason is in the notes. */}
+                {/* A fix with no proposal can't be applied, so it says why instead of offering a dead button: refused, or never proposed. */}
                 {s.proposal === null
-                  ? <p className="lab-note">It can't go on your layout as it is now; the note below says why.</p>
+                  ? <p className="lab-note">{noProposalWords(s.problem)}</p>
                   : <button type="button" className="bar-apply" onClick={() => { lab.tryFix(i); onTry(s.proposal); }}>Try the fix</button>}
               </div>
             ))}
+            {/* A read-out made without proposals (`lab analyse --no-propose`) reads the recording again with them; the web route proposes. */}
+            {readout.suggestions.some(notProposed) ? (
+              <button type="button" className="sheet-action" onClick={() => void lab.showSession(session.id, true)}><RotateCw size={13} aria-hidden="true" />{READ_WITH_FIXES}</button>
+            ) : null}
           </div>
         )}
         {readout.notes.length === 0 ? null : <p className="lab-note">{readout.notes.join(" ")}</p>}
@@ -318,7 +322,7 @@ function FindingMore({ positions, suggestions, onTry }: { positions: number[]; s
         <div key={s.title} className="lab-fix">
           <p><strong>{s.title}</strong></p>
           <p className="lab-note">{s.removed} of {s.before} misfires gone, {s.introduced === 0 ? "none new" : `${s.introduced} new`}</p>
-          {s.proposal === null ? null : <button type="button" className="bar-apply" onClick={() => onTry(i)}>Try the fix</button>}
+          {s.proposal === null ? <p className="lab-note">{noProposalWords(s.problem)}</p> : <button type="button" className="bar-apply" onClick={() => onTry(i)}>Try the fix</button>}
         </div>
       ))}
     </div>
@@ -340,7 +344,8 @@ function TryFix({ token, suggestion: s, onBack, onAgain, onApply }: { token: str
   const e = s.example;
   const closed = s.proposal === null ? null : labFixClosed(s.proposal.status);
   // A fix already applied, replaced or turned down can't be applied again, so it says why and offers Type again (review of #283).
-  const shown = failed ?? (closed === null ? null : { text: closed, next: "again" as const });
+  // A fix with no proposal to apply says why and offers Type again in Apply's place (R10-12).
+  const shown = failed ?? (s.proposal === null ? { text: noProposalWords(s.problem), next: "again" as const } : closed === null ? null : { text: closed, next: "again" as const });
   return (
     <section className="lab-panel" aria-label={s.title}>
       <header className="lab-head">

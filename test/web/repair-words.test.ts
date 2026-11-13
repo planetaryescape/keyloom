@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import type { BoardReview } from "../../src/api/review.ts";
-import { SHOW_PROPOSAL_WAITS, findingRepairState, repairWords } from "../../src/web/chat/repair-words.ts";
+import { RECHECK_FAILED, SHOW_PROPOSAL_WAITS, findingRepairState, recheckFailure, recheckGone, repairWords } from "../../src/web/chat/repair-words.ts";
+import { ApiError, UNREACHABLE } from "../../src/web/api.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS, failsAgain } from "../../src/web/shell/unexpected.ts";
 
 test("a sent request names the history and offers Open history beside Dismiss request (R6-23)", () => {
   for (const kind of ["proposal", "build", "finding"] as const) {
@@ -73,4 +75,36 @@ test("Dismiss and show the proposal waits while keyloom replies, with the reason
   expect(replying.offer).toBe("show_proposal");
   expect(replying.offerWaits).toBe(SHOW_PROPOSAL_WAITS);
   expect(repairWords("proposal", { sent: false, current: false, replying: false }).offerWaits).toBeUndefined();
+});
+
+// R10-11: a recheck that failed says so in plain words, keeps its code, and never names the "recovery source".
+test("a failed recheck says nothing was sent in plain words and keeps its code", () => {
+  const lost = recheckFailure(new ApiError(0, UNREACHABLE));
+  expect(lost.message).toBe(RECHECK_FAILED);
+  expect(lost.message).not.toContain("recovery source");
+  expect(failsAgain(lost)).toBe(false);
+  const internal = recheckFailure(new ApiError(500, INTERNAL_WORDS, { code: "internal" }));
+  expect(internal.code).toBe("internal");
+  expect(internal.message).toBe(`${RECHECK_FAILED} ${INTERNAL_WORDS}`);
+  expect(failsAgain(internal)).toBe(false);
+  const unreadable = recheckFailure(new ApiError(400, UNREADABLE_WORDS, { code: "unreadable" }));
+  expect(failsAgain(unreadable)).toBe(true);
+});
+
+// #313 review: a recheck that finds the proposal's conversation or the layout gone is out of date for good, like a changed proposal: it says
+// what is gone, Send goes off, and Dismiss request is the only button. It never offers a Send request that fails the same way.
+test("a recheck whose conversation or layout is gone says what is gone and offers only Dismiss request", () => {
+  expect(recheckGone(new ApiError(404, 'no conversation "c1"', { code: "not_found" }), "conversation")).toBe("conversation");
+  expect(recheckGone(new ApiError(404, "keyloom has no layout here.", { code: "not_found" }), "layout")).toBe("layout");
+  // keyloom's catch-all 404 names nothing, so it stays a failed recheck with Restart keyloom; other failures may pass on a second try.
+  expect(recheckGone(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true }), "conversation")).toBeNull();
+  expect(recheckGone(new ApiError(0, UNREACHABLE, { code: "unreachable" }), "layout")).toBeNull();
+  expect(recheckGone(new ApiError(500, INTERNAL_WORDS, { code: "internal" }), "layout")).toBeNull();
+  const conversation = repairWords("proposal", { sent: false, current: false, gone: "conversation" });
+  expect(conversation).toEqual({ scope: expect.stringContaining("no longer has the conversation this proposal came from"), dismissLabel: "Dismiss request", offer: null });
+  expect(conversation.scope).toContain("can't be sent");
+  const layout = repairWords("proposal", { sent: false, current: false, gone: "layout" });
+  expect(layout).toEqual({ scope: expect.stringContaining("no longer has this layout"), dismissLabel: "Dismiss request", offer: null });
+  // A sent request still points at its history.
+  expect(repairWords("proposal", { sent: true, current: false, gone: "layout" }).offer).toBe("open_history");
 });
