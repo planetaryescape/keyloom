@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.80.1](https://github.com/planetaryescape/keyloom/compare/v0.80.0...v0.80.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* fit key-card labels and calm flash approval ([4fff2c5](https://github.com/planetaryescape/keyloom/commit/4fff2c57aee7e356495e88eed4d0ff2000303525))
+* keep unbounded key-card labels within their action regions ([29efd57](https://github.com/planetaryescape/keyloom/commit/29efd57fc539c2792dcd5c0862bcb7668530b23c))
+
 ## [0.80.0](https://github.com/planetaryescape/keyloom/compare/v0.79.2...v0.80.0) (2026-11-13)
 
 
