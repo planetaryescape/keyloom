@@ -23,7 +23,9 @@ export function defineTool<S extends z.ZodObject>(def: {
       // Streamed tool input is not validated by the API (03#model-and-sdk), so this is the check.
       const parsed = def.inputSchema.safeParse(raw);
       if (!parsed.success) {
-        const problems = parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ");
+        const issues = parsed.error.issues;
+        const problems = issues.slice(0, 8).map((i) => `${i.path.join(".") || "input"}: ${i.message}`.slice(0, 200)).join("; ")
+          + (issues.length > 8 ? `; ${issues.length - 8} more validation issues` : "");
         throw new PublicToolError("invalid_input", `invalid input for ${def.name}: ${problems}`);
       }
       return def.run(parsed.data);
