@@ -2,7 +2,7 @@
 
 Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, D-514's update failures, last lines and Sync now notice, D-515's links and downloads, D-516's too-new database, Stop download and busy Sync now, D-521's Restart keyloom and drag and drop, and D-541's log file named to the server in `KEYLOOM_LOG_FILE`, so the page's **Show keyloom's log** opens it); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
-Status update, 2026-11-13: D-569 is implemented in candidate commit `fc3766a728053cedc1928d7d2ffe2398952cd416`, pending merge and release. The fetch script verifies `SHA256SUMS` before replacing the executable. [Evidence and limits](../issues/unchecked-desktop-sidecar.md) remain separate from installed signature verification.
+Status update, 2026-11-13: D-569 merged in commit `3499376af34d1c9348f9f6477df5d6a48a59efe6`, pending release. The fetch script verifies `SHA256SUMS` before replacing the executable. [Evidence and limits](../issues/unchecked-desktop-sidecar.md) remain separate from installed signature verification.
 
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 

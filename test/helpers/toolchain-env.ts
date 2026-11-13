@@ -21,7 +21,8 @@ export async function toolchainEnv(opts: { zapp?: string } = {}) {
   const root = tempDir();
   const cache = join(root, "cache");
   const dataDir = join(root, "data");
-  const bin = fakeBinDir({ docker: FAKE_DOCKER, git: FAKE_GIT, zapp: opts.zapp ?? FAKE_ZAPP_OK, system_profiler: FAKE_SYSTEM_PROFILER });
+  // A stopped daemon can make doctor ask Colima about the VM. Keep that read off the host too.
+  const bin = fakeBinDir({ docker: FAKE_DOCKER, colima: 'echo "[]"', git: FAKE_GIT, zapp: opts.zapp ?? FAKE_ZAPP_OK, system_profiler: FAKE_SYSTEM_PROFILER });
   const revaFile = join(root, "reva.bin");
   const revbFile = join(root, "revb.bin");
   await Bun.write(revaFile, REVA);

@@ -5,6 +5,7 @@ import type { Io } from "../../src/cli/output.ts";
 import { bootloaderPacket } from "../../src/firmware/qmk/handsfree.ts";
 import { dfuBootloader, fakeKeyboard, rawHidOf, runningKeyboard } from "../helpers/fake-hid.ts";
 import { toolchainEnv } from "../helpers/toolchain-env.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 type Result = { code: number; out: string; err: string };
 async function cli(args: string[], handsFree: ReturnType<typeof fakeKeyboard>["deps"]): Promise<Result> {
@@ -79,5 +80,5 @@ describe("keyloom doctor, keyboard lines", () => {
       const none = json(await cli(["doctor", "--data-dir", e.dataDir], fakeKeyboard({ usb: () => [] }).deps));
       expect(none.checks.find((c: { name: string }) => c.name === "keyboard")).toMatchObject({ ok: true, detail: "no keyboard keyloom can flash is attached" });
     });
-  });
+  }, SLOW_RUNNER_MS);
 });

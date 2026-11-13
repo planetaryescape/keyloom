@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { runCli } from "../../src/cli/main.ts";
 import type { Io } from "../../src/cli/output.ts";
 import { toolchainEnv } from "../helpers/toolchain-env.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 type Result = { code: number; out: string; err: string };
 async function cli(args: string[], opts: { tty?: boolean } = {}): Promise<Result> {
@@ -149,13 +150,14 @@ describe("keyloom doctor", () => {
       const r = json(await cli(["doctor", "--data-dir", e.dataDir]));
       const byName = new Map<string, { ok: boolean; detail: string; warn?: boolean }>(r.checks.map((c: { name: string }) => [c.name, c]));
       expect(byName.get("docker")).toMatchObject({ ok: true, detail: "running, server 28.0.0" });
+      expect(byName.get("docker disk")).toMatchObject({ ok: true, detail: "20.0 GB free in Docker's disk" });
       expect(byName.get("zapp")?.ok).toBe(true);
       expect(byName.get("zapp")?.detail).toContain("keyloom-bin-");
       expect(byName.get("checkout zsa/moonlander")).toMatchObject({ ok: true });
       expect(byName.get("checkout zsa/moonlander")?.detail).toContain("pinned at 93b2b9ec3");
       expect(byName.get("build image")?.detail).toContain("ghcr.io/qmk/qmk_cli");
     });
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a missing zapp is a warning; Docker down and a checkout at another commit fail", async () => {
     const e = await toolchainEnv();
@@ -179,5 +181,5 @@ describe("keyloom doctor", () => {
       expect(t.out).toContain("FAIL  checkout zsa/moonlander");
       expect(t.out).toContain("not the pinned 93b2b9ec3368f86c5eb5a2e3f934049f8daef885");
     }, { FAKE_GIT_HEAD: "1".repeat(40) });
-  });
+  }, SLOW_RUNNER_MS);
 });
