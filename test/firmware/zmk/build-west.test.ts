@@ -90,6 +90,9 @@ describe("buildZmkWest (fake docker)", () => {
     expect(script).not.toContain("-DSHIELD=undefined");
     expect(script).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
     expect(script).not.toContain("west update");
+    expect(script).not.toContain("west zephyr-export");
+    expect(script).toContain("export ZEPHYR_BASE=/work/zephyr");
+    expect(script).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
     expect(script).not.toContain(".git");
   });
 

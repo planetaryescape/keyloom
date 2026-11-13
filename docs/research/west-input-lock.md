@@ -20,7 +20,7 @@ ZMK's blocklist and Zephyr's disabled `optional` and `babblesim` groups remain e
 The Keebart hardware and RGB modules do not import manifests in the build recipe.
 Their pinned `zephyr/module.yml` files declare module build settings, without further source dependencies.
 
-## Compatibility still needs real firmware builds
+## Real builds verify source and package behavior
 
 The saved successful Keebart baseline took 411933 ms at `8d09a1f58dab8ddfdb6e58457d0f988a440a62f9`.
 Its scratch Zephyr HEAD file records `dacab4875df72109b96cc8977547a0dc04875bcd`, and its VERSION file says 3.5.0.
@@ -28,7 +28,7 @@ Those old writable files are supporting observations. They do not establish trus
 The new cache fetches every project from its repository at the locked commit.
 
 Focused checks verify immutable revisions, module preservation, cache identity, discarded writable metadata, and read-only mount arguments.
-Real scratch builds for both supported recipes remain a release gate until their results are recorded here.
+At candidate `2e847a8f`, both west recipes fetched every pinned input, then failed at `west zephyr-export`. The pinned export script writes `current_path.txt` beside itself, which a read-only source mount correctly rejects. Builds now set the pinned `ZEPHYR_BASE` and pass its exact `Zephyr_DIR` to CMake. They do not run package registration. A real CMake package lookup against the read-only pin succeeded with those explicit paths. Both firmware builds still need to pass after that correction.
 No keyboard flash or hardware behavior is part of these checks.
 
 ## Update the lock with reviewed inputs

@@ -45,7 +45,7 @@ A new ZMK commit requires a reviewed lock. An unknown source commit fails before
 
 Builds and emulation mount each trusted project read-only. Git metadata stays read-only too, because west uses it to locate projects.
 The writable workspace contains generated config and output. Each run recreates it without opening its old Git or west metadata.
-No build-time `west update` remains. Repository URLs, every resolved commit, and the image digest form the source-cache identity.
+No build-time `west update` remains. CMake receives the pinned `ZEPHYR_BASE` and exact `Zephyr_DIR` directly. Package registration is omitted because this Zephyr version writes into its source directory during `west zephyr-export`. Repository URLs, every resolved commit, and the image digest form the source-cache identity.
 The emulator's result key also includes the full resolved manifest, including hardware and RGB modules.
 
 Reason: C2 reproduced the mutable `v3.5.0+zmk-fixes` import under an otherwise pinned ZMK commit.

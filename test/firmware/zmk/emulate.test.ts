@@ -168,5 +168,7 @@ describe("the container scripts", () => {
   test("the west script cannot resolve source or Git from the writable workspace", () => {
     expect(westEmulateScript()).not.toContain("west update");
     expect(westEmulateScript()).not.toContain("git -C");
+    expect(westEmulateScript()).not.toContain("west zephyr-export");
+    expect(westEmulateScript()).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
   });
 });
