@@ -272,22 +272,25 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
 
   const stop = useCallback(() => {
     viewLife.current?.abort();
-    const stopping = controller.current;
-    if (stopping === null) return;
     // A cancel that fails after the reply has ended (or a new one has started) has nothing left to stop, so it shows nothing (PR #310 review).
-    const failedStop = (error: unknown) => {
-      if (controller.current === stopping) setProblem(stopProblem(error));
+    const failedStop = (still: () => boolean) => (error: unknown) => {
+      if (still()) setProblem(stopProblem(error));
     };
     if (pendingAcceptance.current !== null) {
       const pending = pendingAcceptance.current;
       pending.stopped = true;
-      void cancelSavedRequest(token, pending.id).catch(failedStop);
+      void cancelSavedRequest(token, pending.id).catch(failedStop(() => pendingAcceptance.current === pending));
       return;
     }
+    // A run the server holds is cancelled there even when this page's view of it has dropped: only the local abort needs a controller
+    // (PR #310 CodeRabbit).
     if (savedRun.current !== null) {
-      void cancelSavedRun(token, savedRun.current).catch(failedStop);
+      const run = savedRun.current;
+      void cancelSavedRun(token, run).catch(failedStop(() => savedRun.current === run));
       return;
     }
+    const stopping = controller.current;
+    if (stopping === null) return;
     stopping.abort();
     dispatch({ type: "stopped" });
   }, [token]);

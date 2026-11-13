@@ -4,6 +4,8 @@ import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
+import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
+import { LAYOUT_GONE } from "../release/flash-words.ts";
 import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
 import { bindingSummary } from "./draft.ts";
 import { planRepeat, repeatMeaning, repeatSummary, type LastChange } from "./repeat-plan.ts";
@@ -39,7 +41,9 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
 
   const result = state.status === "done" ? state.result : null;
   const warnings = result?.warnings.length ?? 0;
-  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !failsAgain(applyError);
+  // The route's own not_found: the layout was deleted in another window, so no Apply can land (PR #310 CodeRabbit, as checkFailed does).
+  const layoutGone = applyError?.code === "not_found" && applyError.generic !== true;
+  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !failsAgain(applyError) && !layoutGone;
   const idleNote = plan.transform === null ? "The last change didn't change anything, so there is nothing to repeat." : "Every selected key already matches, or can't take this change.";
 
   async function apply() {
@@ -104,7 +108,12 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
 
       <footer className="editor-foot">
         <div className="editor-foot-note" aria-live="polite">
-          {applyError !== null ? <FailureNote token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
+          {layoutGone ? (
+            <div className="blocked" role="alert">
+              <p>{LAYOUT_GONE}</p>
+              <div className="unexpected-actions"><RestartKeyloom token={token} primary /></div>
+            </div>
+          ) : applyError !== null ? <FailureNote token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
         </div>
         <button type="button" className="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="button button-primary" disabled={!canApply} onClick={() => void apply()}>

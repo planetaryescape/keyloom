@@ -1673,7 +1673,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   // One step back or forward (the head's undo), or, with `target`, back to any earlier revision as one new revision (D-170).
   /** Resolves true when the step back went through, so Compare closes only then and a failure keeps it open beside the toast (R3-23). */
-  async function undo(target?: { id: string; summary: string }): Promise<boolean> {
+  async function undo(target?: { id: string; summary: string }, after?: () => void): Promise<boolean> {
     setUndoing(true);
     setUnsynced([]);
     const undone = target?.summary ?? revision.summary;
@@ -1681,6 +1681,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     try {
       await undoChange(token, layoutRef, { revisionId: revision.id, ...(target === undefined ? {} : { to: target.id }) });
       // The step is written; a failed read says so with Show the new layout, never "Couldn't undo" (R6-03).
+      // What the caller does once the step has landed, such as closing Compare; a retry from the toast runs it too (PR #310 CodeRabbit).
+      after?.();
       if (!(await readAfterApply(onChanged, showAppliedNotShown))) return true;
       toasts.show(
         target === undefined
@@ -1691,7 +1693,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     } catch (error) {
       const stale = error instanceof ApiError && error.status === 409 && error.code !== "validation_failed";
       if (stale) showLatest(STALE_UNDO);
-      else failedToast(target === undefined ? "Couldn't undo" : "Couldn't go back", error, () => void undo(target));
+      else failedToast(target === undefined ? "Couldn't undo" : "Couldn't go back", error, () => void undo(target, after));
       return false;
     } finally {
       setUndoing(false);
@@ -2361,7 +2363,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
-                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }).then((wentBack) => wentBack && setComparing(null))}
+                  onGoBack={() => void undo({ id: comparing.milestone.version.revisionId, summary: versionTitle(comparing.milestone.version) }, () => setComparing(null))}
                   onPutOn={() => setConfigDialog({ kind: "put-version", milestone: comparing.milestone })}
                   onNewConfig={() => setConfigDialog({ kind: "new", start: "version", version: comparing.milestone.version.id })}
                   blockedReason={undoBlock}

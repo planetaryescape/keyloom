@@ -56,6 +56,7 @@ Numbers are not contiguous. Ranges were set aside for parallel workers and some 
 - **Dev editor.** `KEYLOOM_FAKE_UNEXPECTED=check=internal|gone,upgrade=refused,undo=internal` fakes these failures for screenshots.
 
 - **Review fixes (PR #310 review).** Back to History reads History again, so a version that is gone leaves the list instead of failing again. A refused Update layout names only what its offer was for. A Stop whose cancel fails after the reply has ended shows nothing. The four copies of "fails the same way again" use `failsAgain` (D-551).
+- **CodeRabbit fixes (PR #310).** Stop cancels a run the server holds even when this page's view of it has dropped. Repeat's Apply after the layout was deleted in another window says so, turns off and offers Restart keyloom, as the check does. A Go back retried from its toast closes Compare once it lands.
 
 ## 2026-11-13 round 8: keyboards, onboarding and the phone
 
