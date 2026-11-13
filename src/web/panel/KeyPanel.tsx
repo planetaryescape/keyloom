@@ -643,6 +643,7 @@ export function KeyPanel(props: Props) {
         <div className="card-hero">
           <HeroCap
             legend={advancedText ?? shownLegend}
+            compactTap={shownLegend.tap}
             tone={shownTone}
             keycap={keycap}
             led={led}

@@ -108,7 +108,7 @@ Source update, 2026-11-13: the key card fits long labels and reserves space for 
   - Unicode glyphs come from one glyph set, with a setting for "macOS", "Windows" or "words", as keymap-editor's glyph setting does.
 - **Text on rotated thumb keys stays upright,** as it is now.
 - **Full names are one hover away,** in the cap's tooltip and in the panel.
-- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600).
+- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600). A name that still cannot fit appears in full below the key, whose face keeps its plain legend (D-602).
 
 ## Visual system
 

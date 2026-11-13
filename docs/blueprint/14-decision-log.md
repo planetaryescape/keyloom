@@ -3373,3 +3373,7 @@ This fixes the Advanced-view `RCTL(KC_B)` label that drew 135.61px of text insid
 ### D-601: Flash approval uses the neutral confirmation surface. Extends D-457. (2026-11-13)
 
 The flash confirmation uses `--surface-2` and `--line-2`, with its warning icon in secondary ink. The amber border and background are removed. BK called the earlier prompt jarring and inconsistent with the app. The consequence text, Cancel and separate Start flashing approval stay intact. Error and warning states elsewhere keep their existing meanings.
+
+### D-602: A key-card label that cannot fit keeps its full name below the key. Extends D-600. (2026-11-13)
+
+Firmware identifiers can exceed the key's height even after wrapping at the font floor. The card measures the rendered label as fonts load and the preview resizes. When the full label cannot fit, the cap shows its plain legend. If that also cannot fit, it shows "Tap". A separate caption below the cap and modifier controls prints the full name, without truncation. The slot's tooltip and accessible name also keep it. Ordinary labels stay on the cap.

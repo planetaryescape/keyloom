@@ -31,3 +31,11 @@ The broader sweep checked Home, the board, board/config pickers, chat, History, 
 The local suite before the final corner-label change recorded 4,932 passes, 244 skips and five failures outside the web renderer. An isolated run across the four named failing files recorded 85 passes, one skip and one failure. The remaining failure asserted a waiting instruction in `test/app/firmware-zmk.test.ts:171`. The flash itself succeeded. Four focused cases passed on the unchanged review base. These observations do not establish a cause for the timing differences.
 
 The UI, editor and layout check after rebasing onto `054d4169` passed 1,574 tests across 176 files. Final focused checks and CI cover the later corner-label change. Release and installation evidence belongs in the design-review handover, not in these source checks.
+
+## Unbounded identifiers need a caption
+
+The PR review reproduced a second overflow at `3ca47000`: a long Kanata tap-dance identifier exceeds the compact key's height. Font fitting by width cannot make an arbitrary identifier fit at the 11px floor.
+
+The card now measures the rendered label with `ResizeObserver`. A label that cannot fit uses the plain tap legend on the key and keeps its full name in a separate caption below the controls (D-602). The measurement remains live when fonts load, the preview resizes or the binding changes. The plain legend also gets a fit check.
+
+`test/web/hero-cap-fit.fixture.html` runs browser checks on the real component and bundled font. It covers both sizes, filled corners, long identifiers, unbroken text, full captions, accessible names and changes between long and short labels. The same fixture fails against the prior component on the long identifier.
