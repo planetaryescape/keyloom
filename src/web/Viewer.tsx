@@ -1030,7 +1030,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   function showAppliedNotShown(error: unknown) {
     setNotShownOn(revision.id);
     // An answer that fails the same way again gets Restart keyloom, not a button that reads again for ever (R10-07).
-    toasts.show(rereadToast({ message: APPLIED_NOT_SHOWN.words, error, label: "Show the new layout", again: () => void onChanged().catch(showAppliedNotShown), open: setUnexpected }));
+    toasts.show(rereadToast({ message: APPLIED_NOT_SHOWN.words, error, label: "Show the new layout", again: () => void onChanged().catch(showAppliedNotShown), open: setUnexpected, showOthers: chrome.onHome }));
   }
 
   function toggleLibrary() {
@@ -1499,7 +1499,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   function showLatest(words: { words: string; shown: string }) {
     const notShown = (error: unknown) =>
-      toasts.show(rereadToast({ message: words.words, lead: LATEST_NOT_SHOWN, error, label: "Show the latest version", again: () => showLatest(words), open: setUnexpected }));
+      toasts.show(rereadToast({ message: words.words, lead: LATEST_NOT_SHOWN, error, label: "Show the latest version", again: () => showLatest(words), open: setUnexpected, showOthers: chrome.onHome }));
     void readAfterApply(onChanged, notShown).then((shown) => {
       if (shown) toasts.show({ kind: "error", message: words.words, detail: words.shown });
     });
