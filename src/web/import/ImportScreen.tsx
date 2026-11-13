@@ -6,7 +6,7 @@ import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { RestoreKeyboard, keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
 import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
 import { CONTRIBUTION_GUIDE } from "../keyboards/search-words.ts";
-import { activitiesFor, importRefusal, importedNote, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type Refused } from "./import-words.ts";
+import { activitiesFor, importRefusal, importedNote, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type ImportedNote, type Refused } from "./import-words.ts";
 import { createConfig } from "../configs/api-configs.ts";
 import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
@@ -158,8 +158,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
   const [refused, setRefused] = useState<Refused | null>(null);
   // Saved, with something to tell first: the Karabiner edit the card promises, or the importer's warnings (R11-01). The card shows them
   // in place of the drop zone, and Open … goes on to the layout.
-  const [imported, setImported] = useState<ImportResponse | null>(null);
-  const note = imported === null ? null : importedNote(imported);
+  const [imported, setImported] = useState<{ result: ImportResponse; note: ImportedNote } | null>(null);
   // A card that goes away while it holds the screen behind it (Back to choosing a keyboard) lets go, or that screen would stay up for good.
   const holding = useRef(false);
   const hold = (on: boolean) => { holding.current = on; onHold?.(on); };
@@ -189,8 +188,9 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     let held = false;
     try {
       const result = await uploadLayout(token, as.id, file, activitiesFor(as, activities));
-      held = importedNote(result) !== null;
-      if (held) setImported(result);
+      const note = importedNote(result);
+      held = note !== null;
+      if (note !== null) setImported({ result, note });
       else onImported(result);
     } catch (error) {
       if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
@@ -280,7 +280,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
         <h3 id={titleId}>{board.name}</h3>
         <p className="muted">{board.vendor} · {board.keyCount} keys</p>
       </header>
-      {note !== null && imported !== null ? <ImportedNoteView note={note} onOpen={() => { hold(false); onImported(imported); }} /> : <>
+      {imported !== null ? <ImportedNoteView note={imported.note} onOpen={() => { hold(false); onImported(imported.result); }} /> : <>
       <p className="board-card-steps">{guide.steps}</p>
       {guide.link === undefined && !guide.readFromMac ? null : (
         <div className="board-card-actions">
@@ -351,7 +351,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
  * An import that has something to say before the layout opens (R11-01): the Karabiner entry with Copy, which keyloom can't add itself
  * because it never writes karabiner.json (D-233), and the importer's warnings. Open … is the way on.
  */
-function ImportedNoteView({ note, onOpen }: { note: NonNullable<ReturnType<typeof importedNote>>; onOpen: () => void }) {
+function ImportedNoteView({ note, onOpen }: { note: ImportedNote; onOpen: () => void }) {
   return (
     <div className="board-card-imported" role="status">
       <p className="board-card-imported-title"><CircleCheck size={14} aria-hidden="true" /> {note.title}</p>

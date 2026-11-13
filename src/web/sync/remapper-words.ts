@@ -15,7 +15,10 @@ export type SetupActionId =
   | { kind: "open_settings"; pane: SettingsPaneName };
 
 /** A step's button. `off`: shown but not pressable, because a step above has to be done first; the step's detail says which (R11-02). */
-export type SetupAction = { id: SetupActionId; label: string; off?: true };
+export type SetupAction = { id: SetupActionId; label: string; off?: boolean };
+
+/** The Karabiner edit in words, for the import card and the checklist's Karabiner step alike (R11-01). keyloom never writes karabiner.json (D-233). */
+export const KARABINER_ENTRY_WORDS = "add this entry to the \"devices\" list of your profile in karabiner.json. Your rules stay in the file, and removing the entry turns them back on.";
 
 export interface SetupStep {
   key: string;
@@ -194,7 +197,7 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
       detail: !driverReady ? "Install the driver above first."
         : `Restart its service to start kanata again. If kanata isn't on in both panes above yet, turn it on there first, so kanata starts with them. macOS asks for your password. Show kanata's log to see what kanata wrote.${lines !== null && lines.length === 0 ? " kanata's log has nothing in it yet." : ""}`,
       actions: mac ? [
-        { id: { kind: "restart_kanata" }, label: "Restart kanata's service", ...(driverReady ? {} : { off: true as const }) },
+        { id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: !driverReady },
         { id: { kind: "show_kanata_log" }, label: "Show kanata's log" },
       ] : [],
       log: lines !== null && lines.length > 0 ? lines : null, logLabel: "What kanata wrote last",
@@ -205,7 +208,7 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
       detail: !ready ? "Install kanata first." : replaced ? "Deal with the kanata change above first." : !driverReady ? "Install the driver above first."
         : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
       // Off, not hidden, while the driver is still to do: the person sees what comes next, and why it can't run yet (R11-02).
-      actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", ...(driverReady ? {} : { off: true as const }) }] : [],
+      actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: !driverReady }] : [],
     }));
   }
   if (permissions !== null && !notAnswering) steps.push(permissions);
@@ -247,9 +250,7 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
       // While kanata runs is when both remappers grab the keyboard, so the running view keeps this step (whileRunning).
       key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", whileRunning: true,
       // The edit the Karabiner import showed, here too (R11-01): keyloom never writes karabiner.json (D-233), so the person adds it.
-      detail: status.karabinerEntry === undefined
-        ? "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it."
-        : "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it. Or add this entry to the \"devices\" list of your profile in karabiner.json. Your rules stay in the file, and removing the entry turns them back on.",
+      detail: `In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.${status.karabinerEntry === undefined ? "" : ` Or ${KARABINER_ENTRY_WORDS}`}`,
       copy: status.karabinerEntry === undefined ? null : { text: status.karabinerEntry, noun: "entry" },
       actions: mac && installed ? [{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }] : [],
     }));

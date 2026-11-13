@@ -64,7 +64,7 @@ describe("setupSteps", () => {
     const steps = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn")]));
     const start = steps.find((s) => s.key === "start");
     expect(start?.title).toBe("kanata's service is installed, but kanata isn't answering");
-    expect(start?.actions).toEqual([{ id: { kind: "restart_kanata" }, label: "Restart kanata's service" }, { id: { kind: "show_kanata_log" }, label: "Show kanata's log" }]);
+    expect(start?.actions).toEqual([{ id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: false }, { id: { kind: "show_kanata_log" }, label: "Show kanata's log" }]);
     expect(start?.detail).toContain("password");
     expect(start?.detail).not.toContain("install its background service");
     // The grant comes after the first start, so in this state the permissions step comes first, and doesn't say "after the step above".
@@ -83,7 +83,7 @@ describe("setupSteps", () => {
     expect(restart?.actions).toEqual([{ id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: true }, { id: { kind: "show_kanata_log" }, label: "Show kanata's log" }]);
     // With the driver in, nothing is off.
     const ready = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail")]));
-    expect(ready.find((s) => s.key === "start")?.actions).toEqual([{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }]);
+    expect(ready.find((s) => s.key === "start")?.actions).toEqual([{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: false }]);
   });
 
   test("kanata's log, once read, shows in the not-answering step; an empty log says so (R11-02)", () => {

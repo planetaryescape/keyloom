@@ -4,9 +4,9 @@
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROOT_SCRIPT_ENV, type Runner, type SetupDeps, readKanataLog, restartKanataService } from "../../src/app/remapper-setup.ts";
+import { ROOT_SCRIPT_ENV, type Runner, type SetupDeps, logLines, readKanataLog, restartKanataService } from "../../src/app/remapper-setup.ts";
 import { rootScriptFailure } from "../../src/firmware/kanata/daemon-install.ts";
-import { LOG_TAIL_LINES, type ServiceScriptTools, kanataLogScript, kanataRestartScript, logLines } from "../../src/firmware/kanata/daemon-service.ts";
+import { LOG_TAIL_LINES, type ServiceScriptTools, kanataLogScript, kanataRestartScript } from "../../src/firmware/kanata/daemon-service.ts";
 import { DAEMON_LABEL, DAEMON_LOG_PATH, DAEMON_PLIST_PATH, ROOT_KANATA_PATH } from "../../src/firmware/kanata/plist.ts";
 import { MAC } from "../helpers/remapper-world.ts";
 import { tempDir } from "../helpers/tmp.ts";
@@ -58,9 +58,9 @@ describe("the scripts' text", () => {
     }
   });
 
-  test("logLines splits on any line end, drops the trailing blank and shows control characters as text", () => {
+  test("logLines splits on any line end, drops the trailing blank and writes every control character as its escape", () => {
     expect(logLines("one\rtwo\r\nthree\n\n")).toEqual(["one", "two", "three"]);
-    expect(logLines("tab\tkept \u001b[31mred")).toEqual(["tab\tkept \\u001b[31mred"]);
+    expect(logLines("tab\tand \u001b[31mred\u2028")).toEqual(["tab\\tand \\u001b[31mred\\u2028"]);
     expect(logLines(Array.from({ length: 60 }, (_, i) => `l${i}`).join("\n"))).toHaveLength(LOG_TAIL_LINES);
   });
 });

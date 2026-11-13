@@ -5,6 +5,7 @@ import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import type { ReviewActivity } from "../../api/review.ts";
 import { ApiError } from "../api.ts";
 import { keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
+import { KARABINER_ENTRY_WORDS } from "../sync/remapper-words.ts";
 
 export type ImportRefusal =
   /**
@@ -69,7 +70,7 @@ export function importedNote(result: ImportResponse): ImportedNote | null {
   return {
     title: `Imported ${result.name}, ${layers}`,
     karabiner: edit === undefined ? null : {
-      text: "Karabiner-Elements still takes the built-in keyboard, so it and kanata would both grab it. keyloom never edits karabiner.json, so add this entry to the \"devices\" list of your profile there. Your rules stay in the file, and removing the entry turns them back on.",
+      text: `Karabiner-Elements still takes the built-in keyboard, so it and kanata would both grab it. keyloom never edits karabiner.json, so ${KARABINER_ENTRY_WORDS}`,
       entry: edit.entry,
       unimported: edit.unimported === 0 ? null
         : `${edit.unimported === 1 ? "1 rule keyloom didn't import stops" : `${edit.unimported} rules keyloom didn't import stop`} working on the built-in keyboard once Karabiner leaves it alone. ${edit.unimported === 1 ? "It's" : "They're"} listed below.`,

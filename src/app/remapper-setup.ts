@@ -4,10 +4,11 @@
 import { existsSync, realpathSync } from "node:fs";
 import { findKanata } from "../firmware/kanata/binary.ts";
 import { daemonInstallScript, rootScriptFailure, shellQuote } from "../firmware/kanata/daemon-install.ts";
-import { kanataLogScript, kanataRestartScript, logLines } from "../firmware/kanata/daemon-service.ts";
+import { LOG_TAIL_LINES, kanataLogScript, kanataRestartScript } from "../firmware/kanata/daemon-service.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { KARABINER_IGNORE_ENTRY } from "../firmware/kanata/karabiner.ts";
-import { type RemapperOverrides, probeRemapper, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
+import { hello } from "../firmware/kanata/client.ts";
+import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
 
 export { daemonInstallScript, shellQuote } from "../firmware/kanata/daemon-install.ts";
 
@@ -322,13 +323,7 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   const setup = await setupRemapper(boardId, { ...deps.remapper, kanataBin: deps.kanata });
   if (setup.install === null) return { ok: false, code: setup.blocked?.code ?? "failed", reason: setup.blocked?.reason ?? "keyloom couldn't prepare kanata's setup." };
   const r = await deps.run(adminCommand(daemonInstallScript(setup.install), ADMIN_PROMPT));
-  if (r.code === 0) return { ok: true };
-  // osascript reports a cancelled password dialog as error -128.
-  if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata wasn't started." };
-  // The root script says why it stopped (daemon-install.ts), and the code is what the page acts on.
-  const root = rootScriptFailure(r.out);
-  if (root !== null) return { ok: false, code: root.code, reason: root.reason };
-  return { ok: false, code: "failed", reason: `macOS couldn't start kanata: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
+  return r.code === 0 ? { ok: true } : adminFailure(r, "You cancelled the password dialog, so kanata wasn't started.", "macOS couldn't start kanata");
 }
 
 export const RESTART_PROMPT = "keyloom wants to restart kanata's background service, so your MacBook keyboard can type your layout.";
@@ -348,8 +343,10 @@ export async function restartKanataService(boardId: string, deps: SetupDeps): Pr
   if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "keyloom restarts kanata on macOS only." };
   const r = await deps.run(adminCommand(kanataRestartScript(), RESTART_PROMPT));
   if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so kanata's service wasn't restarted.", "macOS couldn't restart kanata's service");
-  const answers = deps.answers ?? (async (id: string) => (await probeRemapper(id, deps.remapper ?? {})) === "running");
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  // One hello on kanata's port per ask: an answer is all the wait needs, not the layer names a full read fetches.
+  const endpoint = remapperEnv(boardId, deps.remapper ?? {}).deps.endpoint;
+  const answers = deps.answers ?? (async () => (await hello(endpoint), true));
+  const sleep = deps.sleep ?? Bun.sleep;
   for (let waited = 0; ; waited += RESTART_ASK_EVERY_MS) {
     if (await answers(boardId).catch(() => false)) return { ok: true };
     if (waited >= RESTART_WAIT_MS) break;
@@ -371,7 +368,22 @@ export async function readKanataLog(deps: SetupDeps): Promise<KanataLogResult> {
   return { ok: true, lines: logLines(r.out) };
 }
 
-/** A root script that didn't finish: the person closed the dialog (osascript's -128), the script said why, or osascript failed. */
+/**
+ * The log's lines as the page shows them: `do shell script` hands its output back with carriage returns for line ends, and every control
+ * character is written as its escape, so nothing in the log can redraw the page's text. The same characters as colima-files.ts's
+ * `printable`, which this file can't import: colima-files imports it.
+ */
+export function logLines(out: string): string[] {
+  const escape = (line: string) => line.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => (c === "\t" ? "\\t" : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`));
+  const lines = out.split(/\r\n|\r|\n/).map(escape);
+  while (lines.length > 0 && lines.at(-1)?.trim() === "") lines.pop();
+  return lines.slice(-LOG_TAIL_LINES);
+}
+
+/**
+ * A root script that didn't finish: the person closed the dialog (osascript's -128), the script said why (its code is what the page acts
+ * on), or osascript failed.
+ */
 function adminFailure(r: { code: number; out: string }, cancelled: string, failed: string): { ok: false; code: string; reason: string } {
   if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: cancelled };
   const root = rootScriptFailure(r.out);

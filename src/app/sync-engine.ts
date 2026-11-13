@@ -529,8 +529,8 @@ export class SyncEngine {
       boardId: b.boardId, boardName: b.boardName, remapper: isRemapper(b.boardId), layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
       reviewDeviceKey: JSON.stringify(b.reading.state === "keyloom" ? { ...b.reading, keys: [...b.reading.keys].sort(), missingHalves: [...(b.reading.missingHalves ?? [])].sort() } : b.reading),
       otherLayouts: b.layouts.filter((l) => l.id !== b.layout.id && l.archivedAt === null).length, state,
-      // Read only where the line can offer a way back, so the views built every tick don't ask the database for every board.
-      ...(isRemapper(b.boardId) && state.kind === "behind" && state.why === "failed" ? { firstVersion: !hasEarlierRevision(this.app.db, b.layout.id, b.layout.headRevisionId) } : {}),
+      // Read only where the line reads it (a failed apply with no count), so the views built every tick don't ask the database for every board.
+      ...(isRemapper(b.boardId) && state.kind === "behind" && state.why === "failed" && state.changes === null ? { firstVersion: !hasEarlierRevision(this.app.db, b.layout.id, b.layout.headRevisionId) } : {}),
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,
         dueAt: state.kind === "behind" && state.why === "waiting" ? b.layout.updatedAt + this.quietMs : null,

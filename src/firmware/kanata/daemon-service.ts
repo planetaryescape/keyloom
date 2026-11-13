@@ -2,7 +2,7 @@
 // Like the install script (daemon-install.ts), each is fixed text: nothing from keyloom, the page or the person's files is put into it,
 // every tool runs by its absolute path, and the app runs it through `adminCommand`'s empty environment (D-493, D-498, D-533).
 import { DAEMON_LABEL, DAEMON_LOG_PATH, DAEMON_PLIST_PATH, ROOT_KANATA_DIR, ROOT_KANATA_PATH } from "./plist.ts";
-import { shellQuote } from "./daemon-install.ts";
+import { failLine as fail, shellQuote } from "./daemon-install.ts";
 
 /**
  * Where the scripts look, and the account that must own it. Parameters only so a test, which runs as its own account, can point them at
@@ -17,9 +17,8 @@ const ROOT_TOOLS: ServiceScriptTools = {
 export const LOG_TAIL_LINES = 40;
 const LOG_TAIL_BYTES = 16_384;
 
-// Each line prints `keyloom setup stopped (<code>): <reason>` before it exits 1, as the install script does, so `rootScriptFailure` reads
-// the code. The reasons have no apostrophes, so they stay readable inside single quotes.
-const fail = (code: string, reason: string) => `fail ${code} ${shellQuote(reason)}`;
+// Each failure prints `keyloom setup stopped (<code>): <reason>` before it exits 1, as the install script does, so `rootScriptFailure`
+// reads the code.
 const FAIL_FN = `fail() { /usr/bin/printf "keyloom setup stopped (%s): %s\\n" "$1" "$2" >&2; exit 1; };`;
 
 /**
@@ -54,14 +53,4 @@ export function kanataLogScript(tools: ServiceScriptTools = ROOT_TOOLS): string 
     `[ -f ${log} ] && [ ! -L ${log} ] || ${fail("log_missing", "kanata has no log yet. Its background service writes one once it starts.")};`,
     `/usr/bin/tail -n ${LOG_TAIL_LINES} ${log} | /usr/bin/tail -c ${LOG_TAIL_BYTES}`,
   ].join(" ");
-}
-
-/**
- * The log's lines as the page shows them: `do shell script` hands its output back with carriage returns for line ends, and a control
- * character other than a tab is shown as `\uXXXX`, so nothing in the log can redraw the page's text.
- */
-export function logLines(out: string): string[] {
-  const lines = out.split(/\r\n|\r|\n/).map((line) => line.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`));
-  while (lines.length > 0 && lines.at(-1)?.trim() === "") lines.pop();
-  return lines.slice(-LOG_TAIL_LINES);
 }
