@@ -11,6 +11,18 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 one-shot modifiers in the editor
+
+### D-568: Edit one-shot modifiers through the existing native writer and validated change path.
+
+A modifier key offers **For the next key only**. The same control turns a supported imported one-shot back into a plain modifier. The picker offers one-shot modifiers and finds them through “sticky”, “once” and “one shot”. QMK also offers Hyper and Meh. ZMK and kanata accept one modifier. QMK accepts modifiers from one side at a time. A disabled control explains the firmware limit and how to resolve it.
+
+The editor uses `writeSteps` through `layout/one-shot-mods.ts`. It saves a native binding with `setBinding`, through the ordinary validator. The CLI already accepts that operation through `change check`, `change propose` and `change apply` (D-030). No new binding kind or firmware writer is needed.
+
+A one-shot has no hold or tap-dance slot in the model, so those choices stay unavailable. Existing tap dances cannot select a one-shot. Unchanged imported source stays verbatim. Redefined ZMK behaviours and kanata timeouts other than keyloom's 2000 ms remain native, because editing them as plain modifiers would lose settings. QMK's card links to the existing one-shot timeout in Settings.
+
+Tests: `test/web/one-shot-mods.test.tsx` covers validation, reopening, limits, picker search, legends and preservation. `test/layout/native-translation.test.ts` covers the kanata reader. Hardware timing is not part of this check.
+
 ## 2026-11-13 round 13: polish after the last ways on
 
 ### D-567: A start `launchctl bootstrap` failed offers Set up and start kanata on its line; while a start, a restart or a log read waits, the step says what for and Check again waits too; the dev editor can fail or hold a start. Refines D-565. (Claude, from the round-13 dead-ends review, R13-01, R13-03 and the fixture note)

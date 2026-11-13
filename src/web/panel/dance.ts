@@ -5,7 +5,7 @@
 import { tapDanceSlots } from "../../layout/functions.ts";
 import type { Layout, Mod, SlotAction, TapDance } from "../../layout/schema.ts";
 import { type Draft, isDance, keyWords, sortMods, toggleMod } from "../editor/draft.ts";
-import { modOfKey, type TapPick } from "./slots.ts";
+import { isOneShotMod, modOfKey, type TapPick } from "./slots.ts";
 import { modsWords } from "../../layout/describe.ts";
 
 export type ExtraSlot = "doubleTap" | "tapThenHold";
@@ -95,7 +95,8 @@ export function clearExtraSlot(draft: Draft, which: ExtraSlot): Draft {
 }
 
 /** Whether the tap slot can start a dance: it holds a key, modifier, layer or macro. */
-export const canAddExtraSlot = (draft: Draft): boolean => tapSlotAction(draft) !== null;
+// A one-shot modifier is a firmware key, and a dance's tap slot can't hold one, so it gets no double tap, as it gets no hold.
+export const canAddExtraSlot = (draft: Draft): boolean => tapSlotAction(draft) !== null && !isOneShotMod(draft);
 
 export function slotWords(action: SlotAction, layout: Layout): string {
   switch (action.kind) {

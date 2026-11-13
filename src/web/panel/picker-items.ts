@@ -1,6 +1,9 @@
 // What the key panel's one picker lists for a slot and a tab or a search (16: one picker for every
 // slot, D-087). Pure, so the choice of tabs and matches is tested without a browser.
-import type { Firmware, Layout } from "../../layout/schema.ts";
+import type { Firmware, Layout, Mod } from "../../layout/schema.ts";
+import { keptDefinitions } from "../../layout/kept-behaviours.ts";
+import { writeOneShot } from "../../layout/one-shot-mods.ts";
+import { modWords } from "../card/card-words.ts";
 import { firmwareName, searchKeys, type PickerGroup } from "../editor/keysearch.ts";
 import type { LayerAction } from "../editor/draft.ts";
 import { modOfKey, type TapPick } from "./slots.ts";
@@ -69,6 +72,7 @@ export type PickerItem = {
 export type PickerSection = { id: string; title: string; items: PickerItem[] };
 
 export interface PickerQuery {
+  hasExtraSlots?: boolean;
   text: string;
   tab: PickerTab;
   slot: SlotName;
@@ -131,6 +135,27 @@ function danceSection(query: PickerQuery, text: string): PickerSection[] {
   return items.length === 0 ? [] : [{ id: "dances", title: "Tap dances", items }];
 }
 
+// The modifiers a key can hold for the next key only (D-568), in the order the hold's own groups list them.
+const ONE_SHOT_MODS: readonly Mod[][] = [["LCTL"], ["LALT"], ["LSFT"], ["LGUI"], ["LCTL", "LSFT", "LALT", "LGUI"], ["LCTL", "LSFT", "LALT"]];
+const ONE_SHOT_WORDS: readonly string[] = ["one-shot", "one shot", "oneshot", "sticky", "once", "next key"];
+
+/** The picker's id for a one-shot of `mods`, so the card can mark the one the key holds. */
+export const oneShotItemId = (mods: readonly Mod[]): string => `oneshot-${mods.join("-")}`;
+
+/** One-shot modifiers, on the tap slot of a key with no hold, and only those the layout's firmware can write. */
+function oneShotSection(query: PickerQuery, text: string): PickerSection[] {
+  if (query.slot !== "tap" || query.keysOnly || query.hasExtraSlots) return [];
+  const kept = keptDefinitions(query.layout.passthrough);
+  const items = ONE_SHOT_MODS.flatMap((mods): PickerItem[] => {
+    const written = writeOneShot(mods, query.firmware, kept);
+    if ("why" in written) return [];
+    return [{ id: oneShotItemId(mods), label: `One-shot ${modWords(mods)}`, detail: "For the next key only", code: written.binding.source, pick: { t: "oneShot", mods } }];
+  })
+    // Every word typed is in the name or the one-shot words, so "sticky shift" finds Shift alone.
+    .filter((item) => text === "" || text.split(/\s+/).every((word) => `${norm(item.label)} ${ONE_SHOT_WORDS.join(" ")}`.includes(word)));
+  return items.length === 0 ? [] : [{ id: "oneShot", title: "For the next key only", items }];
+}
+
 const SPECIAL: readonly { words: readonly string[]; item: PickerItem }[] = [
   { words: ["transparent", "trans", "fall through", "blank"], item: { id: "special-transparent", label: "Transparent", detail: "Use the layer below", pick: { t: "transparent" } } },
   { words: ["none", "nothing", "disabled", "off"], item: { id: "special-none", label: "Nothing", detail: "Does nothing", pick: { t: "none" } } },
@@ -156,6 +181,8 @@ export function pickerSections(query: PickerQuery): PickerSection[] {
   if (searching || query.tab === "dance") sections.push(...(allowed.has("dance") ? danceSection(query, text) : []));
   if (searching || query.tab === "other") sections.push(...(query.slot === "tap" && !query.keysOnly ? specialSection(text) : []));
   if (searching || !["layers", "macro", "dance"].includes(query.tab)) sections.push(...keyItems(query, text));
+  if (searching || query.tab === "modifiers") sections.push(...oneShotSection(query, text));
   // A search lists keys first: the best match leads, so Enter after typing takes it.
-  return searching ? [...sections.filter((s) => !["layers", "macros", "dances", "special"].includes(s.id)), ...sections.filter((s) => ["layers", "macros", "dances", "special"].includes(s.id))] : sections;
+  const after = ["layers", "macros", "dances", "special", "oneShot"];
+  return searching ? [...sections.filter((s) => !after.includes(s.id)), ...sections.filter((s) => after.includes(s.id))] : sections;
 }

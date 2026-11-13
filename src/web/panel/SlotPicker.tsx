@@ -15,6 +15,7 @@ interface Props {
   layerId: string;
   /** The tap of a hold-tap takes keys only. */
   keysOnly: boolean;
+  hasExtraSlots?: boolean;
   advanced: boolean;
   /** Item ids that are what the slot holds now, drawn selected. */
   selectedIds: ReadonlySet<string>;
@@ -45,7 +46,7 @@ const LAYER_ACTIONS: readonly { value: LayerAction; label: string; hint: string 
 // search box and the arrow keys move a cursor through the tiles (the ARIA combobox pattern over a
 // listbox that doesn't pop up); Enter takes the tile under the cursor.
 export function SlotPicker({
-  slot, tab, onTab, layout, layerId, keysOnly, advanced, selectedIds, initialLayerAction, autoFocus, token, layoutRef, position, onPick, onUseBinding, macroPane,
+  slot, tab, onTab, layout, layerId, keysOnly, hasExtraSlots = false, advanced, selectedIds, initialLayerAction, autoFocus, token, layoutRef, position, onPick, onUseBinding, macroPane,
 }: Props) {
   const id = useId();
   const [query, setQuery] = useState("");
@@ -56,8 +57,8 @@ export function SlotPicker({
   const tabs = tabsFor(slot, keysOnly);
 
   const sections = useMemo(
-    () => pickerSections({ text: query, tab, slot, keysOnly, layout, firmware: layout.firmware, layerId, layerAction }),
-    [query, tab, slot, keysOnly, layout, layerId, layerAction],
+    () => pickerSections({ text: query, tab, slot, keysOnly, hasExtraSlots, layout, firmware: layout.firmware, layerId, layerAction }),
+    [query, tab, slot, keysOnly, hasExtraSlots, layout, layerId, layerAction],
   );
   const flat = useMemo(() => sections.flatMap((section) => section.items), [sections]);
   const searching = query.trim() !== "";

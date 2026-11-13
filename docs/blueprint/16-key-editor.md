@@ -1,5 +1,7 @@
 # 16: Key editor: everything about a key is built on the key
 
+Source update, 2026-11-13 (D-568): modifier keys offer **For the next key only**. The picker also offers one-shot modifiers. Supported imported one-shots open with the control on. Firmware limits appear beside the disabled control.
+
 Source update, 2026-11-01: ZMK encoder turns are editable per layer on the encoder's key card (D-471). This replaces the encoder deferral in D-105, not the other deferred features below. [The encoder recipe](../encoder-layers.md) covers availability, the UI and checked CLI path; compilation passed for both Keebart halves, with no new hardware test.
 
 Status: built in v0.11.0 to v0.19.0 (rungs 9, 11, 14, 15, 16 and 18), as of v0.36.1. That covers changing any key, the key panel, tap dance slots, macros, combos from a selection, layer management, moving and copying keys, history, the settings page and per-key and per-layer lights. Conditional layers were added afterwards (D-385 to D-389). Not built: the features in "What keyloom doesn't take, and why" (D-105). The hardware checks in the rungs' "done when" lines are mostly unrecorded; see [13](13-roadmap.md). Written 2026-10-15 against origin/main at `65cc12a` (v0.10.1). Since D-530 (2026-11-12), a direct edit whose re-read fails says it is applied, with Show the new layout, and Swap, Copy and Paste say why they are off in a line under the key card's header. Since D-537, the editor keeps a "Not showing the latest version" line with Show it until a read works.
@@ -245,3 +247,10 @@ What each tool does, and the keyloom rung that brings it ([13](13-roadmap.md)). 
 | Conditional layers | Yes | — | — | Layer menu: "Also on when … and … are held" (D-389) | After rung 18 |
 | Choice of AI provider | — | — | — | Anthropic API only | Rung 10 ([19](19-model-providers.md)) |
 | Agent proposals and decision memory | — | — | — | Yes | Kept |
+
+
+## Make a modifier apply to the next key only
+
+Select a key, then choose Shift, Control, Option or Command in its tap picker. Press **For the next key only**, then Apply. You can also search the picker for “one shot Shift” or “sticky Shift”. Turn the control off to restore a plain modifier.
+
+The cap shows the modifier with `once`. QMK's card links to its one-shot timeout in Settings. ZMK and kanata accept one modifier at a time. QMK accepts several modifiers from the same side. The card explains a combination the firmware cannot write. One-shots cannot share a key with a hold or tap-dance action.

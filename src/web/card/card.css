@@ -383,6 +383,35 @@
   color: var(--ink);
 }
 
+/* "For the next key only" on a modifier key (D-568): the slot button's look, lit when on like a pressed modifier. */
+.card-oneshot {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+}
+
+.card-slot-add[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.card-slot-add:disabled {
+  color: var(--ghost);
+  cursor: not-allowed;
+}
+
+.card-oneshot-mark {
+  font-weight: 600;
+}
+
+.card-oneshot-note {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
 .card-note {
   margin: 0;
   color: var(--ink-2);

@@ -6,6 +6,7 @@ import type { GridContext } from "./render-grid.ts";
 import type { Binding, Mod } from "./schema.ts";
 import { capMods, layerLegend } from "./cap-words.ts";
 import { renumber } from "./layer-refs.ts";
+import { readNative } from "./native-read.ts";
 
 type Native = Extract<Binding, { kind: "native" }>;
 export type NativePrint = { tap: string; hold?: string; layerId?: string };
@@ -74,6 +75,12 @@ export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
   if (osm !== null) {
     const mods = (osm[1] as string).split("|").flatMap((part) => (MOD_OF[part.trim()] === undefined ? [] : [MOD_OF[part.trim()] as Mod]));
     if (mods.length > 0) return { tap: capMods(mods), hold: "once" };
+  }
+  // Use the reader for generated ZMK aliases and kanata one-shots.
+  if (binding.firmware !== "qmk") {
+    const reading = readNative({ firmware: binding.firmware, source }, new Map());
+    const [step] = reading.kind === "steps" ? reading.steps : [];
+    if (step?.kind === "oneShot") return { tap: capMods(step.mods), hold: "once" };
   }
   if (/^DUAL_FUNC_\d+$/.test(source)) {
     const dual = dualFunction(source, ctx);
