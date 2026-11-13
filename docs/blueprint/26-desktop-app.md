@@ -2,6 +2,8 @@
 
 Status: built through 2026-11-11 (rung 24, D-481, D-507's problem window, restarts and log, D-514's update failures, last lines and Sync now notice, D-515's links and downloads, D-516's too-new database, Stop download and busy Sync now, D-521's Restart keyloom and drag and drop, and D-541's log file named to the server in `KEYLOOM_LOG_FILE`, so the page's **Show keyloom's log** opens it); signed and notarised in the current releases and installed on BK's Mac (v0.65.0, 2026-10-31). Source baseline: origin/main at v0.36.1. Research: [../research/desktop-shell.md](../research/desktop-shell.md); the shell is `desktop/tauri/`.
 
+Status update, 2026-11-13: D-569 is implemented in candidate commit `fc3766a728053cedc1928d7d2ffe2398952cd416`, pending merge and release. The fetch script verifies `SHA256SUMS` before replacing the executable. [Evidence and limits](../issues/unchecked-desktop-sidecar.md) remain separate from installed signature verification.
+
 BK: "since the config UI is just a web app, but the cli does all the work, Don't you think it's a good idea for us to just make this an electron app? Or Tauri? instead of relying on the browser where our keyboard shortcuts can clash with other things and extensions could do some unexpected behaviour."
 
 ## What it is to the person
@@ -28,6 +30,7 @@ keyloom becomes an app in the Dock, with its own window and keyboard, and a quie
 ## Shipping
 
 - A release job on BK's Mac (the `keyloom-builder` runner, D-483) builds the `.app`, and signs and notarises it when those credentials exist (D-329). The bun sidecar needs the `allow-jit`, `allow-unsigned-executable-memory` and `disable-library-validation` entitlements, or it crashes under hardened runtime.
+- Before packaging, `fetch-sidecar.sh` verifies the selected asset against `SHA256SUMS` (D-569). Local builds require the manifest beside the binary. A failure preserves the previous sidecar. See the [build instructions](../../desktop/tauri/README.md).
 - One Homebrew cask in `planetaryescape/homebrew-tap` installs the app and links the bundled binary as the CLI, so there's one install and one version. `install.sh` keeps working for the CLI alone.
 - **Auto-update** through Tauri's updater, with its own signing key. Detection is automatic; installation and restart are user-initiated (D-481).
 - **Needs from BK:** notarisation credentials (an app-specific password or an App Store Connect API key). His Developer ID certificate is already in his keychain.
