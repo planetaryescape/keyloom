@@ -6,7 +6,7 @@ import { LogTail } from "./LogTail.tsx";
 import type { FileProblem } from "./flash-words.ts";
 import type { FlashStepView } from "./release-words.ts";
 import { linuxBrowser } from "./build-failure-words.ts";
-import { failedWays, toolFailed, toolMissingLead, toolRunning, toolWay } from "./tool-words.ts";
+import { failedWays, missingDownload, toolFailed, toolMissingLead, toolRunning, toolWay } from "./tool-words.ts";
 import type { Install } from "./useInstall.ts";
 import { UnexpectedActions } from "./UnexpectedActions.tsx";
 
@@ -70,6 +70,8 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
     );
   }
   const way = toolWay(view);
+  // A hand-built Install has no download, as in the failed view above.
+  const download = missingDownload(view) ? install.download : undefined;
   return (
     <div className="callout callout-warning" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
@@ -87,6 +89,12 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
               <Download size={14} aria-hidden="true" />
               Get {view.name}
             </a>
+          )}
+          {download === undefined ? null : (
+            <button type="button" className="button" onClick={download}>
+              <Download size={14} aria-hidden="true" />
+              Download {view.name}
+            </button>
           )}
           <button type="button" className="button" onClick={onCheck}>Check again</button>
         </div>

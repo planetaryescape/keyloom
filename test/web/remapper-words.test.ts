@@ -2,7 +2,7 @@
 // in the order the steps have to happen, and no step shows a CLI command.
 import { describe, expect, test } from "bun:test";
 import type { KanataInstall, RemapperSetupResponse, SetupFinding } from "../../src/api/system-remapper.ts";
-import { attentionSteps, recheckAfter, setupFailure, setupSteps } from "../../src/web/sync/remapper-words.ts";
+import { attentionSteps, recheckAfter, setupFailure, setupSteps, setupWaiting } from "../../src/web/sync/remapper-words.ts";
 
 const f = (code: SetupFinding["code"], status: SetupFinding["status"], detail = "x"): SetupFinding => ({ code, name: code, status, detail });
 const k = (over: Partial<RemapperSetupResponse["kanata"]> = {}): RemapperSetupResponse["kanata"] => ({ version: null, wanted: "1.12.0", update: null, path: null, copyVersion: null, ...over });
@@ -317,9 +317,23 @@ describe("setupFailure", () => {
       link: null, action: { id: { kind: "start_kanata" }, label: "Set up and start kanata" },
     });
     expect(restart.text).not.toContain("launchctl");
-    // After Set up and start kanata, that step's own button is the way on, so no second one.
+    // R13-01: after Set up and start kanata the re-read shows the not-answering step, which has no Set up and start kanata, so the line
+    // carries it and names it, never "Press the button again".
     const start = setupFailure("root_start_failed", "macOS did not start the kanata background service (launchctl bootstrap failed).", "start_kanata");
-    expect(start).toEqual({ text: "macOS didn't start kanata's background service. Press the button again to set it up afresh. macOS asks for your password.", link: null });
+    expect(start).toEqual({
+      text: "macOS didn't start kanata's background service. Set kanata up again to install the service afresh and start it. macOS asks for your password.",
+      link: null, action: { id: { kind: "start_kanata" }, label: "Set up and start kanata" },
+    });
+    expect(start.text).not.toContain("Press the button");
+  });
+
+  // R13-03: the actions that hold the request open through the password dialog say what they wait for; the quick ones say nothing.
+  test("a start, a restart and a log read say what they wait for", () => {
+    expect(setupWaiting("start_kanata")).toBe("Waiting for your password, then for kanata to start…");
+    expect(setupWaiting("restart_kanata")).toBe("Waiting for your password, then for kanata to answer…");
+    expect(setupWaiting("show_kanata_log")).toBe("Waiting for your password…");
+    expect(setupWaiting("install_kanata")).toBeNull();
+    expect(setupWaiting("pane:input_monitoring")).toBeNull();
   });
 
   test("a closed password dialog names what didn't happen, for the restart and the log too (R11-02)", () => {

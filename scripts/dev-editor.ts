@@ -29,7 +29,9 @@
 // kanata (R10-03); =kanata_no_driver is that checklist with the driver still to install, so Start is off (R11-02); =kanata_not_answering is
 // a service that is installed while kanata doesn't answer, with Restart kanata's service and Show kanata's log (R11-02): the restart
 // answers that kanata still doesn't answer, or KEYLOOM_FAKE_KANATA_RESTART=cancel|outdated a closed dialog or a service setup didn't
-// make; the log answers some lines, or KEYLOOM_FAKE_KANATA_LOG=cancel|missing|empty. =kanata_karabiner adds the Karabiner step with its
+// make; the log answers some lines, or KEYLOOM_FAKE_KANATA_LOG=cancel|missing|empty. With =kanata_first_run, KEYLOOM_FAKE_KANATA_START=bootstrap
+// makes Set up and start kanata fail as launchctl bootstrap failing twice, and =wait holds it for 6 s and then answers ok; after either, the
+// service reads as installed and kanata as not answering (R13-01, R13-03). =kanata_karabiner adds the Karabiner step with its
 // entry to copy (R11-01). =kanata_no_builtin is a Mac with no built-in keyboard (R10-14); =kanata_foreign offers Replace it, which
 // KEYLOOM_FAKE_REPLACE=internal fails with a server exception (R10-05). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
 // Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine a ready Docker reports
@@ -353,6 +355,8 @@ const configs = proposalsFailure === "missing" ? undefined : fakeConfigsBackend(
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
 const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign", "kanata_no_driver", "kanata_not_answering", "kanata_karabiner", "kanata_no_brew"] as const;
+// Set up and start kanata in kanata_first_run has run (KEYLOOM_FAKE_KANATA_START), so the service reads as installed.
+let kanataServiceInstalled = false;
 // Get kanata in kanata_no_brew (D-560): when it started, or null before it has.
 let kanataDownload: { startedAt: number; cancelled: boolean } | null = null;
 const kanataJob = (): RemapperSetupResponse["install"] => {
@@ -368,7 +372,11 @@ const kanataFindings = (): RemapperSetupResponse["findings"] => {
   switch (syncMode) {
     case "kanata_keyboard": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare" }, ok("port_closed", "kanata answers")];
     case "kanata_setup": return [{ code: "kanata_version", name: "kanata", status: "warn", detail: "1.10.0 at /opt/homebrew/bin/kanata; keyloom writes configs for 1.12.0" }, ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
-    case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
+    case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" },
+      // After a pretend Set up and start kanata (KEYLOOM_FAKE_KANATA_START), the service is installed and kanata doesn't answer, as a real
+      // failed bootstrap leaves it (the plist is in place before launchctl runs), or a first run before the permissions (R13-01, R13-03).
+      kanataServiceInstalled ? ok("daemon_missing", "installed") : { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" },
+      { code: "port_closed", name: "kanata's port", status: kanataServiceInstalled ? "warn" : "fail", detail: "nothing answers" }];
     case "kanata_no_brew": return [
       kanataJob().state === "succeeded" ? ok("kanata_version", "1.12.0") : { code: "kanata_missing", name: "kanata", status: "fail", detail: "not found" },
       { code: "driver_missing", name: "driver", status: "fail", detail: "not installed" }, { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" },
@@ -403,7 +411,22 @@ const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined
     if (kanataDownload !== null && kanataJob().state === "running") kanataDownload.cancelled = true;
     return { ok: true };
   },
-  startKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't start kanata." }),
+  // Nothing installs and no dialog opens. KEYLOOM_FAKE_KANATA_START=bootstrap answers as launchctl bootstrap failing twice (R13-01);
+  // =wait holds the start for 6 s, as a real start waits up to 8 s for kanata to answer, then answers ok with kanata not answering (R13-03).
+  startKanata: async () => {
+    const mode = process.env.KEYLOOM_FAKE_KANATA_START;
+    if (mode === "bootstrap") {
+      await Bun.sleep(1500);
+      kanataServiceInstalled = true;
+      return { ok: false, code: "root_start_failed", reason: "macOS did not start the kanata background service (launchctl bootstrap failed)." };
+    }
+    if (mode === "wait") {
+      await Bun.sleep(6000);
+      kanataServiceInstalled = true;
+      return { ok: true };
+    }
+    return { ok: false, code: "unsupported", reason: "The dev editor doesn't start kanata." };
+  },
   // Nothing restarts and no dialog opens: a fixed answer after the time a real restart waits for kanata, so the button shows its progress.
   restartKanata: async () => {
     await Bun.sleep(1500);

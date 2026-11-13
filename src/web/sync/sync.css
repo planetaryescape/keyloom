@@ -289,3 +289,16 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Check again's reason while a setup step waits for its password dialog and kanata (R13-03). */
+.sync-setup-recheck-note {
+  align-self: center;
+}
+
+/* The waiting words in the problem line's place, when the press came from that line's own button (R13-03). */
+.sync-setup-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}

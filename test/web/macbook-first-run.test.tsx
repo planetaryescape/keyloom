@@ -6,7 +6,7 @@ import type { KanataLogResponse, RemapperSetupResponse, SetupActionResponse, Set
 import { BoardCard } from "../../src/web/import/ImportScreen.tsx";
 import { RemapperSetup } from "../../src/web/sync/RemapperSetup.tsx";
 import type { SyncApi } from "../../src/web/sync/useSync.ts";
-import { answerReads, button, mount, press, setUpDom } from "../helpers/dom.tsx";
+import { act, answerReads, button, mount, press, setUpDom } from "../helpers/dom.tsx";
 
 await setUpDom();
 
@@ -138,5 +138,90 @@ describe("kanata's checklist when its service is installed and kanata doesn't an
     expect(button("Restart kanata's service")?.disabled).toBe(true);
     expect(document.body.textContent).toContain("Install the driver above first.");
     expect(button("Show kanata's log")?.disabled).toBe(false);
+  });
+});
+
+describe("Set up and start kanata on a first run", () => {
+  const f = (code: SetupFinding["code"], status: SetupFinding["status"]): SetupFinding => ({ code, name: code, status, detail: "x" });
+  // Before the press the service isn't installed; the install script puts it in place before launchctl runs, so after the press it is
+  // installed whether bootstrap worked or not (daemon-install.ts), and kanata doesn't answer.
+  const firstRun = (installed: boolean): RemapperSetupResponse => ({
+    platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null },
+    kanata: { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: null }, driverVersion: "6.2.0",
+    findings: [f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", installed ? "ok" : "fail"), f("port_closed", installed ? "warn" : "fail")],
+  });
+
+  function fakeSync(start: () => Promise<SetupActionResponse>) {
+    const calls: string[] = [];
+    let installed = false;
+    const sync = {
+      token: "t",
+      remapperSetup: {
+        status: async () => (calls.push("status"), firstRun(installed)),
+        installKanata: async () => ({ ok: true }), cancelInstall: async () => ({ ok: true }), openSettings: async () => ({ ok: true }),
+        startKanata: async () => {
+          calls.push("start");
+          const r = await start();
+          installed = true;
+          return r;
+        },
+        restartKanata: async () => ({ ok: true }), kanataLog: async () => ({ ok: true, lines: [] }),
+      },
+    } as unknown as SyncApi;
+    return { sync, calls };
+  }
+
+  // R13-01: the re-read after a failed bootstrap has no Set up and start kanata of its own, so the line carries it.
+  test("a start macOS didn't finish offers Set up and start kanata beside the words, which sets up again", async () => {
+    const { sync, calls } = fakeSync(async () => ({ ok: false, code: "root_start_failed", reason: "macOS did not start the kanata background service (launchctl bootstrap failed)." }));
+    await mount(<RemapperSetup sync={sync} boardId="apple/macbook-ansi" />);
+    await press("Set up and start kanata");
+    const problem = document.querySelector(".sync-setup-problem")?.textContent ?? "";
+    expect(problem).toContain("Set kanata up again to install the service afresh and start it.");
+    expect(problem).not.toContain("Press the button again");
+    // The step is now the not-answering one; the only Set up and start kanata is the line's.
+    expect(document.body.textContent).toContain("kanata's service is installed, but kanata isn't answering");
+    expect([...document.querySelectorAll("button")].filter((b) => b.textContent === "Set up and start kanata")).toHaveLength(1);
+    await press("Set up and start kanata");
+    expect(calls.filter((c) => c === "start")).toHaveLength(2);
+  });
+
+  // R13-03: the line's own button goes with the line while it runs, so the waiting words take the line's place.
+  test("a start pressed from the problem line says what it waits for in the line's place", async () => {
+    let presses = 0;
+    let finish = (_: SetupActionResponse) => {};
+    const { sync } = fakeSync(() => (++presses === 1
+      ? Promise.resolve({ ok: false, code: "root_start_failed", reason: "x" })
+      : new Promise((resolve) => { finish = resolve; })));
+    await mount(<RemapperSetup sync={sync} boardId="apple/macbook-ansi" />);
+    await press("Set up and start kanata");
+    await press("Set up and start kanata");
+    expect(document.querySelector(".sync-setup-waiting")?.textContent?.trim()).toBe("Waiting for your password, then for kanata to start…");
+    expect(button("Check again")?.disabled).toBe(true);
+    await act(async () => {
+      finish({ ok: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector(".sync-setup-waiting")).toBeNull();
+  });
+
+  // R13-03: the start holds its request through the password dialog and up to 8 s for kanata; the step says so, and Check again waits.
+  test("while the start waits, the step says so and Check again is off with its reason", async () => {
+    let finish = (_: SetupActionResponse) => {};
+    const { sync, calls } = fakeSync(() => new Promise((resolve) => { finish = resolve; }));
+    await mount(<RemapperSetup sync={sync} boardId="apple/macbook-ansi" />);
+    await press("Set up and start kanata");
+    const waiting = document.querySelector('.sync-setup-step [role="status"]');
+    expect(waiting?.textContent).toBe("Waiting for your password, then for kanata to start…");
+    expect(button("Check again")?.disabled).toBe(true);
+    expect(document.body.textContent).toContain("keyloom checks again by itself when this ends.");
+    const reads = calls.filter((c) => c === "status").length;
+    await act(async () => {
+      finish({ ok: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(calls.filter((c) => c === "status").length).toBe(reads + 1);
+    expect(document.querySelector('[role="status"]')).toBeNull();
+    expect(button("Check again")?.disabled).toBe(false);
   });
 });

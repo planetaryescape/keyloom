@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import type { InstallState } from "../../src/api/tool-install.ts";
 import { flashStepView } from "../../src/web/release/release-words.ts";
-import { failedWays, toolFailed, toolMissingLead, toolRunning, toolWay } from "../../src/web/release/tool-words.ts";
+import { failedWays, missingDownload, toolFailed, toolMissingLead, toolRunning, toolWay } from "../../src/web/release/tool-words.ts";
 
 const view = (canInstall: boolean, canDownload?: boolean, downloadable?: boolean) => {
   const v = flashStepView({
@@ -36,6 +36,21 @@ describe("the missing tool's step", () => {
     const dfu = flashStepView({ manual: null, tool: { name: "dfu-util", installed: false, canInstall: false, url: "https://dfu-util.sourceforge.net/" }, canReveal: true });
     if (dfu.kind !== "needs-tool") throw new Error("expected needs-tool");
     expect(toolMissingLead(dfu, "Moonlander", true)).toEndWith("Install it, then check again.");
+  });
+
+  // R13-02: a cancelled install, or a reload after a failed one, leaves no failure to offer Download Zapp beside, so the missing step offers
+  // it always where a release file is, Homebrew first.
+  test("with Homebrew, the missing step offers Download Zapp beside Install where a release file is, and says what it does", () => {
+    expect(missingDownload(view(true, false, true))).toBe(true);
+    expect(toolMissingLead(view(true, false, true), "Moonlander")).toBe(
+      "keyloom flashes your Moonlander with Zapp, and this computer doesn't have it yet. keyloom can install it with Homebrew, or download it from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.",
+    );
+    // No release file for this computer, or an older server: Homebrew alone.
+    expect(missingDownload(view(true, false, false))).toBe(false);
+    expect(missingDownload(view(true))).toBe(false);
+    // Without Homebrew, Get Zapp is already the download, so no second button.
+    expect(missingDownload(view(false, true, true))).toBe(false);
+    expect(missingDownload(view(false, false, false))).toBe(false);
   });
 
   test("while it runs, the step says which way it is going", () => {

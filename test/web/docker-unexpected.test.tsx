@@ -51,3 +51,20 @@ test("a Docker that came up keeps an engine name only from a ready readiness", (
   expect(readinessAfterStart({ ok: true, version: "28.0", engine: "OrbStack", autoStart: false }, "29.0")).toEqual({ ok: true, version: "29.0", engine: "OrbStack", autoStart: false });
   expect(readinessAfterStart(null, "29.0").engine).toBe("Docker");
 });
+
+// R13-02: after a cancelled Homebrew install (or a reload after a failed one) the step still offers Download Zapp, second, beside Install.
+test("the missing Zapp step offers Download Zapp after Install Zapp where keyloom can download it", () => {
+  const downloads: string[] = [];
+  const cancelled: Install = { ...install(null), state: { tool: "zapp", status: "cancelled", phase: null, logTail: [], error: null, errorCode: null }, download: () => downloads.push("download") };
+  const html = renderToStaticMarkup(
+    <ToolCallout view={{ kind: "needs-tool", tool: "zapp", name: "Zapp", canInstall: true, canDownload: false, downloadable: true, url: "https://github.com/zsa/zapp" }} boardName="Moonlander" install={cancelled} onCheck={noop} />,
+  );
+  expect(html).toContain("You stopped the install.");
+  expect(html.indexOf("Install Zapp")).toBeLessThan(html.indexOf("Download Zapp"));
+  expect(html).toContain("Check again");
+  // No release file here: Install alone.
+  const none = renderToStaticMarkup(
+    <ToolCallout view={{ kind: "needs-tool", tool: "zapp", name: "Zapp", canInstall: true, canDownload: false, downloadable: false, url: "https://github.com/zsa/zapp" }} boardName="Moonlander" install={cancelled} onCheck={noop} />,
+  );
+  expect(none).not.toContain("Download Zapp");
+});

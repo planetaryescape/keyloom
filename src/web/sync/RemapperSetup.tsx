@@ -5,12 +5,14 @@ import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import type { SyncApi } from "./useSync.ts";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
-import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, recheckAfter, setupFailure, setupSteps } from "./remapper-words.ts";
+import { type SetupActionId, type SetupFailure, type SetupStep, attentionSteps, recheckAfter, setupFailure, setupSteps, setupWaiting } from "./remapper-words.ts";
 
 // A failure keeps its code, so one no screen planned for offers Restart keyloom, never only Check again (R9-05, D-540).
 type Load = { kind: "loading" } | { kind: "ready"; status: RemapperSetupResponse } | { kind: "error"; failure: PageFailure };
 
 const actionKey = (id: SetupActionId) => (id.kind === "open_settings" ? `pane:${id.pane}` : id.kind);
+// The step whose own button is the press that runs, if one still is after the list was read again.
+const stepRuns = (step: SetupStep, busy: string | null) => busy !== null && step.actions.some((action) => actionKey(action.id) === busy);
 // Often enough that Homebrew's lines read as progress, not so often that a long install floods the server.
 const INSTALL_POLL_MS = 1500;
 
@@ -113,10 +115,21 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     document.addEventListener("visibilitychange", back);
     return stop;
   }, [awaitingReturn, check]);
+  // A start, a restart or a log read holds its request open through the password dialog and kanata's wait (R13-03). A check meanwhile
+  // would swap the step for one whose buttons are all off, so Check again waits too, and says why: run() checks again when it ends.
+  const waiting = busy === null ? null : setupWaiting(busy);
   const recheck = (
-    <button type="button" className="button sync-setup-recheck" disabled={checking} onClick={() => void check()}>
-      <RefreshCw size={14} className={checking ? "spin" : undefined} aria-hidden="true" /> Check again
-    </button>
+    <span className="sync-setup-actions">
+      <button type="button" className="button sync-setup-recheck" disabled={checking || waiting !== null} onClick={() => void check()}>
+        <RefreshCw size={14} className={checking ? "spin" : undefined} aria-hidden="true" /> Check again
+      </button>
+      {waiting === null ? null : <span className="sync-setup-detail sync-setup-recheck-note">keyloom checks again by itself when this ends.</span>}
+    </span>
+  );
+  // A press from the problem line (Set up and start kanata after a failed start) has no step button to sit under, and run() clears that
+  // line, so the words take its place, with the spinner the button would have had.
+  const waitingAlone = (steps: SetupStep[]) => waiting === null || steps.some((step) => stepRuns(step, busy)) ? null : (
+    <p className="sync-setup-detail sync-setup-waiting" role="status"><LoaderCircle size={12} className="spin" aria-hidden="true" /> {waiting}</p>
   );
 
   // A read that failed says so with Check again, in either mode: the attention steps vanishing would hide an update kanata needs (R6-22).
@@ -137,7 +150,8 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     if (steps.length === 0) return null;
     return (
       <div className="sync-setup">
-        <Steps steps={steps} busy={busy} installing={installing} onRun={run} />
+        <Steps steps={steps} busy={busy} waiting={waiting} installing={installing} onRun={run} />
+        {waitingAlone(steps)}
         <ProblemLine problem={problem} token={sync.token} busy={busy !== null} onRun={run} />
         {/* A step done elsewhere (System Settings, Karabiner, Terminal) shows as done once the list is read again (R8-17). */}
         {recheck}
@@ -148,9 +162,11 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
     return <p className="sync-setup-status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Checking what kanata needs…</p>;
   }
   if (load.kind === "error") return readFailed;
+  const steps = setupSteps(load.status, { kanataLog });
   return (
     <div className="sync-setup">
-      <Steps steps={setupSteps(load.status, { kanataLog })} busy={busy} installing={installing} onRun={run} />
+      <Steps steps={steps} busy={busy} waiting={waiting} installing={installing} onRun={run} />
+      {waitingAlone(steps)}
       <ProblemLine problem={problem} token={sync.token} busy={busy !== null} onRun={run} />
       {/* Usable while Homebrew runs: an install finished elsewhere, or a pane allowed meanwhile, shows up at once. */}
       {recheck}
@@ -158,7 +174,7 @@ export function RemapperSetup({ sync, boardId, mode = "setup" }: { sync: SyncApi
   );
 }
 
-function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: string | null; installing: boolean; onRun: (id: SetupActionId) => void }) {
+function Steps({ steps, busy, waiting, installing, onRun }: { steps: SetupStep[]; busy: string | null; waiting: string | null; installing: boolean; onRun: (id: SetupActionId) => void }) {
   // While Homebrew runs, only Cancel and the Settings panes stay pressable: another install or a setup would race it.
   const disabled = (action: SetupStep["actions"][number]) => action.off === true || busy !== null || (installing && action.id.kind !== "cancel_install" && action.id.kind !== "open_settings");
   return (
@@ -187,6 +203,8 @@ function Steps({ steps, busy, installing, onRun }: { steps: SetupStep[]; busy: s
                 )}
               </span>
             )}
+            {/* The words under the step whose button runs, while it waits for the password and for kanata (R13-03). */}
+            {waiting === null || !stepRuns(step, busy) ? null : <span className="sync-setup-detail" role="status">{waiting}</span>}
           </div>
         </li>
       ))}
