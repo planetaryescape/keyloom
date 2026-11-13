@@ -78,13 +78,16 @@ export function VersionCompare({ token, comparing, layout, boardName, layerId, l
 }) {
   const v = comparing.milestone.version;
   const now = Date.now();
+  // A version that is gone (the route's own not_found) can't be gone back to, put on or copied, so the header's promise and the footer's
+  // three ways forward go with it; Back to History is the way on (R10-09).
+  const gone = comparing.status === "error" && comparing.code === "not_found" && comparing.generic !== true;
   return (
     <section className="history-panel" aria-label={`Compare ${versionTitle(v)} with now`}>
       <header className="sheet-head">
         <div className="sheet-title">
           <button type="button" className="sheet-action history-back" onClick={onBack}><ArrowLeft size={13} aria-hidden="true" />History</button>
           <h2>{versionTitle(v)}</h2>
-          <p>{versionWhen(v, now)}. Going back to it changes what's marked on the board.</p>
+          <p>{versionWhen(v, now)}.{gone ? null : " Going back to it changes what's marked on the board."}</p>
         </div>
         <button type="button" className="sheet-close" aria-label="Close the history" onClick={onClose}><X size={16} aria-hidden="true" /></button>
       </header>
@@ -110,13 +113,13 @@ export function VersionCompare({ token, comparing, layout, boardName, layerId, l
           <Differences compare={comparing.compare} layout={layout} layerId={layerId} layerName={layerName} onShowLayer={onShowLayer} />
         )}
       </div>
-      <footer className="history-compare-foot">
+      {gone ? null : <footer className="history-compare-foot">
         <button type="button" className="sheet-action" onClick={onNewConfig}><Copy size={13} aria-hidden="true" />New config from here</button>
         <button type="button" className="sheet-action" disabled={blockedReason !== null} onClick={onPutOn}><Keyboard size={13} aria-hidden="true" />Put on your {boardName}</button>
         <button type="button" className="bar-apply" disabled={blockedReason !== null || (comparing.status === "ready" && comparing.compare.diff.same)} onClick={onGoBack}>
           <Undo2 size={14} aria-hidden="true" />Go back to this
         </button>
-      </footer>
+      </footer>}
     </section>
   );
 }

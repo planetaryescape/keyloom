@@ -100,6 +100,7 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { boardLight, openKeyboardStatus, ReplaceForeignHost, SyncStatus } from "./sync/SyncStatus.tsx";
 import type { ReleaseStatus } from "./release/status.ts";
 import { AfterApplyContext, type AfterApplyKeyboard, afterApplyRun } from "./release/AfterApply.tsx";
+import { OtherLayoutsContext } from "./editor/LayoutGone.tsx";
 import { afterApply } from "./release/flash-words.ts";
 import { reachWords } from "./light/reach-words.ts";
 import { HalfSwitcher, type Half } from "./shell/HalfSwitcher.tsx";
@@ -1996,6 +1997,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
 
   return (
     <AfterApplyContext.Provider value={afterApplyKeyboard}>
+    <OtherLayoutsContext.Provider value={chrome.onHome ?? null}>
     <div className="workspace">
       <TopBar
         onHome={chrome.onHome}
@@ -2622,6 +2624,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       )}
     </div>
+    </OtherLayoutsContext.Provider>
     </AfterApplyContext.Provider>
   );
 }

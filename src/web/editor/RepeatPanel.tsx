@@ -4,10 +4,9 @@ import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
-import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
-import { LAYOUT_GONE } from "../release/flash-words.ts";
 import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
 import { bindingSummary } from "./draft.ts";
+import { LayoutGoneWayOut, useLayoutGoneWords } from "./LayoutGone.tsx";
 import { planRepeat, repeatMeaning, repeatSummary, type LastChange } from "./repeat-plan.ts";
 import { useCheckOps } from "./useCheckOps.ts";
 import { Validation } from "./Validation.tsx";
@@ -37,6 +36,7 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
   // The failure keeps its code (R9-05): Apply is its Try again, and an answer that fails the same way every time turns Apply off, with
   // Restart keyloom and the log beside the sentence.
   const [applyError, setApplyError] = useState<PageFailure | null>(null);
+  const goneWords = useLayoutGoneWords();
   const layerName = layout.layers.find((l) => l.id === layerId)?.name ?? layerId;
 
   const result = state.status === "done" ? state.result : null;
@@ -110,8 +110,8 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
         <div className="editor-foot-note" aria-live="polite">
           {layoutGone ? (
             <div className="blocked" role="alert">
-              <p>{LAYOUT_GONE}</p>
-              <div className="unexpected-actions"><RestartKeyloom token={token} primary /></div>
+              <p>{goneWords}</p>
+              <div className="unexpected-actions"><LayoutGoneWayOut token={token} /></div>
             </div>
           ) : applyError !== null ? <FailureNote token={token} failure={applyError} className="blocked" /> : <p className="muted">Nothing is saved until you apply.</p>}
         </div>

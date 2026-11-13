@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Layout } from "../../src/layout/schema.ts";
 import { importOryxSource } from "../../src/firmware/qmk/import.ts";
 import { ApiError, UNREACHABLE } from "../../src/web/api.ts";
+import { LAYOUT_GONE_HERE, OtherLayoutsContext } from "../../src/web/editor/LayoutGone.tsx";
 import { Validation } from "../../src/web/editor/Validation.tsx";
 import { checkFailed } from "../../src/web/editor/useCheck.ts";
 import { LAYOUT_GONE } from "../../src/web/release/flash-words.ts";
@@ -51,4 +52,15 @@ test("a check against a moved head shows no button of its own: the page reads th
   const html = render(new ApiError(409, "stale", { code: "stale_base" }));
   expect(html).not.toContain("Check again");
   expect(html).not.toContain("Restart keyloom");
+});
+
+test("on a layout page, a layout deleted elsewhere offers Show your other layouts first, then Restart keyloom (R10-09)", () => {
+  const error = new ApiError(404, "no layout lay_1", { code: "not_found" });
+  const html = renderToStaticMarkup(createElement(OtherLayoutsContext.Provider, { value: () => {} },
+    createElement(Validation, { token: "t", layout, idleNote: "", state: checkFailed(error), onRecheck: () => {} })));
+  expect(html).toContain(LAYOUT_GONE_HERE.replace(/'/g, "&#x27;"));
+  expect(html).not.toContain("Restarting keyloom opens");
+  expect(html.indexOf("Show your other layouts")).toBeGreaterThan(-1);
+  expect(html.indexOf("Show your other layouts")).toBeLessThan(html.indexOf("Restart keyloom"));
+  expect(html).toMatch(/button-primary"[^>]*>(<svg[^]*?<\/svg>)?Show your other layouts/);
 });
