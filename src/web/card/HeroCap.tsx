@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { KeycapColour } from "../../boards/schema.ts";
 import type { Legend } from "../../layout/legend.ts";
 import { frontWords } from "../keyboard/front-words.ts";
+import { CAP_INSET, fitLegend, isCondensed } from "../keyboard/fit.ts";
 
 export type HeroSlot = "tap" | "hold" | "doubleTap" | "tapThenHold";
 
@@ -47,7 +48,17 @@ const withSpaceMark = (text: string): ReactNode[] =>
 // is what a tap sends, the front skirt what a hold does, the top corners a double tap and a tap-then-hold. An empty slot is a faint word
 // on the cap, never a row of dashed boxes. Each part is a button that opens that slot's picker under the cap.
 export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = null, doubleTap, tapThenHold, open, draft, changed, onOpen, label, size = 112 }: Props) {
-  const tapSize = [...legend.tap].length <= 1 ? 0.42 : [...legend.tap].length <= 3 ? 0.32 : 0.22;
+  const hasCorners = doubleTap?.text != null || tapThenHold?.text != null;
+  const letters = [...legend.tap].length;
+  const preferredSize = letters <= 1 ? 0.42 : letters <= 3 ? 0.32 : 0.22;
+  // Filled corners leave room for one symbol or two lines of text above the 24px hold target.
+  const faceHeight = size - (hasCorners ? Math.max(size * 0.34, 32) : size * 0.04) - Math.max(size * 0.2, 26);
+  const tapSize = Math.min(preferredSize, faceHeight / size / (letters > 3 ? 2.6 : 1.3));
+  // The face is 0.85u wide. Match its real inset instead of fitting against the whole cap.
+  const tapFit = fitLegend(legend.tap, 0.85 + CAP_INSET, { max: tapSize, min: 0.1 }, { unit: size }, isCondensed(legend.tap));
+  const print = (text: string) => withSpaceMark(text.replace(/[_+(]/g, (seam) => `${seam}\u200b`));
+  const capStyle: CSSProperties & { "--u": string; "--led"?: string } = { "--u": `${size}px`, width: size, height: size };
+  if (led !== undefined) capStyle["--led"] = led;
   const region = (slot: HeroSlot, value: Region | null, className: string, children: ReactNode) =>
     value === null ? null : (
       <button
@@ -56,6 +67,7 @@ export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = 
         data-open={open === slot}
         data-changed={changed?.has(slot) === true}
         data-empty={value.text === null}
+        title={`${value.name}: ${value.text ?? "nothing yet"}`}
         aria-label={`${value.name}: ${value.text ?? "nothing yet"}. ${value.text === null ? "Add" : "Change"}`}
         aria-expanded={open === slot}
         onClick={() => onOpen(slot)}
@@ -63,14 +75,13 @@ export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = 
         {children}
       </button>
     );
-  const cornerText = (value: Region | null) => (value === null ? null : value.text === null ? <span className="hero-ghost">{value.ghost}</span> : withSpaceMark(value.text));
   return (
-    <div className="hero-cap cap" data-tone={tone} data-keycap={keycap} data-led={led !== undefined} data-draft={draft} style={{ "--u": `${size}px`, width: size, height: size, ...(led === undefined ? {} : { "--led": led }) } as CSSProperties}>
+    <div className="hero-cap cap" data-tone={tone} data-keycap={keycap} data-led={led !== undefined} data-draft={draft} style={capStyle}>
       <span className="sr-only">{label}</span>
       <span className="cap-bleed" aria-hidden="true" />
-      <span className="cap-body">
+      <span className="cap-body" data-corners={hasCorners}>
         <span className="cap-top" aria-hidden="true" />
-        {region("tap", { text: legend.tap, name: "When tapped" }, "hero-tap", <span className="cap-tap" style={{ fontSize: size * tapSize }}>{withSpaceMark(legend.tap === "" ? "·" : legend.tap)}</span>)}
+        {region("tap", { text: legend.tap, name: "When tapped" }, "hero-tap", <span className="cap-tap" data-stretch={isCondensed(legend.tap) ? "condensed" : undefined} style={{ fontSize: size * tapFit.size }}>{print(legend.tap === "" ? "·" : legend.tap)}</span>)}
         {region(
           "hold",
           hold,
@@ -88,8 +99,8 @@ export function HeroCap({ legend, tone, keycap, led, reach, hold, staticFront = 
             </span>
           </span>
         ) : null}
-        {region("tapThenHold", tapThenHold, "hero-corner hero-corner-start", cornerText(tapThenHold))}
-        {region("doubleTap", doubleTap, "hero-corner hero-corner-end", cornerText(doubleTap))}
+        {region("tapThenHold", tapThenHold, "hero-corner hero-corner-start", <span aria-hidden="true">1×⇣</span>)}
+        {region("doubleTap", doubleTap, "hero-corner hero-corner-end", <span aria-hidden="true">2×</span>)}
       </span>
       {draft ? <span className="cap-mark cap-mark-draft" aria-hidden="true" /> : null}
     </div>

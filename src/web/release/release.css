@@ -382,9 +382,9 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-warning);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  background: var(--color-warning-bg);
+  background: var(--surface-2);
 }
 
 .confirm p {
@@ -399,7 +399,8 @@
 }
 
 .confirm-title svg {
-  color: var(--color-warning);
+  flex: none;
+  color: var(--ink-2);
 }
 
 .confirm-actions {

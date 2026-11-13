@@ -24,6 +24,8 @@ keyloom v0.10.1 is accurate and accessible, but it reads like a tool for checkin
 - **History means chats,** and undo goes back only one step.
 - **A phone gets a board that scrolls sideways,** with the inspector covering the thumbs.
 
+Source update, 2026-11-13: the key card fits long labels and reserves space for filled action corners (D-600). Flash approval uses the neutral confirmation surface (D-601).
+
 ## Principles
 
 1. **The keyboard is the page.** Everything else is a panel that serves it. Oryx gives the board the whole width and opens a popover on the key, which is why it feels direct (D-098).
@@ -106,6 +108,7 @@ keyloom v0.10.1 is accurate and accessible, but it reads like a tool for checkin
   - Unicode glyphs come from one glyph set, with a setting for "macOS", "Windows" or "words", as keymap-editor's glyph setting does.
 - **Text on rotated thumb keys stays upright,** as it is now.
 - **Full names are one hover away,** in the cap's tooltip and in the panel.
+- The key card fits text inside each action region at both preview sizes. Firmware names wrap without losing their full accessible name (D-600).
 
 ## Visual system
 

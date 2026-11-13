@@ -3252,3 +3252,13 @@ The selected saved proposal or recorded unsaved `propose_changes` validation ref
 Reuse the App-owned config-keyed repair request. Opening sends nothing, overwrites no pending request and cancels no work. Explicit Send starts a separate ordinary chat request after source/head and composer checks. A definite refusal keeps edits; uncertain acceptance remains observation-only. The validator and explicit Apply still decide. No wire/storage expansion or raw tool results are needed.
 
 `agent replan <config> --proposal <id>` or `--conversation <id> --turn <user-message-id>` resolves the source read-only before starting work. `--draft` prints the shared request without writes. A different base alone is not a refusal: disjoint proposals may still validate. Long requests retain the full goal and require shortening rather than truncation.
+
+### D-600: The key card fits each legend inside its own action region. (2026-11-13)
+
+The key card uses the board renderer's `fitLegend` and condensed font for long labels. Firmware names wrap at underscores, plus signs and opening parentheses. Text can wrap further when a single token exceeds the available width. The card keeps the full accessible name and the 11px floor. Filled action corners reserve space above the tap label. They show compact gesture marks, `2×` and `1×⇣`; the full action remains in the tooltip, accessible name and key description. Hold and corner buttons have at least 24px of height. This applies to the 112px key and its 84px picker preview.
+
+This fixes the Advanced-view `RCTL(KC_B)` label that drew 135.61px of text inside a 95.20px face at `8d09a1f5`. It does not change the key's binding or firmware spelling.
+
+### D-601: Flash approval uses the neutral confirmation surface. Extends D-457. (2026-11-13)
+
+The flash confirmation uses `--surface-2` and `--line-2`, with its warning icon in secondary ink. The amber border and background are removed. BK called the earlier prompt jarring and inconsistent with the app. The consequence text, Cancel and separate Start flashing approval stay intact. Error and warning states elsewhere keep their existing meanings.

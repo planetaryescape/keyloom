@@ -256,20 +256,27 @@
 .hero-tap {
   top: calc(var(--u) * 0.04);
   right: calc(var(--u) * 0.075);
-  bottom: calc(var(--u) * 0.2);
+  bottom: max(calc(var(--u) * 0.2), 26px);
   left: calc(var(--u) * 0.075);
+  min-width: 0;
+}
+
+.hero-cap .cap-body[data-corners="true"] .hero-tap {
+  top: max(calc(var(--u) * 0.34), 32px);
 }
 
 .hero-tap .cap-tap {
   color: var(--legend);
   font-weight: 450;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .hero-front {
   right: calc(var(--u) * 0.04);
   bottom: calc(var(--u) * 0.01);
   left: calc(var(--u) * 0.04);
-  height: calc(var(--u) * 0.18);
+  height: max(calc(var(--u) * 0.18), 24px);
 }
 
 .hero-front-static {
@@ -291,6 +298,11 @@
   font-size: 12px;
   font-stretch: 75%;
   font-weight: 600;
+  min-height: 24px;
+  max-width: 40%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .hero-corner-start {
