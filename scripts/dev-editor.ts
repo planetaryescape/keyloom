@@ -21,7 +21,10 @@
 // KEYLOOM_FAKE_SYNC=files_and_folders|files_split|input_monitoring|tool_missing gives the Moonlander a pill that syncs for 3 s (KEYLOOM_FAKE_SYNC_MS) from when a page first follows it, then ends
 // as a sync whose flash macOS refused (R9-01: behind, a split board's needs-hand, the Moonlander's reset wait) or whose flash tool is missing
 // (R9-10, pair it with KEYLOOM_FAKE_FLASH=no-zapp); =kanata_keyboard shows kanata's checklist with a keyboard keyloom doesn't know by name
-// (R9-12). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
+// (R9-12). =kanata_refused|kanata_setup|kanata_unwritable end the MacBook's apply as a config kanata refused, one kanata refused because
+// it is older than keyloom writes for, or one keyloom couldn't write (R10-01); =kanata_first_run is the checklist before Set up and start
+// kanata (R10-03); =kanata_no_builtin is a Mac with no built-in keyboard (R10-14); =kanata_foreign offers Replace it, which
+// KEYLOOM_FAKE_REPLACE=internal fails with a server exception (R10-05). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
 // Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine a ready Docker reports
 // (KEYLOOM_FAKE_RESTART_ENGINE, or Colima, by default; R10-06).
 // KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY=1 fails the first layout read after each apply, as when the change is written but the page
@@ -59,6 +62,7 @@ import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
 import type { SystemBackend } from "../src/server/system-backend.ts";
 import type { RemapperSetupBackend } from "../src/server/system-remapper-routes.ts";
+import type { RemapperSetupResponse } from "../src/api/system-remapper.ts";
 import { type SyncBackend, SyncError } from "../src/server/sync-backend.ts";
 import { EditorError } from "../src/server/editor-backend.ts";
 import type { BoardSync } from "../src/api/http.ts";
@@ -263,19 +267,30 @@ if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw 
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
-const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard"] as const;
+const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_first_run", "kanata_no_builtin", "kanata_foreign"] as const;
+// The checklist's findings for each kanata mode (D-493): a keyboard keyloom doesn't know by name (R9-12), a kanata older than keyloom writes
+// for (R10-01), a first run before Set up and start kanata (R10-03), and a Mac with no built-in keyboard (R10-14).
+const kanataFindings = (): RemapperSetupResponse["findings"] => {
+  const ok = (code: RemapperSetupResponse["findings"][number]["code"], detail = "ok") => ({ code, name: code, status: "ok" as const, detail });
+  switch (syncMode) {
+    case "kanata_keyboard": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare" }, ok("port_closed", "kanata answers")];
+    case "kanata_setup": return [{ code: "kanata_version", name: "kanata", status: "warn", detail: "1.10.0 at /opt/homebrew/bin/kanata; keyloom writes configs for 1.12.0" }, ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
+    case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" }, { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" }, { code: "port_closed", name: "kanata's port", status: "fail", detail: "nothing answers" }];
+    case "kanata_no_builtin": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "keyboard_name", name: "built-in keyboard", status: "fail", detail: "this Mac has no built-in keyboard" }, ok("port_closed", "kanata answers")];
+    default: return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), ok("keyboard_name"), ok("port_closed", "kanata answers")];
+  }
+};
 const staticMode = STATIC_SYNC.find((m) => m === syncMode);
 const sync = syncMode === "build_failed" ? await fakeBuildFailedSync() : staticMode !== undefined ? await fakeFlashRefusedSync(staticMode) : undefined;
 // System Settings never opens here: the fake says it did, or that it didn't with KEYLOOM_FAKE_OPEN_SETTINGS=fail.
 const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined ? undefined : {
   status: async () => ({
     platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null },
-    kanata: { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: "1.12.0" }, driverVersion: "6.2.0",
-    findings: [
-      { code: "kanata_version", name: "kanata", status: "ok", detail: "1.12.0" }, { code: "driver_mismatch", name: "driver", status: "ok", detail: "6.2.0" },
-      { code: "keyboard_name", name: "built-in keyboard", status: "warn", detail: "no keyboard named \"Apple Internal Keyboard / Trackpad\" was found; run `kanata --list` and compare" },
-      { code: "port_closed", name: "kanata's port", status: "ok", detail: "kanata answers" },
-    ],
+    kanata: syncMode === "kanata_setup"
+      ? { version: "1.10.0", wanted: "1.12.0", update: "brew", path: "/opt/homebrew/bin/kanata", copyVersion: "1.10.0" }
+      : { version: "1.12.0", wanted: "1.12.0", update: null, path: "/opt/homebrew/bin/kanata", copyVersion: "1.12.0" },
+    driverVersion: "6.2.0",
+    findings: kanataFindings(),
   }),
   installKanata: async () => ({ ok: false, code: "unsupported", reason: "The dev editor doesn't install kanata." }),
   cancelInstall: async () => ({ ok: true }),
@@ -311,6 +326,12 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
   const files = "Copying to /Volumes/GLV80RHBOOT/CURRENT.UF2 failed: EACCES: permission denied, open '/Volumes/GLV80RHBOOT/CURRENT.UF2'. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
   const hand = "macOS didn't let keyloom restart the keyboard by itself. Press the reset button on the Moonlander (the small hole on the left half) within 2 minutes.";
   const zapp = "zapp isn't installed. Install it with `brew install zapp`, then flash again.";
+  // kanata's and keyloom's own sentences for a config that didn't go on (R10-01).
+  const kanataSentence = {
+    kanata_refused: "kanata --check refused the new config, so nothing was changed: Error in configuration: unknown key `lrld-num`",
+    kanata_setup: "kanata --check refused the new config, so nothing was changed: Error in configuration: unknown action `tap-hold-release-keys`",
+    kanata_unwritable: "this layout can't be written for kanata: key 12 on layer Base: tap dance \"td1\" doesn't exist",
+  };
   const status = async (): Promise<BoardSync[]> => {
     const running = Date.now() - startedAt < Number(process.env.KEYLOOM_FAKE_SYNC_MS ?? 3000);
     const base = { boardId: "zsa/moonlander", boardName: "Moonlander", layoutId: "moonlander-daily", layoutName: "Daily driver", headRevisionId: head, otherLayouts: 0, auto };
@@ -318,7 +339,16 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
       id: "sync_1", trigger: "auto" as const, status: running ? "flashing" as const : "failed" as const, step: running ? "writing" : "done", revisionId: head,
       failure: running ? null : failure, error: running ? null : error, errorCode: running ? null : errorCode, buildId: build.id, startedAt, finishedAt: running ? null : Date.now(), timings,
     });
-    if (mode === "kanata_keyboard") return [{ ...base, remapper: true, state: { kind: "in_sync" }, last: null }];
+    // The MacBook's modes stand on this page's board, named as the MacBook so the words read as they do there.
+    const mac = { ...base, boardName: "MacBook", remapper: true };
+    if (mode === "kanata_keyboard" || mode === "kanata_no_builtin") return [{ ...mac, state: { kind: "in_sync" }, last: null }];
+    if (mode === "kanata_first_run") return [{ ...mac, state: { kind: "not_connected" }, last: null }];
+    if (mode === "kanata_foreign") return [{ ...mac, state: { kind: "not_keyloom", detail: "kanata runs /Users/you/kanata.kbd" }, last: null }];
+    if (mode === "kanata_refused" || mode === "kanata_setup" || mode === "kanata_unwritable") {
+      const code = mode;
+      if (running) return [{ ...mac, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: { ...last("build", "", null), buildId: null } }];
+      return [{ ...mac, state: { kind: "behind", changes: 1, why: "failed", error: kanataSentence[code] }, last: { ...last("build", kanataSentence[code], code), buildId: null } }];
+    }
     if (running) return [{ ...base, state: { kind: "syncing", step: "writing", syncId: "sync_1", startedAt, trigger: "auto" }, last: last("flash", "", null) }];
     switch (mode) {
       case "files_and_folders": return [{ ...base, state: { kind: "behind", changes: 1, why: "failed", error: files }, last: last("flash", files, "permission_files_and_folders") }];
@@ -331,7 +361,9 @@ async function fakeFlashRefusedSync(mode: (typeof STATIC_SYNC)[number]): Promise
     throw new SyncError(400, "busy", "The dev editor's fake sync only shows how a sync ended.");
   };
   return {
-    status, syncNow: refused, setAutoSync: refused, setPaused: refused, disableRemapping: refused, replaceForeignRemapperConfig: refused, confirmExitChord: refused,
+    status, syncNow: refused, setAutoSync: refused, setPaused: refused, disableRemapping: refused, confirmExitChord: refused,
+    // KEYLOOM_FAKE_REPLACE=internal makes Replace it hit a server exception, so its confirm shows Restart keyloom and the log (R10-05).
+    replaceForeignRemapperConfig: process.env.KEYLOOM_FAKE_REPLACE === "internal" ? async () => { throw new Error("database is locked"); } : refused,
     newKeyboards: () => [], setupBoards: () => [],
     subscribe: (listener) => {
       if (!followed) {
