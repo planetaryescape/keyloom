@@ -51,13 +51,17 @@ export function toolRunning(view: NeedsTool, state: InstallState): string {
 
 /**
  * What a failed install says. Its code says which way failed: keyloom's download (Get, or Download after Homebrew failed) or Homebrew. After
- * a failed Homebrew install with a download here, it says what Download does (R12-01).
+ * a failed Homebrew install with a download here, it says what Download does (R12-01). Zapp's page is linked beside every failure, so the
+ * words say where a Zapp from it must go (R12-02, PR #321 review); a checksum mismatch's own reason already says so.
  */
-export function toolFailed(view: NeedsTool, state: InstallState): string {
+export function toolFailed(view: NeedsTool, state: InstallState, linux = false): string {
   const reason = plain(state.error ?? "");
-  if (DOWNLOAD_CODES.has(state.errorCode)) return `keyloom couldn't get ${view.name}. ${reason}`.trim();
+  const page = view.tool === "zapp" && state.errorCode !== "checksum_mismatch" ? ` If you get Zapp from its page, ${lowerFirst(zappPlacement(linux))}` : "";
+  if (DOWNLOAD_CODES.has(state.errorCode)) return `keyloom couldn't get ${view.name}. ${reason}`.trim() + page;
   const other = failedWays(view, state).download
     ? ` Or keyloom can download ${view.name} from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.`
     : "";
-  return `${view.name} didn't install. ${reason}`.trim() + other;
+  return `${view.name} didn't install. ${reason}`.trim() + other + page;
 }
+
+const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;

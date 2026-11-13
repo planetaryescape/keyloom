@@ -49,10 +49,14 @@ const kanataRelease = (version: string) => `${KANATA_RELEASES}/tag/v${version}`;
  * what keyloom downloaded and checked. The release names its program after the processor (kanata_macos_arm64). With `path`, the kanata
  * keyloom finds now, which the new one has to replace to be found first. The server's HAND_PLACEMENT says the same after a failed check.
  */
-export const kanataPlacement = (path: string | null = null): string =>
-  path === null
-    ? "Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there."
-    : `Rename its program to kanata and put it in place of the one at ${path}, which is the kanata keyloom finds.`;
+export const kanataPlacement = (path: string | null = null): string => {
+  const onPath = "Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.";
+  if (path === null) return onPath;
+  // A file written over Homebrew's reads as kanata changed outside Homebrew, whose only way on is Reinstall kanata, which puts Homebrew's
+  // back (the kanata_replaced step, PR #321 review). So Homebrew's kanata goes first, and the new one goes outside Homebrew's folders.
+  if (path.includes("/Cellar/kanata/")) return `Remove Homebrew's kanata first, so keyloom doesn't find it before the new one. Then ${lowerFirst(onPath)}`;
+  return `Rename its program to kanata and put it in place of the one at ${path}, which is the kanata keyloom finds.`;
+};
 const driverPage = (version: string | null) =>
   version === null ? "https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases" : `https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases/tag/v${version}`;
 /** Where setup copies kanata for the daemon (D-498); src/firmware/kanata/plist.ts holds the same path. */

@@ -198,8 +198,13 @@ describe("setupSteps", () => {
     expect(done).toMatchObject({ actions: [], link: { href: "https://github.com/jtroo/kanata/releases/tag/v1.12.0", label: "Get kanata 1.12.0" } });
     expect(done?.detail).toBe("Homebrew has nothing newer than 1.11.0, and keyloom writes for 1.12.0. Get 1.12.0 from kanata's releases page. Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
     // R12-02: with the kanata keyloom finds named, the new one takes its place, or keyloom keeps finding the old one first.
-    const found = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "link", path: "/opt/homebrew/Cellar/kanata/1.11.0/bin/kanata" }), install: job({ action: "upgrade", state: "succeeded" }) }))[0];
-    expect(found?.detail).toEndWith("Rename its program to kanata and put it in place of the one at /opt/homebrew/Cellar/kanata/1.11.0/bin/kanata, which is the kanata keyloom finds.");
+    const found = setupSteps(status(old, { kanata: k({ version: "1.13.0", update: "link", path: "/usr/local/opt/kanata-src/kanata" }) }))[0];
+    expect(found?.detail).toEndWith("rename its program to kanata and put it in place of the one at /usr/local/opt/kanata-src/kanata, which is the kanata keyloom finds.");
+    // PR #321 review: a file written over Homebrew's reads as kanata changed outside Homebrew, whose only way on puts Homebrew's back, so
+    // Homebrew's goes first and the new one goes outside its folders.
+    const cellar = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "link", path: "/opt/homebrew/Cellar/kanata/1.11.0/bin/kanata" }), install: job({ action: "upgrade", state: "succeeded" }) }))[0];
+    expect(cellar?.detail).toEndWith("Remove Homebrew's kanata first, so keyloom doesn't find it before the new one. Then rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
+    expect(cellar?.detail).not.toContain("in place of");
   });
 
   test("a kanata changed outside Homebrew names it and offers no password step for Homebrew's; Reinstall kanata puts it back (D-498)", () => {

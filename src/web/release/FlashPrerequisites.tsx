@@ -40,11 +40,12 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
     const ways = failedWays(view, state);
     const download = install.download;
     const retry = ways.retry === "download" && download !== undefined ? download : install.start;
+    const linux = typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent);
     return (
       <div className="callout callout-error" role="alert">
         <CircleAlert size={18} aria-hidden="true" />
         <div className="callout-body">
-          <p>{toolFailed(view, state)}</p>
+          <p>{toolFailed(view, state, linux)}</p>
           {state.logTail.length > 0 ? <LogTail label="Install log, last lines" lines={state.logTail} /> : null}
           <div className="callout-actions">
             <button type="button" className="button" onClick={retry}>

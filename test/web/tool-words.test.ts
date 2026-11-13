@@ -48,18 +48,23 @@ describe("the missing tool's step", () => {
   test("a failed Homebrew install offers Download Zapp where a release file is, and Try again repeats the way that failed", () => {
     const brewFailed = state({ status: "failed", phase: null, errorCode: "brew_failed", error: "Homebrew stopped with exit code 1." });
     expect(failedWays(view(true, false, true), brewFailed)).toEqual({ retry: "again", download: true, page: "Open Zapp's page" });
+    const page = " If you get Zapp from its page, put the zapp program in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.";
     expect(toolFailed(view(true, false, true), brewFailed)).toBe(
-      "Zapp didn't install. Homebrew stopped with exit code 1. Or keyloom can download Zapp from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.",
+      `Zapp didn't install. Homebrew stopped with exit code 1. Or keyloom can download Zapp from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.${page}`,
     );
+    // PR #321 review: the page link sits beside every failure, so the words say where its file goes; on Linux with the udev rules.
+    expect(toolFailed(view(true), brewFailed, true)).toEndWith("Also add ZSA's udev rules from the same page, so Zapp can reach the keyboard without root.");
+    expect(toolFailed(view(false, true), state({ status: "failed", errorCode: "download_failed", error: "keyloom couldn't download Zapp: offline." }))).toEndWith(page);
     // No release file for this computer, or an older server: Homebrew's Try again and the page, as before.
     expect(failedWays(view(true, false, false), brewFailed)).toEqual({ retry: "again", download: false, page: "Get Zapp" });
     expect(failedWays(view(true), brewFailed).download).toBe(false);
-    expect(toolFailed(view(true), brewFailed)).toBe("Zapp didn't install. Homebrew stopped with exit code 1.");
+    expect(toolFailed(view(true), brewFailed)).toBe(`Zapp didn't install. Homebrew stopped with exit code 1.${page}`);
     // A start that failed after the install (Docker's) is not Homebrew failing, so no download.
     expect(failedWays(view(true, false, true), state({ status: "failed", errorCode: "start_failed" })).download).toBe(false);
     // The download then failed: Try again downloads again, and no second Download button.
     const mismatch = state({ status: "failed", phase: null, errorCode: "checksum_mismatch", error: "The file keyloom downloaded isn't Zapp 1.0.2 as released." });
     expect(failedWays(view(true, false, true), mismatch)).toEqual({ retry: "download", download: false, page: "Open Zapp's page" });
+    // A mismatch's own reason says where the file goes (HAND_PLACEMENT), so it isn't said twice.
     expect(toolFailed(view(true, false, true), mismatch)).toBe("keyloom couldn't get Zapp. The file keyloom downloaded isn't Zapp 1.0.2 as released.");
     // Get Zapp without Homebrew: its page is named as a page beside the Get button.
     expect(failedWays(view(false, true, true), mismatch).page).toBe("Open Zapp's page");
@@ -68,6 +73,6 @@ describe("the missing tool's step", () => {
   test("a failed download says keyloom couldn't get it; a failed Homebrew install says it didn't install", () => {
     expect(toolFailed(view(false, true), state({ status: "failed", errorCode: "checksum_mismatch", error: "The file keyloom downloaded isn't Zapp 1.0.2 as released." })))
       .toBe("keyloom couldn't get Zapp. The file keyloom downloaded isn't Zapp 1.0.2 as released.");
-    expect(toolFailed(view(true), state({ status: "failed", errorCode: "brew_failed", error: "Homebrew stopped with exit code 1." }))).toBe("Zapp didn't install. Homebrew stopped with exit code 1.");
+    expect(toolFailed(view(true), state({ status: "failed", errorCode: "brew_failed", error: "Homebrew stopped with exit code 1." }))).toStartWith("Zapp didn't install. Homebrew stopped with exit code 1. If you get Zapp from its page,");
   });
 });
