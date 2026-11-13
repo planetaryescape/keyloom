@@ -172,6 +172,20 @@ describe("the picker lists one-shot modifiers where the firmware can write them"
     expect(pickTap(dance, { t: "oneShot", mods: ["LSFT"] })).toBe(dance);
   });
 
+  test("a dance the editor cannot expand keeps its original binding", () => {
+    const layout = layoutFor("qmk");
+    layout.tapDances = [{
+      id: "kept", name: "Kept dance", tap: { kind: "key", code: "A" },
+      hold: { kind: "layer", action: "toggle", layerId: "base" }, doubleTap: { kind: "key", code: "B" },
+    }];
+    const binding: Binding = { kind: "tapDance", tapDanceId: "kept" };
+    const draft = draftFromBinding(binding, layout, "base");
+    expect(draft.kind).toBe("tapDance");
+    const picked = pickTap(draft, { t: "oneShot", mods: ["LSFT"] });
+    expect(picked).toBe(draft);
+    expect(bindingFromDraft(picked, layout)).toEqual(binding);
+  });
+
   test("picking one makes the tap a one-shot, and picking a plain modifier key after it makes a plain one", () => {
     const layout = layoutFor("kanata");
     const start = draftFromBinding({ kind: "key", code: "A" }, layout, "base");

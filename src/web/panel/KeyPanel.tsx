@@ -502,7 +502,7 @@ export function KeyPanel(props: Props) {
           layout={layout}
           layerId={layerId}
           keysOnly={which === "hold" ? true : which === "tap" ? keysOnly : false}
-          hasExtraSlots={isDance(draft)}
+          hasExtraSlots={isDance(draft) || draft.kind === "tapDance"}
           advanced={advanced}
           selectedIds={selected}
           initialLayerAction={which === "tap" ? draft.layerAction : which === "hold" ? "momentary" : extra?.kind === "layer" ? extra.action : "toggle"}

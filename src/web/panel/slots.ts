@@ -88,7 +88,7 @@ export function pickTap(draft: Draft, pick: TapPick): Draft {
       return { ...draft, kind: "key", key, tap: { ...key } };
     }
     case "oneShot":
-      if (isDance(draft)) return draft;
+      if (isDance(draft) || draft.kind === "tapDance") return draft;
       return { ...draft, kind: "modifier", modifier: sortMods(pick.mods), oneShot: true };
     case "layer":
       return { ...draft, kind: "layer", layerAction: pick.action, layerId: pick.layerId };
