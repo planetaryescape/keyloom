@@ -12,6 +12,7 @@ import { type Fetcher, PINNED_TOOLS, type PinnedTool, canDownload, downloadTool,
 import { kanataRevision } from "../../src/firmware/kanata/board-config.ts";
 import { findKanata } from "../../src/firmware/kanata/binary.ts";
 import { findTool, keptTool, keptToolChanged, keptToolsDir } from "../../src/firmware/toolchain/kept-tools.ts";
+import { which } from "../../src/firmware/toolchain/run.ts";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "keyloom-tools-"));
 const pins = testPins;
@@ -233,7 +234,7 @@ describe("where keyloom keeps them", () => {
       expect(findKanata(env, pin)).toBeUndefined();
     }
     // With the real pins, a file that isn't the real release is never found: the Zapp flash looks here through findTool.
-    if (Bun.which("zapp") === null) expect(findTool("zapp", env)).toBeUndefined();
+    if (which("zapp") === null) expect(findTool("zapp", env)).toBeUndefined();
     expect(keptTool("kanata", env, { platform: "darwin", arch: "arm64" })).toBeUndefined();
     // Getting it again writes the pinned program over the changed one.
     await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(kanataZip).fetch, dir, pins: pins() });
