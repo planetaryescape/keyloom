@@ -200,6 +200,14 @@ function sessionRow(app: App, id: string): TypingSessionRow {
 // --- analysing --------------------------------------------------------------------------------
 
 /** An analysis as it is stored: the engine's result, and the change sets made from its suggestions. */
+/** The validator's first error, from a refusal that carries its result. */
+function firstErrorOf(err: ValidationFailedError): string | null {
+  // SAFETY: read as unknowns and checked below; a refusal without a validator result yields null.
+  const details = err.details as { errors?: Array<{ message?: unknown }> } | null;
+  const message = details?.errors?.[0]?.message;
+  return typeof message === "string" && message !== "" ? message : null;
+}
+
 export type StoredAnalysis = Analysis & { proposals: Array<{ candidateId: string; changeSetId: string | null; problem?: string }> };
 
 export type AnalyseOptions = {
@@ -294,7 +302,8 @@ export async function analyseSession(app: App, id: string, deps: LabDeps, opts: 
           stored.proposals.push({ candidateId: s.candidate.id, changeSetId: cs.id });
         } catch (err) {
           if (!(err instanceof ValidationFailedError)) throw err;
-          stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null, problem: err.message });
+          // The check's own first reason, which the lab shows beside the fix (R10-12); the note keeps the whole sentence.
+          stored.proposals.push({ candidateId: s.candidate.id, changeSetId: null, problem: firstErrorOf(err) ?? err.message });
           stored.notes.push(`${s.candidate.title} could not be proposed on the current layout: ${err.message}`);
         }
       }
@@ -333,6 +342,7 @@ export function typingFindings(app: App, layoutId: string): TypingFindings {
   const stored = row.analysis as StoredAnalysis;
   const view = getLayout(app, layoutId, row.revisionId);
   const byCandidate = new Map(stored.proposals.map((p) => [p.candidateId, p.changeSetId]));
+  const problemOf = new Map(stored.proposals.map((p) => [p.candidateId, p.problem ?? null]));
   return {
     sessions: all.length,
     analysed: analysed.length,
@@ -431,6 +441,7 @@ export function labReadout(app: App, id: string): { session: TypingSessionSummar
     return [];
   };
   const byCandidate = new Map(stored.proposals.map((p) => [p.candidateId, p.changeSetId]));
+  const problemOf = new Map(stored.proposals.map((p) => [p.candidateId, p.problem ?? null]));
   return {
     session,
     readout: {
@@ -449,6 +460,8 @@ export function labReadout(app: App, id: string): { session: TypingSessionSummar
             termMs: binding?.kind === "holdTap" ? (tappingTermOf(layout, binding.profileId) ?? null) : null,
           },
           proposal: cs === undefined ? null : toCard(cs),
+          // Why keyloom's check refused the fix on the layout, so the lab says it beside the fix, not only in the notes (R10-12).
+          problem: problemOf.get(s.candidate.id) ?? null,
         };
       }),
       notes: stored.notes,

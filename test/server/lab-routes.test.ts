@@ -1,7 +1,8 @@
 // The typing lab routes (src/api/lab.ts, D-314), over a real app with a scripted fake keyboard and the replay model: the guard, a whole
 // session from start to read-out to delete, per-finger typos, the board that can't be recorded, and a second start refused.
 import { afterAll, describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
-import { EmulateFailedError, applyOps, getLayout, type LabDeps } from "../../src/app/index.ts";
+import { EmulateFailedError, applyOps, getLayout, sessionAnalysis, type LabDeps } from "../../src/app/index.ts";
+import { saveAnalysis } from "../../src/persistence/typing-sessions.ts";
 import { LabPassagesResponseSchema, LabReadoutResponseSchema, LabSessionResponseSchema, LabSessionsResponseSchema, RecordingResponseSchema } from "../../src/api/lab.ts";
 import { appLabBackend } from "../../src/cli/lab-backend.ts";
 import { handleLabRoute } from "../../src/server/lab-routes.ts";
@@ -88,6 +89,25 @@ describe("a session through the routes", () => {
     expect(list.sessions[0]?.incomplete).toBe(false);
     expect((await post(`/api/lab/sessions/${stopped.session.id}/delete`)).status).toBe(200);
     expect((await call(`/api/lab/sessions/${stopped.session.id}`)).status).toBe(404);
+  });
+
+  test("a fix the checks refused carries the check's reason in the read-out (R10-12)", async () => {
+    const { app, layoutId, call, post } = await serve();
+    await post(`/api/lab/${layoutId}/recording`, { text: SCRIPT });
+    await new Promise((r) => setTimeout(r, 120));
+    const stopped = LabSessionResponseSchema.parse(await (await post("/api/lab/recording/stop", { typedText: SCRIPT })).json());
+    await post(`/api/lab/sessions/${stopped.session.id}/analyse`);
+    // As the analysis stores a candidate whose proposal the validator refused (lab.ts, ValidationFailedError).
+    const { analysis } = sessionAnalysis(app, stopped.session.id);
+    const refused = analysis.proposals[0];
+    expect(refused).toBeDefined();
+    saveAnalysis(app.db, stopped.session.id, { ...analysis, proposals: [{ candidateId: refused!.candidateId, changeSetId: null, problem: "You asked to keep this where it is" }, ...analysis.proposals.slice(1)] });
+    const read = LabReadoutResponseSchema.parse(await (await call(`/api/lab/sessions/${stopped.session.id}`)).json());
+    const first = read.readout?.suggestions[0];
+    expect(first?.proposal).toBeNull();
+    expect(first?.problem).toBe("You asked to keep this where it is");
+    // A proposed fix has no problem.
+    expect(read.readout?.suggestions.slice(1).every((s) => s.problem === null)).toBe(true);
   });
 
   test("stopping with nothing running is refused with its own code, and cancel saves nothing", async () => {

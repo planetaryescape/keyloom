@@ -91,3 +91,14 @@ export function labFixClosed(status: "proposed" | "applied" | "rejected" | "supe
     case "rejected": return "This fix was turned down. Type again to try fixes on the layout as it is now.";
   }
 }
+
+/**
+ * A fix keyloom's checks refused on the layout as it is now (R10-12). The check's own reason follows, when this keyloom stored one. The fix
+ * can't be applied, so the screen hides Apply and offers Type again, which records on the layout as it is now. Pure.
+ */
+export function refusedFixWords(problem: string | null | undefined): string {
+  const lead = "keyloom's checks refused this fix on your layout as it is now, so it can't be applied.";
+  if (problem == null || problem.trim() === "") return lead;
+  const reason = problem.trim();
+  return `${lead} ${reason.charAt(0).toUpperCase()}${reason.slice(1)}${/[.!?]$/.test(reason) ? "" : "."}`;
+}
