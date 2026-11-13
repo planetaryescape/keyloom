@@ -43,6 +43,16 @@ export type Docker = {
 export type DockerAction = "start" | "restart" | "fix-files";
 type DockerStartCode = NonNullable<Extract<DockerStartResponse, { ok: false }>["code"]>;
 
+/**
+ * The readiness a start that brought Docker up leaves until it is read again. A failed readiness's `engine` is only what keyloom chose to
+ * start, and the start's own answer can be "the Docker daemon" (it found Docker already up), so neither names what answers. Only a ready
+ * readiness's engine, which came from the daemon itself (D-555), is kept; otherwise it reads "Docker" until readiness is asked again
+ * (PR #315 CodeRabbit).
+ */
+export function readinessAfterStart(previous: DockerReadinessResponse | null, version: string): DockerReadinessResponse {
+  return { ok: true, version, engine: previous?.ok === true ? previous.engine : "Docker", autoStart: previous?.autoStart ?? true };
+}
+
 export function useDocker(token: string): Docker {
   const [readiness, setReadiness] = useState<DockerReadinessResponse | null>(null);
   const [unanswered, setUnanswered] = useState(false);
@@ -89,9 +99,11 @@ export function useDocker(token: string): Docker {
     ask(token)
       .then((result) => {
         setLinkedFile((before) => linkedFileAfter(before, action, result));
-        // The engine readiness named is kept: a start that found Docker already up answers "the Docker daemon", which names no engine (R10-06).
-        if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: previous?.engine ?? result.engine, autoStart: previous?.autoStart ?? true }));
-        else if (result.code === "engine_busy") {
+        // Readiness is asked again, so the engine is named from what answers now, not from what the start guessed (R10-06).
+        if (result.ok) {
+          setReadiness((previous) => readinessAfterStart(previous, result.version));
+          setAsks((n) => n + 1);
+        } else if (result.code === "engine_busy") {
           // keyloom is already starting the engine (R4-04): nothing failed, so nothing is recorded, and the readiness follows that start.
           setLastAction(before);
           // Shown as starting until the readiness asked for below says which action runs, so the button doesn't come back meanwhile.

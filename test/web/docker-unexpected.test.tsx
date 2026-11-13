@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DockerCallout } from "../../src/web/release/DockerCallout.tsx";
 import { ToolCallout } from "../../src/web/release/FlashPrerequisites.tsx";
-import type { Docker } from "../../src/web/release/useDocker.ts";
+import { type Docker, readinessAfterStart } from "../../src/web/release/useDocker.ts";
 import type { Install } from "../../src/web/release/useInstall.ts";
 import type { PageFailure } from "../../src/web/shell/unexpected.ts";
 
@@ -41,4 +41,13 @@ test("an install that couldn't start for an unexpected reason offers Restart key
   );
   expect(html).toContain("keyloom couldn&#x27;t find what this page asked for.");
   expect(html).toContain("Restart keyloom");
+});
+
+// PR #315 CodeRabbit: a failed readiness names only what keyloom chose to start, so a start that brought Docker up never keeps it as the
+// engine that answers; only a ready readiness's engine, which the daemon named, is kept until readiness is read again.
+test("a Docker that came up keeps an engine name only from a ready readiness", () => {
+  const down = { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Docker Desktop", canStart: true, autoStart: true, install: null, access: null, restartEngine: null } as const;
+  expect(readinessAfterStart(down as never, "29.0")).toEqual({ ok: true, version: "29.0", engine: "Docker", autoStart: true });
+  expect(readinessAfterStart({ ok: true, version: "28.0", engine: "OrbStack", autoStart: false }, "29.0")).toEqual({ ok: true, version: "29.0", engine: "OrbStack", autoStart: false });
+  expect(readinessAfterStart(null, "29.0").engine).toBe("Docker");
 });
