@@ -154,9 +154,10 @@ describe("a build that ran out of Docker's disk", () => {
     expect(cachePruneOutcome({ ok: true, freed: "0B" })).toMatchObject({ again: false, text: expect.stringContaining("already empty") });
     expect(cachePruneOutcome({ ok: true, freed: null }).text).toBe("Docker freed its build cache. Build again to continue; it takes longer this time.");
     // A running build or flash, or a Docker start, ends by itself: the button stays with the reason.
-    expect(cachePruneOutcome({ ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it." })).toMatchObject({ again: true });
-    expect(cachePruneOutcome({ ok: false, code: "engine_busy", reason: "keyloom is already starting Docker." })).toMatchObject({ again: true });
-    expect(cachePruneOutcome({ ok: false, unreachable: true })).toMatchObject({ again: true });
+    expect(cachePruneOutcome({ ok: false, code: "build_running", reason: "keyloom is running a build. Free Docker's build cache once it has finished." })).toMatchObject({ again: true });
+    expect(cachePruneOutcome({ ok: false, code: "engine_busy", reason: "keyloom is starting Docker. Free Docker's build cache once that has finished." })).toMatchObject({ again: true });
+    // The step's one button is Free Docker's build cache, so no words promise a Try again.
+    expect(cachePruneOutcome({ ok: false, unreachable: true })).toEqual({ again: true, text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again." });
     // Docker's own failure would fail again, so the button goes and Build again stays.
     expect(cachePruneOutcome({ ok: false, reason: "Docker couldn't free its build cache: `daemon` error" })).toMatchObject({ again: false, text: expect.not.stringContaining("`") });
     const refused = failedStep("disk_full", { error }, { cachePrune: { running: false, outcome: cachePruneOutcome({ ok: false, code: "build_running", reason: "A build runs." }) } });

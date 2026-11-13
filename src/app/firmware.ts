@@ -407,6 +407,20 @@ export function engineRestartBlocker(app: App): string | null {
 }
 
 /**
+ * Why Docker's build cache can't be freed now, or null (R8-04). A prune takes the cache a running build reads, so it waits for the same
+ * work as a forced restart. It stops nothing and restarts nothing, so its words say only what runs and that freeing waits for it, never
+ * the restart's sentence (PR #306 review).
+ */
+export function buildCachePruneBlocker(app: App): string | null {
+  const { stopping, writing } = engineRestartHolds(app);
+  if (stopping.length === 0 && !writing) return null;
+  const names = stopping.length <= 1 ? stopping[0] : `${stopping.slice(0, -1).join(", ")} and ${stopping.at(-1)}`;
+  const doing = [...(names === undefined ? [] : [`running ${names}`]), ...(writing ? ["writing to a keyboard"] : [])];
+  const one = stopping.length + (writing ? 1 : 0) === 1;
+  return `keyloom is ${doing.join(" and ")}. Free Docker's build cache once ${one ? "it has" : "they have"} finished.`;
+}
+
+/**
  * What a forced restart waits for now, named for the person ("a build", "a lab analysis", "a keyboard write"), or empty when nothing
  * holds it. The page names it while it waits to restart by itself ("Restarts when the lab analysis ends", R7-04); the refusal itself
  * comes from `engineRestartBlocker`, inside the engine lock.

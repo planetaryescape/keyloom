@@ -425,11 +425,17 @@ export const BUILD_CACHE_UNGUARDED = "keyloom can't tell whether a build is runn
 /**
  * Frees Docker's build cache for a build that ran out of disk (R8-04). It holds the engine lock, so a start, a restart or Fix Colima's
  * files refuses it as `engine_busy`, and a build waits for it in `ensureDocker`. A prune while a build runs would take the cache that build
- * reads, so it asks `blocker` (D-529's `engineRestartBlocker`) inside the lock, and is refused as `build_running` while a build, flash,
- * keyboard write, lab analysis, review test or emulator run is under way, and refused without a blocker at all.
+ * reads, so it asks `blocker` (serve's `buildCachePruneBlocker`, which waits for what D-529's restart waits for) inside the lock, and is
+ * refused as `build_running` while a build, flash, keyboard write, lab analysis, review test or emulator run is under way, and refused
+ * without a blocker at all.
  */
 export async function freeBuildCache(opts: { blocker?: () => string | null; overrides?: ToolchainOverrides } = {}): Promise<{ ok: true; freed: string | null } | { ok: false; reason: string; code?: "engine_busy" | "build_running" }> {
-  return engineBusy() ?? holdEngine("prune", async () => {
+  // The page keeps Free Docker's build cache for this refusal and has no Check again, so the words say when to press it (PR #306 review).
+  if (engineHolder !== null) {
+    const what = ENGINE_ACTION_WORDS[engineHolder.kind];
+    return { ok: false, code: "engine_busy", reason: `keyloom is ${engineHolder.kind === "prune" ? "already " : ""}${what}. Free Docker's build cache once that has finished.` };
+  }
+  return holdEngine("prune", async () => {
     const blocked = opts.blocker === undefined ? BUILD_CACHE_UNGUARDED : opts.blocker();
     if (blocked !== null) return { ok: false as const, reason: blocked, code: "build_running" as const };
     return (opts.overrides?.pruneCache ?? pruneBuildCache)();

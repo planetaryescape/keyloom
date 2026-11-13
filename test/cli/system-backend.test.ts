@@ -116,16 +116,17 @@ describe("appSystemBackend", () => {
     const done = Promise.withResolvers<void>();
     const given: Array<(() => string | null) | undefined> = [];
     const prune = async (opts?: { blocker?: () => string | null }) => { prunes += 1; given.push(opts?.blocker); await done.promise; return { ok: true as const, freed: "512MB" }; };
-    const restartBlocker = () => null;
-    const backend = appSystemBackend({}, { prune, restartBlocker });
+    const pruneBlocker = () => null;
+    // The restart's blocker is not the prune's: its words would tell the person to restart Docker (PR #306 review).
+    const backend = appSystemBackend({}, { prune, pruneBlocker, restartBlocker: () => "restart words" });
     const first = backend.pruneBuildCache?.();
     const second = backend.pruneBuildCache?.();
     done.resolve();
     expect(await first).toEqual({ ok: true, freed: "512MB" });
     expect(await second).toEqual({ ok: true, freed: "512MB" });
     expect(prunes).toBe(1);
-    expect(given).toEqual([restartBlocker]);
-    expect(await appSystemBackend({}, { prune }).pruneBuildCache?.()).toMatchObject({ ok: false, code: "build_running" });
+    expect(given).toEqual([pruneBlocker]);
+    expect(await appSystemBackend({}, { prune, restartBlocker: () => null }).pruneBuildCache?.()).toMatchObject({ ok: false, code: "build_running" });
     expect(prunes).toBe(1);
   });
 

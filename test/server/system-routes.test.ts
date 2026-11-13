@@ -140,8 +140,8 @@ describe("the Docker routes", () => {
       expect((await call("/api/system/docker/prune-build-cache", { method: "POST", body: "{\"all\":true}", headers: { "content-type": "application/json" } })).status).toBe(400);
       expect((await call("/api/system/docker/prune-build-cache")).status).toBe(405);
       expect(prunes).toBe(1);
-      backend.pruneBuildCache = async () => ({ ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it." });
-      expect(await (await post("/api/system/docker/prune-build-cache")).json()).toEqual({ ok: false, code: "build_running", reason: "keyloom is running a build, and restarting Docker now would stop it." });
+      backend.pruneBuildCache = async () => ({ ok: false, code: "build_running", reason: "keyloom is running a lab analysis. Free Docker's build cache once it has finished." });
+      expect(await (await post("/api/system/docker/prune-build-cache")).json()).toEqual({ ok: false, code: "build_running", reason: "keyloom is running a lab analysis. Free Docker's build cache once it has finished." });
     } finally {
       delete backend.pruneBuildCache;
     }

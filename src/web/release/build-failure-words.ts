@@ -61,7 +61,7 @@ export type CachePruneOutcome = { text: string; again: boolean };
 const MAKE_ROOM = "Make room in Docker's disk another way: raise its disk limit in your Docker engine's settings, or remove images you no longer use, then build again.";
 
 export function cachePruneOutcome(result: { ok: true; freed: string | null } | { ok: false; reason: string; code?: string | undefined } | { ok: false; unreachable: true }): CachePruneOutcome {
-  if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Try again.", again: true };
+  if ("unreachable" in result) return { text: "keyloom didn't answer, so Docker's build cache may not have been freed. Free Docker's build cache again.", again: true };
   if (!result.ok) {
     // A running build or flash, or a start or restart of Docker, ends by itself; any other failure would fail the same way again.
     if (result.code === "build_running" || result.code === "engine_busy") return { text: plain(result.reason), again: true };

@@ -25,6 +25,8 @@ export function appSystemBackend(
     restart?: typeof restartDocker; start?: typeof startDocker; fixFiles?: typeof fixColimaFiles; prune?: typeof freeBuildCache; restartBlocker?: () => string | null;
     /** What a forced restart waits for, named for the person; serve passes `engineRestartWork` (R7-04). */
     restartWork?: () => string[];
+    /** Why Docker's build cache can't be freed now, or null; serve passes `buildCachePruneBlocker`, whose words are the prune's own (R8-04). */
+    pruneBlocker?: () => string | null;
   } = {},
 ): SystemBackend & { stopInstalls: () => Promise<void> } {
   let starting: Promise<DockerStartResponse> | null = null;
@@ -80,10 +82,10 @@ export function appSystemBackend(
       fixing = (docker.fixFiles ?? fixColimaFiles)({ blocker }).then(restartResponse).finally(() => { fixing = null; });
       return fixing;
     },
-    // A prune takes the cache a running build reads, so it asks the same blocker as a forced restart, inside the lock (R8-04).
+    // A prune takes the cache a running build reads, so it waits for the same work as a forced restart, asked inside the lock (R8-04).
     pruneBuildCache: async () => {
       if (pruning !== null) return pruning;
-      const blocker = docker.restartBlocker;
+      const blocker = docker.pruneBlocker;
       if (blocker === undefined) return { ok: false, reason: BUILD_CACHE_UNGUARDED, code: "build_running" };
       pruning = (docker.prune ?? freeBuildCache)({ blocker }).finally(() => { pruning = null; });
       return pruning;

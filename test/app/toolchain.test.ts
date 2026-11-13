@@ -202,7 +202,7 @@ describe("a daemon that refuses this account (D-497)", () => {
       let prunes = 0;
       const pruneCache = async () => (prunes++, { ok: true as const, freed: "2.1GB" });
       expect(await freeBuildCache({ blocker: () => null, overrides: { pruneCache } })).toEqual({ ok: true, freed: "2.1GB" });
-      const running = "keyloom is running a build, and restarting Docker now would stop it. Restart Docker once that has finished.";
+      const running = "keyloom is running a build. Free Docker's build cache once it has finished.";
       expect(await freeBuildCache({ blocker: () => running, overrides: { pruneCache } })).toEqual({ ok: false, reason: running, code: "build_running" });
       expect(await freeBuildCache({ overrides: { pruneCache } })).toMatchObject({ ok: false, code: "build_running" });
       expect(prunes).toBe(1);
@@ -217,7 +217,7 @@ describe("a daemon that refuses this account (D-497)", () => {
       // Readiness never shows a prune as an engine action: it runs only on a Docker that answers.
       expect(await dockerReadiness({ status: async () => down, detect: async () => colima, env: {} })).toMatchObject({ engineAction: null });
       expect(await restartDocker({ overrides: { status: async () => down, detect: async () => colima } })).toMatchObject({ ok: false, code: "engine_busy", reason: expect.stringContaining("freeing Docker's build cache") });
-      expect(await freeBuildCache({ blocker: () => null, overrides: { pruneCache: async () => ({ ok: true as const, freed: null }) } })).toMatchObject({ ok: false, code: "engine_busy" });
+      expect(await freeBuildCache({ blocker: () => null, overrides: { pruneCache: async () => ({ ok: true as const, freed: null }) } })).toEqual({ ok: false, code: "engine_busy", reason: "keyloom is already freeing Docker's build cache. Free Docker's build cache once that has finished." });
       const building = ensureDocker({ onProgress: (line) => order.push(line), overrides: { env: {}, status: async () => ({ ok: true as const, version: "29" }) } }).then((r) => (order.push(`build proceeds ok=${r.ok}`), r));
       await Bun.sleep(20);
       expect(order).toEqual(["keyloom: waiting for keyloom to finish freeing Docker's build cache"]);
