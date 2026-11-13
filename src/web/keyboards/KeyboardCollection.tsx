@@ -69,7 +69,8 @@ export function KeyboardCollection({ token, choices, active, onChanged, onClose,
       if (action === "restore") setResumable({ keyboard: result, note: said });
       onChanged();
       try { await load(); }
-      catch { setProblem("The keyboard was updated, but the collection couldn't refresh. Try again to reload the list."); }
+      // The buttons beside it say the way on, so the words don't promise a Try again that an unexpected failure doesn't offer (R8-03).
+      catch (error) { setProblem("The keyboard was updated, but the list couldn't be read again.", reload, error); }
     } catch (error) {
       // A keyboard keyloom no longer has (`not_found`) fails the same way on a repeat, so Try again reads the list as it is now (D-534).
       setProblem(error instanceof Error ? error.message : "That didn't work.", isGone(error) ? reload : () => void change(keyboard, action), error);
@@ -144,7 +145,7 @@ export function CollectionProblem({ token, problem, busy }: { token: string; pro
       {problem.text}
       {problem.code === undefined
         ? <button type="button" className="sheet-action" disabled={busy} onClick={problem.retry}>Try again</button>
-        : <UnexpectedWayOut token={token} code={problem.code} onRetry={problem.retry} className="sheet-action" />}
+        : <UnexpectedWayOut token={token} code={problem.code} onRetry={problem.retry} retryDisabled={busy} className="sheet-action" />}
     </p>
   );
 }

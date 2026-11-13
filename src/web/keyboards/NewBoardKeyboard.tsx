@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PreviewBoard, PutPreviewResponse } from "../../api/keyboards.ts";
 import type { BoardChoice } from "../../api/http.ts";
+import { isOnePiece } from "../../boards/one-piece.ts";
 import { describeKey } from "../../layout/describe.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { Layout } from "../../layout/schema.ts";
@@ -13,6 +14,27 @@ const noop = () => {};
 
 /** "pinky", "ring", "thumb": the finger keyloom expects, as a cap's front legend says it. */
 const fingerWord = (finger: string | undefined): string => (finger === undefined ? "" : finger.replace(/^(left|right)-/, ""));
+
+/**
+ * A cap too small for its finger's word shows the word's first letter instead, on every key of the board, never a word cut by the cap's
+ * edge (PR #307 review: "midd" on a 12-column board on a phone). The key's accessible name keeps the whole word, and Review's lead says
+ * what each letter means (FINGER_LETTERS).
+ */
+const fingerLegend = (finger: string | undefined): { tap: string; short?: string } => {
+  const word = fingerWord(finger);
+  return word === "" ? { tap: "" } : { tap: word, short: word.charAt(0).toUpperCase() };
+};
+
+/**
+ * The half of the new board a phone shows: one half of a split board, the whole of a one-piece one (D-351). It follows the new board,
+ * never the board of the config open behind it (PR #307 review: a Glove80 open halved a one-piece board).
+ */
+export function newBoardHalf(phone: boolean, board: Pick<PreviewBoard, "keys" | "hands"> | null, display: BoardChoice["display"], half: "left" | "right"): "left" | "right" | null {
+  return phone && board !== null && !isOnePiece({ hands: board.hands, display }, board.keys) ? half : null;
+}
+
+/** What each finger letter means, for Review's lead. */
+export const FINGER_LETTERS = "A key too small for the word shows its first letter: P pinky, R ring, M middle, I index, T thumb.";
 
 // The new keyboard on the stage (n2 to n4, D-336), drawn by the board renderer every board uses, so it looks like itself and not a diagram.
 // Confirming, its caps are blank and the home row is lit; reviewing, each cap's front says the finger keyloom expects; putting, the caps
@@ -57,7 +79,7 @@ export function NewBoardKeyboard({ board, display, mode, homeRow, mapped, placed
   );
   const overrides = useMemo(
     // An empty key has no front to print on, so the finger is the cap's one word.
-    () => board.keys.map((_, i) => (mode === "review" ? { tap: fingerWord(board.fingers[String(i)]) } : mode === "confirm" ? { tap: "" } : undefined)),
+    () => board.keys.map((_, i) => (mode === "review" ? fingerLegend(board.fingers[String(i)]) : mode === "confirm" ? { tap: "" } : undefined)),
     [board.keys, board.fingers, mode],
   );
   const marks = useMemo(() => new Map([...placed].map((p) => [p, "changed" as const])), [placed]);

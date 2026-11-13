@@ -12,7 +12,7 @@ import { NewKeyboardCard } from "./NewKeyboardCard.tsx";
 import { SearchFailed } from "./SearchFailed.tsx";
 import { SetupCard } from "./SetupCard.tsx";
 import { NewBoardPanel, type PutSource } from "./NewBoardPanel.tsx";
-import { NewBoardKeyboard } from "./NewBoardKeyboard.tsx";
+import { NewBoardKeyboard, newBoardHalf } from "./NewBoardKeyboard.tsx";
 import { Silhouette } from "../shell/TopBar.tsx";
 import { PHONE, useMediaQuery } from "../shell/useMediaQuery.ts";
 import { isOnePiece } from "../../boards/one-piece.ts";
@@ -34,16 +34,18 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
 }) {
   const flow = useNewKeyboard(token, sync.newKeyboards, sync.setupBoards, onBoardAdded);
   const chooseKnown = flow.chooseKnown;
+  // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
+  const [importing, setImporting] = useState<{ board: string | null } | null>(null);
   useEffect(() => {
     if (setup === null) return;
     chooseKnown(setup);
+    // The import screen covers the setup card, so Set up pressed while it shows would seem to do nothing (PR #307 review).
+    setImporting(null);
     onSetupOpened?.();
     // Opened once per Set up: the callbacks are rebuilt each render and say nothing new.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup]);
   const [query, setQuery] = useState("");
-  // The import screen, at one board's card when it opened from that board's setup (R7-13), or at every card.
-  const [importing, setImporting] = useState<{ board: string | null } | null>(null);
   const [half, setHalf] = useState<"left" | "right">("left");
   const [firmwareSearch, setFirmwareSearch] = useState(false);
   const [collection, setCollection] = useState<CollectionKeyboard[] | null>(null);
@@ -76,6 +78,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     rows: Object.entries(known.rows).map(([name, positions]) => ({ name, positions })),
   } : null);
   const display = flow.preview?.board ? undefined : known?.display;
+  const shownHalf = newBoardHalf(phone, drawn, display, half);
   const split = drawn !== null && !isOnePiece({ hands: drawn.hands, display }, drawn.keys);
   const placed = new Set(flow.putPreview?.placements.flatMap((placement) => {
     if (flow.step.kind !== "put" || placement.blocked !== undefined || !placement.candidates[0]) return [];
@@ -88,7 +91,7 @@ export function KeyboardWelcome({ token, choices, boardsRead = "ready", onRetryB
     <header><div>{onBack ? <button className="sheet-action" type="button" onClick={onBack}><ArrowLeft size={14} />Back to your keyboard</button> : null}<h1>{sources.length === 0 ? "Your first keyboard" : "Add a keyboard"}</h1><p>{welcomeLead(chosen)}</p></div><button type="button" className="sheet-action" onClick={() => onManage()}>Manage keyboards</button></header>
     <div className="onboarding-workbench" data-panel={panel || undefined}>
       <section className="onboarding-stage" aria-label="Keyboard setup">
-        {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={phone && split ? half : null} onSwipe={phone && split ? (direction) => setHalf(direction === "left" ? "right" : "left") : undefined} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
+        {drawn && panel ? <><NewBoardKeyboard board={drawn} display={display} mode={flow.step.kind === "review" ? "review" : flow.step.kind === "put" ? "put" : "confirm"} homeRow={flow.step.kind === "confirm" || flow.step.kind === "review" ? flow.step.homeRow ?? flow.preview?.guessedHomeRow ?? null : null} mapped={flow.putPreview} placed={placed} onPickRow={flow.setHomeRow} half={shownHalf} onSwipe={shownHalf === null ? undefined : (direction) => setHalf(direction === "left" ? "right" : "left")} />{split ? <div className="onboarding-halves"><button type="button" className="sheet-action" aria-pressed={half === "left"} onClick={() => setHalf("left")}>Left</button><button type="button" className="sheet-action" aria-pressed={half === "right"} onClick={() => setHalf("right")}>Right</button></div> : null}</> : null}
         <NewKeyboardCard flow={flow} />
         <SetupCard flow={flow} boards={choices} hasConfigs={sources.length > 0} onImport={(board) => setImporting({ board })} onMade={onMade} />
         {flow.step.kind === "idle" ? <div className="onboarding-choices">

@@ -13,6 +13,7 @@ import { deriveProblem, type DeriveProblem } from "./derive-words.ts";
 import { CONTRIBUTION_GUIDE } from "./search-words.ts";
 import { RestoreKeyboard } from "./RestoreKeyboard.tsx";
 import { firstFlashLine } from "./first-flash-words.ts";
+import { FINGER_LETTERS } from "./NewBoardKeyboard.tsx";
 import { UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 
 /** `boardId` leaves out the configs already on the board being put on: a put copies across boards, and `config new` copies within one. */
@@ -238,7 +239,7 @@ function Review({ flow, preview, known }: { flow: NewKeyboard; preview: PreviewR
       <header className="nb-panel-head">
         <button type="button" className="sheet-action nb-back" onClick={flow.backToConfirm}><ArrowLeft size={13} aria-hidden="true" />{reviewBackLabel((preview?.layouts.length ?? 0) > 1, controller !== null)}</button>
         <h2>How keyloom reads your {name}</h2>
-        <p className="nb-lead">Each key shows the finger keyloom expects to press it. If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
+        <p className="nb-lead">Each key shows the finger keyloom expects to press it. {FINGER_LETTERS} If one is wrong, go back and pick another row or keyboard; it's cheaper now than after a flash.</p>
       </header>
       <div className="nb-panel-body">
         {board === null ? <Reading flow={flow} name={name} known={known} /> : (

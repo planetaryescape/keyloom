@@ -14,10 +14,15 @@ import { canvasAround } from "../../src/web/keyboard/canvas.ts";
 import { caseParts } from "../../src/web/keyboard/case-shape.ts";
 import { applyDisplayRotation } from "../../src/web/keyboard/geometry.ts";
 import { MIN_UNIT, fitUnit } from "../../src/web/keyboard/useFitUnit.ts";
+import { tapsFit } from "../../src/web/keyboard/fit.ts";
+import { tapWidth } from "../../src/web/keyboard/Keyboard.tsx";
+import { qmkFlash, zmkFlash } from "../../src/boards/derive/flash-recipe.ts";
+import type { FlashRecipe } from "../../src/boards/recipes.ts";
+import type { GeometryKey } from "../../src/boards/schema.ts";
 import { firstFlashLine } from "../../src/web/keyboards/first-flash-words.ts";
 import { CollectionProblem, rowWayIn } from "../../src/web/keyboards/KeyboardCollection.tsx";
 import { PluggedIn } from "../../src/web/keyboards/KeyboardWelcome.tsx";
-import { NewBoardKeyboard } from "../../src/web/keyboards/NewBoardKeyboard.tsx";
+import { FINGER_LETTERS, NewBoardKeyboard, newBoardHalf } from "../../src/web/keyboards/NewBoardKeyboard.tsx";
 import { NewBoardPanel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 import { unexpectedCodeOf } from "../../src/web/keyboards/unexpected-code.ts";
@@ -46,12 +51,17 @@ describe("R8-02: the new-keyboard drawing on a phone", () => {
       keys: [{ x: 0, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }, { x: 1, y: 0, w: 1, h: 1, r: 0, rx: 0, ry: 0 }],
       hands: { left: [0], right: [1] }, fingers: { "0": "left-pinky", "1": "right-index" }, rows: [{ name: "1", positions: [0, 1] }],
     };
+    // Rendered without a stage to measure, the board is drawn at its smallest unit, where the words don't fit: each cap shows the letter,
+    // and its accessible name keeps the whole word.
     const html = renderToStaticMarkup(<NewBoardKeyboard board={board} mode="review" homeRow={1} mapped={null} placed={new Set()} onPickRow={() => {}} />);
-    expect(html).toContain(">pinky<");
-    expect(html).toContain(">index<");
+    expect(html).toContain(">P<");
+    expect(html).toContain(">I<");
+    expect(html).toContain("left pinky finger");
     expect(html).not.toContain('data-tone="none"');
     // Confirming, the caps stay blank: the home row is the only thing marked.
-    expect(renderToStaticMarkup(<NewBoardKeyboard board={board} mode="confirm" homeRow={1} mapped={null} placed={new Set()} onPickRow={() => {}} />)).not.toContain(">pinky<");
+    const confirm = renderToStaticMarkup(<NewBoardKeyboard board={board} mode="confirm" homeRow={1} mapped={null} placed={new Set()} onPickRow={() => {}} />);
+    expect(confirm).not.toContain(">pinky<");
+    expect(confirm).not.toContain(">P<");
   });
 });
 
@@ -165,5 +175,87 @@ describe("R8-18: the import intro", () => {
     const all = importIntro([moonlander, glove, corne, macbook]);
     expect(all).toStartWith("Each card says where that keyboard's layout comes from");
     expect(all).not.toContain("own editor");
+  });
+});
+
+describe("PR #307 review", () => {
+  // A Planck-style one-piece board: 12 columns, 4 rows, cut between the hands at column 6 with no gap, so a phone shows it whole.
+  const FINGER_COLUMNS = ["pinky", "ring", "middle", "index", "index", "index"];
+  const grid = {
+    keys: Array.from({ length: 48 }, (_, i): GeometryKey => ({ x: i % 12, y: Math.floor(i / 12), w: 1, h: 1, r: 0, rx: 0, ry: 0 })),
+    hands: { left: Array.from({ length: 48 }, (_, i) => i).filter((i) => i % 12 < 6), right: Array.from({ length: 48 }, (_, i) => i).filter((i) => i % 12 >= 6) },
+    fingers: Object.fromEntries(Array.from({ length: 48 }, (_, i) => {
+      const column = i % 12;
+      return [String(i), column < 6 ? `left-${FINGER_COLUMNS[column]}` : `right-${FINGER_COLUMNS[11 - column]}`];
+    })),
+  };
+  const word = (finger: string) => finger.replace(/^(left|right)-/, "");
+  // What Review's caps would print at this stage: the whole word on every key, or the first letter on every key (NewBoardKeyboard).
+  const review = (keys: readonly GeometryKey[], hands: { left: readonly number[]; right: readonly number[] }, fingers: Record<string, string>, display: Parameters<typeof caseParts>[2], half: "left" | "right" | null, stage: { width: number; height: number }) => {
+    const positions = half === null ? keys.map((_, p) => p) : [...hands[half]];
+    const canvas = canvasAround(positions.flatMap((p) => keys[p] ?? []), caseParts(keys, hands, display, half));
+    const { unit } = fitUnit(canvas, stage, MIN_UNIT.preview);
+    const taps = (form: (finger: string) => string) => positions.flatMap((p) => {
+      const finger = fingers[String(p)];
+      const key = keys[p];
+      return finger === undefined || key === undefined ? [] : [{ text: form(finger), width: tapWidth(key, canvas) }];
+    });
+    // Under 44 px a key's legend floor is 10 px (Keyboard.tsx).
+    const px = { unit, floor: unit < 44 ? 10 : 11 };
+    return { words: tapsFit(taps(word), px), letters: tapsFit(taps((finger) => word(finger).charAt(0).toUpperCase()), px) };
+  };
+
+  test("Review never cuts a finger word on a phone: a 12 x 4 one-piece board shows letters, which fit", () => {
+    expect(isOnePiece({ hands: grid.hands, display: undefined }, grid.keys)).toBe(true);
+    expect(review(grid.keys, grid.hands, grid.fingers, undefined, null, PHONE_STAGE)).toEqual({ words: false, letters: true });
+    // On a laptop the same board has room for the words.
+    expect(review(grid.keys, grid.hands, grid.fingers, undefined, null, { width: 840, height: 400 }).words).toBe(true);
+  });
+
+  for (const { definition: d, geometry } of listBoards()) {
+    const keys = applyDisplayRotation(geometry.keys, d.display);
+    const views = isOnePiece(d, keys) ? ([null] as const) : (["left", "right"] as const);
+    for (const half of views) {
+      test(`${d.id}${half === null ? "" : `, ${half} half`}: Review's finger marks fit their caps at 390 px, as words or as letters`, () => {
+        expect(review(keys, d.hands, d.fingers, d.display, half, PHONE_STAGE).letters).toBe(true);
+      });
+    }
+  }
+
+  test("Review's lead says what each letter means", () => {
+    expect(FINGER_LETTERS).toContain("P pinky, R ring, M middle, I index, T thumb");
+  });
+
+  test("a phone halves the new board by the new board's own shape, not the open config's", () => {
+    const corne = listBoards().find(({ definition }) => definition.id === "foostan/corne");
+    if (corne === undefined) throw new Error("foostan/corne is not shipped");
+    const split = { keys: applyDisplayRotation(corne.geometry.keys, corne.definition.display), hands: corne.definition.hands };
+    expect(newBoardHalf(true, grid, undefined, "left")).toBeNull();
+    expect(newBoardHalf(true, split, undefined, "right")).toBe("right");
+    expect(newBoardHalf(false, split, undefined, "right")).toBeNull();
+    expect(newBoardHalf(true, null, undefined, "left")).toBeNull();
+  });
+
+  test("every flash recipe reads as one sentence, central and peripheral halves included", () => {
+    // As the preview route turns a recipe into steps (src/app/keyboard-add.ts, `flash.steps`).
+    const steps = (flash: FlashRecipe | undefined): string[] => flash?.kind === "uf2-drives" ? flash.steps.map((step) => step.enter) : flash?.kind === "dfu-tool" ? [flash.enter] : [];
+    const qmk = ["rp2040", "stm32-dfu", "caterina", "atmel-dfu"].map((bootloader) => qmkFlash(bootloader, undefined, "atmega32u4").flash);
+    const zmk = ["nice_nano//zmk", "rpi_pico//zmk"].flatMap((controller) => [["corne_left", "corne_right"], ["dongle_central", "dongle_peripheral"], ["kb_lh", "kb_rh"], ["one"]].map((siblings) => zmkFlash(controller, siblings)));
+    const lines = [...qmk, ...zmk].map((flash) => firstFlashLine(steps(flash)));
+    expect(lines.length).toBe(12);
+    for (const line of lines) {
+      expect(line).toStartWith("Build and flash, then ");
+      expect(line).not.toMatch(/each half, plug in/i);
+      expect(line).not.toMatch(/\b(left|right|central|peripheral) half and\b/);
+    }
+    expect(firstFlashLine(steps(zmkFlash("nice_nano//zmk", ["dongle_central", "dongle_peripheral"]))))
+      .toBe("Build and flash, then on each half, double-tap its reset button when it asks.");
+    expect(firstFlashLine(steps(zmkFlash("rpi_pico//zmk", ["one"])))).toBe("Build and flash, then plug it in and hold BOOTSEL while plugging in the USB cable when it asks.");
+  });
+
+  test("Your keyboards' Try again beside Restart keyloom is off while another action runs", () => {
+    const html = (busy: boolean) => renderToStaticMarkup(<CollectionProblem token="t" busy={busy} problem={{ text: "x", retry: () => {}, code: "internal" }} />);
+    expect(html(true)).toMatch(/<button[^>]*disabled=""[^>]*>.*Try again/);
+    expect(html(false)).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Try again/);
   });
 });

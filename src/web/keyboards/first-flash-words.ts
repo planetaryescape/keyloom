@@ -12,7 +12,7 @@ const severalSentences = (text: string): boolean => /[.!?)]\s+[A-Z]/.test(text.r
  */
 export function firstFlashLine(steps: readonly string[]): string {
   const halves = steps.length > 1 ? "on each half, " : "";
-  const step = (steps[0] ?? "").replace(/^Plug in the (left|right) half and /i, "").trim();
+  const step = (steps[0] ?? "").replace(/^Plug in the (left|right|central|peripheral) half and /i, "").trim();
   if (step === "") return `Build and flash, then ${halves}put the keyboard in its bootloader when it asks.`;
   if (severalSentences(step)) return `Build and flash, then ${halves}do this when it asks: ${step.charAt(0).toUpperCase()}${step.slice(1).replace(/([^.!?])$/, "$1.")}`;
   return `Build and flash, then ${halves}${lowerFirst(step.replace(/[.!?]$/, ""))} when it asks.`;
