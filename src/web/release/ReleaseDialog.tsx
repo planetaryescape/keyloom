@@ -12,7 +12,7 @@ import { ManualFlash, ToolCallout } from "./FlashPrerequisites.tsx";
 import { buildBlockedReason, buildDisabledReason, dockerView, flashStepView, plain, recheckDocker } from "./release-words.ts";
 import { headline } from "../../layout/history-summary.ts";
 import { BUILD_FILE_GONE, SYNC_BUILD_GONE_CODE, checkOutcome, errorWayOut, failedFlashText, permissionFix, revisionChoices } from "./flash-words.ts";
-import { buildFailureView, engineRestartLog, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
+import { buildFailureView, engineRestartLog, linuxBrowser, restartWaitText, type GoBackProblem, goBackProblem, shownGoBackProblem, type WentBack, wentBackSummary } from "./build-failure-words.ts";
 import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
 import { FailureNote, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
@@ -139,7 +139,7 @@ export function ReleaseDialog({ token, open, onClose, release, head, earlierRevi
 
   const buildState: StepState = build === null ? "todo" : build.status === "running" ? "active" : build.status === "succeeded" ? "done" : "failed";
   // On Linux, an engine keyloom can't restart gets the line that does (R11-10). The page runs on the computer keyloom serves.
-  const host = { linux: typeof navigator !== "undefined" && /linux/i.test(navigator.platform) && !/android/i.test(navigator.userAgent), engine: docker.readiness?.ok === true ? docker.readiness.engine : null };
+  const host = { linux: typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent), engine: docker.readiness?.ok === true ? docker.readiness.engine : null };
   const failure = build?.status === "failed" ? buildFailureView(build, earlierRevision, !release.engineRestart.again, host) : null;
   // A failed read of the latest version keeps "Show the latest version" with its reason.
   const showLatest = (failed: string) =>

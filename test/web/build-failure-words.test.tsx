@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Build } from "../../src/api/http.ts";
 import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
-import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
+import { buildFailureView, linuxBrowser, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
 import { LAYOUT_GONE, buildReadFailure, syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
@@ -337,6 +337,15 @@ describe("a build the engine's own state stopped", () => {
     // A Mac, or Colima on Linux, keeps the restart button keyloom runs.
     expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: "Colima" }, false, false, { linux: true, engine: "Colima" })).toMatchObject({ command: null, button: "Restart Colima and build again" });
     expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false)).toMatchObject({ command: null });
+  });
+
+  test("the page tells a Linux browser from its user agent, never from the runtime that renders it", () => {
+    expect(linuxBrowser("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")).toBe(true);
+    expect(linuxBrowser("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0")).toBe(true);
+    expect(linuxBrowser("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)")).toBe(false);
+    expect(linuxBrowser("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36")).toBe(false);
+    // Bun's own user agent, as a server-side render in a test sees it on a Linux CI runner.
+    expect(linuxBrowser("Bun/1.3.14")).toBe(false);
   });
 
   test("an engine keyloom can't restart says so and keeps Build again", () => {

@@ -30,6 +30,12 @@ export type BuildFailureView =
  */
 export type BuildHost = { linux: boolean; engine: string | null };
 
+/**
+ * Whether the page runs in a Linux browser, from its user agent ("X11; Linux x86_64" in Chrome, Firefox and WebKitGTK). Not
+ * `navigator.platform`, which a server-side render in Bun answers with the server's own platform. Android says Linux too, and is no desktop.
+ */
+export const linuxBrowser = (userAgent: string): boolean => /\bLinux\b/.test(userAgent) && !/\bAndroid\b/.test(userAgent);
+
 /** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
 export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine" | "folderNotShared">, earlierRevision: boolean, restartFailed = false, host: BuildHost = { linux: false, engine: null }): BuildFailureView {
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
