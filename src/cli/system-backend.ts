@@ -12,7 +12,7 @@ const RESTART_LOG_LINES = 30;
 // The page offers Restart for an engine keyloom can restart, so that engine's terminal hint is left out; any other keeps it (R3-04).
 const response = (r: Awaited<ReturnType<typeof startDocker>>): DockerStartResponse => (r.ok ? { ok: true, version: r.version, engine: r.engine, waitedMs: r.waitedMs } : { ok: false, reason: r.restartEngine === undefined ? reasonWithHint(r) : r.reason, engine: r.engine });
 // A restart that failed has already done what the hint says; the page offers the engine's guide and Check again instead.
-const restartResponse = (r: Awaited<ReturnType<typeof restartDocker | typeof fixColimaFiles>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }) });
+const restartResponse = (r: Awaited<ReturnType<typeof restartDocker | typeof fixColimaFiles>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }), ...("file" in r && r.file !== undefined ? { file: r.file } : {}) });
 
 /**
  * `restartBlocker` says why a forced restart can't run now (a build, flash or container run would stop), or null; serve passes

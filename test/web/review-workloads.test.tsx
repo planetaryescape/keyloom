@@ -85,7 +85,7 @@ test("tests that stopped for Docker show the Docker callout from the code, not t
 
 test("a readiness request that failed still offers Check again, and asks again by itself (#277 review)", () => {
   const noop = () => {};
-  const docker = { readiness: null, unanswered: true, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
+  const docker = { readiness: null, unanswered: true, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
   const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("couldn&#x27;t ask whether Docker is ready");
@@ -97,7 +97,7 @@ test("a readiness request that failed still offers Check again, and asks again b
 
 test("Docker installed from the activity tests says it is ready once, with Test again (R3-14)", () => {
   const noop = () => {};
-  const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
+  const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: { tool: "docker" as const, status: "succeeded" as const, phase: null, logTail: [], error: null, errorCode: null }, problem: null, start: noop, cancel: noop };
   const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("Docker is installed and running. Test again to see the results.");
@@ -121,7 +121,7 @@ test("a refusing Colima on a Mac offers Fix Colima's files, keeps the command be
   const noop = () => {};
   const access = { command: 'sudo env HOME="$HOME" colima stop; sudo chown -R "$USER" ~/.colima && colima start', note: "Colima's files belong to another account.", restartApp: null, fixFiles: true };
   const readiness = { ok: false as const, problem: "no-access" as const, reason: "refused", engine: "Colima", canStart: false, autoStart: true, install: null, access };
-  const docker = { readiness, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
+  const docker = { readiness, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
   const render = (d: typeof docker | Record<string, unknown>) => renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker: d as typeof docker, install, busy: false, onRetry: noop }));
   const offered = render(docker);
