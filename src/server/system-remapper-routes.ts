@@ -68,7 +68,7 @@ export async function handleRemapperSetupRoute(request: Request, url: URL, backe
     }
     if (route.action === "install") {
       const parsed = InstallKanataRequestSchema.safeParse(body);
-      if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" | \"reinstall\" }.");
+      if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" | \"reinstall\" | \"download\" }.");
       return Response.json(SetupActionResponseSchema.parse(await backend.installKanata(parsed.data.action ?? "install")));
     }
     if (route.action === "start") {

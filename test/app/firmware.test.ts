@@ -63,8 +63,9 @@ describe("generateFirmware", () => {
 });
 
 describe("FlashToolMissingError (R3-25)", () => {
-  test("names Homebrew on a Mac, and the tool's own page with Zapp's udev rules on Linux", () => {
-    expect(new FlashToolMissingError("zapp", "darwin").message).toBe("zapp isn't installed. Install it with `brew install zapp`, then flash again.");
+  test("names Homebrew on a Mac (and, for Zapp, keyloom's own download, D-561), and the tool's own page with Zapp's udev rules on Linux", () => {
+    expect(new FlashToolMissingError("zapp", "darwin").message).toBe("zapp isn't installed. Install it with `brew install zapp`, or run `keyloom doctor --download zapp` to have keyloom get it, then flash again.");
+    expect(new FlashToolMissingError("dfu-util", "darwin").message).toBe("dfu-util isn't installed. Install it with `brew install dfu-util`, then flash again.");
     expect(new FlashToolMissingError("zapp", "linux").message).toBe("zapp isn't installed. Install it from https://github.com/zsa/zapp, with ZSA's udev rules so it can reach the keyboard without root, then flash again.");
     expect(new FlashToolMissingError("dfu-util", "linux").message).not.toContain("brew");
   });

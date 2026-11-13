@@ -4,6 +4,7 @@
 import { BREW_FORMULA } from "../firmware/qmk/dfu-flash.ts";
 import { DOCKER_BREW_FORMULAE, type DockerStartResult, colimaEngine, startDockerEngine } from "../firmware/toolchain/docker.ts";
 import { run, which } from "../firmware/toolchain/run.ts";
+import { type DownloadDeps, type DownloadErrorCode, canDownload, downloadTool } from "./tool-download.ts";
 
 export const INSTALLABLE_TOOLS = ["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude", "codex"] as const;
 export type InstallableTool = (typeof INSTALLABLE_TOOLS)[number];
@@ -26,13 +27,17 @@ export const TOOL_PAGES = {
   codex: "https://developers.openai.com/codex/cli",
 } satisfies Record<Exclude<InstallableTool, "docker">, string>;
 
-export type InstallErrorCode = "no_brew" | "brew_failed" | "start_failed";
+/** The download codes are Get Zapp's on a Mac without Homebrew (D-561); `cancelled` never reaches a state, which says `cancelled` itself. */
+export type InstallErrorCode = "no_brew" | "brew_failed" | "start_failed" | Exclude<DownloadErrorCode, "cancelled">;
 
 export type InstallState = {
   tool: InstallableTool;
   status: "idle" | "running" | "succeeded" | "failed" | "cancelled";
-  /** While running: installing the formulae, then (for Docker) starting the engine; `stopping` once the person cancelled it (R2-08). */
-  phase: "installing" | "starting" | "stopping" | null;
+  /**
+   * While running: installing the formulae, then (for Docker) starting the engine; `downloading` when keyloom fetches the tool's pinned
+   * release itself (D-561); `stopping` once the person cancelled it (R2-08).
+   */
+  phase: "installing" | "downloading" | "starting" | "stopping" | null;
   /** The last lines of the install's output, oldest first. */
   logTail: string[];
   error: string | null;
@@ -48,6 +53,8 @@ export type InstallDeps = {
   platform?: NodeJS.Platform;
   /** Starts Docker after its install; the default starts Colima through the D-486 path. */
   startDocker?: (onLine: (line: string) => void, signal?: AbortSignal) => Promise<DockerStartResult>;
+  /** Where and how Get Zapp downloads, without Homebrew (D-561); tests pass a fake fetcher and a scratch folder. */
+  download?: DownloadDeps;
 };
 
 /** Whether keyloom can install a tool here by itself: Homebrew on a Mac. */
@@ -77,8 +84,16 @@ const CANCELLED: InstallOutcome = { ok: false, code: "cancelled", reason: "The i
  * Installs a tool with Homebrew, and for Docker starts Colima afterwards and waits for it to answer. `onPhase` says
  * when the install moves on to starting the engine. `signal` stops Homebrew or the start where it is (R2-08).
  */
-export async function installTool(tool: InstallableTool, onLine: (line: string) => void, deps: InstallDeps = {}, onPhase?: (phase: "installing" | "starting") => void, signal?: AbortSignal): Promise<InstallOutcome> {
+export async function installTool(tool: InstallableTool, onLine: (line: string) => void, deps: InstallDeps = {}, onPhase?: (phase: "installing" | "downloading" | "starting") => void, signal?: AbortSignal): Promise<InstallOutcome> {
   const runner = deps.runner ?? realRunner;
+  // Without Homebrew, keyloom gets Zapp's pinned release itself (D-561). Homebrew stays first where it is: it keeps Zapp up to date.
+  const platform = deps.platform ?? process.platform;
+  if (tool === "zapp" && !canInstall(deps) && canDownload("zapp", { platform, ...(deps.download?.arch === undefined ? {} : { arch: deps.download.arch }) })) {
+    onPhase?.("downloading");
+    const got = await downloadTool("zapp", onLine, { ...deps.download, platform }, signal);
+    if (got.ok) return { ok: true };
+    return got.code === "cancelled" ? CANCELLED : { ok: false, code: got.code, reason: got.reason };
+  }
   if (!canInstall(deps)) {
     return { ok: false, code: "no_brew", reason: "keyloom installs this with Homebrew, and Homebrew isn't on this computer." };
   }

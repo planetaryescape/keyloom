@@ -1,15 +1,20 @@
 // Finding and running the kanata binary, for `--check` only. keyloom never starts kanata as a remapper: the LaunchDaemon
 // does, and only BK installs that (D-231).
 import { existsSync } from "node:fs";
+import { keptTool } from "../toolchain/kept-tools.ts";
 
 const CANDIDATES = ["/opt/homebrew/bin/kanata", "/usr/local/bin/kanata"];
 
+/**
+ * The kanata keyloom uses: one named by KEYLOOM_KANATA_BIN, the one on PATH, Homebrew's, then the one keyloom downloaded into its own folder
+ * on a Mac without Homebrew (D-560). A kanata the person installed comes first, so keyloom's own copy is only the fallback.
+ */
 export function findKanata(env: Record<string, string | undefined> = process.env): string | undefined {
   const fromEnv = env.KEYLOOM_KANATA_BIN;
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
   const onPath = Bun.which("kanata");
   if (onPath) return onPath;
-  return CANDIDATES.find((c) => existsSync(c));
+  return CANDIDATES.find((c) => existsSync(c)) ?? keptTool("kanata", env);
 }
 
 export async function kanataVersion(bin: string): Promise<string | undefined> {

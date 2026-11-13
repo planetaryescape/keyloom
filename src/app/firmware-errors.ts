@@ -1,4 +1,5 @@
 // Errors from building and flashing. The CLI maps them to exit codes 7 and 8 (10#exit-codes).
+import { zappMissing } from "../firmware/qmk/flash.ts";
 import { UsageError } from "./errors.ts";
 import { TOOL_PAGES, brewFormulae, type InstallableTool } from "./tool-install.ts";
 
@@ -45,6 +46,8 @@ export class ToolchainUnavailableError extends Error {
 
 /** Homebrew on a Mac; elsewhere the tool's own page, since Homebrew isn't how Linux installs these (R3-25). Zapp also needs ZSA's udev rules there. */
 function installSentence(tool: InstallableTool, platform: NodeJS.Platform): string {
+  // The terminal's way to Get Zapp on a Mac without Homebrew (D-561).
+  if (platform === "darwin" && tool === "zapp") return zappMissing("darwin");
   if (platform === "darwin" || tool === "docker") return `${tool} isn't installed. Install it with \`brew install ${brewFormulae(tool).join(" ")}\`, then flash again.`;
   const rules = tool === "zapp" ? ", with ZSA's udev rules so it can reach the keyboard without root" : "";
   return `${tool} isn't installed. Install it from ${TOOL_PAGES[tool]}${rules}, then flash again.`;

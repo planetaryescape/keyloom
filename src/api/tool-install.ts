@@ -14,10 +14,13 @@ export const InstallRequestSchema = z.object({ tool: InstallableToolSchema }).st
 export const InstallStateSchema = z.object({
   tool: InstallableToolSchema,
   status: z.enum(["idle", "running", "succeeded", "failed", "cancelled"]),
-  phase: z.enum(["installing", "starting", "stopping"]).nullable(),
+  // `downloading`: keyloom fetches the tool's pinned release itself, on a Mac without Homebrew (Zapp, D-561).
+  phase: z.enum(["installing", "downloading", "starting", "stopping"]).nullable(),
   logTail: z.array(z.string()),
   error: z.string().nullable(),
-  // `no_brew`: keyloom can't install here; `brew_failed`: Homebrew stopped; `start_failed`: Docker installed but didn't start.
-  errorCode: z.enum(["no_brew", "brew_failed", "start_failed"]).nullable(),
+  // `no_brew`: keyloom can't install here; `brew_failed`: Homebrew stopped; `start_failed`: Docker installed but didn't start. The rest are
+  // Get Zapp's download (D-561): `no_asset` (no release file for this Mac), `download_failed`, `checksum_mismatch` (nothing kept),
+  // `write_failed` (checked but couldn't be saved) and `unsupported_platform`.
+  errorCode: z.enum(["no_brew", "brew_failed", "start_failed", "unsupported_platform", "no_asset", "download_failed", "checksum_mismatch", "write_failed"]).nullable(),
 });
 export type InstallState = z.infer<typeof InstallStateSchema>;

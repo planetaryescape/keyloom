@@ -10,7 +10,7 @@ import type { KanataInstallAction, RemapperSetupResponse, SettingsPaneName } fro
 export const recheckAfter = (id: { kind: string }): "now" | "on_return" => (id.kind === "open_settings" ? "on_return" : "now");
 
 export type SetupActionId =
-  | { kind: "install_kanata" } | { kind: "update_kanata" } | { kind: "reinstall_kanata" } | { kind: "cancel_install" } | { kind: "start_kanata" }
+  | { kind: "install_kanata" } | { kind: "update_kanata" } | { kind: "reinstall_kanata" } | { kind: "download_kanata" } | { kind: "cancel_install" } | { kind: "start_kanata" }
   | { kind: "open_settings"; pane: SettingsPaneName };
 
 export interface SetupStep {
@@ -21,7 +21,7 @@ export interface SetupStep {
   actions: Array<{ id: SetupActionId; label: string }>;
   /** A page to open when keyloom can't do the step itself. */
   link: { href: string; label: string } | null;
-  /** The last lines Homebrew printed, while it installs or updates kanata. */
+  /** The last lines Homebrew printed, while it installs or updates kanata, or Get kanata's download progress. */
   log: string[] | null;
   /** Why the last try at this step failed. */
   problem: string | null;
@@ -41,12 +41,15 @@ const LOG_LINES = 6;
 
 const step = (s: Pick<SetupStep, "key" | "state" | "title"> & Partial<SetupStep>): SetupStep => ({ detail: null, actions: [], link: null, log: null, problem: null, whileRunning: false, ...s });
 
-/** How each Homebrew job is named on its step, and the button that runs it. */
+/** How each job is named on its step, and the button that runs it: Homebrew's three, and Get kanata's download without Homebrew (D-560). */
 const JOBS: Record<KanataInstallAction, { running: string; noun: string; button: string; retry: SetupActionId }> = {
   install: { running: "Installing kanata…", noun: "install", button: "Install kanata", retry: { kind: "install_kanata" } },
   upgrade: { running: "Updating kanata…", noun: "update", button: "Update kanata", retry: { kind: "update_kanata" } },
   reinstall: { running: "Reinstalling kanata…", noun: "reinstall", button: "Reinstall kanata", retry: { kind: "reinstall_kanata" } },
+  download: { running: "Getting kanata…", noun: "download", button: "Get kanata", retry: { kind: "download_kanata" } },
 };
+const HOMEBREW_RUNNING = "Homebrew is doing it. This can take a few minutes, and keyloom keeps working meanwhile.";
+const downloadRunning = (version: string) => `keyloom is downloading kanata ${version} from its release on GitHub, then checks it against the checksum keyloom carries.`;
 
 /**
  * The kanata step while Homebrew installs, updates or reinstalls it, or after that ended badly; `title` is the step's own title, kept
@@ -56,10 +59,11 @@ function installJob(status: RemapperSetupResponse, action: KanataInstallAction, 
   const job = status.install;
   if (job.action !== action) return null;
   const words = JOBS[action];
+  const download = action === "download";
   if (job.state === "running") {
     return {
       title: words.running,
-      detail: "Homebrew is doing it. This can take a few minutes, and keyloom keeps working meanwhile.",
+      detail: download ? downloadRunning(status.kanata.wanted) : HOMEBREW_RUNNING,
       actions: [{ id: { kind: "cancel_install" }, label: `Cancel ${words.noun}` }],
       log: job.log.slice(-LOG_LINES), problem: null,
     };
@@ -70,9 +74,9 @@ function installJob(status: RemapperSetupResponse, action: KanataInstallAction, 
       title,
       // A cancel was the person's choice, so it is said plainly, not as an error.
       detail: failed ? null : `You cancelled the ${words.noun}. Nothing else changed.`,
-      actions: status.canInstall ? [{ id: words.retry, label: failed ? "Try again" : words.button }] : [],
+      actions: (download ? status.canDownload === true : status.canInstall) ? [{ id: words.retry, label: failed ? "Try again" : words.button }] : [],
       log: failed && job.log.length > 0 ? job.log.slice(-LOG_LINES) : null,
-      problem: failed ? job.failure?.reason ?? "Homebrew stopped with an error." : null,
+      problem: failed ? job.failure?.reason ?? (download ? "The download stopped with an error." : "Homebrew stopped with an error.") : null,
     };
   }
   return null;
@@ -91,15 +95,7 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
 
   const kanata = find("kanata_missing") ?? find("kanata_version");
   if (kanata?.code === "kanata_missing") {
-    const job = installJob(status, "install", "Install kanata");
-    steps.push(step({
-      key: "kanata", state: "todo", title: job?.title ?? "Install kanata", whileRunning: true,
-      detail: job?.detail ?? (status.canInstall ? "kanata is the remapper keyloom writes your MacBook layout for." : "kanata is the remapper keyloom writes your MacBook layout for. Homebrew isn't on this Mac, so download kanata from its releases page."),
-      actions: job?.actions ?? (status.canInstall ? [{ id: { kind: "install_kanata" }, label: "Install kanata" }] : []),
-      log: job?.log ?? null, problem: job?.problem ?? null,
-      // After a failed install there is still a way that doesn't need Homebrew.
-      link: !status.canInstall || (status.install.action === "install" && status.install.state === "failed") ? { href: KANATA_RELEASES, label: "Download kanata" } : null,
-    }));
+    steps.push(kanataMissing(status));
   } else if (kanata !== undefined) {
     if (kanata.status === "ok") steps.push(step({ key: "kanata", state: "done", title: "kanata is installed" }));
     else {
@@ -158,7 +154,8 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
   else if (startable) {
     steps.push(step({
       key: "start", state: "todo", title: "Start kanata",
-      detail: !ready ? "Install kanata first." : replaced ? "Deal with the kanata change above first." : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
+      // Named after the kanata step's own button: Get kanata on a Mac without Homebrew (D-560).
+      detail: !ready ? (!status.canInstall && status.canDownload === true ? "Get kanata first." : "Install kanata first.") : replaced ? "Deal with the kanata change above first." : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
       actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [],
     }));
   }
@@ -232,6 +229,36 @@ function noBuiltInKeyboard(): SetupStep {
   });
 }
 
+/**
+ * kanata isn't on this Mac. With Homebrew, Install kanata. Without it, Get kanata: keyloom downloads kanata's pinned release, checks it and
+ * keeps it in its own folder (D-560). A failed Homebrew install offers the download too, so it never ends at a link. Only a Mac whose
+ * processor has no release file gets the releases page alone.
+ */
+function kanataMissing(status: RemapperSetupResponse): SetupStep {
+  const canDownload = status.canDownload === true;
+  const job = installJob(status, "download", "Get kanata") ?? installJob(status, "install", "Install kanata");
+  const brewFailed = status.install.action === "install" && status.install.state === "failed";
+  const downloadFailed = status.install.action === "download" && status.install.state === "failed";
+  const lead = "kanata is the remapper keyloom writes your MacBook layout for.";
+  const detail = status.canInstall
+    ? lead
+    : canDownload
+      ? `${lead} Homebrew isn't on this Mac, so keyloom downloads kanata ${status.kanata.wanted} from its official release on GitHub, checks it and keeps it in keyloom's own folder.`
+      : `${lead} Homebrew isn't on this Mac, and kanata's release has no download for this Mac's processor. Its releases page lists what there is.`;
+  const first: SetupStep["actions"] = status.canInstall ? [{ id: { kind: "install_kanata" }, label: "Install kanata" }] : canDownload ? [{ id: { kind: "download_kanata" }, label: "Get kanata" }] : [];
+  const actions = job?.actions ?? first;
+  return step({
+    key: "kanata", state: "todo", title: job?.title ?? (!status.canInstall && canDownload ? "Get kanata" : "Install kanata"), whileRunning: true,
+    detail: job?.detail ?? detail,
+    // After a failed Homebrew install, keyloom's own download is the other way, as a button.
+    actions: brewFailed && canDownload ? [...actions, { id: { kind: "download_kanata" }, label: "Download kanata" }] : actions,
+    log: job?.log ?? null, problem: job?.problem ?? null,
+    link: downloadFailed
+      ? { href: kanataRelease(status.kanata.wanted), label: "Open kanata's release page" }
+      : !canDownload && (!status.canInstall || brewFailed) ? { href: KANATA_RELEASES, label: "Download kanata" } : null,
+  });
+}
+
 /** The steps that still need doing while kanata runs: an update, setting it up again, or a kanata changed outside Homebrew. */
 export const attentionSteps = (status: RemapperSetupResponse): SetupStep[] => setupSteps(status).filter((s) => s.whileRunning && s.state !== "done");
 
@@ -243,6 +270,8 @@ export function setupFailure(code: string, reason: string): SetupFailure {
   switch (code) {
     case "cancelled": return { text: "You cancelled the password dialog, so kanata didn't start. Press the button again when you're ready.", link: null };
     case "no_kanata": return { text: "Install kanata first.", link: null };
+    // Get kanata on a Mac whose processor has no kanata release file (D-560).
+    case "no_asset": return { text: reason, link: { href: KANATA_RELEASES, label: "Open kanata's releases page" } };
     case "no_brew": return { text: "Homebrew isn't installed, so keyloom can't install kanata. Download kanata from its releases page instead.", link: { href: KANATA_RELEASES, label: "Download kanata" } };
     // A kanata that can run programs is never run as root (D-498). The release page's plain builds can't.
     // The root script found kanata changed between keyloom's check and the copy, and installed nothing (D-498).
