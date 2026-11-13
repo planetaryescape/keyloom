@@ -154,6 +154,8 @@ BK called both of these an AI smell on 2026-10-18. `test/web/no-ai-patterns.test
 
 ## States say what to do next
 
+The reconnect banner keeps its text readable at phone widths. Its copy command sits below the text on narrow screens. Both stay within the viewport. Automatic reconnect keeps the current view and unsent chat draft.
+
 | State | v0.10.1 | Change |
 |---|---|---|
 | No layouts | One Moonlander import command | An import screen with a card per supported board (Moonlander, Glove80, Corne). Each card says which file to export and has a drop zone for it, so no terminal is needed. The CLI command is shown underneath |
