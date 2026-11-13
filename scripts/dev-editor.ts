@@ -375,9 +375,8 @@ const kanataFindings = (): RemapperSetupResponse["findings"] => {
     case "kanata_first_run": return [ok("kanata_version", "1.12.0"), ok("driver_mismatch", "6.2.0"), { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" },
       // After a pretend Set up and start kanata (KEYLOOM_FAKE_KANATA_START), the service is installed and kanata doesn't answer, as a real
       // failed bootstrap leaves it (the plist is in place before launchctl runs), or a first run before the permissions (R13-01, R13-03).
-      ...(kanataServiceInstalled
-        ? [ok("daemon_missing", "installed"), { code: "port_closed" as const, name: "kanata's port", status: "warn" as const, detail: "nothing answers" }]
-        : [{ code: "daemon_missing" as const, name: "LaunchDaemon", status: "fail" as const, detail: "not installed" }, { code: "port_closed" as const, name: "kanata's port", status: "fail" as const, detail: "nothing answers" }])];
+      kanataServiceInstalled ? ok("daemon_missing", "installed") : { code: "daemon_missing", name: "LaunchDaemon", status: "fail", detail: "not installed" },
+      { code: "port_closed", name: "kanata's port", status: kanataServiceInstalled ? "warn" : "fail", detail: "nothing answers" }];
     case "kanata_no_brew": return [
       kanataJob().state === "succeeded" ? ok("kanata_version", "1.12.0") : { code: "kanata_missing", name: "kanata", status: "fail", detail: "not found" },
       { code: "driver_missing", name: "driver", status: "fail", detail: "not installed" }, { code: "permissions", name: "permissions", status: "unknown", detail: "macOS doesn't let keyloom read these grants" },

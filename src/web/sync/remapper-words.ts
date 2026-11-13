@@ -373,10 +373,10 @@ export function setupFailure(code: string, reason: string, kind?: SetupActionId[
     // Setting up again installs the service afresh, so it is the way on after either (R12-05). The line carries the button: after a failed
     // start, the install script has already put the service in place, so the re-read shows the not-answering step, whose buttons are
     // Restart and Show log, not Set up and start kanata (R13-01).
-    case "root_start_failed":
-      return kind === "restart_kanata"
-        ? { text: "macOS didn't start kanata's background service again. Set kanata up again to install the service afresh and start it. macOS asks for your password.", link: null, action: SET_UP_AGAIN }
-        : { text: "macOS didn't start kanata's background service. Set kanata up again to install the service afresh and start it. macOS asks for your password.", link: null, action: SET_UP_AGAIN };
+    case "root_start_failed": return {
+      text: `macOS didn't start kanata's background service${kind === "restart_kanata" ? " again" : ""}. Set kanata up again to install the service afresh and start it. macOS asks for your password.`,
+      link: null, action: SET_UP_AGAIN,
+    };
     // A kanata that can run programs is never run as root (D-498). The release page's plain builds can't.
     // The root script found kanata changed between keyloom's check and the copy, and installed nothing (D-498).
     // keyloom's downloaded kanata changed since the download (D-560); the kanata step offers Get kanata, which replaces it.
