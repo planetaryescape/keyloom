@@ -243,6 +243,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   useEffect(() => () => stopWaiting.current(), []);
   const refusalHandlers: RefusalHandlers = {
     open_status: openStatus,
+    // A sync request that failed no way the page planned for (R9-05).
+    restart_keyloom: (failure) => setUnexpected({ failure, title: "keyloom couldn't do that" }),
     restore: () => void restoreArchived(summary.id),
     put_on: () => setConfigDialog({ kind: "put-on", target: { id: summary.id, name: summary.name } }),
     open_release: (buildId?: string) => onOpenRelease(undefined, buildId),
@@ -344,7 +346,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [quick, setQuick] = useState<readonly string[] | null>(null);
   const [pendingDrop, setPendingDrop] = useState<{ ops: ChangeOp[]; summary: string; lost: string[]; reason: string } | null>(null);
   // A board change that hit a failure no screen planned for, opened from its toast's Restart keyloom (R8-03).
-  const [unexpected, setUnexpected] = useState<{ failure: PageFailure; retry?: () => void } | null>(null);
+  const [unexpected, setUnexpected] = useState<{ failure: PageFailure; retry?: () => void; title?: string } | null>(null);
   const [changing, setChanging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
@@ -2571,7 +2573,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : null}
       {unexpected === null ? null : (
-        <RestartDialog token={token} title="keyloom couldn't make that change" failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
+        <RestartDialog token={token} title={unexpected.title ?? "keyloom couldn't make that change"} failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
       )}
       {pendingDrop === null ? null : (
         <DropConfirm

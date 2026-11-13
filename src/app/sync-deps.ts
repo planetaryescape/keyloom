@@ -6,6 +6,7 @@ import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts
 import { latestSuccessfulBuildOfRevision } from "../persistence/builds.ts";
 import type { App } from "./context.ts";
 import { type FlashOptions, startBuild, startFlash, waitForBuild, waitForFlash } from "./firmware.ts";
+import { FlashToolMissingError } from "./firmware-errors.ts";
 import type { HandsFreeOverrides } from "./firmware-drivers.ts";
 import { applyToRemapper, disableRemapperFor, probeRemapper } from "./remapper.ts";
 import { type KeyboardReading, readKeyboards } from "./sync-keyboard.ts";
@@ -13,7 +14,8 @@ import { type DetectedKeyboard, detectKeyboards } from "./keyboard-detect.ts";
 import type { UsbDevice } from "../firmware/toolchain/usb.ts";
 
 export type BuildOutcome = { ok: true; buildId: string; reused: boolean } | { ok: false; error: string; buildId?: string };
-export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note: string | null } | { ok: false; flashId?: string; error: string };
+/** `code`: a failure found before the flash started, which has no flash row to carry it, such as "flash_tool_missing" (R9-10). */
+export type FlashOutcome = { ok: true; flashId: string; verified: boolean; note: string | null } | { ok: false; flashId?: string; error: string; code?: "flash_tool_missing" };
 
 export type RemapperDeps = {
   /** Writes, checks, reloads and verifies one revision on a software remapper. Never throws. */
@@ -112,6 +114,8 @@ export function appSyncDeps(app: App, opts: DefaultDepsOptions = {}): SyncDeps {
         if (done.status !== "succeeded") return { ok: false, flashId: done.id, error: done.error ?? "the flash failed" };
         return { ok: true, flashId: done.id, verified: done.note !== null, note: done.note };
       } catch (err) {
+        // The sentence names a Homebrew command; the code lets the page offer Build and flash, whose step installs the tool (R9-10).
+        if (err instanceof FlashToolMissingError) return { ok: false, error: message(err), code: "flash_tool_missing" };
         return { ok: false, error: message(err) };
       }
     },

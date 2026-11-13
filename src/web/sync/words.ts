@@ -1,15 +1,22 @@
 // What the header says about a keyboard (17#apply-sync-and-the-keyboards-state). Plain words, one place, so the pill, the
 // popover and the toasts agree, and so the wording is tested without a browser.
 import type { BoardSync } from "../../api/http.ts";
+import type { SettingsPaneName } from "../../api/system-remapper.ts";
 import { syncBuildFailureLine } from "../release/build-failure-words.ts";
+import { type PermissionFix, permissionFix } from "../release/flash-words.ts";
 import { plain } from "../release/release-words.ts";
+import { wayOutFor } from "../shell/unexpected.ts";
 
 export type SyncTone = "success" | "busy" | "neutral" | "warning" | "error";
 /**
  * What a line's button does. `put_on` opens the put-on confirm (D-300), `open_release` the Build and flash dialog, where Docker's own
- * callout lives, and `replace_foreign` the confirm that replaces a kanata config keyloom didn't write (R1-17).
+ * callout lives, `replace_foreign` the confirm that replaces a kanata config keyloom didn't write (R1-17), and `open_settings` the System
+ * Settings pane a flash was refused for (R9-01, D-492).
  */
-export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign";
+export type SyncActionId = "sync_now" | "flash_keyloom" | "put_on" | "open_release" | "replace_foreign" | "open_settings";
+
+/** `buildId`: the sync's failed build, which `open_release` opens the dialog on (R8-01). `pane`: the pane `open_settings` opens. */
+export type SyncAction = { id: SyncActionId; label: string; buildId?: string; pane?: SettingsPaneName };
 
 export interface SyncLine {
   /** The pill's text. */
@@ -21,8 +28,9 @@ export interface SyncLine {
   tone: SyncTone;
   /** What keyloom read, for those who want it, behind "Details" (a USB serial): never in the line's one sentence. */
   more?: string;
-  /** `buildId`: the sync's failed build, which `open_release` opens the dialog on (R8-01). */
-  action: { id: SyncActionId; label: string; buildId?: string } | null;
+  action: SyncAction | null;
+  /** A second, plain button after the filled one: Sync now beside the settings a flash was refused for (R9-01). */
+  second?: SyncAction;
 }
 
 // A software remapper has no build or flash: the words say what it does instead (21).
@@ -49,6 +57,24 @@ const plural = (n: number, one: string, many: string): string => (n === 1 ? `1 $
 const buildFailed = (board: BoardSync): boolean => board.last?.failure === "build";
 const dockerNotReady = (board: BoardSync): boolean => buildFailed(board) && board.last?.errorCode === "docker_unavailable";
 const buildStopped = (board: BoardSync): boolean => buildFailed(board) && board.last?.errorCode === "cancelled";
+/** The flash tool isn't installed (R9-10): Build and flash has the step that installs it, never the CLI's Homebrew sentence. */
+const toolMissing = (board: BoardSync): boolean => board.last?.failure === "flash" && board.last.errorCode === "flash_tool_missing";
+const TOOL_MISSING = "The tool that flashes this keyboard isn't installed on this computer, so keyloom couldn't flash the change. Build and flash installs it.";
+
+/**
+ * The macOS permission the last flash was refused for, or the one a hand is needed for, with the pane that grants it (R9-01). A waiting
+ * hand carries it on the state; a flash that failed carries it as the flash's code.
+ */
+function permissionOf(board: BoardSync): PermissionFix | null {
+  const s = board.state;
+  const code = (s.kind === "needs_hand" ? s.instructionCode : undefined) ?? (board.last?.failure === "flash" || board.last?.failure === "needs_hand" ? board.last.errorCode : null);
+  return code === "permission_files_and_folders" || code === "permission_input_monitoring" ? permissionFix(code) : null;
+}
+const settingsAction = (fix: PermissionFix): SyncAction => ({ id: "open_settings", label: fix.button, pane: fix.pane });
+const SYNC_NOW: SyncAction = { id: "sync_now", label: "Sync now" };
+/** A permission's words: what macOS refused, then what to allow. A hand's own instruction already says what macOS refused. */
+const permissionText = (fix: PermissionFix, instruction?: string): string =>
+  instruction !== undefined && instruction.startsWith(fix.failed) ? `${instruction} ${fix.sync}` : `${fix.failed} ${fix.sync}`;
 /**
  * A sync that failed after its build. A flash code the page has its own words for says them, because the flasher's sentence names a CLI
  * flag (R8-11); any other sentence loses its backticks.
@@ -57,11 +83,16 @@ function failedSyncText(board: BoardSync, error: string): string {
   if (board.last?.failure === "flash" && board.last.errorCode === "write_timeout") {
     return "Flashing didn't finish within 3 minutes, so keyloom stopped it. The keyboard may be left in its bootloader, where it doesn't type. Sync now flashes it again.";
   }
+  if (toolMissing(board)) return TOOL_MISSING;
+  const fix = permissionOf(board);
+  if (fix !== null) return permissionText(fix);
+  // A write that finished but couldn't be confirmed says so first, as the dialog does: the keyboard may well run the new build.
+  if (board.last?.failure === "flash" && board.last.errorCode === "not_confirmed") return `keyloom wrote the firmware, but couldn't confirm the keyboard runs it. ${plain(error)}`;
   return plain(error);
 }
 
 /** Build and flash, on the sync's failed build when it made one. Called only for a sync that failed at its build. */
-function openFailedBuild(board: BoardSync): { id: "open_release"; label: string; buildId?: string } {
+function openFailedBuild(board: BoardSync): SyncAction & { id: "open_release" } {
   const buildId = board.last?.buildId ?? undefined;
   return { id: "open_release", label: "Build and flash…", ...(buildId === undefined ? {} : { buildId }) };
 }
@@ -100,15 +131,25 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
         : s.why === "other_config" ? `Your ${name} runs a different config. Put “${board.layoutName}” on it to replace that one.`
         : s.why === "unknown_build" ? `Your ${name} runs a keyloom build this copy doesn't know, so keyloom won't replace it by itself.`
         : "Something else was flashed since this change.";
+      // The flasher's sentence names the System Settings path the button opens; it stays behind Details for what it says about each half.
+      const fix = s.why === "failed" ? permissionOf(board) : null;
+      if (fix !== null) return { label, short: "Behind", detail, ...(s.error ? { more: plain(s.error) } : {}), tone: "error", action: settingsAction(fix), second: SYNC_NOW };
       return { label, short: "Behind", detail, tone: s.why === "failed" ? "error" : "neutral", action: behindAction(board, s.why) };
     }
-    case "needs_hand":
-      return {
-        label: "Needs a hand", short: "Needs a hand",
-        // The flasher's own words already say why ("keyloom couldn't restart..."); the reason is added only where they don't.
-        detail: s.instruction.toLowerCase().includes("couldn't") || s.reason === "" ? s.instruction : `${s.instruction} ${s.reason[0]?.toUpperCase()}${s.reason.slice(1)}.`,
-        tone: "warning", action: { id: "sync_now", label: "Try again" },
-      };
+    case "needs_hand": {
+      const fix = permissionOf(board);
+      if (fix !== null) {
+        // The settings first: granting it is what makes the next sync hands-free. Sync now follows once this sync has ended; while it still
+        // waits, pressing the key is the way on.
+        const running = board.last?.status === "building" || board.last?.status === "flashing";
+        const own = s.instruction.startsWith(fix.failed);
+        return {
+          label: "Needs a hand", short: "Needs a hand", detail: needsHandDetail(s.instruction, s.reason, fix), ...(own ? {} : { more: plain(s.instruction) }),
+          tone: "warning", action: settingsAction(fix), ...(running ? {} : { second: SYNC_NOW }),
+        };
+      }
+      return { label: "Needs a hand", short: "Needs a hand", detail: needsHandDetail(s.instruction, s.reason, null), tone: "warning", action: { id: "sync_now", label: "Try again" } };
+    }
     case "not_connected":
       // A change applied while it is unplugged is the one thing worth saying: it isn't on the keyboard yet (amber, D-263).
       if (s.changes != null && s.changes > 0) {
@@ -128,12 +169,25 @@ export function syncLine(board: BoardSync, selectedLayoutId: string | null): Syn
   }
 }
 
+/**
+ * A hand's words. The flasher's own words already say why ("keyloom couldn't restart…", "macOS didn't let keyloom…"), so the reason is
+ * added only where they don't, and in keyloom's own lower case (R9-01). A permission says what to allow so the next sync needs no hand.
+ */
+function needsHandDetail(instruction: string, reason: string, fix: PermissionFix | null): string {
+  if (fix !== null) return permissionText(fix, instruction);
+  if (/couldn't|didn't let/i.test(instruction) || reason === "") return instruction;
+  const why = reason.startsWith("keyloom") ? reason : `${reason[0]?.toUpperCase() ?? ""}${reason.slice(1)}`;
+  return `${instruction} ${why}.`;
+}
+
 // Sync now is offered only where it can succeed. Another config on the keyboard is a choice (D-300), and a failed build is answered in
 // Build and flash, which says what the build needs (Docker's callout) and shows its log; repeating it from here would fail the same way.
 function behindAction(board: BoardSync, why: Extract<BoardSync["state"], { kind: "behind" }>["why"]): SyncLine["action"] {
   if (why === "other_config") return { id: "put_on", label: `Put “${board.layoutName}” on it` };
   // A stopped build has nothing to show: syncing again builds it again.
   if (why === "failed" && buildFailed(board) && board.last?.errorCode !== "cancelled") return openFailedBuild(board);
+  // Build and flash on the sync's build has the step that installs the flash tool (R9-10).
+  if (why === "failed" && toolMissing(board)) return openFailedBuild(board);
   return { id: "sync_now", label: "Sync now" };
 }
 
@@ -212,7 +266,8 @@ const seconds = (ms: number | null): string | null => (ms === null ? null : `${M
 /** The toast for a board whose state just changed, or null when nothing needs saying. `action` is the toast's button. */
 export type SyncNotice = {
   kind: "success" | "error"; message: string; detail?: string;
-  action?: { id: RefusalAction | "open_board"; label: string; buildId?: string } | { id: "open_config"; label: string; layoutId: string };
+  action?: { id: RefusalAction | "open_board"; label: string; buildId?: string } | { id: "open_config"; label: string; layoutId: string }
+    | { id: "open_settings"; label: string; pane: SettingsPaneName };
 };
 
 /**
@@ -222,7 +277,8 @@ export type SyncNotice = {
  * open this config's dialog on the other config's build (PR #306 review).
  */
 export function noticeOnPage(notice: SyncNotice, board: Pick<BoardSync, "boardId" | "boardName" | "layoutId" | "layoutName">, page: { boardId: string; layoutId: string } | undefined): SyncNotice {
-  if (notice.action === undefined || page === undefined) return notice;
+  // System Settings is the computer's, not a page's, so its button opens it from any page (R9-01).
+  if (notice.action === undefined || page === undefined || notice.action.id === "open_settings") return notice;
   const label = notice.action.label.replace(/…$/, "");
   if (board.boardId !== page.boardId) return { ...notice, detail: `${notice.detail ?? ""} Its page has ${label}.`.trim(), action: { id: "open_board", label: `Open ${board.boardName}` } };
   if (board.layoutId === page.layoutId) return notice;
@@ -252,14 +308,25 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
     if (buildFailed(after)) {
       return { kind: "error", message: `Couldn't build the change for your ${after.boardName}`, detail: syncBuildFailureLine(after.last?.errorCode), ...(buildStopped(after) ? {} : { action: openFailedBuild(after) }) };
     }
-    return { kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: failedSyncText(after, now.error ?? "The sync failed.") };
+    const fix = permissionOf(after);
+    return {
+      kind: "error", message: `Couldn't put the change on your ${after.boardName}`, detail: failedSyncText(after, now.error ?? "The sync failed."),
+      ...(fix !== null ? { action: { id: "open_settings" as const, label: fix.button, pane: fix.pane } } : toolMissing(after) ? { action: openFailedBuild(after) } : {}),
+    };
   }
-  if (now.kind === "needs_hand") return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };
+  if (now.kind === "needs_hand") {
+    const fix = permissionOf(after);
+    if (fix === null) return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: now.instruction };
+    return { kind: "error", message: `Your ${after.boardName} needs a hand`, detail: permissionText(fix, now.instruction), action: { id: "open_settings", label: fix.button, pane: fix.pane } };
+  }
   return null;
 }
 
-/** `open_status` opens the keyboard's status popover, where kanata's checklist is; `restore_keyboard` puts a removed keyboard back. */
-export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard";
+/**
+ * `open_status` opens the keyboard's status popover, where kanata's checklist is; `restore_keyboard` puts a removed keyboard back;
+ * `restart_keyloom` opens the restart dialog for a failure no screen planned for (R9-05, D-540).
+ */
+export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_foreign" | "check_exit_chord" | "open_status" | "restore_keyboard" | "restart_keyloom";
 
 /**
  * The toast for a sync the server refused, from its code (R1-16). The server's own sentence names CLI commands, so it is never shown;
@@ -267,8 +334,18 @@ export type RefusalAction = "restore" | "put_on" | "open_release" | "replace_for
  */
 export type RefusalNotice = { message: string; detail?: string; action?: { id: RefusalAction; label: string } };
 
-export const refusalNotice = (code: string | undefined, message: string): RefusalNotice =>
-  knownRefusal(code) ?? { message: "keyloom couldn't do that", detail: message };
+export const refusalNotice = (code: string | undefined, message: string, generic?: boolean): RefusalNotice =>
+  knownRefusal(code) ?? {
+    message: "keyloom couldn't do that", detail: message,
+    // An exception, an unreadable answer or keyloom's catch-all 404 fails the same way from here; a restart clears it (R9-05, D-540).
+    ...(wayOutFor({ message, code, generic }, false) === null ? {} : { action: { id: "restart_keyloom" as const, label: "Restart keyloom" } }),
+  };
+
+/** The words when System Settings didn't open from a sync's button: where the setting is, so the person can open it themselves (R9-01). */
+export function settingsOpenFailure(pane: SettingsPaneName, reason: string): string {
+  const where = pane === "files_and_folders" ? "Files & Folders" : pane === "input_monitoring" ? "Input Monitoring" : null;
+  return where === null ? reason : `${reason.replace(/\.?$/, ".")} Open System Settings, then Privacy & Security, then ${where}.`;
+}
 
 /**
  * The words and button for a refusal code, or null for a code that isn't one (R3-01): a put-on refused by the sync engine gets the same

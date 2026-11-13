@@ -211,6 +211,18 @@ describe("failures leave the keyboard alone and say why", () => {
     expect(e.views()[0]?.last).toMatchObject({ failure: "flash", errorCode: "write_timeout" });
   });
 
+  test("a flash tool that isn't installed carries flash_tool_missing, though no flash row was made (R9-10)", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.flashMode = "tool_missing";
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await waitFor(() => w.stateOf(e)?.kind === "behind" && (w.stateOf(e) as { why: string }).why === "failed", "the failure");
+    expect(e.views()[0]?.last).toMatchObject({ failure: "flash", errorCode: "flash_tool_missing" });
+    expect(e.views()[0]?.last?.buildId).toBe(w.calls.builds.at(-1)?.buildId);
+  });
+
   test("a flash the flasher could not verify is not in sync", async () => {
     const w = await world();
     w.flashed();
@@ -475,6 +487,23 @@ describe("a flash that needs a hand", () => {
     expect(w.stateOf(e)).toMatchObject({ kind: "needs_hand", instruction: expect.stringContaining("Press the reset button") });
     await Bun.sleep(150);
     expect(w.calls.flashes).toHaveLength(1);
+  });
+
+  test("a hand macOS asked for keeps its permission code while it waits and after it ends, so the page offers the settings (R9-01)", async () => {
+    const w = await world();
+    w.flashed();
+    w.world.flashMode = "needs_hand";
+    w.world.needsHandProblem = "permission_input_monitoring";
+    w.world.flashGate = gate();
+    const e = w.engine();
+    await e.start();
+    w.apply();
+    await settled(w, e, "needs_hand");
+    expect(w.stateOf(e)).toMatchObject({ kind: "needs_hand", instructionCode: "permission_input_monitoring" });
+    w.world.flashGate.open();
+    await waitFor(() => lastSyncOfBoard(w.app.db, BOARD)?.status === "failed", "the flasher giving up");
+    expect(lastSyncOfBoard(w.app.db, BOARD)).toMatchObject({ failure: "needs_hand", instructionCode: "permission_input_monitoring" });
+    expect(w.stateOf(e)).toMatchObject({ kind: "needs_hand", instructionCode: "permission_input_monitoring" });
   });
 
   test("stopping while it waits for a hand cancels it, because nothing has been written", async () => {

@@ -31,8 +31,12 @@ export type SyncRow = {
   step: SyncStep;
   /** What the person must do now, while the step is `needs_hand`. */
   instruction: string | null;
+  /** Why the keyboard needs a hand, as a code the page offers a fix for, such as "permission_input_monitoring" (R9-01). Kept with `instruction`. */
+  instructionCode: string | null;
   failure: SyncFailure | null;
   error: string | null;
+  /** A failure's code when no build or flash row carries one, such as "flash_tool_missing" (R9-10). */
+  errorCode: string | null;
   buildId: string | null;
   flashId: string | null;
   logPath: string;
@@ -48,13 +52,13 @@ export type SyncRow = {
 
 type SyncDb = {
   id: string; board_id: string; layout_id: string; revision_id: string; board_revision: string; trigger: SyncTrigger; status: SyncStatus; step: SyncStep;
-  instruction: string | null; failure: SyncFailure | null; error: string | null; build_id: string | null; flash_id: string | null; log_path: string; pid: number;
+  instruction: string | null; instruction_code: string | null; failure: SyncFailure | null; error: string | null; error_code: string | null; build_id: string | null; flash_id: string | null; log_path: string; pid: number;
   owner: string; applied_at: number; started_at: number; built_at: number | null; flash_started_at: number | null; finished_at: number | null;
 };
 
 const toSync = (r: SyncDb): SyncRow => ({
   id: r.id, boardId: r.board_id, layoutId: r.layout_id, revisionId: r.revision_id, boardRevision: r.board_revision, trigger: r.trigger, status: r.status,
-  step: r.step, instruction: r.instruction, failure: r.failure, error: r.error, buildId: r.build_id, flashId: r.flash_id, logPath: r.log_path, pid: r.pid,
+  step: r.step, instruction: r.instruction, instructionCode: r.instruction_code ?? null, failure: r.failure, error: r.error, errorCode: r.error_code ?? null, buildId: r.build_id, flashId: r.flash_id, logPath: r.log_path, pid: r.pid,
   owner: r.owner, appliedAt: r.applied_at, startedAt: r.started_at, builtAt: r.built_at, flashStartedAt: r.flash_started_at, finishedAt: r.finished_at,
 });
 
@@ -110,10 +114,10 @@ export function activeSyncs(db: Database): SyncRow[] {
   return (db.query(`SELECT * FROM syncs WHERE ${ACTIVE} ORDER BY started_at`).all() as SyncDb[]).map(toSync);
 }
 
-export type SyncProgress = Partial<Pick<SyncRow, "step" | "instruction" | "buildId" | "flashId" | "builtAt" | "flashStartedAt">> & { status?: "building" | "flashing" };
+export type SyncProgress = Partial<Pick<SyncRow, "step" | "instruction" | "instructionCode" | "buildId" | "flashId" | "builtAt" | "flashStartedAt">> & { status?: "building" | "flashing" };
 
 const COLUMNS: Record<keyof SyncProgress, string> = {
-  step: "step", instruction: "instruction", buildId: "build_id", flashId: "flash_id", builtAt: "built_at", flashStartedAt: "flash_started_at", status: "status",
+  step: "step", instruction: "instruction", instructionCode: "instruction_code", buildId: "build_id", flashId: "flash_id", builtAt: "built_at", flashStartedAt: "flash_started_at", status: "status",
 };
 
 /** Records progress of a sync that is still running; a sync that already finished is left alone. Returns whether it was written. */
@@ -127,7 +131,7 @@ export function progressSync(db: Database, id: string, patch: SyncProgress): boo
 
 export type SyncFinish =
   | { status: "succeeded" }
-  | { status: "failed" | "cancelled"; failure: SyncFailure; error: string };
+  | { status: "failed" | "cancelled"; failure: SyncFailure; error: string; code?: string | undefined };
 
 /**
  * Finishes a sync that is still running. Only the first finish counts; returns whether this one did. A sync that succeeded was
@@ -138,8 +142,11 @@ export function finishSync(db: Database, id: string, result: SyncFinish, now = D
   return db.transaction(() => {
     const r =
       result.status === "succeeded"
-        ? db.query(`UPDATE syncs SET status = 'succeeded', step = 'done', instruction = NULL, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(now, id)
-        : db.query(`UPDATE syncs SET status = ?, step = 'done', instruction = CASE WHEN ? = 'needs_hand' THEN instruction ELSE NULL END, failure = ?, error = ?, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(result.status, result.failure, result.failure, result.error, now, id);
+        ? db.query(`UPDATE syncs SET status = 'succeeded', step = 'done', instruction = NULL, instruction_code = NULL, finished_at = ? WHERE id = ? AND ${ACTIVE}`).run(now, id)
+        : db.query(
+          `UPDATE syncs SET status = ?, step = 'done', instruction = CASE WHEN ? = 'needs_hand' THEN instruction ELSE NULL END,
+             instruction_code = CASE WHEN ? = 'needs_hand' THEN instruction_code ELSE NULL END, failure = ?, error = ?, error_code = ?, finished_at = ? WHERE id = ? AND ${ACTIVE}`,
+        ).run(result.status, result.failure, result.failure, result.failure, result.error, result.code ?? null, now, id);
     if (r.changes > 0 && result.status === "succeeded") {
       const row = findSync(db, id) as SyncRow;
       recordVersion(db, { layoutId: row.layoutId, revisionId: row.revisionId, boardId: row.boardId, syncId: id, at: now });

@@ -1,10 +1,12 @@
-import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, ShieldCheck, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { CircleAlert, CircleCheck, Hammer, KeyboardOff, LoaderCircle, Pause, Play, RefreshCw, Settings, ShieldCheck, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { useState } from "react";
 import type { BoardSync } from "../../api/http.ts";
+import type { SettingsPaneName } from "../../api/system-remapper.ts";
 import { ConfirmDialog } from "../configs/ConfigDialogs.tsx";
 import { Menu } from "../shell/Menu.tsx";
 import { RemapperSetup } from "./RemapperSetup.tsx";
 import type { SyncApi } from "./useSync.ts";
-import { autoSyncLine, syncLine, type SyncActionId, type SyncLine, type SyncTone } from "./words.ts";
+import { autoSyncLine, settingsOpenFailure, syncLine, type SyncAction, type SyncLine, type SyncTone } from "./words.ts";
 import "./sync.css";
 
 const ICON = {
@@ -38,7 +40,19 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
   const auto = autoSyncLine(board);
   // Each action acts on the layout on screen when this is its board, and on the layout the keyboard is tracked against otherwise.
   const target = selected && layoutId !== board.layoutId ? { id: layoutId, name: layoutName } : { id: board.layoutId, name: board.layoutName };
-  const act = (id: SyncActionId, buildId?: string) => {
+  // System Settings that didn't open says so in the popover, which stays open for it (R9-01).
+  const [paneProblem, setPaneProblem] = useState<string | null>(null);
+  const openPane = (pane: SettingsPaneName, close: () => void) => {
+    setPaneProblem(null);
+    const failed = (reason: string) => setPaneProblem(settingsOpenFailure(pane, reason));
+    sync.remapperSetup.openSettings(pane).then((r) => (r.ok ? close() : failed(r.reason)), (e: unknown) => failed(e instanceof Error ? e.message : "System Settings didn't open."));
+  };
+  const press = (action: SyncAction, close: () => void) => {
+    if (action.id === "open_settings" && action.pane !== undefined) return openPane(action.pane, close);
+    close();
+    act(action);
+  };
+  const act = ({ id, buildId }: SyncAction) => {
     if (id === "flash_keyloom" || id === "open_release") onOpenRelease(buildId);
     else if (id === "put_on") onPutOn(target);
     else if (id === "replace_foreign") sync.setReplaceAsk(selected ? layoutId : board.layoutId);
@@ -77,12 +91,9 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
                 </details>
               )}
             </div>
-            {line.action === null ? null : (
-              <button type="button" role="menuitem" className="menu-item sync-primary" onClick={() => { close(); act(line.action!.id, line.action!.buildId); }}>
-                {line.action.id === "open_release" ? <Hammer size={14} aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-                <span className="menu-item-label">{line.action.label}</span>
-              </button>
-            )}
+            {line.action === null ? null : <ActionItem action={line.action} primary onPress={(a) => press(a, close)} />}
+            {line.second === undefined ? null : <ActionItem action={line.second} primary={false} onPress={(a) => press(a, close)} />}
+            {paneProblem === null ? null : <p className="sync-note sync-note-problem" role="alert">{paneProblem}</p>}
             {board.remapper === true ? <RemapperSetup sync={sync} boardId={board.boardId} mode={remapperDown ? "setup" : "attention"} /> : null}
             {board.auto.proven ? (
               <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); void sync.setPaused(board.boardId, !board.auto.paused); }}>
@@ -132,6 +143,16 @@ function BoardPill({ board, line, selected, sync, layoutId, layoutName, onOpenRe
       </Menu>
       {/* The one thing to do is the popover's filled button; the line itself only says the state (P4 review). */}
     </div>
+  );
+}
+
+function ActionItem({ action, primary, onPress }: { action: SyncAction; primary: boolean; onPress: (action: SyncAction) => void }) {
+  const Icon = action.id === "open_release" ? Hammer : action.id === "open_settings" ? Settings : RefreshCw;
+  return (
+    <button type="button" role="menuitem" className={primary ? "menu-item sync-primary" : "menu-item"} onClick={() => onPress(action)}>
+      <Icon size={14} aria-hidden="true" />
+      <span className="menu-item-label">{action.label}</span>
+    </button>
   );
 }
 

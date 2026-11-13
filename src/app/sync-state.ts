@@ -32,7 +32,8 @@ export type SyncState =
   | { kind: "in_sync" }
   | { kind: "syncing"; step: SyncStepName; syncId: string; startedAt: number; trigger: "auto" | "manual" }
   | { kind: "behind"; changes: number | null; why: BehindWhy; error: string | null }
-  | { kind: "needs_hand"; instruction: string; reason: string }
+  /** `instructionCode`: a permission that would let keyloom do it next time, such as "permission_input_monitoring" (R9-01). */
+  | { kind: "needs_hand"; instruction: string; reason: string; instructionCode?: string }
   // `firstFlash`: the board has no USB IDs keyloom knows, so keyloom sees it only once its own firmware is on it, and it never has been (R6-10).
   | { kind: "not_connected"; changes?: number | null; firstFlash?: true }
   | { kind: "not_keyloom"; detail: string };
@@ -72,11 +73,12 @@ export type SyncFacts = {
 };
 
 const NEEDS_HAND_REASON = "keyloom couldn't restart it by itself";
+const codeOf = (row: SyncRow): { instructionCode?: string } => (row.instructionCode === null ? {} : { instructionCode: row.instructionCode });
 
 export function deriveState(f: SyncFacts): SyncState {
   const a = f.active;
   if (a && isActive(a)) {
-    if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON };
+    if (a.step === "needs_hand") return { kind: "needs_hand", instruction: a.instruction ?? "", reason: NEEDS_HAND_REASON, ...codeOf(a) };
     return { kind: "syncing", step: a.step === "done" ? "building" : a.step, syncId: a.id, startedAt: a.startedAt, trigger: a.trigger };
   }
   // Kanata reports the loaded revision directly. Firmware needs a later successful flash of the failed revision or a descendant.
@@ -88,7 +90,7 @@ export function deriveState(f: SyncFacts): SyncState {
   const h = unsuperseded(f.headSync);
   const latest = unsuperseded(f.latestSync ?? f.headSync);
   if (f.split && latest?.status === "failed" && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand") && f.reading.state !== "keyloom") {
-    return { kind: "needs_hand", instruction: latest.error ?? latest.instruction ?? "Connect every half, then press Sync now.", reason: "" };
+    return { kind: "needs_hand", instruction: latest.error ?? latest.instruction ?? "Connect every half, then press Sync now.", reason: "", ...codeOf(latest) };
   }
   if (f.reading.state === "keyloom" && f.reading.missingHalves?.length) {
     return {
@@ -99,7 +101,7 @@ export function deriveState(f: SyncFacts): SyncState {
   }
   // A visible head marker does not undo a failed flash or prove the rest of a split keyboard recovered.
   if (latest?.status === "failed" && f.reading.state === "keyloom" && f.split && (latest.failure === "flash" || latest.failure === "verify" || latest.failure === "needs_hand")) {
-    if (latest.failure === "needs_hand") return { kind: "needs_hand", instruction: [latest.error, latest.instruction].filter(Boolean).join(" "), reason: NEEDS_HAND_REASON };
+    if (latest.failure === "needs_hand") return { kind: "needs_hand", instruction: [latest.error, latest.instruction].filter(Boolean).join(" "), reason: NEEDS_HAND_REASON, ...codeOf(latest) };
     return { kind: "behind", changes: f.running.kind === "behind" ? f.running.changes : null, why: "failed", error: latest.error };
   }
   if (f.reading.state === "absent") {
@@ -122,7 +124,7 @@ export function deriveState(f: SyncFacts): SyncState {
 
   const changes = f.running.kind === "behind" ? f.running.changes : null;
   if (h?.status === "failed" && h.failure === "needs_hand") {
-    return { kind: "needs_hand", instruction: h.instruction ?? h.error ?? "", reason: NEEDS_HAND_REASON };
+    return { kind: "needs_hand", instruction: h.instruction ?? h.error ?? "", reason: NEEDS_HAND_REASON, ...codeOf(h) };
   }
   if (h?.status === "failed" && !RETRYABLE_FAILURES.includes(h.failure ?? "flash")) return { kind: "behind", changes, why: "failed", error: h.error };
   if (f.running.kind === "same") return { kind: "in_sync" };

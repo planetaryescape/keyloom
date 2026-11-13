@@ -3,7 +3,7 @@ import { lightFor } from "../../src/web/sync/SyncStatus.tsx";
 // every state from the blueprint's table has its sentence, and a failure says why.
 import { describe, expect, test } from "bun:test";
 import { type BoardSync, BoardSyncSchema } from "../../src/api/http.ts";
-import { autoSyncLine, noticeOnPage, refusalNotice, syncLine, syncNotice } from "../../src/web/sync/words.ts";
+import { autoSyncLine, noticeOnPage, refusalNotice, settingsOpenFailure, syncLine, syncNotice } from "../../src/web/sync/words.ts";
 
 const board = (state: BoardSync["state"], over: Partial<BoardSync> = {}): BoardSync =>
   BoardSyncSchema.parse({
@@ -40,7 +40,10 @@ describe("syncLine", () => {
   test("needs a hand carries the instruction and the reason", () => {
     const line = syncLine(board({ kind: "needs_hand", instruction: "Press the reset button.", reason: "keyloom couldn't restart it by itself" }), "lay_1");
     expect(line).toMatchObject({ label: "Needs a hand", tone: "warning" });
-    expect(line.detail).toBe("Press the reset button. Keyloom couldn't restart it by itself.");
+    // keyloom keeps its own lower case at the start of the reason (R9-01).
+    expect(line.detail).toBe("Press the reset button. keyloom couldn't restart it by itself.");
+    // A reason that isn't keyloom's name starts with a capital.
+    expect(syncLine(board({ kind: "needs_hand", instruction: "Unplug it.", reason: "it is in its bootloader" }), "lay_1").detail).toBe("Unplug it. It is in its bootloader.");
     // The flasher's own words already say why; the reason isn't said twice.
     const said = syncLine(board({ kind: "needs_hand", instruction: "keyloom couldn't restart the keyboard by itself (no HID). Press reset.", reason: "keyloom couldn't restart it by itself" }), "lay_1");
     expect(said.detail).toBe("keyloom couldn't restart the keyboard by itself (no HID). Press reset.");
@@ -236,6 +239,68 @@ describe("syncNotice", () => {
     expect(syncNotice(at(syncing), failed)?.detail).toBe(words);
   });
 
+  // R9-01: the dialog's permission fix, on the pill, its needs-hand line and the toast.
+  const FILES_CLI = "Copying to /Volumes/GLV80RHBOOT/CURRENT.UF2 failed: EACCES: permission denied. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.";
+  const FILES_WORDS = "macOS didn't let keyloom write to the keyboard's drive, so that part wasn't flashed. Allow keyloom to use removable volumes, then sync again.";
+  test("a sync whose drive write macOS refused opens Files and Folders settings, with Sync now second (R9-01)", () => {
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: FILES_CLI }, { ...run("failed"), failure: "flash", error: FILES_CLI, errorCode: "permission_files_and_folders" });
+    const line = syncLine(failed, "lay_1");
+    expect(line).toMatchObject({ detail: FILES_WORDS, tone: "error", action: { id: "open_settings", label: "Open Files and Folders settings", pane: "files_and_folders" }, second: { id: "sync_now", label: "Sync now" } });
+    // The flasher's sentence names the path the button opens; it stays behind Details for what it says about each half.
+    expect(line.detail).not.toContain("System Settings >");
+    expect(line.more).toContain("The right half was not flashed");
+    expect(syncNotice(at(syncing), failed)).toMatchObject({ detail: FILES_WORDS, action: { id: "open_settings", label: "Open Files and Folders settings", pane: "files_and_folders" } });
+  });
+  test("a split board left needing a hand by the same refusal gets the same button (R9-01)", () => {
+    const hand = at({ kind: "needs_hand", instruction: FILES_CLI, reason: "" }, { ...run("failed"), failure: "flash", error: FILES_CLI, errorCode: "permission_files_and_folders" });
+    expect(syncLine(hand, "lay_1")).toMatchObject({ label: "Needs a hand", detail: FILES_WORDS, action: { id: "open_settings", pane: "files_and_folders" }, second: { id: "sync_now", label: "Sync now" } });
+    expect(syncLine(hand, "lay_1").more).toContain("The right half was not flashed");
+    expect(syncNotice(at(syncing), hand)).toMatchObject({ message: "Your Glove80 needs a hand", detail: FILES_WORDS, action: { id: "open_settings", pane: "files_and_folders" } });
+  });
+  test("a Moonlander waiting for a hand without Input Monitoring offers its settings, says it once, and in keyloom's case (R9-01)", () => {
+    const instruction = "macOS didn't let keyloom restart the keyboard by itself. Press the reset button on the Moonlander within 2 minutes.";
+    const state: BoardSync["state"] = { kind: "needs_hand", instruction, reason: "keyloom couldn't restart it by itself", instructionCode: "permission_input_monitoring" };
+    const waiting = at(state, { ...run("failed"), status: "flashing", step: "needs_hand", finishedAt: null });
+    const line = syncLine(waiting, "lay_1");
+    expect(line.detail).toBe(`${instruction} Allow keyloom in Input Monitoring, and the next sync needs no keypress.`);
+    expect(line.detail).not.toContain("Keyloom");
+    expect(line).toMatchObject({ action: { id: "open_settings", label: "Open Input Monitoring settings", pane: "input_monitoring" } });
+    // While it still waits, pressing the key is the way on; Sync now comes once the sync has ended.
+    expect(line.second).toBeUndefined();
+    expect(syncLine(at(state, { ...run("failed"), failure: "needs_hand" }), "lay_1").second).toEqual({ id: "sync_now", label: "Sync now" });
+    expect(syncNotice(at(syncing), waiting)).toMatchObject({ message: "Your Glove80 needs a hand", action: { id: "open_settings", pane: "input_monitoring" } });
+  });
+  test("an Input Monitoring refusal that ended the flash says what to allow (R9-01)", () => {
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: "x" }, { ...run("failed"), failure: "flash", error: "x", errorCode: "permission_input_monitoring" });
+    expect(syncLine(failed, "lay_1")).toMatchObject({ detail: "macOS didn't let keyloom restart the keyboard by itself. Allow keyloom in Input Monitoring, and the next sync needs no keypress.", action: { pane: "input_monitoring" } });
+  });
+  test("a write keyloom couldn't confirm says so first, as the dialog does", () => {
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: "The keyboard didn't come back." }, { ...run("failed"), failure: "flash", error: "The keyboard didn't come back.", errorCode: "not_confirmed" });
+    expect(syncLine(failed, "lay_1").detail).toBe("keyloom wrote the firmware, but couldn't confirm the keyboard runs it. The keyboard didn't come back.");
+  });
+  test("System Settings that didn't open says where the setting is", () => {
+    expect(settingsOpenFailure("files_and_folders", "macOS didn't open System Settings: open exited 1")).toBe("macOS didn't open System Settings: open exited 1. Open System Settings, then Privacy & Security, then Files & Folders.");
+    expect(settingsOpenFailure("input_monitoring", "x.")).toBe("x. Open System Settings, then Privacy & Security, then Input Monitoring.");
+  });
+  test("a notice's settings button opens System Settings from any page (R9-01)", () => {
+    const notice = syncNotice(at(syncing), at({ kind: "behind", changes: 1, why: "failed", error: FILES_CLI }, { ...run("failed"), failure: "flash", error: FILES_CLI, errorCode: "permission_files_and_folders" }));
+    if (notice === null) throw new Error("expected a notice");
+    expect(noticeOnPage(notice, at({ kind: "in_sync" }), { boardId: "zsa/moonlander", layoutId: "lay_9" })).toBe(notice);
+  });
+
+  // R9-10: the flash tool isn't installed. Build and flash's step installs it; the Homebrew sentence never shows.
+  test("a sync without Zapp offers Build and flash on its build, never the brew command (R9-10)", () => {
+    const cli = "zapp isn't installed. Install it with `brew install zapp`, then flash again.";
+    const failed = at({ kind: "behind", changes: 1, why: "failed", error: cli }, { ...run("failed"), failure: "flash", error: cli, errorCode: "flash_tool_missing", buildId: "bld_9" });
+    const line = syncLine(failed, "lay_1");
+    expect(line.detail).not.toContain("brew");
+    expect(line.detail).toContain("Build and flash installs it");
+    expect(line.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_9" });
+    const notice = syncNotice(at(syncing), failed);
+    expect(notice?.detail).not.toContain("brew");
+    expect(notice?.action).toEqual({ id: "open_release", label: "Build and flash…", buildId: "bld_9" });
+  });
+
   test("a flash failure's sentence loses its backticks on the page", () => {
     const failed = at({ kind: "behind", changes: 1, why: "failed", error: "Run `keyloom flash` again." }, { ...run("failed"), failure: "flash", error: "Run `keyloom flash` again." });
     expect(syncLine(failed, "lay_1").detail).toBe("Run keyloom flash again.");
@@ -354,5 +419,14 @@ describe("refusalNotice", () => {
 
   test("an unknown code keeps the server's sentence, which is all there is", () => {
     expect(refusalNotice("usage", "the Glove80 can't be synced right now")).toEqual({ message: "keyloom couldn't do that", detail: "the Glove80 can't be synced right now" });
+  });
+
+  test("a failure no screen planned for offers Restart keyloom; a route's own refusal doesn't (R9-05)", () => {
+    const restart = { id: "restart_keyloom", label: "Restart keyloom" };
+    expect(refusalNotice("internal", "keyloom hit a problem it didn't expect. The details are in keyloom's log.").action).toEqual(restart);
+    expect(refusalNotice("unreadable", "x").action).toEqual(restart);
+    expect(refusalNotice("not_found", "x", true).action).toEqual(restart);
+    expect(refusalNotice("not_found", "no layout \"x\"").action).toBeUndefined();
+    expect(refusalNotice("usage", "x").action).toBeUndefined();
   });
 });

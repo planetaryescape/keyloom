@@ -12,7 +12,7 @@ const base = (over: Partial<SyncFacts> = {}): SyncFacts => ({
 });
 const row = (over: Partial<SyncRow> = {}): SyncRow => ({
   id: "syn_1", boardId: "zsa/moonlander", layoutId: "lay_1", revisionId: "rev_1", boardRevision: "reva", trigger: "auto", status: "building", step: "building",
-  instruction: null, failure: null, error: null, buildId: null, flashId: null, logPath: "logs/x", pid: 1, owner: "o", appliedAt: 0, startedAt: 0, builtAt: null,
+  instruction: null, instructionCode: null, failure: null, error: null, errorCode: null, buildId: null, flashId: null, logPath: "logs/x", pid: 1, owner: "o", appliedAt: 0, startedAt: 0, builtAt: null,
   flashStartedAt: null, finishedAt: null, ...over,
 });
 
@@ -160,4 +160,20 @@ test("every running build must descend from the failed revision, even after anot
   expect(deriveState(facts)).toMatchObject({ kind: "behind", why: "waiting" });
   expect(deriveState({ ...facts, runningRevisionLine: ["rev_old"] })).toMatchObject({ kind: "behind", why: "failed" });
   expect(autoSyncDue({ ...facts, runningRevisionLine: ["rev_old"] })).toBe(false);
+});
+
+// The permission that would let keyloom restart the keyboard itself goes with the instruction, so the page offers its settings (R9-01).
+describe("deriveState: a needs-hand code", () => {
+  test("a running sync waiting for a hand carries its permission code", () => {
+    const active = row({ status: "flashing", step: "needs_hand", instruction: "Press the reset button.", instructionCode: "permission_input_monitoring" });
+    expect(deriveState(base({ active }))).toEqual({ kind: "needs_hand", instruction: "Press the reset button.", reason: "keyloom couldn't restart it by itself", instructionCode: "permission_input_monitoring" });
+  });
+  test("a sync that ended waiting for a hand keeps it", () => {
+    const headSync = row({ status: "failed", failure: "needs_hand", step: "done", instruction: "Press the reset button.", instructionCode: "permission_input_monitoring" });
+    expect(deriveState(base({ headSync }))).toMatchObject({ kind: "needs_hand", instructionCode: "permission_input_monitoring" });
+  });
+  test("a hand without a permission to grant has no code", () => {
+    const active = row({ status: "flashing", step: "needs_hand", instruction: "Press the reset button." });
+    expect(deriveState(base({ active }))).not.toHaveProperty("instructionCode");
+  });
 });
