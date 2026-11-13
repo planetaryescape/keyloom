@@ -168,7 +168,7 @@ describe("a build the engine's own state stopped", () => {
     const down = { ok: false as const, problem: "daemon-down" as const, reason: "Docker isn't answering.", engine: "Docker Desktop", canStart: true, autoStart: true, install: null, access: null, restartEngine: null, alternatives: [], engineAction: null };
     const html = failedStep("stale_mount", { error: stale, restartEngine: "Docker Desktop" }, {
       engineRestart: { running: false, problem: "Docker Desktop didn't come back.", again: false, waitingFor: null, log: [] },
-      docker: { readiness: down, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: false, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
+      docker: { readiness: down, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop },
     });
     expect(html).toContain("Build again starts Docker Desktop if it isn&#x27;t running.");
     expect(html).toContain("Start it now");
