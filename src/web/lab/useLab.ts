@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LabPassage, LabReadout, LabSession } from "../../api/lab.ts";
 import { ApiError } from "../api.ts";
 import * as api from "./api-lab.ts";
+import { labCancelCode, labProblemCode } from "./lab-words.ts";
 
 // The typing lab's moments (24#key-moments, D-314): choosing a passage, listening while BK types, reading the recording back, and the
 // read-out, with one finding open or one fix being tried. One recording at a time; closing while listening cancels it, saving nothing.
@@ -62,7 +63,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
   const say = (error: unknown) => {
     setFailedRead(null);
     setProblem(error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
-    setProblemCode(error instanceof ApiError ? (error.code ?? null) : null);
+    // Keeps whether a not_found is keyloom's catch-all, which names no session (R10-07).
+    setProblemCode(labProblemCode(error));
   };
 
   const start = useCallback(async (choice: { passageId?: string; text?: string }) => {
@@ -127,7 +129,8 @@ export function useLab(token: string, layoutRef: string, open: boolean) {
     } catch (error) {
       setFailedRead(null);
       setProblem(error instanceof Error ? error.message : "The server didn't answer.");
-      setProblemCode("cancel_failed");
+      // A cancel that would fail the same way again gets Restart keyloom, not Stop again (R10-07).
+      setProblemCode(labCancelCode(error));
     } finally {
       cancelling.current = false;
     }
