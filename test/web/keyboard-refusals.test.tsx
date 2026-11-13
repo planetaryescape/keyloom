@@ -169,6 +169,18 @@ describe("R6-18 and R6-25: the import cards", () => {
     expect(importRefusal(new ApiError(400, "x", { code: "usage" }), [], moonlander)).toBeNull();
   });
 
+  // R11-09: a 42-key Corne keymap on the Keebart Corne's card names the boards and offers the one it fits.
+  test("a ZMK keymap with another board's key count names both boards by name and offers the one it fits", () => {
+    const keebart: BoardChoice = { id: "keebart/corne-choc-pro-bt", name: "Corne Choc Pro BT", vendor: "Keebart", firmware: "zmk", keyCount: 46, importers: ["zmk-keymap"] };
+    const corne: BoardChoice = { id: "foostan/corne", name: "Corne", vendor: "foostan", firmware: "zmk", keyCount: 42, importers: ["zmk-keymap"] };
+    const refusal = importRefusal(new ApiError(400, "pass --board foostan/corne", { code: "keymap_for_other_board", board: "foostan/corne" }), [keebart, corne], keebart);
+    expect(refusal).toEqual({ kind: "other_board", boardId: "foostan/corne", board: corne, keymap: true });
+    if (refusal?.kind !== "other_board") throw new Error("expected an other-board refusal");
+    expect(otherBoardWords("corne.keymap", refusal, keebart)).toBe("corne.keymap has 42 keys, and the Keebart Corne Choc Pro BT has 46. It fits the foostan Corne.");
+    // A board the page can't name isn't offered: the server's sentence shows instead.
+    expect(importRefusal(new ApiError(400, "x", { code: "keymap_for_other_board", board: "local/odd" }), [keebart], keebart)).toBeNull();
+  });
+
   // #299 review: the person removed the Glove80, then chose "Import it as a Glove80 config" on the Moonlander card.
   test("a removed keyboard is the one the server refused, so Restore restores it and the retry imports to it", () => {
     const refusal = importRefusal(new ApiError(400, "restore moergo/glove80", { code: "keyboard_removed", board: "moergo/glove80" }), [glove, moonlander], glove);

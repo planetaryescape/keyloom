@@ -1476,3 +1476,14 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+
+/* On a phone with a bottom sheet open, the pill rides in the sheet's bar beside the grabber (R11-11): fixed in the corner it covered the
+   sheet's Apply. The grabber keeps the rest of the bar. */
+.sheet-bar .chat-background-work {
+  position: static;
+  flex: none;
+  padding: 0;
+  max-width: none;
+  border: 0;
+  background: none;
+}

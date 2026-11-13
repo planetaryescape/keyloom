@@ -3,6 +3,9 @@ import { useState } from "react";
 import type { ApiConfig } from "../../api/configs.ts";
 import { formatWhen } from "../history/words.ts";
 import { Menu } from "../shell/Menu.tsx";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
+import { archiveWaits, configListWords } from "./config-list-words.ts";
 import "./configs.css";
 
 interface Props {
@@ -21,6 +24,12 @@ interface Props {
   /** Deleting for good is offered for archived configs only (D-316); the dialog asks for the name. */
   onDelete: (config: ApiConfig) => void;
   onImport: () => void;
+  /** The list couldn't be read (R11-07): the menu says so with a way to read it again, and Archive waits until it is read. */
+  failure?: PageFailure | null;
+  onReadAgain?: () => void;
+  /** Whether the first read of the list has answered; until then the list is unknown too, and Archive waits with its reason. */
+  loaded?: boolean;
+  token?: string;
 }
 
 /** Where a config came from and when it was last edited, under its name; the one on the keyboard says only that. */
@@ -31,13 +40,14 @@ export function configLine(config: ApiConfig, now: number): string {
 
 // The config switcher (D-315): the caption's layout menu, now this board's configs only (other boards are in the top bar's board
 // switch). The one on the keyboard is marked green; New, Rename, Archive and the archived ones follow, then Import.
-export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onDelete, onImport }: Props) {
+export function ConfigMenu({ live, archived, selectedId, selectedName, boardName, onSelect, onNew, onRename, onArchive, onRestore, onDelete, onImport, failure = null, onReadAgain, loaded = true, token }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const now = Date.now();
   const selected = live.find((c) => c.id === selectedId);
   // The one on the keyboard first, then the rest newest edited first (the API's order).
   const ordered = [...live.filter((c) => c.onKeyboard), ...live.filter((c) => !c.onKeyboard)];
   const onKeyboard = selected?.onKeyboard === true;
+  const archiveWhy = onKeyboard ? `Put another on your ${boardName} first` : archiveWaits(failure, boardName, loaded);
   return (
     <Menu
       label="Choose a config"
@@ -77,6 +87,14 @@ export function ConfigMenu({ live, archived, selectedId, selectedName, boardName
                 {config.id === selectedId ? <Check size={14} aria-hidden="true" /> : null}
               </button>
             ))}
+            {failure === null ? null : (
+              <div className="config-menu-problem" role="alert">
+                <p>{configListWords(failure)}</p>
+                {token === undefined || onReadAgain === undefined ? null : (
+                  <div className="unexpected-actions"><RetryOrRestart token={token} failure={failure} onRetry={onReadAgain} retryLabel="Read them again" /></div>
+                )}
+              </div>
+            )}
           </div>
           <div className="menu-separator" role="separator" />
           <button type="button" role="menuitem" className="menu-item" onClick={() => { close(); onNew(); }}>
@@ -87,12 +105,12 @@ export function ConfigMenu({ live, archived, selectedId, selectedName, boardName
             <Pencil size={14} aria-hidden="true" />
             <span className="menu-item-label">Rename {selected?.name ?? selectedName}…</span>
           </button>
-          {/* The config on the keyboard can't be archived (the API refuses it); the item says why instead of failing. */}
-          <button type="button" role="menuitem" className="menu-item" disabled={onKeyboard} onClick={() => { close(); onArchive(); }}>
+          {/* The config on the keyboard can't be archived (the API refuses it), and an unread list can't say which that is (R11-07); the item says why instead of failing. */}
+          <button type="button" role="menuitem" className="menu-item" disabled={archiveWhy !== null} onClick={() => { close(); onArchive(); }}>
             <Archive size={14} aria-hidden="true" />
             <span className="menu-item-label">
               Archive {selected?.name ?? selectedName}
-              {onKeyboard ? <span className="config-sub">Put another on your {boardName} first</span> : null}
+              {archiveWhy === null ? null : <span className="config-sub">{archiveWhy}</span>}
             </span>
           </button>
           {archived.length === 0 ? null : (

@@ -19,14 +19,28 @@ export type BuildFailureView =
   | { kind: "docker" }
   | { kind: "disk_full"; text: string; next: string }
   | { kind: "folder_not_shared"; text: string; next: string; openApp: "docker_desktop" | null; helpUrl: string | null }
-  | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null }
+  /** `command`: on Linux, the line that restarts the engine, which keyloom can't run itself (R11-10); null where `button` restarts it. */
+  | { kind: "restart_engine"; text: string; next: string; button: string | null; busy: string | null; command: string | null }
   | { kind: "same_every_time"; code: "compile_error" | "too_large" | "source_error"; next: string; goBack: { revisionId: string; summary: string } | null }
   | { kind: "may_pass" };
 
+/**
+ * Where keyloom runs, for an engine it can't restart itself (R11-10): `linux`, `engine`, the engine a ready Docker names ("Docker
+ * Desktop", "Podman Desktop", or "Docker" when keyloom knows none), and `systemService`, whether readiness found Linux's system Docker
+ * service behind it (its socket, and systemd's active `docker` unit).
+ */
+export type BuildHost = { linux: boolean; engine: string | null; systemService?: boolean };
+
+/**
+ * Whether the page runs in a Linux browser, from its user agent ("X11; Linux x86_64" in Chrome, Firefox and WebKitGTK). Not
+ * `navigator.platform`, which a server-side render in Bun answers with the server's own platform. Android says Linux too, and is no desktop.
+ */
+export const linuxBrowser = (userAgent: string): boolean => /\bLinux\b/.test(userAgent) && !/\bAndroid\b/.test(userAgent);
+
 /** `restartFailed`: keyloom's own restart of the engine failed, so it isn't offered again (D-511) and the words say what is left. */
-export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine" | "folderNotShared">, earlierRevision: boolean, restartFailed = false): BuildFailureView {
+export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | "restartEngine" | "folderNotShared">, earlierRevision: boolean, restartFailed = false, host: BuildHost = { linux: false, engine: null }): BuildFailureView {
   if (build.errorCode === "docker_unavailable") return { kind: "docker" };
-  if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed);
+  if (build.errorCode === "stale_mount" || build.errorCode === "stuck_container") return engineRestartView(build.errorCode, build.restartEngine ?? null, restartFailed, host);
   if (build.errorCode === "folder_not_shared") return folderView(build.folderNotShared ?? null);
   if (build.errorCode === "disk_full") return { kind: "disk_full", text: DISK_FULL_TEXT, next: DISK_FULL_NEXT };
   if (build.errorCode !== "compile_error" && build.errorCode !== "too_large" && build.errorCode !== "source_error") return { kind: "may_pass" };
@@ -39,14 +53,36 @@ export function buildFailureView(build: Pick<Build, "errorCode" | "lastBuilt" | 
 }
 
 // The build's own sentence names a terminal command and XDG_CACHE_HOME; the page says what happened and offers the restart instead.
-function engineRestartView(code: "stale_mount" | "stuck_container", engine: string | null, restartFailed: boolean): BuildFailureView {
+function engineRestartView(code: "stale_mount" | "stuck_container", engine: string | null, restartFailed: boolean, host: BuildHost): BuildFailureView {
   const text = code === "stale_mount"
     ? "Docker kept showing the build an old copy of the files keyloom wrote, so the build stopped before it used them."
     : "A build container that an earlier keyloom left running couldn't be removed, so the build stopped before it started.";
   // Build again starts the engine itself when it is down (ensureDocker), so the way on is that button, never a terminal (R7-03).
-  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Build again starts ${engine} if it isn't running.`, button: null, busy: null };
-  if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null };
-  return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…` };
+  if (engine !== null && restartFailed) return { kind: "restart_engine", text, next: `keyloom couldn't restart ${engine}. Build again starts ${engine} if it isn't running.`, button: null, busy: null, command: null };
+  if (engine === null && host.linux) return { kind: "restart_engine", text, ...linuxRestart(host.engine, host.systemService === true) };
+  if (engine === null) return { kind: "restart_engine", text, next: "Restarting your Docker engine clears this. Restart it, then build again.", button: null, busy: null, command: null };
+  return { kind: "restart_engine", text, next: `Restarting ${engine} clears this. It stops anything else ${engine} is running.`, button: `Restart ${engine} and build again`, busy: `Restarting ${engine}…`, command: null };
+}
+
+/**
+ * Linux's engines keyloom doesn't restart (R11-10, the R8 root limit): the system service needs root, which keyloom never asks for, and
+ * keyloom's forced restart knows only Colima and the Mac apps. A command is shown only where keyloom knows it restarts what answers:
+ * Docker Desktop's user unit (Docker's own Linux docs start and stop it with `systemctl --user … docker-desktop`), and the system service
+ * when readiness found it. Any other engine (Podman, Rancher Desktop, rootless Docker, Lima, a remote context, one keyloom can't name) is
+ * named when known and restarted the way the person started it: a guessed command restarts nothing, or the wrong daemon (PR #318 review).
+ */
+function linuxRestart(engine: string | null, systemService: boolean) {
+  const none = { button: null, busy: null, command: null };
+  if (engine === "Docker Desktop") {
+    return { next: "Restarting Docker Desktop clears this, and keyloom can't restart it from here. Run this in a terminal, then build again. It stops anything else Docker Desktop is running.", button: null, busy: null, command: "systemctl --user restart docker-desktop" };
+  }
+  if (systemService) {
+    return { next: "Restarting the Docker service clears this. It needs your password, so keyloom doesn't run it. Run this in a terminal, then build again. It stops anything else Docker is running.", button: null, busy: null, command: "sudo systemctl restart docker" };
+  }
+  if (engine !== null && engine !== "Docker") {
+    return { next: `Restarting ${engine} clears this, and keyloom can't restart it from here. Restart ${engine} the way you started it, then build again. It stops anything else ${engine} is running.`, ...none };
+  }
+  return { next: "Restarting your Docker engine clears this, and keyloom can't restart it from here. Restart it the way you started it, then build again.", ...none };
 }
 
 const DISK_FULL_TEXT = "Docker ran out of disk space, so the build stopped.";

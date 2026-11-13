@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Build } from "../../src/api/http.ts";
 import { ReleaseDialog } from "../../src/web/release/ReleaseDialog.tsx";
 import { ApiError } from "../../src/web/api.ts";
-import { buildFailureView, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
+import { buildFailureView, linuxBrowser, buildQuestion, cachePruneOutcome, goBackProblem, restartWaitText, shownGoBackProblem, wentBackSummary } from "../../src/web/release/build-failure-words.ts";
 import { type Release, mayShowBuild } from "../../src/web/release/useRelease.ts";
 import { LAYOUT_GONE, buildReadFailure, syncBuildReadFailure } from "../../src/web/release/flash-words.ts";
 
@@ -321,8 +321,50 @@ describe("a build the engine's own state stopped", () => {
   });
   test("a stuck container names the Mac app keyloom restarts", () => {
     const view = buildFailureView({ errorCode: "stuck_container", lastBuilt: null, restartEngine: "Docker Desktop" }, false);
-    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…" });
+    expect(view).toEqual({ kind: "restart_engine", text: expect.stringContaining("earlier keyloom left running"), next: expect.stringContaining("Restarting Docker Desktop clears this."), button: "Restart Docker Desktop and build again", busy: "Restarting Docker Desktop…", command: null });
   });
+  // R11-10: on Linux keyloom restarts no engine but Colima, and the step said "Restart it" with nothing to press.
+  test("on Linux, an engine keyloom can't restart is named with the line that restarts it", () => {
+    const service = buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine: "Docker", systemService: true });
+    if (service.kind !== "restart_engine") throw new Error("expected restart_engine");
+    expect(service.next).toStartWith("Restarting the Docker service clears this.");
+    expect(service.next).not.toContain("Restart it, then");
+    expect(service).toMatchObject({ button: null, command: "sudo systemctl restart docker" });
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine: "Docker Desktop" }))
+      .toMatchObject({ command: "systemctl --user restart docker-desktop", next: expect.stringContaining("Restarting Docker Desktop clears this") });
+    // A Mac, or Colima on Linux, keeps the restart button keyloom runs.
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: "Colima" }, false, false, { linux: true, engine: "Colima" })).toMatchObject({ command: null, button: "Restart Colima and build again" });
+    expect(buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false)).toMatchObject({ command: null });
+  });
+
+  // PR #318 review: Podman, rootless Docker, Lima, a remote context or an engine keyloom can't name all read as not the system service, and
+  // `sudo systemctl restart docker` restarts nothing they use, or the wrong daemon.
+  test("on Linux, the root command is only for the system Docker service readiness found; any other engine is named with no command", () => {
+    const linux = (engine: string | null, systemService?: boolean) =>
+      buildFailureView({ errorCode: "stale_mount", lastBuilt: null, restartEngine: null }, false, false, { linux: true, engine, ...(systemService === undefined ? {} : { systemService }) });
+    for (const engine of ["Podman Desktop", "Rancher Desktop"]) {
+      const view = linux(engine);
+      expect(view).toMatchObject({ kind: "restart_engine", button: null, command: null });
+      if (view.kind !== "restart_engine") throw new Error("expected restart_engine");
+      expect(view.next).toContain(`Restart ${engine} the way you started it, then build again.`);
+      expect(view.next).not.toContain("Docker service");
+    }
+    for (const view of [linux("Docker"), linux("Docker", false), linux(null)]) {
+      expect(view).toMatchObject({ kind: "restart_engine", button: null, command: null });
+      if (view.kind !== "restart_engine") throw new Error("expected restart_engine");
+      expect(view.next).toBe("Restarting your Docker engine clears this, and keyloom can't restart it from here. Restart it the way you started it, then build again.");
+    }
+  });
+
+  test("the page tells a Linux browser from its user agent, never from the runtime that renders it", () => {
+    expect(linuxBrowser("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")).toBe(true);
+    expect(linuxBrowser("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0")).toBe(true);
+    expect(linuxBrowser("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)")).toBe(false);
+    expect(linuxBrowser("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36")).toBe(false);
+    // Bun's own user agent, as a server-side render in a test sees it on a Linux CI runner.
+    expect(linuxBrowser("Bun/1.3.14")).toBe(false);
+  });
+
   test("an engine keyloom can't restart says so and keeps Build again", () => {
     const html = failedStep("stale_mount", { error: stale, restartEngine: null });
     expect(html).toContain("Restarting your Docker engine clears this.");

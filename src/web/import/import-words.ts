@@ -11,8 +11,11 @@ export type ImportRefusal =
    * the board an Import it as … chose, so the words and Restore name the board the server refused, not always the card's (#299 review).
    */
   | { kind: "removed"; boardId: string; board: BoardChoice | null }
-  /** The file is a keyloom export for another board: import it as that board's config, when keyloom has the board. */
-  | { kind: "other_board"; boardId: string; board: BoardChoice | null };
+  /**
+   * The file is for another board: import it as that board's config, when keyloom has the board. `keymap`: a ZMK keymap that has that
+   * board's number of keys, not a keyloom export that names it (R11-09).
+   */
+  | { kind: "other_board"; boardId: string; board: BoardChoice | null; keymap?: true };
 
 /** `as`: the board the refused request went to, for a refusal that doesn't name one. */
 export function importRefusal(error: unknown, boards: readonly BoardChoice[], as: Pick<BoardChoice, "id">): ImportRefusal | null {
@@ -23,6 +26,8 @@ export function importRefusal(error: unknown, boards: readonly BoardChoice[], as
     return { kind: "removed", boardId, board: find(boardId) };
   }
   if (error.code === "layout_for_other_board" && error.board !== undefined) return { kind: "other_board", boardId: error.board, board: find(error.board) };
+  // Only a board the page can name is offered: without it, the server's sentence says what doesn't match, with Start blank (R11-09).
+  if (error.code === "keymap_for_other_board" && error.board !== undefined && find(error.board) !== null) return { kind: "other_board", boardId: error.board, board: find(error.board), keymap: true };
   return null;
 }
 
@@ -41,10 +46,17 @@ export const retryFor = (refused: Refused): { kind: "blank" } | { kind: "import"
   refused.file === null ? { kind: "blank" } : { kind: "import", file: refused.file, as: refused.as };
 
 export function otherBoardWords(filename: string, refusal: Extract<ImportRefusal, { kind: "other_board" }>, here: BoardChoice): string {
+  // The fitting board has the keymap's number of keys, so its count is the keymap's.
+  if (refusal.keymap === true && refusal.board !== null) {
+    return `${filename} has ${refusal.board.keyCount} keys, and the ${boardTitle(here)} has ${here.keyCount}. It fits the ${boardTitle(refusal.board)}.`;
+  }
   return refusal.board === null
     ? `${filename} is a layout for a keyboard keyloom doesn't have (${refusal.boardId}), not the ${here.name}. keyloom can import it once it has that keyboard.`
     : `${filename} is a layout for the ${refusal.board.name}, not the ${here.name}.`;
 }
+
+/** A board as its maker and the person name it: "Keebart Corne Choc Pro BT", "foostan Corne". */
+const boardTitle = (board: Pick<BoardChoice, "vendor" | "name">): string => `${board.vendor} ${board.name}`;
 
 /** kanata has no firmware to test on, so a MacBook import takes no activity tests (R6-25), whatever is ticked above the cards. */
 export const activitiesFor = (board: Pick<BoardChoice, "firmware">, activities: readonly ReviewActivity[]): ReviewActivity[] =>

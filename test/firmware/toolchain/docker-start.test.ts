@@ -1,7 +1,7 @@
 // Starting the engine a build needs (D-486, D-487): keyloom finds what runs the daemon here and waits for
 // it, so a closed Docker Desktop is a wait rather than a dead end. No test launches an app or talks to a daemon.
 import { describe, expect, test } from "bun:test";
-import { type DockerContext, type DockerEngine, type DockerStatus, adoptBundledDockerCli, answeringEngine, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
+import { type DockerContext, type DockerEngine, type DockerStatus, adoptBundledDockerCli, answeringEngine, appleScriptApp, bundledDockerCli, cliMissing, colimaEngine, dockerInstall, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine, systemDockerService, versionFailure } from "../../../src/firmware/toolchain/docker.ts";
 import { fakeBinDir } from "../../helpers/fake-bin.ts";
 
 const down: DockerStatus = { ok: false, kind: "daemon-down", reason: "The Docker daemon isn't running." };
@@ -466,6 +466,25 @@ describe("restarting a Mac app that refuses this account (R2-07)", () => {
     const result = await restartDockerApp(orbstack, { status: async () => refused, start: async () => ({ ok: true }), sleep: async () => {} });
     expect(result).toMatchObject({ ok: false });
     if (!result.ok) expect(result.reason).toContain("refusing");
+  });
+});
+
+// R11-10 (PR #318 review): the root restart command is shown only for the system Docker service, so this reads it only from evidence.
+describe("the system Docker service on Linux", () => {
+  const active = (on: boolean) => async () => on;
+  test("is the system socket with systemd's docker unit active", async () => {
+    expect(await systemDockerService({ context: at("default", "unix:///var/run/docker.sock"), active: active(true) })).toBe(true);
+  });
+  test("is nothing else: another socket, an inactive unit, or nothing readable", async () => {
+    // Podman's Docker socket can sit at the system path, but no docker unit runs then.
+    expect(await systemDockerService({ context: at("default", "unix:///var/run/docker.sock"), active: active(false) })).toBe(false);
+    // Rootless Docker, Podman's own socket, Lima and a remote context.
+    for (const host of ["unix:///run/user/1000/docker.sock", "unix:///run/user/1000/podman/podman.sock", "unix:///home/x/.lima/default/sock/docker.sock", "ssh://builder", "tcp://10.0.0.2:2376"]) {
+      expect(await systemDockerService({ context: at("work", host), active: active(true) })).toBe(false);
+    }
+    expect(await systemDockerService({ context: at("default", null), active: active(true) })).toBe(false);
+    expect(await systemDockerService({ context: async () => { throw new Error("no context"); }, active: active(true) })).toBe(false);
+    expect(await systemDockerService({ context: at("default", "unix:///var/run/docker.sock"), active: async () => { throw new Error("no systemctl"); } })).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { importZmk, importZmkSource, ZmkImportError } from "../../../src/firmware/zmk/import.ts";
+import { importZmk, importZmkSource, ZmkImportError, ZmkKeyCountError } from "../../../src/firmware/zmk/import.ts";
 import { STYLE_FIXTURE, TEMPLATE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 
@@ -178,8 +178,22 @@ describe("a Layout Editor style keymap", () => {
 });
 
 describe("what it refuses", () => {
-  test("a layer with the wrong number of bindings names the layer and the counts", async () => {
-    await expect(importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B" }) }, board)).rejects.toThrow("layer base has 2 bindings, but moergo/glove80 has 80");
+  test("a layer with the wrong number of bindings names the board by its name and both counts (R11-09)", async () => {
+    const refused = await importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B" }) }, board).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(ZmkKeyCountError);
+    expect(refused).toMatchObject({ found: 2, message: "This keymap has 2 keys, and the MoErgo Glove80 has 80." });
+  });
+
+  // PR #318 review: a keymap whose layers disagree has no count of its own, so it names no board that "fits" it.
+  test("layers that disagree on their number of keys are refused as that, with no count for a board to fit", async () => {
+    const eighty = Array(80).fill("&none").join(" ");
+    const refused = await importZmk({ name: "x", keymap: small({ bindings: eighty, layers: "nav { bindings = <&kp A &kp B>; };" }) }, board).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(ZmkImportError);
+    expect(refused).not.toBeInstanceOf(ZmkKeyCountError);
+    expect((refused as Error).message).toBe("This keymap's layers don't have the same number of keys (base has 80, nav has 2), and the MoErgo Glove80 has 80 on every layer.");
+    // Layers that agree with each other, but not the board, keep the keymap's count.
+    const two = await importZmk({ name: "x", keymap: small({ bindings: "&kp A &kp B", layers: "nav { bindings = <&kp C &kp D>; };" }) }, board).then(() => null, (err: unknown) => err);
+    expect(two).toMatchObject({ found: 2, message: "This keymap has 2 keys, and the MoErgo Glove80 has 80." });
   });
 
   test("no keymap node, a syntax error and a non-devicetree file are errors a person can act on", async () => {

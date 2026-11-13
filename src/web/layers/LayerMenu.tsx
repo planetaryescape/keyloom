@@ -7,6 +7,7 @@ import type { ChangeOp } from "../../layout/change.ts";
 import type { ConditionalLayer, Layer, Layout } from "../../layout/schema.ts";
 import { niceLayerName } from "../../layout/layer-ops.ts";
 import type { ChangeOutcome } from "../editor/useChange.ts";
+import { LayerRefusal } from "./LayerRefusal.tsx";
 import { conditionSummary, draftChange, draftChoices, noNewCondition, pickerChoices, setPickerChange } from "./conditional-ops.ts";
 
 export interface LayerMenuProps {
@@ -26,12 +27,14 @@ export interface LayerMenuProps {
   onCondition: (ops: ChangeOp[], summary: string) => Promise<ChangeOutcome>;
   /** A layer's light (a CSS colour) or null, for the dots on its chips, as the strip draws them. */
   lightOf: (layerId: string) => string | null;
+  /** For Restart keyloom and the log beside a failed change to the conditions (R11-06). */
+  token?: string | undefined;
 }
 
 // The active tab's actions. The popover is position: fixed because the tab strip scrolls sideways and
 // would clip an absolute one (the ARIA menu button pattern, like shell/Menu.tsx).
 export function LayerMenu(props: LayerMenuProps) {
-  const { layout, layers, index, transparentCount, noneCount, disabledReason, onRename, onDuplicate, onMove, onStyle, onConvert, onDelete, onCondition, lightOf } = props;
+  const { layout, layers, index, transparentCount, noneCount, disabledReason, onRename, onDuplicate, onMove, onStyle, onConvert, onDelete, onCondition, lightOf, token } = props;
   const layer = layers[index];
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"list" | "look" | "when">("list");
@@ -149,7 +152,7 @@ export function LayerMenu(props: LayerMenuProps) {
               {item("Delete layer", <Trash2 size={14} aria-hidden="true" />, onDelete, disabledReason !== null || index === 0, index === 0 ? "The base layer can't be deleted" : undefined)}
             </>
           ) : view === "when" ? (
-            <WhenForm layout={layout} layer={layer} conditions={conditions} onCondition={onCondition} lightOf={lightOf} onBack={() => setView("list")} />
+            <WhenForm layout={layout} layer={layer} conditions={conditions} onCondition={onCondition} lightOf={lightOf} onBack={() => setView("list")} token={token} />
           ) : (
             <LookForm layer={layer} colorIndex={layerColorOf(layers, index)} onBack={() => setView("list")} onSave={(label, color) => { close(true); onStyle(label, color); }} />
           )}
@@ -203,7 +206,7 @@ function LookForm({ layer, colorIndex, onBack, onSave }: { layer: Layer; colorIn
 // so nothing is applied that BK didn't pick.
 type Opened = { key: string; slot: 0 | 1 };
 
-function WhenForm({ layout, layer, conditions, onCondition, lightOf, onBack }: { layout: Layout; layer: Layer; conditions: ConditionalLayer[]; onCondition: LayerMenuProps["onCondition"]; lightOf: LayerMenuProps["lightOf"]; onBack: () => void }) {
+function WhenForm({ layout, layer, conditions, onCondition, lightOf, onBack, token }: { layout: Layout; layer: Layer; conditions: ConditionalLayer[]; onCondition: LayerMenuProps["onCondition"]; lightOf: LayerMenuProps["lightOf"]; onBack: () => void; token: string | undefined }) {
   const [refused, setRefused] = useState<Extract<ChangeOutcome, { ok: false }> | null>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<[string | null, string | null] | null>(null);
@@ -335,12 +338,8 @@ function WhenForm({ layout, layer, conditions, onCondition, lightOf, onBack }: {
           </div>
         </div>
       )}
-      {refused === null ? null : (
-        <div className="layer-refused" role="alert">
-          <strong>{refused.message}</strong>
-          {refused.problems.length === 0 ? null : <ul>{refused.problems.slice(0, 4).map((problem) => <li key={problem}>{problem}</li>)}</ul>}
-        </div>
-      )}
+      {/* Each chip, Remove and Add is a separate change, so they stay on as the Try again, as D-551's mismatch page keeps its actions. */}
+      {refused === null ? null : <LayerRefusal token={token} refused={refused} problems={4} />}
       {draft !== null ? null : (
         <>
           <button

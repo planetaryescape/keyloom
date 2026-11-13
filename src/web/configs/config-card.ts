@@ -1,10 +1,12 @@
 // What the config card on a reply says and offers, as data. The card opens the config the agent made, or goes back to the one BK was
 // on; it never claims more than the config list says (a config deleted since has no button).
 import type { ApiConfig } from "../../api/configs.ts";
+import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
 
 export type ConfigCardData =
   | { state: "loading" }
-  | { state: "error" }
+  /** The config list couldn't be read; `failure` keeps its code, so the card offers Try again or Restart keyloom (R11-07). */
+  | { state: "error"; failure: PageFailure }
   | { state: "gone" }
   /** `waiting` is null when the outside-chat count is unavailable or does not describe this card's chat-owned proposals. */
   | { state: "ready"; config: ApiConfig; waiting: number | null };
@@ -30,10 +32,15 @@ const countText = (n: number) => (n === 0 ? "No proposals waiting" : n === 1 ? "
 
 const NONE = { action: null, secondary: null };
 
+export const CARD_READ_FAILED = "keyloom couldn't read this config right now.";
+
+/** keyloom's sentence follows for a failure no screen planned for, because it explains the Restart keyloom beside it (D-551). */
+const errorNote = (failure: PageFailure): string => (wayOutFor(failure, true) === null ? CARD_READ_FAILED : `${CARD_READ_FAILED} ${failure.message}`);
+
 export function configCardView(data: ConfigCardData, currentId: string, origin: CardOrigin | null, configId: string): ConfigCardView {
   const unnamed = "A config keyloom made";
   if (data.state === "loading") return { title: unnamed, facts: [], note: null, ...NONE };
-  if (data.state === "error") return { title: unnamed, facts: [], note: "Couldn't load this config right now.", ...NONE };
+  if (data.state === "error") return { title: unnamed, facts: [], note: errorNote(data.failure), ...NONE };
   if (data.state === "gone") return { title: unnamed, facts: [], note: "This config has since been deleted.", ...NONE };
   const { config, waiting } = data;
   const facts = [config.boardName];

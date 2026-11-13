@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import type { Board } from "../boards/load.ts";
 import { ImportError, importOryxSource } from "../firmware/qmk/import.ts";
 import { KarabinerImportError, importKarabiner } from "../firmware/kanata/karabiner.ts";
-import { ZmkImportError, importZmkSource } from "../firmware/zmk/import.ts";
+import { ZmkImportError, ZmkKeyCountError, importZmkSource } from "../firmware/zmk/import.ts";
 import {
   type LayoutExportDocument, type LayoutExportProbe, buildLayoutExportDocument, probeLayoutExport,
 } from "../layout/export-document.ts";
@@ -20,7 +20,7 @@ import {
   NameTakenError, type LayoutRow, type RevisionRow, createLayout, findLayoutRow, findRevision, listLayoutRows, markLayoutOpened,
 } from "../persistence/layouts.ts";
 import type { App } from "./context.ts";
-import { showBoard } from "./boards.ts";
+import { listBoardDefinitions, showBoard } from "./boards.ts";
 import { BoardRefusal, NotFoundError, UsageError } from "./errors.ts";
 
 /** A portable layout document is far smaller than this; the cap only stops a huge file being read as one. */
@@ -154,10 +154,27 @@ export async function importLayout(app: App, input: ImportInput): Promise<Import
   try {
     result = await importer(input.source, board);
   } catch (err) {
+    if (err instanceof ZmkKeyCountError) throw keyCountRefusal(err, board);
     if (err instanceof ImportError || err instanceof ZmkImportError || err instanceof KarabinerImportError) throw new UsageError(err.message);
     throw err;
   }
   return storeImported(app, result, explicit, input.reviewActivities);
+}
+
+/**
+ * A ZMK keymap with another board's number of keys (R11-09). When exactly one other ZMK board keyloom knows has that many, the refusal
+ * names it, so the import card offers to import the file as that board's config. When several do, none is offered over the others: the
+ * sentence names each, and the person picks a card (PR #318 review). Otherwise the sentence alone says what doesn't match.
+ */
+export function keyCountRefusal(err: ZmkKeyCountError, board: Board, boards: readonly Board[] = listBoardDefinitions()): UsageError {
+  const fits = boards.map((b) => b.definition).filter((d) => d.id !== board.definition.id && d.firmware === "zmk" && d.keyCount === err.found);
+  const [only] = fits;
+  if (only === undefined) return new UsageError(err.message);
+  if (fits.length > 1) {
+    const names = fits.map((d) => `the ${d.vendor} ${d.name}`);
+    return new UsageError(`${err.message} It fits ${names.slice(0, -1).join(", ")} or ${names.at(-1)}.`);
+  }
+  return new BoardRefusal("keymap_for_other_board", only.id, `${err.message} It fits the ${only.vendor} ${only.name}: pass --board ${only.id}.`);
 }
 
 export function listLayouts(app: App): LayoutRow[] {

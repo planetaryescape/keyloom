@@ -29,6 +29,8 @@ export interface LayerActions {
   openCombo: (comboId: string) => ComboOpenRefusal | null;
   removeTapDance: (tapDanceId: string) => Promise<ChangeOutcome>;
   notify: (message: string) => void;
+  /** For Restart keyloom and the log beside a layer change that failed no way a screen planned for (R11-06). */
+  token?: string | undefined;
 }
 
 interface LayerTabsProps {
@@ -249,6 +251,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
               onDelete={() => setDeleting(selected.id)}
               onCondition={actions.condition}
               lightOf={lightOf}
+              token={actions.token}
             />
             </span>
           )}
@@ -265,6 +268,7 @@ export function LayerTabs({ layout, selectedId, onSelect, marked, reviewed, acti
           onOpenCombo={actions.openCombo}
           onRemoveTapDance={actions.removeTapDance}
           onClose={() => setDeleting(null)}
+          token={actions.token}
         />
       )}
     </div>

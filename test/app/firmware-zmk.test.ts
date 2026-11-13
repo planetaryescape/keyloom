@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { BuildSchema, FlashSchema } from "../../src/api/http.ts";
 import {
-  BuildFailedError, FlashFailedError, UsageError, buildAndWait, drainManualFlashTasks, flashAndWait, generateFirmware, getBuild, getFlash, getLayout, startBuild, startFlash,
+  BoardRefusal, BuildFailedError, FlashFailedError, UsageError, buildAndWait, drainManualFlashTasks, flashAndWait, generateFirmware, getBuild, getFlash, getLayout, startBuild, startFlash,
 } from "../../src/app/index.ts";
 import { appEditorBackend } from "../../src/cli/editor-backend.ts";
 import { imageTag } from "../../src/firmware/zmk/image.ts";
@@ -47,8 +47,63 @@ describe("import and generate", () => {
     const { importLayout } = await import("../../src/app/index.ts");
     await Bun.write(join(e.root, "bad.keymap"), "/ { keymap { compatible = \"zmk,keymap\"; l { bindings = <&kp A>; }; }; };");
     await expect(importLayout(e.app, { board: "moergo/glove80", source: join(e.root, "bad.keymap") })).rejects.toThrow(UsageError);
-    await expect(importLayout(e.app, { board: "moergo/glove80", source: join(e.root, "bad.keymap") })).rejects.toThrow(/layer l has 1 bindings, but moergo\/glove80 has 80/);
+    await expect(importLayout(e.app, { board: "moergo/glove80", source: join(e.root, "bad.keymap") })).rejects.toThrow("This keymap has 1 keys, and the MoErgo Glove80 has 80.");
     await expect(importLayout(e.app, { board: "moergo/glove80", source: join(e.root, "nope.keymap") })).rejects.toThrow(/does not exist/);
+  });
+
+  // R11-09: a 42-key Corne keymap dropped on the Keebart Corne's card was refused in board ids, with nothing but Start blank.
+  test("a keymap with another ZMK board's number of keys names both boards and the board it fits", async () => {
+    const e = await zmkEnv();
+    const { importLayout } = await import("../../src/app/index.ts");
+    const refused = await importLayout(e.app, { board: "keebart/corne-choc-pro-bt", source: "test/fixtures/zmk/corne/corne.keymap" }).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(BoardRefusal);
+    expect(refused).toMatchObject({ code: "keymap_for_other_board", board: "foostan/corne" });
+    expect((refused as Error).message).toStartWith("This keymap has 42 keys, and the Keebart Corne Choc Pro BT has 46. It fits the foostan Corne");
+    // The same file on the board it fits imports.
+    expect((await importLayout(e.app, { board: "foostan/corne", source: "test/fixtures/zmk/corne/corne.keymap" })).report.keysPerLayer).toBe(42);
+  });
+
+  // PR #318 review: base at 46 and nav at 42 was offered "It fits the foostan Corne", whose card then offered the Keebart Corne back.
+  test("a keymap whose layers disagree on their number of keys offers no board", async () => {
+    const e = await zmkEnv();
+    const { importLayout } = await import("../../src/app/index.ts");
+    const row = (n: number) => Array(n).fill("&kp A").join(" ");
+    await Bun.write(join(e.root, "mixed.keymap"), `/ { keymap { compatible = "zmk,keymap"; base { bindings = <${row(46)}>; }; nav { bindings = <${row(42)}>; }; }; };`);
+    for (const board of ["keebart/corne-choc-pro-bt", "foostan/corne"]) {
+      const refused = await importLayout(e.app, { board, source: join(e.root, "mixed.keymap") }).then(() => null, (err: unknown) => err);
+      expect(refused).toBeInstanceOf(UsageError);
+      expect(refused).not.toBeInstanceOf(BoardRefusal);
+      expect((refused as Error).message).toStartWith("This keymap's layers don't have the same number of keys (base has 46, nav has 42)");
+      expect((refused as Error).message).not.toContain("It fits");
+    }
+  });
+
+  // PR #318 review: `.find` offered whichever board was listed first when two ZMK boards share a count.
+  test("a keymap that fits several ZMK boards offers none over the others, and names each", async () => {
+    const { keyCountRefusal } = await import("../../src/app/layouts.ts");
+    const { ZmkKeyCountError } = await import("../../src/firmware/zmk/import.ts");
+    const { listBoardDefinitions } = await import("../../src/app/boards.ts");
+    const boards = listBoardDefinitions();
+    const keebart = boards.find((b) => b.definition.id === "keebart/corne-choc-pro-bt");
+    const corne = boards.find((b) => b.definition.id === "foostan/corne");
+    if (keebart === undefined || corne === undefined) throw new Error("expected both Cornes");
+    const copy = { ...corne, definition: { ...corne.definition, id: "me/corne-copy", vendor: "Me", name: "Corne copy" } };
+    const err = new ZmkKeyCountError(42, "This keymap has 42 keys, and the Keebart Corne Choc Pro BT has 46.");
+    const refused = keyCountRefusal(err, keebart, [...boards, copy]);
+    expect(refused).not.toBeInstanceOf(BoardRefusal);
+    expect(refused.message).toBe("This keymap has 42 keys, and the Keebart Corne Choc Pro BT has 46. It fits the foostan Corne or the Me Corne copy.");
+    // One board with that count is still offered.
+    expect(keyCountRefusal(err, keebart, boards)).toMatchObject({ code: "keymap_for_other_board", board: "foostan/corne" });
+  });
+
+  test("a keymap no ZMK board keyloom knows fits is a plain usage error naming both counts", async () => {
+    const e = await zmkEnv();
+    const { importLayout } = await import("../../src/app/index.ts");
+    await Bun.write(join(e.root, "three.keymap"), "/ { keymap { compatible = \"zmk,keymap\"; l { bindings = <&kp A &kp B &kp C>; }; }; };");
+    const refused = await importLayout(e.app, { board: "foostan/corne", source: join(e.root, "three.keymap") }).then(() => null, (err: unknown) => err);
+    expect(refused).toBeInstanceOf(UsageError);
+    expect(refused).not.toBeInstanceOf(BoardRefusal);
+    expect((refused as Error).message).toBe("This keymap has 3 keys, and the foostan Corne has 42.");
   });
 });
 

@@ -56,10 +56,16 @@
 // check=gone fails every change check with a server exception or as a layout deleted elsewhere; upgrade=refused offers Update layout and
 // has keyloom's check turn it down; undo=internal fails Undo and Go back. With missing_key, a pasted key containing "bad"
 // is refused and any other is "saved"; KEYLOOM_FAKE_CODEX_SIGNIN_MS holds the pretend Codex sign-in that long (default 1500).
+// The configs routes answer by default, over this one layout: its list, its versions and its open proposals (none). In the same comma list,
+// configs=internal|unreadable fails the config list; proposals=internal|unreadable|gone fails the open-proposals read with a server
+// exception, an answer the page can't read, or as a config deleted in another window, and proposals=missing serves no configs routes at
+// all, as an older keyloom (R11-05, R11-07). apply=internal|unreadable fails every change: the key card, a layer's Delete and its
+// conditions (R11-06). Restart keyloom and Show keyloom's log answer as the desktop app's do; KEYLOOM_FAKE_RESTART=0 serves neither.
 // Edits live in memory and vanish when the process stops. Ctrl-C stops it.
 import { FakeChat } from "../test/helpers/fake-chat-backend.ts";
 import { FakeEditor } from "../test/helpers/fake-editor-backend.ts";
 import { devSample } from "../test/helpers/dev-sample.ts";
+import { fakeConfigsBackend } from "../test/helpers/fake-configs-backend.ts";
 import { startServer } from "../src/server/start-server.ts";
 import type { InstallState } from "../src/api/tool-install.ts";
 import { FlashCheckResponseSchema, type FlashPlan } from "../src/api/http.ts";
@@ -290,6 +296,25 @@ if (unexpected.get("check") === "internal") fake.check = async () => { throw new
 if (unexpected.get("check") === "gone") fake.check = async (ref: string) => { throw new EditorError(404, "not_found", `no layout ${ref}`); };
 if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw new EditorError(409, "validation_failed", "the upgrade was not saved: the upgraded layout doesn't parse"); };
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
+const applyFailure = unexpected.get("apply");
+if (applyFailure === "internal") fake.apply = async () => { throw new Error("database is locked"); };
+if (applyFailure === "unreadable") fake.apply = async () => { throw new EditorError(400, "unreadable", "The dev editor answers this as a keyloom of another version would."); };
+function readFailure<T extends string>(key: string, allowed: readonly T[]): T | undefined {
+  const value = unexpected.get(key);
+  if (value === undefined) return undefined;
+  const known = allowed.find((candidate) => candidate === value);
+  if (known === undefined) throw new Error(`KEYLOOM_FAKE_UNEXPECTED ${key}=${value}: expected one of ${allowed.join(", ")}`);
+  return known;
+}
+const listFailure = readFailure("configs", ["internal", "unreadable"] as const);
+const proposalsFailure = readFailure("proposals", ["internal", "unreadable", "gone", "missing"] as const);
+// The real `keyloom serve` always has these routes (cli/serve.ts); proposals=missing leaves them out, as an older keyloom behind this page.
+const configs = proposalsFailure === "missing" ? undefined : fakeConfigsBackend(source, {
+  boardName: fixture.board.name,
+  revisions: () => fake.revisions(),
+  failList: listFailure,
+  failProposals: proposalsFailure,
+});
 
 const syncMode = process.env.KEYLOOM_FAKE_SYNC;
 const STATIC_SYNC = ["files_and_folders", "files_split", "input_monitoring", "tool_missing", "kanata_keyboard", "kanata_refused", "kanata_setup", "kanata_unwritable", "kanata_reload_failed", "kanata_first_run", "kanata_no_builtin", "kanata_foreign", "kanata_no_brew"] as const;
@@ -346,13 +371,13 @@ const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined
   },
 };
 
-// KEYLOOM_FAKE_RESTART=1 answers /api/restart as the desktop app's server would, and /api/log with a log file, so Restart keyloom and Show
-// keyloom's log render as they do there. Neither restarts or opens anything.
-const desktop = process.env.KEYLOOM_FAKE_RESTART === "1" ? {
+// /api/restart answers as the desktop app's server would, and /api/log with a log file, so Restart keyloom and Show keyloom's log render as
+// they do there. Neither restarts or opens anything. KEYLOOM_FAKE_RESTART=0 leaves both out, as an older keyloom.
+const desktop = process.env.KEYLOOM_FAKE_RESTART !== "0" ? {
   restart: { canRestart: true, command: "keyloom serve", restart: () => console.log("fake: restart asked for") },
   log: { log: { kind: "file" as const, path: "/Users/you/Library/Logs/keyloom/keyloom.log", canShow: true }, show: async () => { console.log("fake: show log"); } },
 } : {};
-const server = startServer({ port, source, editor: fake, chat, system, ...desktop, ...(sync === undefined ? {} : { sync }), ...(remapperSetup === undefined ? {} : { remapperSetup }), token: "dev-editor-token" });
+const server = startServer({ port, source, editor: fake, chat, system, ...desktop, ...(configs === undefined ? {} : { configs }), ...(sync === undefined ? {} : { sync }), ...(remapperSetup === undefined ? {} : { remapperSetup }), token: "dev-editor-token" });
 
 /**
  * One Moonlander whose sync runs for 3 s, then ends the way `mode` says (R9-01, R9-10, R9-12), so its toast shows too. Each sentence is

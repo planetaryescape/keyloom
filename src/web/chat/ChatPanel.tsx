@@ -166,7 +166,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     [carried, transcript.turns],
   );
   const cardData = useConfigCards(token, madeIds, `${layoutRef}:${revisionId}`);
-  const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}) };
+  const configCards: ConfigCards | undefined = onOpenConfig === undefined ? undefined : { data: cardData.data, currentId: layoutRef, origin: carried?.from ?? null, onOpen: onOpenConfig, onReview: onReviewProposals ?? (() => {}), onReadAgain: cardData.reload, token };
   // What a reply's own markers can go to (D-468): the configs this page can open, and the proposals of the thread on screen, each
   // through the seam the cards already use. A carried thread's layers, keys and proposals belong to another config, so only a config
   // it names stays live there — unless the thread is about this very config again, when everything it named still exists on the page.
