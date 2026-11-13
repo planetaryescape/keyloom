@@ -23,6 +23,15 @@ describe("readiness", () => {
     expect(readiness).toMatchObject({ ok: true, version: "27.4.0", autoStart: true });
   });
 
+  // R10-06: the prune's way to make room names Docker Desktop's settings only when readiness names Docker Desktop.
+  test("a daemon that is up names the engine behind it, and Docker when it knows none", async () => {
+    const up = async () => ({ ok: true as const, version: "27.4.0" });
+    expect(await dockerReadiness({ status: up, detect: async () => desktop, env: {} })).toMatchObject({ ok: true, engine: "Docker Desktop" });
+    expect(await dockerReadiness({ status: up, detect: async () => ({ kind: "engine", engine: { name: "Colima", command: ["colima", "start"] } }), env: {} })).toMatchObject({ engine: "Colima" });
+    expect(await dockerReadiness({ status: up, detect: async () => ({ kind: "elsewhere", detail: "remote" }), env: {} })).toMatchObject({ engine: "Docker" });
+    expect(await dockerReadiness({ status: up, detect: async () => { throw new Error("context unreadable"); }, env: {} })).toMatchObject({ ok: true, engine: "Docker" });
+  });
+
   test("a closed Docker Desktop is a start away, not a dead end", async () => {
     const readiness = await dockerReadiness({ status: async () => down, detect: async () => desktop, env: {} });
     expect(readiness).toMatchObject({ ok: false, problem: "daemon-down", engine: "Docker Desktop", canStart: true, autoStart: true, install: null });

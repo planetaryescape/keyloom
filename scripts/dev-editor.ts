@@ -22,7 +22,8 @@
 // as a sync whose flash macOS refused (R9-01: behind, a split board's needs-hand, the Moonlander's reset wait) or whose flash tool is missing
 // (R9-10, pair it with KEYLOOM_FAKE_FLASH=no-zapp); =kanata_keyboard shows kanata's checklist with a keyboard keyloom doesn't know by name
 // (R9-12). Open … settings answers ok, or fails with KEYLOOM_FAKE_OPEN_SETTINGS=fail. KEYLOOM_FAKE_PRUNE=daemon answers a prune as
-// Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine readiness reports.
+// Docker's daemon being down, =internal fails the request itself (R9-07); KEYLOOM_FAKE_ENGINE names the engine a ready Docker reports
+// (KEYLOOM_FAKE_RESTART_ENGINE, or Colima, by default; R10-06).
 // KEYLOOM_FAKE_READ_FAIL_AFTER_APPLY=1 fails the first layout read after each apply, as when the change is written but the page
 // can't show it (R7-06).
 // KEYLOOM_FAKE_FLASH_RESULT=unverified|files_and_folders ends the flash written but not confirmed, or refused by Files and Folders;
@@ -73,6 +74,7 @@ const flashPlan: FlashPlan = flashMode === "manual"
   ? { manual: "Put the board in its bootloader, then flash the file with QMK Toolbox.", tool: null, canReveal: true }
   : zappPlan(flashMode !== "no-zapp");
 const restartEngineName = process.env.KEYLOOM_FAKE_RESTART_ENGINE ?? "Colima";
+const readyEngine = process.env.KEYLOOM_FAKE_ENGINE ?? restartEngineName;
 const fake = new FakeEditor(fixture, {
   flashPlan,
   failBuildDocker: process.env.KEYLOOM_FAKE_FAIL_BUILD === "docker",
@@ -156,13 +158,14 @@ const system: SystemBackend = {
       }
     : colimaBroken && !colimaRestarted
       ? { ok: false, problem: "daemon-down", reason: "The Docker daemon isn't running.", engine: "Colima", canStart: true, autoStart: true, install: null, access: null, restartEngine: "Colima", alternatives: ALTERNATIVES, engineAction: engineAction() }
-      : { ok: true, version: "29.0.0", engine: process.env.KEYLOOM_FAKE_ENGINE ?? "Docker", autoStart: true },
+      // As the real readiness does since R10-06: a Docker that answers names the engine behind it.
+      : { ok: true, version: "29.0.0", engine: readyEngine, autoStart: true },
   startDocker: async () => {
     // Start it now brings back an app a failed forced restart left down (R7-03).
     appLeftDown = false;
     return colimaBroken && !colimaRestarted
       ? (await Bun.sleep(1500), { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" })
-      : { ok: true, version: "29.0.0", engine: "Docker", waitedMs: 0 };
+      : { ok: true, version: "29.0.0", engine: readyEngine, waitedMs: 0 };
   },
   install: async (tool) => {
     if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false }]]);

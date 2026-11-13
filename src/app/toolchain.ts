@@ -124,7 +124,13 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
   const status = over.status ?? (() => dockerStatus());
   const autoStart = dockerAutoStart(over.env ?? process.env);
   const now = await status();
-  if (now.ok) return { ok: true, version: now.version, engine: "Docker", autoStart };
+  // A Docker that answers names its engine too, so a page can name Docker Desktop's own settings (R10-06). A test that fakes the status
+  // without describing the engine doesn't read this computer's context.
+  if (now.ok) {
+    const detect = over.detect ?? (over.status === undefined ? findDockerEngine : undefined);
+    const finding = detect === undefined ? null : await detect().catch(() => null);
+    return { ok: true, version: now.version, engine: finding?.kind === "engine" ? finding.engine.name : "Docker", autoStart };
+  }
 
   // An install or a missing link needs no engine hunt: there is nothing here to start. A missing link names its app, which a click opens.
   const finding = now.kind === "not-installed" || now.kind === "cli-missing" ? null : await (over.detect ?? findDockerEngine)();

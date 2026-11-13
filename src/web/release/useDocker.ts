@@ -89,7 +89,8 @@ export function useDocker(token: string): Docker {
     ask(token)
       .then((result) => {
         setLinkedFile((before) => linkedFileAfter(before, action, result));
-        if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: result.engine, autoStart: previous?.autoStart ?? true }));
+        // The engine readiness named is kept: a start that found Docker already up answers "the Docker daemon", which names no engine (R10-06).
+        if (result.ok) setReadiness((previous) => ({ ok: true, version: result.version, engine: previous?.engine ?? result.engine, autoStart: previous?.autoStart ?? true }));
         else if (result.code === "engine_busy") {
           // keyloom is already starting the engine (R4-04): nothing failed, so nothing is recorded, and the readiness follows that start.
           setLastAction(before);
