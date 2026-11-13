@@ -48,7 +48,7 @@ describe("downloadTool", () => {
     const tampered = zipSync({ kanata_macos_arm64: CMD_ALLOWED });
     const out = await downloadTool("kanata", () => undefined, { ...mac, fetch: serving(tampered).fetch, dir, pins: pins() });
     expect(out).toMatchObject({ ok: false, code: "checksum_mismatch" });
-    expect(out.ok ? "" : out.reason).toBe("The file keyloom downloaded isn't kanata 1.12.0 as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get kanata from its release page.");
+    expect(out.ok ? "" : out.reason).toBe("The file keyloom downloaded isn't kanata 1.12.0 as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get kanata from its release page. Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
     expect(readdirSync(dir)).toEqual([]);
   });
 

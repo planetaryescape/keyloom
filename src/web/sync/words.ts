@@ -381,7 +381,8 @@ export function syncNotice(before: BoardSync | undefined, after: BoardSync): Syn
     // The toast has no Apply now of its own; the keyboard's status has it, beside the step a setup cause needs.
     return {
       kind: "error", message: `Couldn't put the change on your ${after.boardName}`,
-      detail: refused.way === "setup" ? `${refused.text} The keyboard's status says how to fix it, or how to go back.` : refused.way === "again" ? `${refused.text} Apply now in the keyboard's status to try again.` : refused.text,
+      // "or how to go back" only where the status offers a way back: a first version has none (R12-03).
+      detail: refused.way === "setup" ? `${refused.text} The keyboard's status says how to fix it${refused.back.action === null ? "" : ", or how to go back"}.` : refused.way === "again" ? `${refused.text} Apply now in the keyboard's status to try again.` : refused.text,
       // With no earlier version, the keyboard's status is the way on: its steps fix a setup cause (R11-04).
       action: refused.way === "back" && refused.back.action !== null ? refused.back.action : OPEN_STATUS,
     };

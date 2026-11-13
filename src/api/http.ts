@@ -173,8 +173,9 @@ export const ImportResponseSchema = z.object({
   keysPerLayer: z.number().int().nonnegative(),
   warnings: z.array(z.string()),
   // A Karabiner import's edit that stops Karabiner-Elements grabbing the built-in keyboard (R11-01): the "devices" entry to add, and the
-  // count of rules keyloom didn't import. Absent for other importers and from older senders.
-  karabinerEdit: z.object({ entry: z.string().min(1), unimported: z.number().int().nonnegative() }).optional(),
+  // count of rules keyloom didn't import. `appInstalled`: Karabiner-Elements is on this Mac, so the note can open it (R12-07). Absent for
+  // other importers and from older senders.
+  karabinerEdit: z.object({ entry: z.string().min(1), unimported: z.number().int().nonnegative(), appInstalled: z.boolean().optional() }).optional(),
 });
 export type ImportResponse = z.infer<typeof ImportResponseSchema>;
 
@@ -190,8 +191,9 @@ export type BuildRequest = z.infer<typeof BuildRequestSchema>;
 // when keyloom can't flash it; `tool` is the program the flash runs and whether it is here.
 export const FlashPlanSchema = z.object({
   manual: z.string().nullable(),
-  // `canDownload`: no Homebrew, and keyloom can download the tool's pinned release itself (Zapp, D-561). Optional for older servers.
-  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), canDownload: z.boolean().optional(), url: z.string().min(1) }).nullable(),
+  // `canDownload`: no Homebrew, and keyloom can download the tool's pinned release itself (Zapp, D-561). `downloadable`: it could download
+  // it here, Homebrew or not, for the way on after a failed Homebrew install (R12-01). Both optional for older servers.
+  tool: z.object({ name: InstallableToolSchema, installed: z.boolean(), canInstall: z.boolean(), canDownload: z.boolean().optional(), downloadable: z.boolean().optional(), url: z.string().min(1) }).nullable(),
   canReveal: z.boolean(),
 });
 export type FlashPlan = z.infer<typeof FlashPlanSchema>;

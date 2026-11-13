@@ -9,17 +9,39 @@ type NeedsTool = Extract<FlashStepView, { kind: "needs-tool" }>;
 export type ToolWay = "brew" | "download" | "page";
 export const toolWay = (view: NeedsTool): ToolWay => (view.canInstall ? "brew" : view.canDownload ? "download" : "page");
 
-export function toolMissingLead(view: NeedsTool, boardName: string): string {
+/**
+ * Where a Zapp from its page must go (R12-02): the flash looks for it on PATH and in keyloom's own folder, which only keyloom's download
+ * fills (findTool), so a file left in Downloads is never found. On Linux Zapp also needs ZSA's udev rules to reach the keyboard without root,
+ * as the CLI says (zappMissing).
+ */
+export function zappPlacement(linux: boolean): string {
+  const path = "Put the zapp program in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.";
+  return linux ? `${path} Also add ZSA's udev rules from the same page, so Zapp can reach the keyboard without root.` : path;
+}
+
+/** `linux`: the page runs on a Linux computer (linuxBrowser), where Zapp needs its udev rules. */
+export function toolMissingLead(view: NeedsTool, boardName: string, linux = false): string {
   const lead = `keyloom flashes your ${boardName} with ${view.name}, and this computer doesn't have it yet.`;
   switch (toolWay(view)) {
     case "brew": return `${lead} keyloom can install it with Homebrew.`;
     case "download": return `${lead} Homebrew isn't here, so keyloom downloads ${view.name} from its official release on GitHub, checks it against the checksum keyloom carries, and keeps it in keyloom's own folder.`;
-    case "page": return `${lead} Install it, then check again.`;
+    case "page": return view.tool === "zapp" ? `${lead} Get it from its page. ${zappPlacement(linux)} Then check again.` : `${lead} Install it, then check again.`;
   }
 }
 
-/** The tool's page beside a failure: "Get Zapp" is the download button's own name where keyloom downloads it, so the page is named as a page. */
-export const toolPageLabel = (view: NeedsTool): string => (toolWay(view) === "download" ? `Open ${view.name}'s page` : `Get ${view.name}`);
+/** The download codes, from Get Zapp's own download or Download Zapp after a failed Homebrew install (D-561, R12-01). */
+const DOWNLOAD_CODES: ReadonlySet<InstallState["errorCode"]> = new Set(["download_failed", "checksum_mismatch", "write_failed", "no_asset", "unsupported_platform"]);
+
+/**
+ * The buttons beside a failed install. Try again repeats the way that failed: keyloom's download after a failed download, Homebrew after
+ * Homebrew. After a failed Homebrew install, keyloom's own download of the pinned release is offered beside it, where there is one for this
+ * computer (R12-01), as kanata's step does (D-560). The tool's page is named as a page wherever a button already says Get or Download.
+ */
+export function failedWays(view: NeedsTool, state: InstallState): { retry: "again" | "download"; download: boolean; page: string } {
+  const downloaded = DOWNLOAD_CODES.has(state.errorCode);
+  const download = !downloaded && state.errorCode === "brew_failed" && view.downloadable;
+  return { retry: downloaded ? "download" : "again", download, page: downloaded || download || toolWay(view) === "download" ? `Open ${view.name}'s page` : `Get ${view.name}` };
+}
 
 export function toolRunning(view: NeedsTool, state: InstallState): string {
   if (state.phase === "stopping") return "Stopping the install.";
@@ -28,10 +50,18 @@ export function toolRunning(view: NeedsTool, state: InstallState): string {
 }
 
 /**
- * What a failed install says. The server downloads only where the plan offered Get (`downloadsHere`), so the way the step offered is the
- * way that failed.
+ * What a failed install says. Its code says which way failed: keyloom's download (Get, or Download after Homebrew failed) or Homebrew. After
+ * a failed Homebrew install with a download here, it says what Download does (R12-01). Zapp's page is linked beside every failure, so the
+ * words say where a Zapp from it must go (R12-02, PR #321 review); a checksum mismatch's own reason already says so.
  */
-export function toolFailed(view: NeedsTool, state: InstallState): string {
+export function toolFailed(view: NeedsTool, state: InstallState, linux = false): string {
   const reason = plain(state.error ?? "");
-  return (toolWay(view) === "download" ? `keyloom couldn't get ${view.name}. ${reason}` : `${view.name} didn't install. ${reason}`).trim();
+  const page = view.tool === "zapp" && state.errorCode !== "checksum_mismatch" ? ` If you get Zapp from its page, ${lowerFirst(zappPlacement(linux))}` : "";
+  if (DOWNLOAD_CODES.has(state.errorCode)) return `keyloom couldn't get ${view.name}. ${reason}`.trim() + page;
+  const other = failedWays(view, state).download
+    ? ` Or keyloom can download ${view.name} from its official release on GitHub, check it against the checksum keyloom carries, and keep it in keyloom's own folder.`
+    : "";
+  return `${view.name} didn't install. ${reason}`.trim() + other + page;
 }
+
+const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;

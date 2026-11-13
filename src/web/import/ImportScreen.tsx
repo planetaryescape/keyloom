@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BookOpen, CircleCheck, ExternalLink, FilePlus2, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { AppWindow, ArrowLeft, ArrowRight, BookOpen, CircleCheck, ExternalLink, FilePlus2, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import { boardDisplayName } from "../shell/Header.tsx";
@@ -8,6 +8,7 @@ import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
 import { CONTRIBUTION_GUIDE } from "../keyboards/search-words.ts";
 import { activitiesFor, importRefusal, importedNote, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type ImportedNote, type Refused } from "./import-words.ts";
 import { createConfig } from "../configs/api-configs.ts";
+import { openSettings } from "../release/flash-api.ts";
 import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
 import { acceptsFile, firstFreeName, guideFor, importCommand, importIntro, offersStartBlank } from "./export-steps.ts";
@@ -299,7 +300,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
         <h3 id={titleId}>{board.name}</h3>
         <p className="muted">{board.vendor} · {board.keyCount} keys</p>
       </header>
-      {imported !== null ? <ImportedNoteView note={imported.note} onOpen={() => { hold(false); onImported(imported.result); }} /> : <>
+      {imported !== null ? <ImportedNoteView token={token} note={imported.note} onOpen={() => { hold(false); onImported(imported.result); }} /> : <>
       <p className="board-card-steps">{guide.steps}</p>
       {guide.link === undefined && !guide.readFromMac ? null : (
         <div className="board-card-actions">
@@ -368,9 +369,20 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
 
 /**
  * An import that has something to say before the layout opens (R11-01): the Karabiner entry with Copy, which keyloom can't add itself
- * because it never writes karabiner.json (D-233), and the importer's warnings. Open … is the way on.
+ * because it never writes karabiner.json (D-233), and the importer's warnings. Open … is the way on. Where Karabiner-Elements is installed,
+ * Open Karabiner-Elements opens it here, as the checklist's Karabiner step does (R12-07).
  */
-function ImportedNoteView({ note, onOpen }: { note: ImportedNote; onOpen: () => void }) {
+function ImportedNoteView({ token, note, onOpen }: { token: string; note: ImportedNote; onOpen: () => void }) {
+  const [opening, setOpening] = useState(false);
+  // macOS's own answer when it didn't open the app, or a request that failed, which offers Restart keyloom where nothing planned for it.
+  const [openProblem, setOpenProblem] = useState<string | PageFailure | null>(null);
+  const openKarabiner = () => {
+    setOpening(true);
+    setOpenProblem(null);
+    openSettings(token, "karabiner_elements")
+      .then((r) => setOpenProblem(r.ok ? null : r.reason), (error: unknown) => setOpenProblem(pageFailure(error, "keyloom couldn't open Karabiner-Elements.")))
+      .finally(() => setOpening(false));
+  };
   return (
     <div className="board-card-imported" role="status">
       <p className="board-card-imported-title"><CircleCheck size={14} aria-hidden="true" /> {note.title}</p>
@@ -378,6 +390,17 @@ function ImportedNoteView({ note, onOpen }: { note: ImportedNote; onOpen: () => 
         <>
           <p>{note.karabiner.text}</p>
           <CopyCommand command={note.karabiner.entry} noun="entry" />
+          {note.karabiner.open ? (
+            <div className="board-card-actions">
+              <button type="button" className="sheet-action" disabled={opening} onClick={openKarabiner}>
+                {opening ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <AppWindow size={13} aria-hidden="true" />}
+                Open Karabiner-Elements
+              </button>
+            </div>
+          ) : null}
+          {openProblem === null ? null : typeof openProblem === "string"
+            ? <p className="callout-note" role="alert">{openProblem} Copy the entry above and add it in karabiner.json yourself.</p>
+            : <CardProblem token={token} problem={openProblem} />}
           {note.karabiner.unimported === null ? null : <p>{note.karabiner.unimported}</p>}
         </>
       )}

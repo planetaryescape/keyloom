@@ -19,7 +19,7 @@ function moonlanderWith(flash: FlashRecipe): Board {
 describe("flashPlanFor", () => {
   test("a Moonlander flashes with Zapp: installed or not, and installable where Homebrew is", () => {
     const moonlander = showBoard("zsa/moonlander");
-    expect(flashPlanFor(moonlander, "revb", mac(["brew", "zapp"]))).toEqual({ manual: null, tool: { name: "zapp", installed: true, canInstall: true, canDownload: false, url: "https://github.com/zsa/zapp" }, canReveal: true });
+    expect(flashPlanFor(moonlander, "revb", mac(["brew", "zapp"]))).toEqual({ manual: null, tool: { name: "zapp", installed: true, canInstall: true, canDownload: false, downloadable: expect.any(Boolean), url: "https://github.com/zsa/zapp" }, canReveal: true });
     expect(flashPlanFor(moonlander, "revb", mac(["brew"])).tool).toMatchObject({ name: "zapp", installed: false, canInstall: true });
     expect(flashPlanFor(moonlander, "revb", { platform: "linux", has: () => false })).toMatchObject({ tool: { installed: false, canInstall: false }, canReveal: false });
   });
@@ -32,9 +32,13 @@ describe("flashPlanFor", () => {
     expect(flashPlanFor(moonlander, "revb", { ...mac(["brew"]), arch: "arm64" }).tool).toMatchObject({ canInstall: true, canDownload: false });
     expect(flashPlanFor(moonlander, "revb", { ...mac([]), arch: "ppc64" }).tool).toMatchObject({ canInstall: false, canDownload: false });
     expect(flashPlanFor(moonlander, "revb", { platform: "linux", has: () => false, arch: "x64" }).tool).toMatchObject({ canDownload: false });
+    // A failed Homebrew install can fall back to the download (R12-01): downloadable where a release file is, Homebrew or not.
+    expect(flashPlanFor(moonlander, "revb", { ...mac(["brew"]), arch: "arm64" }).tool).toMatchObject({ downloadable: true });
+    expect(flashPlanFor(moonlander, "revb", { ...mac(["brew"]), arch: "ppc64" }).tool).toMatchObject({ downloadable: false });
+    expect(flashPlanFor(moonlander, "revb", { platform: "linux", has: () => false, arch: "x64" }).tool).toMatchObject({ downloadable: false });
     // Only Zapp: keyloom pins no DFU tool.
     const dfu = moonlanderWith({ kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11", enter: "Press reset." });
-    expect(flashPlanFor(dfu, "revb", { ...mac([]), arch: "arm64" }).tool).toMatchObject({ canDownload: false });
+    expect(flashPlanFor(dfu, "revb", { ...mac([]), arch: "arm64" }).tool).toMatchObject({ canDownload: false, downloadable: false });
   });
 
   test("a board keyloom can't flash carries its own steps, and no tool", () => {

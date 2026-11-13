@@ -172,6 +172,8 @@ describe("setupSteps", () => {
     const steps = setupSteps(status(fresh, { canInstall: false, canDownload: false }));
     expect(steps[0]).toMatchObject({ title: "Install kanata", actions: [], link: { href: "https://github.com/jtroo/kanata/releases", label: "Download kanata" } });
     expect(steps[0]?.detail).toContain("kanata's release has no download for this Mac's processor");
+    // R12-02: a kanata from that page is found only where keyloom looks.
+    expect(steps[0]?.detail).toEndWith("Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
     expect(setupFailure("no_asset", "kanata's release has no download for this Mac's processor, so keyloom can't get it.")).toMatchObject({ link: { label: "Open kanata's releases page" } });
   });
 
@@ -180,7 +182,7 @@ describe("setupSteps", () => {
     const brew = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }) }))[0];
     // The release link sits beside Update kanata: Homebrew may not have the version keyloom writes for yet.
     expect(brew).toMatchObject({ state: "note", whileRunning: true, actions: [{ id: { kind: "update_kanata" }, label: "Update kanata" }], link: { label: "Get kanata 1.12.0" } });
-    expect(brew?.detail).toBe("It's version 1.11.0, and keyloom writes for 1.12.0, so some keys may not load.");
+    expect(brew?.detail).toBe("It's version 1.11.0, and keyloom writes for 1.12.0, so some keys may not load. If you get 1.12.0 from its release page, rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
     const updating = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }), install: job({ action: "upgrade", log: ["==> Upgrading kanata"] }) }))[0];
     expect(updating).toMatchObject({ title: "Updating kanata…", actions: [{ id: { kind: "cancel_install" }, label: "Cancel update" }], log: ["==> Upgrading kanata"], link: null });
     const failed = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }), install: job({ action: "upgrade", state: "failed", failure: { code: "failed", reason: "nope" } }) }))[0];
@@ -194,7 +196,15 @@ describe("setupSteps", () => {
     // The server sends `link` once a `brew upgrade` succeeded and kanata is still older.
     const done = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "link" }), install: job({ action: "upgrade", state: "succeeded" }) }))[0];
     expect(done).toMatchObject({ actions: [], link: { href: "https://github.com/jtroo/kanata/releases/tag/v1.12.0", label: "Get kanata 1.12.0" } });
-    expect(done?.detail).toBe("Homebrew has nothing newer than 1.11.0, and keyloom writes for 1.12.0. Get 1.12.0 from kanata's releases page.");
+    expect(done?.detail).toBe("Homebrew has nothing newer than 1.11.0, and keyloom writes for 1.12.0. Get 1.12.0 from kanata's releases page. Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
+    // R12-02: with the kanata keyloom finds named, the new one takes its place, or keyloom keeps finding the old one first.
+    const found = setupSteps(status(old, { kanata: k({ version: "1.13.0", update: "link", path: "/usr/local/opt/kanata-src/kanata" }) }))[0];
+    expect(found?.detail).toEndWith("rename its program to kanata and put it in place of the one at /usr/local/opt/kanata-src/kanata, which is the kanata keyloom finds.");
+    // PR #321 review: a file written over Homebrew's reads as kanata changed outside Homebrew, whose only way on puts Homebrew's back, so
+    // Homebrew's goes first and the new one goes outside its folders.
+    const cellar = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "link", path: "/opt/homebrew/Cellar/kanata/1.11.0/bin/kanata" }), install: job({ action: "upgrade", state: "succeeded" }) }))[0];
+    expect(cellar?.detail).toEndWith("Remove Homebrew's kanata first, so keyloom doesn't find it before the new one. Then rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.");
+    expect(cellar?.detail).not.toContain("in place of");
   });
 
   test("a kanata changed outside Homebrew names it and offers no password step for Homebrew's; Reinstall kanata puts it back (D-498)", () => {
@@ -285,11 +295,31 @@ describe("setupFailure", () => {
     expect(setupFailure("failed", "macOS couldn't start kanata: boom")).toEqual({ text: "macOS couldn't start kanata: boom", link: null });
   });
 
-  test("a kanata that can run programs, or no Homebrew, points at the download (D-498)", () => {
+  test("a kanata that can run programs points at the download and says where the new one goes (D-498, R12-02)", () => {
+    const place = "keyloom sets up the first kanata it finds, so put the new one, named kanata, in place of this one.";
     expect(setupFailure("kanata_allows_cmd", "x")).toMatchObject({ text: expect.stringContaining("won't run it as root"), link: { label: "Download kanata" } });
-    expect(setupFailure("no_brew", "x").link?.href).toBe("https://github.com/jtroo/kanata/releases");
+    expect(setupFailure("kanata_allows_cmd", "x").text).toEndWith(place);
     // One keyloom can't read is refused too; the download is the way on (review of #279).
     expect(setupFailure("kanata_cmd_unknown", "keyloom couldn't tell.")).toMatchObject({ text: expect.stringContaining("keyloom couldn't tell."), link: { label: "Download kanata" } });
+    expect(setupFailure("kanata_cmd_unknown", "keyloom couldn't tell.").text).toEndWith(place);
+  });
+
+  // R12-07: Homebrew went away between the read and the press. The re-read offers Get kanata, so the line points at the step, not a link.
+  test("no Homebrew any more points at the kanata step, with no link of its own", () => {
+    expect(setupFailure("no_brew", "x")).toEqual({ text: "Homebrew isn't on this Mac now, so keyloom can't install kanata with it. The kanata step above now shows the other way to get it.", link: null });
+  });
+
+  // R12-05: launchctl bootstrap failed twice in the root script.
+  test("a service macOS didn't start says so plainly, and after a restart offers Set up and start kanata", () => {
+    const restart = setupFailure("root_start_failed", "macOS did not restart the kanata background service (launchctl bootstrap failed).", "restart_kanata");
+    expect(restart).toEqual({
+      text: "macOS didn't start kanata's background service again. Set kanata up again to install the service afresh and start it. macOS asks for your password.",
+      link: null, action: { id: { kind: "start_kanata" }, label: "Set up and start kanata" },
+    });
+    expect(restart.text).not.toContain("launchctl");
+    // After Set up and start kanata, that step's own button is the way on, so no second one.
+    const start = setupFailure("root_start_failed", "macOS did not start the kanata background service (launchctl bootstrap failed).", "start_kanata");
+    expect(start).toEqual({ text: "macOS didn't start kanata's background service. Press the button again to set it up afresh. macOS asks for your password.", link: null });
   });
 
   test("a closed password dialog names what didn't happen, for the restart and the log too (R11-02)", () => {

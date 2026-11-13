@@ -44,6 +44,19 @@ const KANATA_RELEASES = "https://github.com/jtroo/kanata/releases";
 /** How a board learns this Mac's keyboard: its `device.name` (CONTRIBUTING.md, the board reference). */
 const CONTRIBUTION_GUIDE = "https://github.com/planetaryescape/keyloom/blob/main/CONTRIBUTING.md";
 const kanataRelease = (version: string) => `${KANATA_RELEASES}/tag/v${version}`;
+/**
+ * Where a kanata from its release page must go (R12-02): keyloom uses the first kanata it finds (findKanata), and its own folder holds only
+ * what keyloom downloaded and checked. The release names its program after the processor (kanata_macos_arm64). With `path`, the kanata
+ * keyloom finds now, which the new one has to replace to be found first. The server's HAND_PLACEMENT says the same after a failed check.
+ */
+export const kanataPlacement = (path: string | null = null): string => {
+  const onPath = "Rename its program to kanata and put it in a folder on your PATH, such as /usr/local/bin, because keyloom looks for it there.";
+  if (path === null) return onPath;
+  // A file written over Homebrew's reads as kanata changed outside Homebrew, whose only way on is Reinstall kanata, which puts Homebrew's
+  // back (the kanata_replaced step, PR #321 review). So Homebrew's kanata goes first, and the new one goes outside Homebrew's folders.
+  if (path.includes("/Cellar/kanata/")) return `Remove Homebrew's kanata first, so keyloom doesn't find it before the new one. Then ${lowerFirst(onPath)}`;
+  return `Rename its program to kanata and put it in place of the one at ${path}, which is the kanata keyloom finds.`;
+};
 const driverPage = (version: string | null) =>
   version === null ? "https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases" : `https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases/tag/v${version}`;
 /** Where setup copies kanata for the daemon (D-498); src/firmware/kanata/plist.ts holds the same path. */
@@ -126,8 +139,8 @@ export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = 
       steps.push(step({
         key: "kanata", state: "note", title: job?.title ?? "kanata is installed", whileRunning: true,
         detail: job?.detail ?? (brewHasNothingNewer
-          ? `Homebrew has nothing newer than ${version ?? "this kanata"}, and keyloom writes for ${wanted}. Get ${wanted} from kanata's releases page.`
-          : `${is}, and keyloom writes for ${wanted}, so some keys may not load.`),
+          ? `Homebrew has nothing newer than ${version ?? "this kanata"}, and keyloom writes for ${wanted}. Get ${wanted} from kanata's releases page. ${kanataPlacement(status.kanata.path)}`
+          : `${is}, and keyloom writes for ${wanted}, so some keys may not load.${update === null || status.install.state === "running" ? "" : ` If you get ${wanted} from its release page, ${lowerFirst(kanataPlacement(status.kanata.path))}`}`),
         actions: job?.actions ?? (update === "brew" ? [{ id: { kind: "update_kanata" }, label: "Update kanata" }] : []),
         log: job?.log ?? null, problem: job?.problem ?? null,
         // Beside Update kanata too: Homebrew may not have the version keyloom writes for yet.
@@ -297,7 +310,7 @@ function kanataMissing(status: RemapperSetupResponse, keptChanged: boolean): Set
       title: "Get kanata", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }],
       detail: `${lead} Homebrew isn't on this Mac, so keyloom downloads kanata ${status.kanata.wanted} from its official release on GitHub, checks it and keeps it in keyloom's own folder.`,
     },
-    page: { title: "Install kanata", actions: [], detail: `${lead} Homebrew isn't on this Mac, and kanata's release has no download for this Mac's processor. Its releases page lists what there is.` },
+    page: { title: "Install kanata", actions: [], detail: `${lead} Homebrew isn't on this Mac, and kanata's release has no download for this Mac's processor. Its releases page lists what there is. ${kanataPlacement()}` },
   } satisfies Record<typeof way, Pick<SetupStep, "title" | "detail" | "actions">>;
   const actions = job?.actions ?? FIRST[way].actions;
   return step({
@@ -319,6 +332,9 @@ export const attentionSteps = (status: RemapperSetupResponse): SetupStep[] => se
 export type SetupFailure = { text: string; link: SetupStep["link"]; action?: SetupAction };
 
 const SET_UP_AGAIN: SetupAction = { id: { kind: "start_kanata" }, label: "Set up and start kanata" };
+// keyloom sets up the first kanata it finds (findKanata), so a new one must take the refused one's place to be used (R12-02).
+const CMD_PLACEMENT = "keyloom sets up the first kanata it finds, so put the new one, named kanata, in place of this one.";
+const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
 /** The SetupFailure for a step's code. `kind` is the button that was pressed, for the words of a closed password dialog. */
 export function setupFailure(code: string, reason: string, kind?: SetupActionId["kind"]): SetupFailure {
@@ -337,14 +353,22 @@ export function setupFailure(code: string, reason: string, kind?: SetupActionId[
     case "no_kanata": return { text: "Install kanata first.", link: null };
     // Get kanata on a Mac whose processor has no kanata release file (D-560).
     case "no_asset": return { text: reason, link: { href: KANATA_RELEASES, label: "Open kanata's releases page" } };
-    case "no_brew": return { text: "Homebrew isn't installed, so keyloom can't install kanata. Download kanata from its releases page instead.", link: { href: KANATA_RELEASES, label: "Download kanata" } };
+    // Homebrew went away between the read and the press: the re-read after it shows the kanata step's other way, so this line names no
+    // other way of its own to contradict it (R12-07).
+    case "no_brew": return { text: "Homebrew isn't on this Mac now, so keyloom can't install kanata with it. The kanata step above now shows the other way to get it.", link: null };
+    // launchctl bootstrap failed twice, in Set up and start kanata (daemon-install.ts) or in Restart kanata's service (daemon-service.ts).
+    // Setting up again installs the service afresh, so it is the way on after a restart; after a start the step's own button is that (R12-05).
+    case "root_start_failed":
+      return kind === "restart_kanata"
+        ? { text: "macOS didn't start kanata's background service again. Set kanata up again to install the service afresh and start it. macOS asks for your password.", link: null, action: SET_UP_AGAIN }
+        : { text: "macOS didn't start kanata's background service. Press the button again to set it up afresh. macOS asks for your password.", link: null };
     // A kanata that can run programs is never run as root (D-498). The release page's plain builds can't.
     // The root script found kanata changed between keyloom's check and the copy, and installed nothing (D-498).
     // keyloom's downloaded kanata changed since the download (D-560); the kanata step offers Get kanata, which replaces it.
     case "kanata_kept_changed": return { text: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't set it up. Get kanata again to replace it.", link: null };
     case "kanata_swapped": return { text: "kanata changed while macOS asked for your password, so keyloom installed nothing. Press the button again to check kanata and set it up.", link: null };
-    case "kanata_cmd_unknown": return { text: `${reason} Install Homebrew's kanata, or download a release build whose name doesn't say cmd_allowed.`, link: { href: KANATA_RELEASES, label: "Download kanata" } };
-    case "kanata_allows_cmd": return { text: "This kanata can run programs from its config, so keyloom won't run it as root. Install a kanata without that feature: Homebrew's, or a release build whose name doesn't say cmd_allowed.", link: { href: KANATA_RELEASES, label: "Download kanata" } };
+    case "kanata_cmd_unknown": return { text: `${reason} Install Homebrew's kanata, or download a release build whose name doesn't say cmd_allowed. ${CMD_PLACEMENT}`, link: { href: KANATA_RELEASES, label: "Download kanata" } };
+    case "kanata_allows_cmd": return { text: `This kanata can run programs from its config, so keyloom won't run it as root. Install a kanata without that feature: Homebrew's, or a release build whose name doesn't say cmd_allowed. ${CMD_PLACEMENT}`, link: { href: KANATA_RELEASES, label: "Download kanata" } };
     default: return { text: reason, link: null };
   }
 }

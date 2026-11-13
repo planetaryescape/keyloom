@@ -11,7 +11,8 @@
 // error that repeats every time, naming the previous revision as the last that built (R5-02); =stale fails every build on a stale Colima
 // mount until Restart Colima and build again (a forced restart, about 3 s) clears it (R6-09); with KEYLOOM_FAKE_FORCE=busy that restart is
 // refused because a build runs, and with =fail it fails. With =wait it is refused while a pretend lab analysis runs for 12 s, the page
-// waits and restarts by itself once it ends (R7-04). KEYLOOM_FAKE_RESTART_ENGINE names the engine (Colima by default); with "Docker
+// waits and restarts by itself once it ends (R7-04). KEYLOOM_FAKE_RESTART_ENGINE names the engine (Colima by default, =none for one keyloom
+// doesn't restart, as on Linux, R12-06); with "Docker
 // Desktop" and =fail, Docker reads down after the failed restart (R7-03). KEYLOOM_FAKE_FAIL_BUILD=folder fails every build because the
 // engine doesn't share the build folder, naming KEYLOOM_FAKE_RESTART_ENGINE or Docker Desktop (R7-02).
 // KEYLOOM_FAKE_FAIL_BUILD=disk fails every build because Docker's disk is full, until Free Docker's build cache (about 2 s) frees it; with
@@ -49,6 +50,10 @@
 // its Install button installs a fake one in about four seconds (D-489). KEYLOOM_FAKE_NO_BREW=1 takes Homebrew away, so that button is Get
 // Zapp, a pretend download of Zapp's pinned release (D-561); KEYLOOM_FAKE_SYNC=kanata_no_brew is the MacBook's checklist on a Mac without
 // Homebrew or kanata, whose Get kanata does the same (D-560). KEYLOOM_FAKE_DOWNLOAD=mismatch ends either download as a checksum mismatch.
+// KEYLOOM_FAKE_BREW=fail makes Install Zapp fail as Homebrew would, so the step offers Download Zapp beside Try again (R12-01);
+// KEYLOOM_FAKE_NO_BREW=page takes Homebrew away on a computer with no Zapp release file, so the step links Zapp's page (R12-02).
+// KEYLOOM_FAKE_IMPORT=karabiner adds the MacBook's card, whose drop of any .json answers as a Karabiner import with Karabiner-Elements
+// installed (=karabiner_no_app without it), so its note shows (R12-07). Pair it with KEYLOOM_FAKE_SYNC=kanata_karabiner for Open's route.
 // The chat plays a scripted Option-Option conversation (a question, then three proposals):
 // KEYLOOM_FAKE_CHAT=missing_key|busy|drop_midstream makes it fail that way (codex_missing: locked to a Codex that isn't installed);
 // KEYLOOM_FAKE_CHAT=unreadable refuses each message with an answer the page can't read; KEYLOOM_FAKE_CHAT_STOP=internal, with
@@ -87,8 +92,14 @@ import { type ShownFailureKind, isShownFailureKind } from "../test/helpers/model
 const port = Number(process.argv[2] ?? 4490);
 const fixture = await devSample();
 const flashMode = process.env.KEYLOOM_FAKE_FLASH;
-const noBrew = process.env.KEYLOOM_FAKE_NO_BREW === "1" || process.env.KEYLOOM_FAKE_SYNC === "kanata_no_brew";
-const zappPlan = (installed: boolean): FlashPlan => ({ manual: null, tool: { name: "zapp", installed, canInstall: !noBrew, canDownload: noBrew, url: "https://github.com/zsa/zapp" }, canReveal: true });
+const noBrew = process.env.KEYLOOM_FAKE_NO_BREW === "1" || process.env.KEYLOOM_FAKE_NO_BREW === "page" || process.env.KEYLOOM_FAKE_SYNC === "kanata_no_brew";
+// No Zapp release file for this computer, as on Linux: neither Get Zapp nor Download Zapp.
+const noZappRelease = process.env.KEYLOOM_FAKE_NO_BREW === "page";
+const brewFails = process.env.KEYLOOM_FAKE_BREW === "fail";
+const zappPlan = (installed: boolean): FlashPlan => ({
+  manual: null, canReveal: true,
+  tool: { name: "zapp", installed, canInstall: !noBrew, canDownload: noBrew && !noZappRelease, downloadable: !noZappRelease, url: "https://github.com/zsa/zapp" },
+});
 /** A pretend download of a pinned release (D-560, D-561): progress for about four seconds, then kept, or refused with KEYLOOM_FAKE_DOWNLOAD=mismatch. */
 const fakeDownload = (name: string, version: string, url: string, startedAt: number) => {
   const elapsed = Date.now() - startedAt;
@@ -113,7 +124,8 @@ const fake = new FakeEditor(fixture, {
   failBuildCompile: process.env.KEYLOOM_FAKE_FAIL_BUILD === "compile",
   failBuildStale: process.env.KEYLOOM_FAKE_FAIL_BUILD === "stale",
   failBuildDisk: process.env.KEYLOOM_FAKE_FAIL_BUILD === "disk",
-  restartEngine: restartEngineName,
+  // =none: the build names no engine keyloom restarts, as on Linux, so the step names the one readiness found (KEYLOOM_FAKE_ENGINE, R12-06).
+  restartEngine: restartEngineName === "none" ? null : restartEngineName,
   failBuildFolder: process.env.KEYLOOM_FAKE_FAIL_BUILD === "folder" ? { engine: process.env.KEYLOOM_FAKE_RESTART_ENGINE ?? "Docker Desktop" } : null,
   failBuild: process.env.KEYLOOM_FAKE_FAIL_BUILD === "1",
   failFlash: process.env.KEYLOOM_FAKE_FAIL_FLASH === "1",
@@ -150,12 +162,12 @@ const chat = new FakeChat(fake, "moonlander-daily", {
 });
 
 // Docker is always up here; an install finishes after a few seconds and, for Zapp, puts it in the build's flash plan.
-let installs = new Map<string, { startedAt: number; cancelled: boolean }>();
+let installs = new Map<string, { startedAt: number; cancelled: boolean; via?: "download" }>();
 const installState = (tool: InstallState["tool"]): InstallState => {
   const started = installs.get(tool);
   if (started === undefined) return { tool, status: "idle", phase: null, logTail: [], error: null, errorCode: null };
   if (started.cancelled) return { tool, status: "cancelled", phase: null, logTail: [`keyloom: brew install ${tool}`, "keyloom: stopping the install"], error: null, errorCode: null };
-  if (noBrew && tool === "zapp") {
+  if ((noBrew || started.via === "download") && tool === "zapp") {
     const got = fakeDownload("Zapp", "1.0.2", "https://github.com/zsa/zapp/releases/download/v1.0.2/zapp-macos-aarch64.tar.gz", started.startedAt);
     if (got.state === "succeeded") Object.assign(flashPlan, zappPlan(true));
     if (got.state === "running") return { tool, status: "running", phase: "downloading", logTail: got.log, error: null, errorCode: null };
@@ -164,6 +176,12 @@ const installState = (tool: InstallState["tool"]): InstallState => {
       : { tool, status: "succeeded", phase: null, logTail: got.log, error: null, errorCode: null };
   }
   const done = Date.now() - started.startedAt > 4000;
+  if (done && brewFails && tool === "zapp") {
+    return {
+      tool, status: "failed", phase: null, error: "Homebrew stopped with exit code 1.", errorCode: "brew_failed",
+      logTail: [`keyloom: brew install ${tool}`, "Error: The following directories are not writable by your user:", "/opt/homebrew"],
+    };
+  }
   if (done && tool === "zapp") Object.assign(flashPlan, zappPlan(true));
   return { tool, status: done ? "succeeded" : "running", phase: done ? null : "installing", logTail: [`keyloom: brew install ${tool}`, `==> Pouring ${tool}--1.0.2.arm64_sequoia.bottle.tar.gz`], error: null, errorCode: null };
 };
@@ -207,8 +225,8 @@ const system: SystemBackend = {
       ? (await Bun.sleep(1500), { ok: false, reason: "keyloom couldn't start Colima: error starting vm: exit status 1", engine: "Colima" })
       : { ok: true, version: "29.0.0", engine: readyEngine, waitedMs: 0 };
   },
-  install: async (tool) => {
-    if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false }]]);
+  install: async (tool, via) => {
+    if (installs.get(tool) === undefined || installState(tool).status !== "running") installs = new Map([...installs, [tool, { startedAt: Date.now(), cancelled: false, ...(via === undefined ? {} : { via }) }]]);
     return installState(tool);
   },
   installState: async (tool) => installState(tool),
@@ -298,6 +316,18 @@ const source = { ...fakeSource, get: async (ref: string) => {
 } };
 // A plain Error is the server's exception (500 internal); an EditorError is a route's own answer.
 if (unexpected.get("check") === "internal") fake.check = async () => { throw new Error("database is locked"); };
+const importMode = process.env.KEYLOOM_FAKE_IMPORT;
+if (importMode === "karabiner" || importMode === "karabiner_no_app") {
+  const boards = fake.boards.bind(fake);
+  const upload = fake.importUpload.bind(fake);
+  fake.boards = async () => [...await boards(), { id: "apple/macbook-ansi", name: "MacBook keyboard (ANSI)", vendor: "Apple", firmware: "kanata", keyCount: 77, importers: ["karabiner-json"] }];
+  // Nothing is read: any .json on the MacBook's card answers as the synthetic Karabiner fixture's import does.
+  fake.importUpload = async (request) => request.board !== "apple/macbook-ansi" ? upload(request) : {
+    layoutId: "lay_imported", revisionId: "rev_imported", name: "macbook-from-karabiner", layers: 2, keysPerLayer: 77,
+    warnings: ["Not imported, left as it is in Karabiner: b clicks the mouse (pointing_button has no kanata action keyloom writes)"],
+    karabinerEdit: { entry: '{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }', unimported: 1, appInstalled: importMode === "karabiner" },
+  };
+}
 if (unexpected.get("check") === "gone") fake.check = async (ref: string) => { throw new EditorError(404, "not_found", `no layout ${ref}`); };
 if (unexpected.get("upgrade") === "refused") fake.upgrade = async () => { throw new EditorError(409, "validation_failed", "the upgrade was not saved: the upgraded layout doesn't parse"); };
 if (unexpected.get("undo") === "internal") fake.undo = async () => { throw new Error("database is locked"); };
@@ -379,6 +409,8 @@ const remapperSetup: RemapperSetupBackend | undefined = staticMode === undefined
     await Bun.sleep(1500);
     const mode = process.env.KEYLOOM_FAKE_KANATA_RESTART;
     if (mode === "cancel") return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata's service wasn't restarted." };
+    // launchctl bootstrap failed twice in the restart script (R12-05).
+    if (mode === "bootstrap") return { ok: false, code: "root_start_failed", reason: "macOS did not restart the kanata background service (launchctl bootstrap failed)." };
     if (mode === "outdated") return { ok: false, code: "service_outdated", reason: "The background service does not run the copy of kanata that only macOS can change, so keyloom restarted nothing. Set kanata up again." };
     return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
   },

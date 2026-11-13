@@ -9,8 +9,11 @@ export interface SystemBackend {
   docker: () => Promise<DockerReadinessResponse>;
   /** Starts the engine and waits for it. Repeated calls share one attempt. */
   startDocker: () => Promise<DockerStartResponse>;
-  /** Starts installing a tool and returns at once; a second call joins the install already running (D-488, D-489). */
-  install: (tool: InstallableTool) => Promise<InstallState>;
+  /**
+   * Starts installing a tool and returns at once; a second call joins the install already running (D-488, D-489). `via: "download"` gets
+   * Zapp's pinned release even where Homebrew is, after a failed Homebrew install (R12-01).
+   */
+  install: (tool: InstallableTool, via?: "download") => Promise<InstallState>;
   /** Where an install of the tool has got to. */
   installState: (tool: InstallableTool) => Promise<InstallState>;
   /** Karabiner-Elements' config from its fixed place, for the MacBook's import card. Absent where the server can't read it. */

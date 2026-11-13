@@ -219,15 +219,17 @@ export type FlashStepView =
   | { kind: "manual"; instructions: string; canReveal: boolean }
   /**
    * The flash tool is missing: install it with Homebrew, download its pinned release where Homebrew isn't (`canDownload`, Zapp, D-561), or
-   * link its page where keyloom can do neither.
+   * link its page where keyloom can do neither. `downloadable`: keyloom could download it here even where Homebrew is, for the way on after
+   * a failed Homebrew install (R12-01).
    */
-  | { kind: "needs-tool"; tool: InstallableTool; name: string; canInstall: boolean; canDownload: boolean; url: string };
+  | { kind: "needs-tool"; tool: InstallableTool; name: string; canInstall: boolean; canDownload: boolean; downloadable: boolean; url: string };
 
 export function flashStepView(plan: FlashPlan): FlashStepView {
   if (plan.manual !== null) return { kind: "manual", instructions: plan.manual, canReveal: plan.canReveal };
   if (plan.tool !== null && !plan.tool.installed) {
     return {
-      kind: "needs-tool", tool: plan.tool.name, name: toolName(plan.tool.name), canInstall: plan.tool.canInstall, canDownload: plan.tool.canDownload === true, url: plan.tool.url,
+      kind: "needs-tool", tool: plan.tool.name, name: toolName(plan.tool.name), canInstall: plan.tool.canInstall, canDownload: plan.tool.canDownload === true,
+      downloadable: plan.tool.downloadable === true, url: plan.tool.url,
     };
   }
   return { kind: "flash" };

@@ -70,7 +70,8 @@ export const activitiesFor = (board: Pick<BoardChoice, "firmware">, activities: 
  */
 export type ImportedNote = {
   title: string;
-  karabiner: { text: string; entry: string; unimported: string | null } | null;
+  /** `open`: Karabiner-Elements is on this Mac, so the note offers Open Karabiner-Elements, as the checklist's step does (R12-07). */
+  karabiner: { text: string; entry: string; unimported: string | null; open: boolean } | null;
   warnings: string[];
   open: string;
 };
@@ -84,6 +85,7 @@ export function importedNote(result: ImportResponse): ImportedNote | null {
     karabiner: edit === undefined ? null : {
       text: `Karabiner-Elements still takes the built-in keyboard, so it and kanata would both grab it. keyloom never edits karabiner.json, so ${KARABINER_ENTRY_WORDS}`,
       entry: edit.entry,
+      open: edit.appInstalled === true,
       unimported: edit.unimported === 0 ? null
         : `${edit.unimported === 1 ? "1 rule keyloom didn't import stops" : `${edit.unimported} rules keyloom didn't import stop`} working on the built-in keyboard once Karabiner leaves it alone. ${edit.unimported === 1 ? "It's" : "They're"} listed below.`,
     },

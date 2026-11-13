@@ -50,7 +50,7 @@ export function appSystemBackend(
       starting ??= (docker.start ?? startDocker)().then(response).finally(() => { starting = null; });
       return starting;
     },
-    install: async (tool) => installs.start(tool),
+    install: async (tool, via) => installs.start(tool, via),
     stopInstalls: () => installs.cancelAll(),
     installState: async (tool) => installs.get(tool),
     karabinerConfig: () => readKarabinerConfig(),

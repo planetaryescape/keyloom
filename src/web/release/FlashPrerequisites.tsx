@@ -5,7 +5,8 @@ import { InstallCancel, InstallLost, InstallStopped } from "./InstallCancel.tsx"
 import { LogTail } from "./LogTail.tsx";
 import type { FileProblem } from "./flash-words.ts";
 import type { FlashStepView } from "./release-words.ts";
-import { toolFailed, toolMissingLead, toolPageLabel, toolRunning, toolWay } from "./tool-words.ts";
+import { linuxBrowser } from "./build-failure-words.ts";
+import { failedWays, toolFailed, toolMissingLead, toolRunning, toolWay } from "./tool-words.ts";
 import type { Install } from "./useInstall.ts";
 import { UnexpectedActions } from "./UnexpectedActions.tsx";
 
@@ -35,20 +36,31 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
     );
   }
   if (state?.status === "failed") {
+    // A hand-built Install has no download; the button and the retry by download need one.
+    const ways = failedWays(view, state);
+    const download = install.download;
+    const retry = ways.retry === "download" && download !== undefined ? download : install.start;
+    const linux = typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent);
     return (
       <div className="callout callout-error" role="alert">
         <CircleAlert size={18} aria-hidden="true" />
         <div className="callout-body">
-          <p>{toolFailed(view, state)}</p>
+          <p>{toolFailed(view, state, linux)}</p>
           {state.logTail.length > 0 ? <LogTail label="Install log, last lines" lines={state.logTail} /> : null}
           <div className="callout-actions">
-            <button type="button" className="button" onClick={install.start}>
+            <button type="button" className="button" onClick={retry}>
               <RefreshCw size={14} aria-hidden="true" />
               Try again
             </button>
+            {ways.download && download !== undefined ? (
+              <button type="button" className="button button-primary" onClick={download}>
+                <Download size={14} aria-hidden="true" />
+                Download {view.name}
+              </button>
+            ) : null}
             <a className="button" href={view.url} target="_blank" rel="noreferrer">
               <ExternalLink size={14} aria-hidden="true" />
-              {toolPageLabel(view)}
+              {ways.page}
             </a>
             <button type="button" className="button" onClick={onCheck}>Check again</button>
           </div>
@@ -63,7 +75,7 @@ export function ToolCallout({ view, boardName, install, onCheck }: { view: Needs
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="callout-body">
         <InstallStopped stopped={state?.status === "cancelled"} />
-        <p>{toolMissingLead(view, boardName)}</p>
+        <p>{toolMissingLead(view, boardName, typeof navigator !== "undefined" && linuxBrowser(navigator.userAgent))}</p>
         <div className="callout-actions">
           {way !== "page" ? (
             <button type="button" className="button button-primary" onClick={install.start}>

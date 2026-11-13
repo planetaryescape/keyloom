@@ -13,7 +13,7 @@ afterAll(() => servers.forEach((s) => s.stop(true)));
 const backend: SystemBackend = {
   docker: async () => ({ ok: false, problem: "daemon-down", reason: "the docker daemon isn't running", engine: "Docker Desktop", canStart: true, autoStart: true, install: null, access: null }),
   startDocker: async () => ({ ok: true, version: "28.0.1", engine: "Docker Desktop", waitedMs: 21_000 }),
-  install: async (tool) => ({ tool, status: "running", phase: "installing", logTail: [], error: null, errorCode: null }),
+  install: async (tool, via) => { installed.push(via === undefined ? tool : `${tool} via ${via}`); return { tool, status: "running", phase: via === "download" ? "downloading" : "installing", logTail: [], error: null, errorCode: null }; },
   installState: async (tool) => ({ tool, status: "succeeded", phase: null, logTail: ["==> Pouring zapp"], error: null, errorCode: null }),
   cancelInstall: async (tool) => { cancelled.push(tool); return { tool, status: "running", phase: "stopping", logTail: ["keyloom: stopping the install"], error: null, errorCode: null }; },
   restartDocker: async (opts) => { restarts += 1; forced.push(opts?.force === true); return { ok: true, version: "28.0.1", engine: "OrbStack", waitedMs: 4_000 }; },
@@ -22,6 +22,7 @@ const backend: SystemBackend = {
 let fixes = 0;
 const forced: boolean[] = [];
 const cancelled: string[] = [];
+const installed: string[] = [];
 let restarts = 0;
 
 async function serve() {
@@ -53,6 +54,18 @@ describe("the install routes (D-488, D-489)", () => {
     expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp" }), headers: { "content-type": "text/plain" } })).status).toBe(415);
     expect((await call("/api/system/install?tool=zapp", {}, null)).status).toBe(401);
     expect((await call("/api/system/install", { method: "PUT" })).status).toBe(405);
+  });
+
+  // R12-01: Download Zapp after a failed Homebrew install asks for keyloom's own download where Homebrew is.
+  test("via download reaches the job for Zapp, and no other tool can ask for it", async () => {
+    const { call } = await serve();
+    const json = { "content-type": "application/json" };
+    installed.length = 0;
+    const got = await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp", via: "download" }), headers: json });
+    expect(InstallStateSchema.parse(await got.json())).toMatchObject({ tool: "zapp", phase: "downloading" });
+    expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "docker", via: "download" }), headers: json })).status).toBe(400);
+    expect((await call("/api/system/install", { method: "POST", body: JSON.stringify({ tool: "zapp", via: "curl" }), headers: json })).status).toBe(400);
+    expect(installed).toEqual(["zapp via download"]);
   });
 
   test("a DELETE stops the named install, and names only a tool keyloom knows (R2-08)", async () => {

@@ -2,14 +2,17 @@ import { z } from "zod";
 
 // Installing what a build or flash needs, from a button (D-488, D-489). An install takes minutes, so the POST starts it
 // and returns at once, and the page polls the GET until it is no longer running.
-//   POST /api/system/install   { tool }   -> InstallState   (joins an install of that tool already running)
+//   POST /api/system/install   { tool, via? }   -> InstallState   (joins an install of that tool already running; `via: "download"`
+//                                          downloads Zapp's pinned release even where Homebrew is, after a failed Homebrew install, R12-01)
 //   GET  /api/system/install?tool=<tool> -> InstallState
 //   DELETE /api/system/install?tool=<tool> -> InstallState  (stops a running install: `phase` is "stopping" until it has, then
 //                                          `status` is "cancelled"; an install that isn't running comes back as it is)
 export const InstallableToolSchema = z.enum(["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude", "codex"]);
 export type InstallableTool = z.infer<typeof InstallableToolSchema>;
 
-export const InstallRequestSchema = z.object({ tool: InstallableToolSchema }).strict();
+// Only Zapp has a pinned release keyloom downloads (D-561), so `via: "download"` names no other tool.
+export const InstallRequestSchema = z.object({ tool: InstallableToolSchema, via: z.literal("download").optional() }).strict()
+  .refine((body) => body.via === undefined || body.tool === "zapp", { message: "keyloom downloads only Zapp itself", path: ["via"] });
 
 export const InstallStateSchema = z.object({
   tool: InstallableToolSchema,
