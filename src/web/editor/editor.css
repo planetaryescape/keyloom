@@ -454,6 +454,18 @@
   gap: var(--space-3);
 }
 
+/* A failed Apply's line in Settings, Combos and the tuner (R10-07): the sentence in the error colour, its buttons wrapping below it. */
+.apply-problem {
+  display: grid;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.apply-problem > p:first-child {
+  margin: 0;
+  color: var(--color-error);
+}
+
 .tuner-foot p {
   min-width: 0;
   margin: 0;

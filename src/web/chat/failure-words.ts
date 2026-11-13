@@ -20,7 +20,9 @@ export type FailureAction =
   /** Sends the same message again. Offered only where a second try can succeed. */
   | "retry"
   /** Restart keyloom: for a failure no screen planned for, and for an answer this page can't read (R7-01, R7-09). */
-  | "restart";
+  | "restart"
+  /** Shows keyloom's log, where an exception's words say its details are (D-541, R10-07). */
+  | "log";
 
 export type FailureView = {
   title: string; message: string; actions: readonly FailureAction[]; setUpLabel: string;
@@ -50,7 +52,10 @@ const VIEWS: Readonly<Record<string, Omit<FailureView, "message"> & { message?: 
   // The page lost the request before keyloom confirmed it, so keyloom may be answering it already (R5-07). The page's own code.
   unconfirmed: { title: "keyloom didn't confirm your message", actions: ["open_history", "retry"], setUpLabel: "", retryLabel: "Ask again" },
   // A server exception: the stream's own frame says "internal error", so the page says it in its words. A second try may pass (R7-01).
-  internal: { title: "The reply stopped", message: INTERNAL_WORDS, actions: ["retry", "restart"], setUpLabel: "" },
+  internal: { title: "The reply stopped", message: INTERNAL_WORDS, actions: ["retry", "restart", "log"], setUpLabel: "" },
+  // The same exception as kept with a saved run (`runFailure`), so a page that watches or reopens the run offers what a live stream does
+  // (R10-07). The route logs the exception before the run is saved.
+  agent_error: { title: "The reply stopped", message: INTERNAL_WORDS, actions: ["retry", "restart", "log"], setUpLabel: "" },
   // The same frame would be unreadable again, so only the restart that brings keyloom and the page together is offered (R7-09).
   unreadable: { title: "keyloom and this page don't match", message: UNREADABLE_WORDS, actions: ["restart"], setUpLabel: "" },
 };

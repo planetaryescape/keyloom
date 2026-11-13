@@ -3,6 +3,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Binding, Firmware, Layout } from "../../layout/schema.ts";
 import { bindingSummary } from "../editor/draft.ts";
 import { parseBinding } from "../api-write.ts";
+import { ApiError } from "../api.ts";
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 
 interface Props {
   token: string;
@@ -19,10 +22,24 @@ type Reading =
   | { status: "idle" }
   | { status: "reading" }
   | { status: "ok"; binding: Binding; native: boolean; note?: string }
-  | { status: "problem"; message: string };
+  | { status: "problem"; message: string }
+  /** The read itself failed, kept with its code (R10-07). */
+  | { status: "failed"; failure: PageFailure };
 
 const EXAMPLE: Record<Firmware, string> = { qmk: "LCTL_T(KC_A)", zmk: "&mt LCTRL A", kanata: "S-a" };
 const DEBOUNCE_MS = 250;
+
+/** A request that never reached keyloom. The page's other reads come back by themselves; this field reads again only on Try again. */
+export const FIELD_UNREACHABLE = "keyloom stopped answering, so it couldn't read that. Try again once it is back.";
+
+/**
+ * A failed read of the typed keycode, kept with its code (R10-07), so the field picks its buttons from it. A lost connection gets its own
+ * words, because the shared sentence promises a reconnect this field doesn't make by itself. Pure.
+ */
+export function readFailure(error: unknown): PageFailure {
+  if (error instanceof ApiError && error.status === 0) return { message: FIELD_UNREACHABLE, ...(error.code === undefined ? {} : { code: error.code }) };
+  return pageFailure(error, "keyloom couldn't read that.");
+}
 
 // The escape hatch that keeps the categories small (D-087): a firmware expression, read by the same
 // code an import uses, shown as what it means before it is taken. The reading happens on the server
@@ -30,6 +47,8 @@ const DEBOUNCE_MS = 250;
 export function AnyField({ token, layoutRef, layout, firmware, position, autoFocus, onUse }: Props) {
   const [text, setText] = useState("");
   const [reading, setReading] = useState<Reading>({ status: "idle" });
+  // Bumped by Try again, so the same text is read again.
+  const [reads, setReads] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const id = useId();
 
@@ -53,14 +72,14 @@ export function AnyField({ token, layoutRef, layout, firmware, position, autoFoc
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
-          setReading({ status: "problem", message: error instanceof Error ? error.message : "keyloom couldn't read that." });
+          setReading({ status: "failed", failure: readFailure(error) });
         });
     }, DEBOUNCE_MS);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [text, token, layoutRef, position]);
+  }, [text, token, layoutRef, position, reads]);
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
@@ -95,6 +114,11 @@ export function AnyField({ token, layoutRef, layout, firmware, position, autoFoc
           <p className="muted"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Reading</p>
         ) : reading.status === "problem" ? (
           <p className="any-problem"><CircleAlert size={14} aria-hidden="true" /> {reading.message}</p>
+        ) : reading.status === "failed" ? (
+          <>
+            <p className="any-problem"><CircleAlert size={14} aria-hidden="true" /> {reading.failure.message}</p>
+            <div className="unexpected-actions"><RetryOrRestart token={token} failure={reading.failure} onRetry={() => setReads((n) => n + 1)} /></div>
+          </>
         ) : (
           <>
             <p className="any-reads">

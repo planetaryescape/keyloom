@@ -18,7 +18,7 @@ describe("a reply that stopped offers what fixes it", () => {
   });
 
   test("busy, unreachable and server failures retry, and don't offer a switch the account doesn't need", () => {
-    for (const code of ["model_rate_limit", "model_overloaded", "model_connection", "model_server", "agent_error", "stream"]) {
+    for (const code of ["model_rate_limit", "model_overloaded", "model_connection", "model_server", "stream"]) {
       expect(actions(code)).toEqual(["retry"]);
     }
   });
@@ -27,10 +27,13 @@ describe("a reply that stopped offers what fixes it", () => {
     expect(actions("model_request")).toEqual(["retry", "new_conversation"]);
   });
 
-  test("a reply stopped by a server exception says so in keyloom's words, with Try again and Restart keyloom (R7-01)", () => {
-    const view = failureView({ code: "internal", message: "internal error" });
-    expect(view.actions).toEqual(["retry", "restart"]);
-    expect(view.message).toBe("keyloom hit a problem it didn't expect. The details are in keyloom's log.");
+  test("a reply stopped by a server exception says so in keyloom's words, with Try again, Restart keyloom and the log (R7-01, R10-07)", () => {
+    // `agent_error` is the same exception as a saved run keeps it, so a watched or reopened run offers the same.
+    for (const code of ["internal", "agent_error"]) {
+      const view = failureView({ code, message: "keyloom hit an unexpected problem while working on this reply." });
+      expect(view.actions).toEqual(["retry", "restart", "log"]);
+      expect(view.message).toBe("keyloom hit a problem it didn't expect. The details are in keyloom's log.");
+    }
   });
 
   test("a chat frame the page can't read offers only Restart keyloom, since the next frame would be the same (R7-09)", () => {

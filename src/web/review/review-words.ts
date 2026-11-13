@@ -4,7 +4,7 @@ import type { ChatProviderStatus } from "../../api/http.ts";
 import type { BoardReview } from "../../api/review.ts";
 import type { ReviewItem } from "../../validation/review-item.ts";
 import { CONFIG_GONE } from "../history/useVersions.ts";
-import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
+import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 
 /** A message as a sentence that ends in a full stop. */
 export const sentence = (text: string): string => text.trim().replace(/([^.!?])$/, "$1.");
@@ -191,4 +191,13 @@ export function reviewLoadProblem(failure: PageFailure, status: number): ReviewL
   if (wayOutFor(failure, true) !== null) return { words: `${what} ${failure.message}`, way: "unexpected" };
   if (failure.code === "not_found") return { words: CONFIG_GONE, way: "gone" };
   return { words: `${what} ${status < 400 ? "The server didn't answer." : sentence(failure.message)}`, way: "retry" };
+}
+
+/**
+ * A provider switch that failed, kept with its code (R10-07): keyloom's words first, then the failure's own sentence. The review offers
+ * Try again where a second press can pass, and Restart keyloom where it can't (`RetryOrRestart`).
+ */
+export function switchFailure(providerName: string, error: unknown): PageFailure {
+  const failure = pageFailure(error, "");
+  return { ...failure, message: `keyloom couldn't switch to ${providerName}.${failure.message.trim() === "" ? "" : ` ${sentence(failure.message)}`}` };
 }

@@ -16,6 +16,27 @@ interface Props {
   token?: string | undefined;
 }
 
+/**
+ * One Forget. The chip leaves when it lands, but this component stays mounted for the turn's other chips, so `removing` is cleared on
+ * success too (R10-02): every Forget is off while one runs, and a success must turn the rest back on.
+ */
+export async function forgetPriority(
+  id: string,
+  onRemove: (id: string) => Promise<void>,
+  setRemoving: (id: string | null) => void,
+  setProblem: (problem: PageFailure | null) => void,
+): Promise<void> {
+  setRemoving(id);
+  setProblem(null);
+  try {
+    await onRemove(id);
+  } catch (error) {
+    setProblem(pageFailure(error, "Couldn't forget that."));
+  } finally {
+    setRemoving(null);
+  }
+}
+
 // What BK said that keyloom will remember. A misheard priority is one click to undo (08), so the
 // remove button is on the chip itself and the chip says in his own words where it came from.
 export function PriorityChips({ priorities, layout, onRemove, token }: Props) {
@@ -23,16 +44,7 @@ export function PriorityChips({ priorities, layout, onRemove, token }: Props) {
   const [problem, setProblem] = useState<PageFailure | null>(null);
   if (priorities.length === 0) return null;
 
-  async function remove(id: string) {
-    setRemoving(id);
-    setProblem(null);
-    try {
-      await onRemove(id);
-    } catch (error) {
-      setProblem(pageFailure(error, "Couldn't forget that."));
-      setRemoving(null);
-    }
-  }
+  const remove = (id: string) => forgetPriority(id, onRemove, setRemoving, setProblem);
 
   return (
     <div className="priorities" role="group" aria-label="Remembered from what you said">

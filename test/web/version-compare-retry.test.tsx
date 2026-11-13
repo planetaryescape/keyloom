@@ -43,3 +43,14 @@ test("a version that is gone says so and goes back to History, never Try again",
   // keyloom's catch-all keeps its own words.
   expect(compareFailure(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true })).message).toBe(NOT_FOUND_WORDS);
 });
+
+test("a version that is gone drops the header's promise and the footer's ways forward (R10-09)", () => {
+  const html = render(compareFailure(new ApiError(404, "config main has no revision \"rev_1\"", { code: "not_found" })));
+  expect(html).not.toContain("Going back to it changes");
+  expect(html).not.toContain("Go back to this");
+  expect(html).not.toContain("New config from here");
+  // A failure that isn't a missing version keeps them.
+  const other = render({ message: INTERNAL_WORDS, code: "internal" });
+  expect(other).toContain("Going back to it changes");
+  expect(other).toContain("Go back to this");
+});
