@@ -163,7 +163,7 @@ BK called both of these an AI smell on 2026-10-18. `test/web/no-ai-patterns.test
 
 - **At 900 px or less,** the side panel becomes a bottom sheet with three heights: peek, half and full. The board scales to the width.
 - **At 600 px or less,** a split board shows one half at a time, with a Left and Right switcher and a swipe.
-  - Caps stay at 44 px or more.
+  - Caps stay at 44 px or more on a board the person edits. A board drawn only to be looked at, such as the new-keyboard steps', fits the width down to 16 px, so the whole half shows (D-545).
   - The key panel opens as a sheet covering less than half the screen, and scrolls the key into view above it.
 - The header collapses to the layout menu and the sync state. Layer tabs scroll sideways.
 

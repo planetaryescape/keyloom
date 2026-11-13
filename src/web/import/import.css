@@ -54,6 +54,19 @@
   flex: 1;
 }
 
+/* Restart keyloom's terminal line is long: it takes its own row under the words, not a squeezed third column (R8-03). */
+.import-error {
+  flex-wrap: wrap;
+}
+
+.import-error > svg {
+  flex: none;
+}
+
+.import-error .restart-keyloom {
+  flex-basis: 100%;
+}
+
 .board-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

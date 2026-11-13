@@ -83,6 +83,8 @@ interface KeyboardProps {
   half?: "left" | "right" | null;
   /** A horizontal swipe on the board, for the phone's half switcher. */
   onSwipe?: (direction: "left" | "right") => void;
+  /** The smallest key size the board fits down to before it scrolls; the pointer's own minimum when absent (useFitUnit). */
+  fitMin?: number;
   /** Lines between the keys of combos, with their outputs (16#combos-are-made-from-a-selection). */
   comboLines?: readonly ComboLine[];
   /** The combo being pointed at, and the keys that makes light up. */
@@ -171,6 +173,7 @@ export function Keyboard({
   handle,
   half = null,
   onSwipe,
+  fitMin,
   comboLines = [],
   comboHovered = null,
   comboLit,
@@ -211,7 +214,7 @@ export function Keyboard({
   const shownKeys = useMemo(() => (visible === null ? keys : keys.filter((_, index) => visible.has(index))), [keys, visible]);
   const parts = useMemo(() => caseParts(keys, hands, display, half), [keys, hands, display, half]);
   const canvas = canvasAround(shownKeys, parts);
-  const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height });
+  const { ref, unit: fitUnit, overflowing } = useFitUnit({ width: canvas.width, height: canvas.height }, fitMin);
   // A parted board that is too wide for the stage is drawn at a smaller unit, never with a CSS scale: every legend is then fitted at
   // the size it is drawn, so the 11 px floor still holds (P2 review).
   // Never below a fingertip's 44 px for a parting (or below the unit the window already gave): smaller keys take the 10 px floor, and

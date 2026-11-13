@@ -9,6 +9,10 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 const MIN_UNIT_TOUCH = 44;
 const MIN_UNIT_MOUSE = 34;
 const MAX_UNIT = 58;
+// A board drawn to be looked at, not edited, such as the new-keyboard steps' (R8-02): nothing on it is a key the person taps to change,
+// so it fits the stage's width down to this size instead of scrolling: on a 390 px phone a split board shows a whole half, and the
+// MacBook's 17-unit deck shows whole (R8-02).
+const MIN_UNIT_PREVIEW = 16;
 
 /** The smallest key the board is drawn at for this pointer: a fingertip's 44 px, or 34 px with a mouse. */
 export function minUnit(): number {
@@ -24,7 +28,7 @@ interface FitInput {
 // Sizes the board to the stage it sits in, by width and by height, keeping its proportions
 // (18#the-board-stays-in-view). The stage's size comes from the page layout and never from the
 // board or the panel beside it, so opening a panel cannot change the unit. Returns px per key unit.
-export function useFitUnit({ width, height }: FitInput): {
+export function useFitUnit({ width, height }: FitInput, min?: number): {
   ref: RefObject<HTMLDivElement | null>;
   unit: number;
   /** True when the board is wider or taller than the stage, so the stage scrolls it. */
@@ -48,7 +52,7 @@ export function useFitUnit({ width, height }: FitInput): {
     return () => observer.disconnect();
   }, []);
 
-  return { ref, ...fitUnit({ width, height }, available, minUnit()) };
+  return { ref, ...fitUnit({ width, height }, available, min ?? minUnit()) };
 }
 
 /** px per key unit for a board of `board` key units in a stage of `available` px, never under `min`; pure, for the stage-fit test. */
@@ -59,4 +63,4 @@ export function fitUnit(board: FitInput, available: { width: number; height: num
   return { unit, overflowing: board.width * unit > available.width + 1 || board.height * unit > available.height + 1 };
 }
 
-export const MIN_UNIT = { touch: MIN_UNIT_TOUCH, mouse: MIN_UNIT_MOUSE } as const;
+export const MIN_UNIT = { touch: MIN_UNIT_TOUCH, mouse: MIN_UNIT_MOUSE, preview: MIN_UNIT_PREVIEW } as const;

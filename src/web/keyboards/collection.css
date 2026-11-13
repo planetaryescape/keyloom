@@ -43,7 +43,9 @@
 .onboarding-workbench[data-panel] { grid-template-columns: minmax(0, 1fr) 360px; }
 .onboarding-stage { position: relative; min-width: 0; min-height: 360px; }
 .onboarding-stage .nb-card { position: relative; top: auto; left: auto; width: min(580px, 100%); margin: var(--space-3) auto; transform: none; max-height: none; }
-.onboarding-stage .keyboard-well { height: 440px; min-height: 320px; }
+/* No caption or floor bar sits over this stage, so the editor's room for them (132 px above, 172 below) would leave the board a 136 px
+   strip to fit in now that it fits rather than scrolls (R8-02). */
+.onboarding-stage .keyboard-well { height: 440px; min-height: 320px; padding: var(--space-5); }
 .onboarding-catalogue { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2); max-height: 42vh; overflow-y: auto; margin: var(--space-3) 0; }
 .onboarding-catalogue button { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
 .onboarding-catalogue .silhouette { fill: var(--ink-2); }
@@ -52,6 +54,7 @@
 .onboarding-catalogue > p { grid-column: 1 / -1; margin: 0; }
 .onboarding-catalogue > p .sheet-action { display: inline-flex; padding: var(--space-1) var(--space-2); }
 .onboarding-halves { display: none; }
+.onboarding-waiting { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 0; }
 .onboarding-panel .nb-panel { position: relative; width: 100%; height: auto; }
 .onboarding-contribution a { color: var(--ink); }
 /* "Manage keyboards" in the sentence reads at the sentence's size (R1-30). */
@@ -62,6 +65,8 @@
 }
 @media (max-width: 600px) {
   .onboarding-halves { display: flex; gap: var(--space-3); justify-content: center; }
+  /* The board fits the width here (R8-02), so a half is short: the well doesn't keep 440 px of empty stage above the steps. */
+  .onboarding-stage .keyboard-well { height: 300px; min-height: 240px; padding: var(--space-3); }
   .keyboard-welcome > header { flex-direction: column; }
   .keyboard-collection { max-height: calc(100dvh - 24px); }
   .collection-head, .collection-tools, .collection-foot { padding: var(--space-3); }

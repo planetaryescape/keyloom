@@ -2104,6 +2104,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 : [])}
               onPickRow={newBoard.setHomeRow}
               half={shownHalf}
+              onSwipe={shownHalf === null ? undefined : (direction) => setHalf(direction === "left" ? "right" : "left")}
             />
           ) : (
           <Keyboard
