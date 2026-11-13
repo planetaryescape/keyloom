@@ -22,7 +22,8 @@ export async function restoreThenRetry(restore: () => Promise<unknown>, onRestor
   try {
     await restore();
   } catch (error) {
-    return pageFailure(error, "That didn't work.");
+    // No words of its own: the line already says the restore failed, and "That didn't work." would only say it twice.
+    return pageFailure(error, "");
   }
   if (current()) await onRestored();
   return null;
@@ -64,7 +65,7 @@ export function RestoreKeyboard({ token, restore: restoreIt, boardName, doing, o
   return (
     <div className="nb-problem nb-cant" role="alert">
       <p>{removedWords(boardName, doing)}</p>
-      {failed === null ? null : <p className="nb-restore-failed">keyloom couldn't restore the {boardName}. {failed.message}</p>}
+      {failed === null ? null : <p className="nb-restore-failed">keyloom couldn't restore the {boardName}.{failed.message === "" ? "" : ` ${failed.message}`}</p>}
       <p className="nb-actions">
         <button type="button" className="sheet-action" disabled={busy || off} onClick={() => void restore()}>
           {busy ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <RotateCcw size={13} aria-hidden="true" />}

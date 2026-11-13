@@ -181,17 +181,29 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   const searchSequence = useRef(0);
   const waiting = keyboards.filter((k) => k.status !== "known");
   const offered = waiting.filter((k) => !dismissed.has(keyboardKey(k)));
-  const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
+  // Every known board with no config: the board switch's chip, which stays after Not now (D-336), as the chip for `waiting` does.
+  const setupWaiting = knownWithNoConfig.filter((k) => k.knownBoard !== null);
+  const setupOffered = setupWaiting.filter((k) => k.knownBoard !== null && !dismissed.has(k.knownBoard.id));
+
+  // A dialog closed, such as Build and flash by its Close button. Its host closes it in an effect that runs after the card's, and nothing
+  // else may re-render the page after that, so a held card would wait for an unrelated change. `close` doesn't bubble, so it is caught on
+  // the way down.
+  const [, setDialogsClosed] = useState(0);
+  useEffect(() => {
+    const onClose = () => setDialogsClosed((n) => n + 1);
+    document.addEventListener("close", onClose, true);
+    return () => document.removeEventListener("close", onClose, true);
+  }, []);
 
   // A keyboard or a bare board that appears opens its card once; "Not now" leaves it to the chip in the board switch. The effect runs on
   // every render (`offered` is a new list each time), so a card held back opens on the first render after the hold or the dialog ends.
   useEffect(() => {
     if (step.kind !== "idle" || hold || dialogOpen()) return;
-    const open = cardToOpen(offered, setupWaiting, shown.current);
+    const open = cardToOpen(offered, setupOffered, shown.current);
     if (open === null) return;
     shown.current = new Set([...shown.current, open.shown]);
     setStep(open.step);
-  }, [offered, setupWaiting, step.kind, hold, shown]);
+  }, [offered, setupOffered, step.kind, hold, shown]);
 
   // The card's keyboard was unplugged: the card goes with it, unless BK is already past choosing.
   useEffect(() => {

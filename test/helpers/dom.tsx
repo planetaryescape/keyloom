@@ -27,23 +27,37 @@ let unmount: (() => void) | null = null;
  * file sets up its own, because bun runs every file in one process and the file before may have taken its document down.
  */
 export async function setUpDom(): Promise<void> {
-  const realFetch = globalThis.fetch;
-  if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: "http://127.0.0.1/" });
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-  globalThis.fetch = fakeFetch;
-  // Loaded once a document exists: react-dom/client reads it when it loads.
-  ({ createRoot } = await import("react-dom/client"));
-  act = (await import("react")).act as Act;
+  const tearDown = await startDom();
   afterEach(() => {
     unmount?.();
     unmount = null;
     document.body.innerHTML = "";
     reads = {};
   });
-  afterAll(async () => {
-    await GlobalRegistrator.unregister();
+  afterAll(tearDown);
+}
+
+/**
+ * The document, the fake fetch and React's act flag, without the test hooks. The returned function takes them down and puts back what was
+ * there, so a later file that mounts with react-dom/client doesn't run as an act environment it never asked for.
+ */
+export async function startDom(): Promise<() => Promise<void>> {
+  const realFetch = globalThis.fetch;
+  const flags = globalThis as { IS_REACT_ACT_ENVIRONMENT?: unknown };
+  const hadActFlag = "IS_REACT_ACT_ENVIRONMENT" in flags;
+  const realActFlag = flags.IS_REACT_ACT_ENVIRONMENT;
+  if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: "http://127.0.0.1/" });
+  flags.IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.fetch = fakeFetch;
+  // Loaded once a document exists: react-dom/client reads it when it loads.
+  ({ createRoot } = await import("react-dom/client"));
+  act = (await import("react")).act as Act;
+  return async () => {
+    if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister();
     globalThis.fetch = realFetch;
-  });
+    if (hadActFlag) flags.IS_REACT_ACT_ENVIRONMENT = realActFlag;
+    else delete flags.IS_REACT_ACT_ENVIRONMENT;
+  };
 }
 
 /** Renders `node` into a fresh host. The returned `render` replaces it in the same root, as a parent's re-render would. */

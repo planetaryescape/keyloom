@@ -122,6 +122,12 @@ describe("RestoreKeyboard", () => {
     expect(after("Restore Glove80")).toEqual({ confirmShown: true, confirmOff: true, restartPrimary: true });
   });
 
+  test("a failure with no words of its own says only that the restore failed", async () => {
+    await mount(<RestoreKeyboard token="t" restore={() => Promise.reject("gone")} boardName="Glove80" doing="make this config" onRestored={() => {}} />);
+    await press("Restore Glove80");
+    expect(document.querySelector(".nb-restore-failed")?.textContent).toBe("keyloom couldn't restore the Glove80.");
+  });
+
   test("an exception keeps Restore as the Try again, with Restart keyloom beside it", async () => {
     await mount(restore(exception));
     await press("Restore Glove80");

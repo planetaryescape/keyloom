@@ -122,6 +122,7 @@ const macbook = board("apple/macbook-ansi", "MacBook", "kanata", ["karabiner-jso
 const corne = board("foostan/corne", "Corne", "zmk", ["zmk-keymap"], { keymapFile: "config/corne.keymap" });
 const keebart = board("keebart/corne-choc-pro-bt", "Corne Choc Pro BT", "zmk", ["zmk-keymap"], { keymapFile: "config/corne_choc_pro.keymap" });
 const moonlander = board("zsa/moonlander", "Moonlander", "qmk", ["oryx-source"]);
+const glove80 = board("moergo/glove80", "Glove80", "zmk", ["zmk-layout-editor-keymap"]);
 
 describe("R7-13: the MacBook's onboarding words", () => {
   test("the welcome talks about flashing only for a USB keyboard", () => {
@@ -141,7 +142,7 @@ describe("R7-13: the MacBook's onboarding words", () => {
   });
 
   test("the setup card never tells a person whose own layout runs on the keyboard that nothing of theirs is on it", () => {
-    for (const b of [moonlander, corne, keebart, macbook]) {
+    for (const b of [moonlander, glove80, corne, keebart, macbook]) {
       const html = renderToStaticMarkup(<SetupCard flow={flow({ step: { kind: "setup", keyboard: null, boardId: b.id, boardName: b.name } })} boards={[b]} hasConfigs={false} onImport={() => {}} onMade={() => {}} />);
       expect(html).toContain(`Your ${b.name} has no config yet`);
       expect(html).toContain("Import the layout you already use, or start from a blank one.");
