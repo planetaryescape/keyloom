@@ -1,0 +1,93 @@
+{
+  "release": "v0.80.0",
+  "verifiedOn": "2026-11-13",
+  "releaseCommit": "b9e519366c249911a9d1ab65e4499bcfc22148ef",
+  "releaseTree": "cb1f95ae18954542a578d19f762e6fc03c949988",
+  "releasePr": 326,
+  "testedReleaseHead": "018055aec8bea20137520a74918450ec6673865d",
+  "releasePrCi": 43470237169,
+  "postMergeCi": 43471707498,
+  "publicationRun": 43471707469,
+  "publicationConclusion": "success",
+  "allFourCliChecksumsValid": true,
+  "allTenAssetsMatchGitHubDigests": true,
+  "desktopArchive": {
+    "name": "keyloom-0.80.0-darwin-arm64.app.zip",
+    "size": 28788099,
+    "sha256": "a5f6e95e3a817f223a5dc5fed7fa8750dba97233197a64f2576d8bd87baaf4db"
+  },
+  "publishedArm64Cli": {
+    "name": "keyloom-darwin-arm64",
+    "size": 71338850,
+    "sha256": "0ee902aa8caee391a8efe8ee795bd2ce9f88ba6b2a60d64f766bcc2b99903fb5"
+  },
+  "publishedArm64CliStrictSignatureValid": false,
+  "installedCliSource": "unchanged Developer ID signed sidecar from checksum-verified desktop archive",
+  "installedCliAndSidecarSha256": "7f3dff2fe2372dd8bfa37f59898a4b2880a877e067e498b90b6214ce038903c1",
+  "installedCliVersion": "0.80.0",
+  "installedDesktopVersion": "0.80.0",
+  "installedSidecarVersion": "0.80.0",
+  "installedCliStrictSignatureValid": true,
+  "installedDesktopDeepStrictSignatureValid": true,
+  "verifiedSigningTeam": "WAVMJLFY95",
+  "desktopGatekeeperAssessment": "accepted; Notarized Developer ID",
+  "cliGatekeeperAppAssessment": "rejected: code is valid but does not seem to be an app (exit 3)",
+  "installedBundleContentsMatchArchive": true,
+  "helper": {
+    "hostVersion": "0.80.0",
+    "protocol": 1,
+    "target": "aarch64-apple-darwin",
+    "capabilities": [
+      "hid.list",
+      "hid.open",
+      "hid.write",
+      "serial.list",
+      "serial.open",
+      "serial.touch.1200",
+      "serial.touch.1201"
+    ],
+    "available": true,
+    "helperVersion": "0.80.0",
+    "helperSha256": "89758bd12c6170027048a9a7ccf90f1657d83070e7c3238d27df2118b909daae"
+  },
+  "scratchSmokePassed": [
+    "published standalone CLI",
+    "downloaded signed desktop sidecar",
+    "installed signed CLI",
+    "installed desktop sidecar"
+  ],
+  "smokeCommands": [
+    "version",
+    "doctor --device-helper-only",
+    "import synthetic published Oryx fixture",
+    "layout list"
+  ],
+  "previousVersion": "0.79.2",
+  "bothPreviousCopiesPreserved": true,
+  "desktopWasRunning": true,
+  "normalQuitAndReopen": true,
+  "runningServer": {
+    "pid": 81397,
+    "startedAt": "2026-11-13T17:29:40.524Z",
+    "version": "0.80.0",
+    "protocol": 1
+  },
+  "authenticatedLiveProbe": {
+    "path": "/api/layouts",
+    "status": 200
+  },
+  "layoutHeadsUnchanged": true,
+  "revisionDocumentsUnchanged": true,
+  "flashHistoryUnchanged": true,
+  "keyboardFlashed": false,
+  "additionalLiveModelCalls": 0,
+  "locallyResigned": false,
+  "osProtectionsChanged": false,
+  "publishedAssetsOverwritten": false,
+  "crossProviderGate": "explicitly waived by BK for remaining current quality loop; no independent clearance claimed",
+  "limits": [
+    "Standalone macOS CLI signing issue remains open. Official installer restores that standalone asset.",
+    "No new physical keyboard acceptance or speed improvement claimed.",
+    "Dependency advisory reachability and TS7 analysis limits remain."
+  ]
+}
