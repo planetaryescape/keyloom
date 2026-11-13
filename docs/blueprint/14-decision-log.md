@@ -11,6 +11,16 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 desktop sidecar integrity
+
+### D-569: Verify the sidecar checksum before replacing the executable.
+
+The desktop fetch script checks staged bytes against one exact architecture-specific entry in `SHA256SUMS`. Downloads fetch the manifest from the same release path. Local builds require the builder's manifest beside the supplied binary. The release workflow downloads both files before calling the script.
+
+Only matching bytes replace the sidecar through an atomic rename. Download or verification failures preserve the previous executable and remove staged files. This extends the CLI installer's integrity check to desktop packaging. It does not establish publisher identity or notarization. The [standalone CLI signature issue](../issues/standalone-macos-cli-signature.md) remains separate.
+
+`test/scripts/fetch-sidecar.test.ts` checks both Mac architectures, explicit and latest release paths, local files, corrupt bytes, missing or duplicate entries, failed downloads, and cleanup. The tests use synthetic payloads and fake download commands. No signed app build or installed update is established by these checks.
+
 ## 2026-11-13 one-shot modifiers in the editor
 
 ### D-568: Edit one-shot modifiers through the existing native writer and validated change path.
