@@ -5,6 +5,7 @@ import type { ApiCandidate } from "../../src/api/detected-keyboards.ts";
 import { NewBoardPanel, reviewBackLabel } from "../../src/web/keyboards/NewBoardPanel.tsx";
 import { addProblem, reviewStep, type NewBoardStep, type NewKeyboard } from "../../src/web/keyboards/useNewKeyboard.ts";
 import { ApiError } from "../../src/web/api.ts";
+import { INTERNAL_WORDS, NOT_FOUND_WORDS, failsAgain } from "../../src/web/shell/unexpected.ts";
 import type { PreviewResponse } from "../../src/api/keyboards.ts";
 import { deriveProblem } from "../../src/web/keyboards/derive-words.ts";
 
@@ -99,9 +100,19 @@ test("the Review step's way back names each question that was asked", () => {
 test("a refused add names the keyboard as the page does, and leaves other failures in the server's words", () => {
   const step = { candidate: { id: "zmk:corne", name: "Corne", firmware: "zmk" } as ApiCandidate };
   const refused = new ApiError(400, "corne needs --controller", { code: "controller_unknown" });
-  expect(addProblem(refused, step, { displayName: "Corne (new)" })).toContain("a controller for the Corne (new) yet.");
-  expect(addProblem(refused, step, null)).toContain("a controller for the Corne yet.");
-  expect(addProblem(new ApiError(500, "disk full"), step, null)).toBe("disk full");
+  expect(addProblem(refused, step, { displayName: "Corne (new)" }).message).toContain("a controller for the Corne (new) yet.");
+  expect(addProblem(refused, step, null).message).toContain("a controller for the Corne yet.");
+  expect(addProblem(new ApiError(500, "disk full"), step, null).message).toBe("disk full");
+});
+
+test("a refused add keeps its code, so a failure no screen planned for offers Restart keyloom (R9-05)", () => {
+  const step = { candidate: { id: "zmk:corne", name: "Corne", firmware: "zmk" } as ApiCandidate };
+  expect(addProblem(new ApiError(500, INTERNAL_WORDS, { code: "internal" }), step, null)).toEqual({ message: INTERNAL_WORDS, code: "internal" });
+  const mismatch = addProblem(new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true }), step, null);
+  expect(mismatch).toEqual({ message: NOT_FOUND_WORDS, code: "not_found", generic: true });
+  expect(failsAgain(mismatch)).toBe(true);
+  // A refusal keyloom maps keeps its own words and is no failure for Restart keyloom.
+  expect(failsAgain(addProblem(new ApiError(400, "corne needs --controller", { code: "controller_unknown" }), step, null))).toBe(false);
 });
 
 test("a QMK keyboard with several layouts asks which is yours first, with keyloom's guess marked", () => {

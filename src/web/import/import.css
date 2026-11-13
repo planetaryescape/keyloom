@@ -178,6 +178,10 @@
   font-size: var(--text-sm);
 }
 
+.board-card-problem p {
+  margin: 0;
+}
+
 .board-card-problem > svg {
   flex: none;
   margin-top: var(--space-1);

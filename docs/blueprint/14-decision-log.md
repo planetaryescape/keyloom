@@ -11,6 +11,30 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 round 9: keyboards, configs, import and first run
+
+### D-551: The config dialogs, the import card, the new-keyboard steps, the welcome's reads and the mismatch page keep a failure's code, and a button that would send a request that fails the same way again goes off. Extends D-534, D-540 and D-544. (Claude, from the round-9 dead-ends review, R9-05)
+
+- **Every one of these screens keeps the failure** (`pageFailure`), and `wayOutFor` picks its buttons. Before, each kept only the message, so "Restarting keyloom opens the page that matches it." or "The details are in keyloom's log." showed with no Restart keyloom and no way to the log.
+  - **The config dialogs** (`ConfigDialogs.tsx`). Put it on, Put a version on, Rename, New config and Delete show the sentence with `UnexpectedWayOut` beside it. A refusal that `problemFor` maps keeps its own words and button. New config's failed read of the versions uses `RetryOrRestart`.
+  - **The import card** (`CardProblem`): a failed drop, Read it from this Mac, or Start blank.
+  - **The new-keyboard steps** (`FlowProblem`): Add, Start blank and Make. `addProblem` now returns the failure with its code, and keeps the page's words for a refusal it maps.
+  - **The welcome's two reads** (`ReadFailed`): keyloom's board list, whose failure `App.tsx` now passes down as `boardsFailure`, and the keyboard collection. A failure no screen planned for adds keyloom's sentence after the page's own, because that sentence explains the button. A lost connection keeps the page's sentence and a plain Try again.
+  - **The mismatch page.** A refused Go back or Archive, and a failed look for an earlier revision that matched, keep their code. One row shows Restart keyloom, for the refusal first, then the look (`mismatchUnexpected`), so two failures never show two Restart buttons. Look again is offered only when a second look can pass (`lookupFailedWords`).
+- **A button that repeats a request that fails the same way goes off** (`failsAgain`, `src/web/shell/unexpected.ts`). The answers this covers are keyloom's catch-all `not_found` and an `unreadable` answer. Restart keyloom beside the sentence becomes the primary button, and the sentence says why. This follows R9-04's rule for Apply on a proposal card.
+  - **Off:** a dialog's confirm (Put it on, Rename, Make, Delete), and the new-keyboard step's one way forward (Add, Make, Start blank, Start a config).
+  - **Not off:** the import card's drop zone, which takes a new file each time, and the mismatch page, whose several actions are separate requests. These keep their controls, as D-540's `FailureNote` does.
+  - **The exception:** a dialog opened without a token, today only kanata's Replace it in `SyncStatus.tsx`, can't show Restart keyloom. So it keeps its confirm.
+- **Rejected: keeping every button on**, as D-540's first screens did. A confirm pressed again after an `unreadable` answer fails the same way. The bar says never to offer a Try again that can't pass, and a dialog's confirm is its Try again.
+- **Product choice made without BK.** Turning the confirm off, and not only adding Restart keyloom beside it, was decided in this round because BK was asleep. The reason is above.
+
+### D-550: Later on the Put step doesn't bring the board's setup card back at once. Refines D-336 and D-544. (Claude, from the round-9 dead-ends review, R9-08)
+
+- **What happened.** A keyboard keyloom hadn't met was plugged in, added, and left with Later on the Put step. Detection then read it as a known board with no config. Its board id wasn't among the cards already shown, because the first card was keyed by its USB identity. So "Just plugged in · Your {name} has no config yet" opened straight away.
+- **The fix.** Later, or any close of the panel on the Put step, marks the board id as shown (`shownAfterClose`). The card that opens by itself is chosen by `cardToOpen`, now a pure function. It opens each keyboard and each bare board once.
+- **Rejected: adding the board to `dismissed`,** as the round-9 brief suggested. `dismissed` also hides the board switch's chip for a known board with no config (`setupWaiting` in `Viewer.tsx`), so the editor would lose its one-press way back. With the board marked as shown, the chip stays. On first run, the welcome lists the board (D-544's read after Add), and Your keyboards has Set up.
+- **Checked by:** unit tests of the sequence (card shown, Add, Later, the board known with no config, no card), and that another bare board still opens its own card once. It was not rendered: neither fixture fakes a USB keyboard that becomes known after Add.
+
 ## 2026-11-13 round 8: keyboards, onboarding and the phone
 
 ### D-545: The new-keyboard drawing fits a phone's width and shows every finger, and Review promises a sync only for a board keyloom can add. Refines D-336, D-538 and 18's 44 px rule. (Claude, from the round-8 dead-ends review, R8-02, R8-07, R8-08)

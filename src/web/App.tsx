@@ -10,7 +10,7 @@ import { BoardSkeleton } from "./shell/BoardSkeleton.tsx";
 import { rememberShape } from "./shell/shape.ts";
 import { ErrorState } from "./shell/States.tsx";
 import { UnexpectedWayOut } from "./shell/UnexpectedWayOut.tsx";
-import { unexpectedWayOut } from "./shell/unexpected.ts";
+import { type PageFailure, failsAgain, pageFailure, unexpectedWayOut } from "./shell/unexpected.ts";
 import { RestartAdvice, ServerGoneBanner, useServerGone } from "./shell/ServerGone.tsx";
 import { buildQuestion } from "./release/build-failure-words.ts";
 import { ReleaseHost, type ReleaseHandle } from "./release/ReleaseHost.tsx";
@@ -28,7 +28,7 @@ import { archiveConfig, useConfig } from "./configs/api-configs.ts";
 import { archiveChoice } from "./configs/archive-choice.ts";
 import { useConfigs } from "./configs/useConfigs.ts";
 import { ConfirmDialog } from "./configs/ConfigDialogs.tsx";
-import { type GoBackRefusal, goBackRefusal } from "./shell/mismatch-words.ts";
+import { type GoBackRefusal, goBackRefusal, lookupFailedWords, mismatchUnexpected } from "./shell/mismatch-words.ts";
 import { refusalProblem } from "./sync/useSyncToasts.ts";
 import { RemapperSetup } from "./sync/RemapperSetup.tsx";
 import type { FindingRepairDraft } from "../api/review.ts";
@@ -93,6 +93,8 @@ export function App({ token }: { token: string }) {
   // Whether the list was read, so first run says it is reading or that it couldn't, never "No supported board matches" (R6-04).
   // A read again after one that worked keeps the list it has.
   const [boardsRead, setBoardsRead] = useState<BoardsRead>("loading");
+  // Why it failed, kept whole, so the welcome offers Restart keyloom where a second read fails the same way (R9-05).
+  const [boardsFailure, setBoardsFailure] = useState<PageFailure | null>(null);
   const [boardsAttempt, setBoardsAttempt] = useState(0);
   // A keyboard with no config whose Set up was pressed in Your keyboards (R8-06): the welcome opens its setup card once.
   const [setupBoard, setSetupBoard] = useState<{ id: string; name: string } | null>(null);
@@ -103,8 +105,11 @@ export function App({ token }: { token: string }) {
     fetchBoards(token, controller.signal).then((boards) => {
       setBoardChoices(boards);
       setBoardsRead("ready");
-    }, () => {
-      if (!controller.signal.aborted) setBoardsRead((now) => (now === "ready" ? now : "failed"));
+      setBoardsFailure(null);
+    }, (error: unknown) => {
+      if (controller.signal.aborted) return;
+      setBoardsRead((now) => (now === "ready" ? now : "failed"));
+      setBoardsFailure(pageFailure(error, ""));
     });
     return () => controller.abort();
     // Again on a reload: a keyboard just added is a board the switch should draw (D-336).
@@ -202,7 +207,7 @@ export function App({ token }: { token: string }) {
   if (layouts.length === 0 || adding) {
     return wrap(
       <Shell menu={{ ...controls, layouts, selectedId: selectedId ?? "", boardChoices, onSelect: (id) => { setSelectedId(id); setAdding(false); }, onImport: openImport }}>
-        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} onRetryBoards={readBoardsAgain} onBoardAdded={readBoardsAgain}
+        <KeyboardWelcome token={token} collectionVersion={attempt} choices={boardChoices.filter((board) => !layouts.some((layout) => layout.boardId === board.id))} boardsRead={boardsRead} boardsFailure={boardsFailure} onRetryBoards={readBoardsAgain} onBoardAdded={readBoardsAgain}
           setup={setupBoard} onSetupOpened={() => setSetupBoard(null)} sync={sync} sources={layouts.map((layout) => ({ id: layout.id, name: layout.name, boardId: layout.boardId,
           boardName: boardChoices.find((b) => b.id === layout.boardId)?.name ?? layout.boardId, note: null }))}
           onMade={(id, proposals = false) => { setAdding(false); setImporting(false); setLayouts(null); setView(null); setCarry({ id, layerName: null, chatOpen: false, thread: null, proposals }); reload(id); }}
@@ -478,10 +483,11 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
   const configs = useConfigs(token, summary.boardId, `${summary.id}:${summary.revisionId}`);
   const archive = archiveChoice(configs.live, summary.id);
   const [putting, setPutting] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
+  // Kept whole, so a failure no screen planned for offers Restart keyloom beside it (R9-05).
+  const [refused, setRefused] = useState<PageFailure | null>(null);
   const [fitting, setFitting] = useState<FittingRevision>(null);
   // A lookup that failed is not "none fits": the page says so and offers to look again.
-  const [lookupFailed, setLookupFailed] = useState(false);
+  const [lookupFailed, setLookupFailed] = useState<PageFailure | null>(null);
   const [lookups, setLookups] = useState(0);
   // Set when the server refused Go back; the button then reloads the layout or goes, with the reason beside it (D-506).
   const [goBackRefused, setGoBackRefused] = useState<GoBackRefusal | null>(null);
@@ -494,13 +500,13 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
     const controller = new AbortController();
     // The answer belongs to the head it was asked for: a new head clears the old one's target until its own answer comes.
     setFitting(null);
-    setLookupFailed(false);
+    setLookupFailed(null);
     fetchFittingRevision(token, summary.id, controller.signal)
       .then((found) => {
         if (!controller.signal.aborted) setFitting(found);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setLookupFailed(true);
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setLookupFailed(pageFailure(error, "keyloom couldn't look for an earlier revision that matched."));
       });
     return () => controller.abort();
   }, [token, summary.id, summary.revisionId, fixable, lookups]);
@@ -513,7 +519,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
       if (stay) onReload?.(summary.id);
       else onReload?.();
     } catch (error) {
-      setRefused(error instanceof Error ? error.message : failed);
+      setRefused(pageFailure(error, failed));
       setBusy(false);
     }
   };
@@ -529,6 +535,7 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
   const archiveIt = () => act(() => archiveConfig(token, summary.id), "keyloom couldn't archive it.", false);
   const onKeyboard = archive.kind === "on_keyboard" ? archive : null;
   const other = onKeyboard?.putOn ?? null;
+  const unexpected = mismatchUnexpected(refused, lookupFailed);
   return (
     <>
     <ErrorState
@@ -545,28 +552,30 @@ function MismatchState({ token, sync, summary, kanata, problem, fixable, onHome,
               Reload this layout
             </button>
           ) : null}
-          {lookupFailed ? (
+          {lookupFailed !== null && !failsAgain(lookupFailed) ? (
             <button type="button" className="button button-primary" disabled={busy} onClick={() => setLookups((n) => n + 1)}>
               Look again
             </button>
           ) : null}
-          {onHome === undefined ? null : <button type="button" className={fitting === null && !lookupFailed ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
+          {onHome === undefined ? null : <button type="button" className={fitting === null && lookupFailed === null && (unexpected === null || !failsAgain(unexpected)) ? "button button-primary" : "button"} onClick={onHome}>Show your other layouts</button>}
           {archive.kind === "archive" ? <button type="button" className="button" disabled={busy} onClick={() => void archiveIt()}>Archive this config</button> : null}
           {other === null ? null : <button type="button" className="button" disabled={busy} onClick={() => setPutting(true)}>Put {other.name} on it…</button>}
+          {unexpected === null ? null : <UnexpectedWayOut token={token} failure={unexpected} primary={failsAgain(unexpected)} />}
         </>
       }
     >
       {problem}{" "}
-      {lookupFailed
-        ? "keyloom couldn't look for an earlier revision that matched. Look again, pick another layout, or archive this one; it keeps its history."
+      {lookupFailed !== null
+        ? lookupFailedWords(lookupFailed)
         : fitting === null
         ? "Pick another layout, or archive this one; it keeps its history."
         : <>The last revision that matched is “{headline(fitting.summary)}”. Going back adds a new revision, so this one stays in History.</>}
       {onKeyboard === null ? null : <> {onKeyboard.reason}</>}
-      {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused}</span>}
+      {refused === null ? null : <span className="state-refused" role="alert"> {goBackRefused?.text ?? refused.message}</span>}
     </ErrorState>
     {putting && other !== null && onKeyboard !== null ? (
       <ConfirmDialog
+        token={token}
         title={`Put ${other.name} on your ${onKeyboard.boardName}?`}
         lines={[
           kanata

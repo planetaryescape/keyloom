@@ -1,15 +1,17 @@
 import { LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ApiConfig, NewConfigRequest, VersionHistoryResponse } from "../../api/configs.ts";
-import { ApiError } from "../api.ts";
 import { versionTitle, versionWhen } from "../history/version-words.ts";
 import { fetchVersions } from "./api-configs.ts";
 import { newConfigWaits, renameWaits } from "./dialog-words.ts";
 import { RestoreKeyboard, keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
 import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
+import { FailureNote, RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import { type PageFailure, failsAgain, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import "./configs.css";
 
-const message = (error: unknown) => (error instanceof ApiError || error instanceof Error ? error.message : "That didn't work.");
+// The whole failure, not its message alone (R9-05): its code picks Restart keyloom, and the log for an exception (D-540).
+const failureOf = (error: unknown): PageFailure => pageFailure(error, "That didn't work.");
 
 /** A modal with a title, its body and a foot; Escape and a click outside close it, as the layer dialogs do. */
 function ConfigDialog({ title, label, onClose, children, foot, onSubmit }: {
@@ -50,7 +52,11 @@ function ConfigDialog({ title, label, onClose, children, foot, onSubmit }: {
  * A failure the dialog can say in words with the button that fixes it, such as a refused put-on (R3-01). `extraFixes`: the dialog's
  * `extra`, such as kanata's setup checklist, is the way past this refusal.
  */
-export type ConfirmProblem = { message: string; detail?: string; action?: { label: string; run: () => void }; extraFixes?: boolean };
+export type ConfirmProblem = {
+  message: string; detail?: string; action?: { label: string; run: () => void }; extraFixes?: boolean;
+  /** A failure no refusal mapping knew, kept whole, so its code picks Restart keyloom (R9-05). */
+  failure?: PageFailure;
+};
 
 /**
  * A refusal's detail, unless `extra` is up and is the way past this refusal (R5-14): a detail like "The keyboard's status lists what is
@@ -64,7 +70,9 @@ export const shownDetail = (problem: ConfirmProblem, extraShown: boolean): strin
  * `onConfirm`; the dialog stays open with the reason if it fails. `problemFor` turns a failure into words and a way on; the button
  * closes the dialog and does it. Without one, or when it returns null, the error's own message is shown.
  */
-export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, problemFor, extra, blocked = false }: {
+export function ConfirmDialog({ token, title, lines, confirmLabel, onConfirm, onClose, problemFor, extra, blocked = false }: {
+  /** For Restart keyloom beside a failure no refusal mapping knew (R9-05). Without it the sentence shows alone. */
+  token?: string | undefined;
   title: string;
   lines: readonly string[];
   confirmLabel: string;
@@ -89,11 +97,15 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
       await onConfirm();
       onClose();
     } catch (error) {
-      setProblem(problemFor?.(error) ?? { message: message(error) });
+      const failure = failureOf(error);
+      setProblem(problemFor?.(error) ?? { message: failure.message, failure });
       setBusy(false);
     }
   };
   const action = problem?.action;
+  // An answer that fails the same way every time takes the confirm away; Restart keyloom beside the sentence is the way on (R9-05).
+  // Without a token there is no Restart keyloom, so the confirm stays as the only button.
+  const stuck = token !== undefined && failsAgain(problem?.failure);
   return (
     <ConfigDialog
       title={title}
@@ -103,7 +115,7 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Not now</button>
-          {blocked ? null : action === undefined ? (
+          {blocked || stuck ? null : action === undefined ? (
             <button type="submit" className="bar-apply" disabled={busy} data-autofocus>
               {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
               {confirmLabel}
@@ -117,29 +129,41 @@ export function ConfirmDialog({ title, lines, confirmLabel, onConfirm, onClose, 
     >
       {lines.map((line) => <p key={line} className="config-dialog-lead">{line}</p>)}
       {extra}
-      {problem === null ? null : (
-        <div className="config-problem" role="alert">
-          <p>{problem.message}</p>
-          {shownDetail(problem, extra != null) === undefined ? null : <p className="config-problem-detail">{problem.detail}</p>}
-        </div>
-      )}
+      {problem === null ? null : <ConfirmProblemNote token={token} problem={problem} extraShown={extra != null} />}
     </ConfigDialog>
   );
 }
 
-export function RenameDialog({ current, onRename, onClose }: { current: string; onRename: (name: string) => Promise<void>; onClose: () => void }) {
+/**
+ * A refused confirm's words: the sentence, its detail, and for a failure no refusal mapping knew, Restart keyloom and the log (R9-05).
+ * Restart keyloom is the primary button when the confirm is gone because it would fail the same way again.
+ */
+export function ConfirmProblemNote({ token, problem, extraShown }: { token: string | undefined; problem: ConfirmProblem; extraShown: boolean }) {
+  return (
+    <div className="config-problem" role="alert">
+      <p>{problem.message}</p>
+      {shownDetail(problem, extraShown) === undefined ? null : <p className="config-problem-detail">{problem.detail}</p>}
+      {token === undefined || problem.failure === undefined ? null : (
+        <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={problem.failure} primary={failsAgain(problem.failure)} /></div>
+      )}
+    </div>
+  );
+}
+
+export function RenameDialog({ token, current, onRename, onClose }: { token?: string | undefined; current: string; onRename: (name: string) => Promise<void>; onClose: () => void }) {
   const [name, setName] = useState(current);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   const waits = renameWaits(name, current);
+  const stuck = token !== undefined && failsAgain(problem);
   const go = async () => {
-    if (waits !== null) return;
+    if (waits !== null || stuck) return;
     setBusy(true);
     try {
       await onRename(name.trim());
       onClose();
     } catch (error) {
-      setProblem(message(error));
+      setProblem(failureOf(error));
       setBusy(false);
     }
   };
@@ -152,14 +176,14 @@ export function RenameDialog({ current, onRename, onClose }: { current: string; 
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Cancel</button>
-          <button type="submit" className="bar-apply" disabled={busy || waits !== null}>Rename</button>
+          <button type="submit" className="bar-apply" disabled={busy || waits !== null || stuck}>Rename</button>
         </>
       }
     >
       <label className="config-label" htmlFor="config-rename">Name</label>
       <input id="config-rename" className="config-input" value={name} data-autofocus aria-describedby="config-rename-waits" onChange={(e) => setName(e.target.value)} />
       <p id="config-rename-waits" className="config-waits">{waits}</p>
-      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
     </ConfigDialog>
   );
 }
@@ -188,23 +212,25 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
   const [name, setName] = useState("");
   const [start, setStart] = useState<Start>(initialStart);
   const [versions, setVersions] = useState<Versions | null>(null);
-  // A failed version list is said, with Try again, instead of hiding the choice as if there were no versions (R3-23).
-  const [versionsFailed, setVersionsFailed] = useState(false);
+  // A failed version list is said, with Try again, instead of hiding the choice as if there were no versions (R3-23). Its code picks
+  // Restart keyloom for an answer that fails the same way every time (R9-05).
+  const [versionsFailed, setVersionsFailed] = useState<PageFailure | null>(null);
   const [versionReads, setVersionReads] = useState(0);
   const [version, setVersion] = useState<string>(initialVersion ?? "");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
+  const stuck = token !== undefined && failsAgain(problem);
   // The keyboard was removed, so no config can be made for it until it is restored (R6-08).
   const [removed, setRemoved] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    setVersionsFailed(false);
+    setVersionsFailed(null);
     fetchVersions(token, source.id, controller.signal).then((r) => {
       setVersions(r.versions);
       setVersion((v) => (v !== "" ? v : (r.versions[0]?.version.id ?? "")));
-    }, () => {
-      if (!controller.signal.aborted) setVersionsFailed(true);
+    }, (error: unknown) => {
+      if (!controller.signal.aborted) setVersionsFailed(pageFailure(error, ""));
     });
     return () => controller.abort();
   }, [token, source.id, versionReads]);
@@ -228,7 +254,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
       onClose();
     } catch (error) {
       if (keyboardRemoved(error)) setRemoved(true);
-      else setProblem(message(error));
+      else setProblem(failureOf(error));
       setBusy(false);
     }
   };
@@ -253,7 +279,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Cancel</button>
-          <button type="submit" className="bar-apply" disabled={busy || !ready}>
+          <button type="submit" className="bar-apply" disabled={busy || !ready || (stuck && start !== "file")}>
             {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
             {start === "file" ? "Choose a file…" : name.trim() === "" ? "Make it" : `Make ${name.trim()}`}
           </button>
@@ -282,18 +308,21 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
                 </select>
               ) : null,
             )}
-        {versionsFailed ? (
-          <p className="config-problem" role="alert">
-            keyloom couldn't read {source.name}'s versions.{" "}
-            <button type="button" className="sheet-action" onClick={() => setVersionReads((n) => n + 1)}>Try again</button>
-          </p>
-        ) : null}
+        {versionsFailed === null ? null : (
+          <div className="config-problem" role="alert">
+            {/* The page's own sentence says why only for a failure no screen planned for, which Restart keyloom answers. */}
+            <p>keyloom couldn't read {source.name}'s versions.{wayOutFor(versionsFailed, true) === null ? "" : ` ${versionsFailed.message}`}</p>
+            <div className="unexpected-actions">
+              <RetryOrRestart token={token} failure={versionsFailed} onRetry={() => setVersionReads((n) => n + 1)} className="sheet-action" />
+            </div>
+          </div>
+        )}
         {choice("blank", "Blank", "The keyboard's own default keymap where keyloom can get it, otherwise one empty layer")}
         {choice("file", "A file", "Oryx, QMK keymap.c or ZMK .keymap")}
       </fieldset>
       <p id="config-name-waits" className="config-waits">{waits}</p>
       {removed ? <RestoreKeyboard restore={() => restoreKeyboard(token, boardId)} boardName={boardName} doing="make this config" onRestored={go} /> : null}
-      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
     </ConfigDialog>
   );
 }
@@ -302,19 +331,20 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
  * Deleting a config for good (D-316): offered only for an archived config, and only after its name is typed, the CLI's guard. The
  * server checks the name too and refuses the config on the keyboard.
  */
-export function DeleteConfigDialog({ name, onDelete, onClose }: { name: string; onDelete: () => Promise<void>; onClose: () => void }) {
+export function DeleteConfigDialog({ token, name, onDelete, onClose }: { token?: string | undefined; name: string; onDelete: () => Promise<void>; onClose: () => void }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   const matches = typed === name;
+  const stuck = token !== undefined && failsAgain(problem);
   const go = async () => {
-    if (!matches) return;
+    if (!matches || stuck) return;
     setBusy(true);
     try {
       await onDelete();
       onClose();
     } catch (error) {
-      setProblem(message(error));
+      setProblem(failureOf(error));
       setBusy(false);
     }
   };
@@ -327,14 +357,14 @@ export function DeleteConfigDialog({ name, onDelete, onClose }: { name: string; 
       foot={
         <>
           <button type="button" className="sheet-action" onClick={onClose}>Cancel</button>
-          <button type="submit" className="bar-apply config-danger" disabled={busy || !matches}>Delete {name}</button>
+          <button type="submit" className="bar-apply config-danger" disabled={busy || !matches || stuck}>Delete {name}</button>
         </>
       }
     >
       <p className="config-dialog-lead">Its layers, history and versions go with it. Unlike archiving, this can't be undone.</p>
       <label className="config-label" htmlFor="config-delete">Type {name} to delete it</label>
       <input id="config-delete" className="config-input" value={typed} data-autofocus autoComplete="off" spellCheck={false} onChange={(e) => setTyped(e.target.value)} />
-      {problem === null ? null : <p className="config-problem" role="alert">{problem}</p>}
+      {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" />}
     </ConfigDialog>
   );
 }

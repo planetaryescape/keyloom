@@ -3,6 +3,7 @@ import type { ApiCandidate } from "../../api/detected-keyboards.ts";
 import type { NewKeyboard } from "./useNewKeyboard.ts";
 import { CONTRIBUTION_GUIDE, searchNote } from "./search-words.ts";
 import { SearchFailed } from "./SearchFailed.tsx";
+import { FlowProblem } from "./FlowProblem.tsx";
 import "./keyboards.css";
 
 /** "Likely" for a candidate keyloom is sure of, "One of two" when it isn't sure, "Maybe" for a long shot. */
@@ -71,7 +72,7 @@ export function NewKeyboardCard({ flow }: { flow: NewKeyboard }) {
         })()}
       </div>
       {flow.searchProblem === null ? null : <SearchFailed flow={flow} />}
-      {flow.problem === null ? null : <p className="nb-problem" role="alert">{flow.problem}</p>}
+      <FlowProblem flow={flow} />
       <footer className="nb-foot">
         <span className="nb-note">keyloom only reads it. Nothing is written to the keyboard.</span>
         <button type="button" className="sheet-action" onClick={flow.notNow}>Not now</button>
