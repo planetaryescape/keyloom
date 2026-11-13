@@ -4,7 +4,7 @@ import type { Layout } from "../../layout/schema.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
 import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
-import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
+import { type PageFailure, failsAgain, pageFailure } from "../shell/unexpected.ts";
 import { bindingSummary } from "./draft.ts";
 import { planRepeat, repeatMeaning, repeatSummary, type LastChange } from "./repeat-plan.ts";
 import { useCheckOps } from "./useCheckOps.ts";
@@ -39,7 +39,7 @@ export function RepeatPanel({ token, layoutRef, layout, revisionId, layerId, pos
 
   const result = state.status === "done" ? state.result : null;
   const warnings = result?.warnings.length ?? 0;
-  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && (applyError === null || wayOutFor(applyError, true)?.retry !== false);
+  const canApply = plan.ops.length > 0 && result !== null && result.ok && !applying && !failsAgain(applyError);
   const idleNote = plan.transform === null ? "The last change didn't change anything, so there is nothing to repeat." : "Every selected key already matches, or can't take this change.";
 
   async function apply() {

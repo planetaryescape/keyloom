@@ -12,7 +12,7 @@ import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
 import { acceptsFile, firstFreeName, guideFor, importCommand, importIntro, offersStartBlank } from "./export-steps.ts";
 import { Silhouette } from "../shell/TopBar.tsx";
-import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { ActivityChoices } from "../review/WorkloadTests.tsx";
 import type { ReviewActivity } from "../../api/review.ts";
@@ -133,7 +133,9 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
   const guide = guideFor(board);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Kept whole (R9-05): its code adds Restart keyloom, and the log for an exception, beside the sentence. The card's own controls stay,
+  // since each drop is a new file.
+  const [problem, setProblem] = useState<PageFailure | null>(null);
   // Saved, but the answer couldn't be read: the page reloads to show it, and the card takes nothing more until then (R2-17).
   const [saved, setSaved] = useState(false);
   // This Mac has no Karabiner settings: nothing to import, so the card offers a blank config instead (R3-12).
@@ -150,7 +152,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     if (file === undefined || busy || saved) return;
     // A file keyloom already read as its own export goes to the board it names, whatever that board's own editor exports.
     if (as === board && !acceptsFile(guide, file.name)) {
-      setProblem(`${file.name} isn't a ${guide.accepts} file. ${guide.steps}`);
+      setProblem({ message: `${file.name} isn't a ${guide.accepts} file. ${guide.steps}` });
       return;
     }
     setBusy(true);
@@ -162,7 +164,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
       if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
       const refusal = importRefusal(error, boards, as);
       if (refusal !== null) setRefused({ refusal, file, as });
-      else setProblem(error instanceof Error ? error.message : "The import didn't go through.");
+      else setProblem(pageFailure(error, "The import didn't go through."));
     } finally {
       setBusy(false);
       // The same file can be chosen again after a fix.
@@ -179,7 +181,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     try {
       file = await readKarabinerConfig(token);
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : "keyloom couldn't read Karabiner's settings.");
+      setProblem(pageFailure(error, "keyloom couldn't read Karabiner's settings."));
       setNothingToRead(error instanceof ApiError && offersStartBlank(error.code));
       return;
     } finally {
@@ -200,7 +202,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
       onStartedBlank(config.id);
     } catch (error) {
       if (keyboardRemoved(error)) setRefused({ refusal: { kind: "removed", boardId: board.id, board }, file: null, as: board });
-      else setProblem(error instanceof Error ? error.message : "keyloom couldn't start a blank config.");
+      else setProblem(pageFailure(error, "keyloom couldn't start a blank config."));
     } finally {
       setBusy(false);
     }
@@ -278,7 +280,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
           onChange={(event) => void take(event.currentTarget.files)}
         />
       </div>
-      {problem === null ? null : <p className="board-card-problem" role="alert"><TriangleAlert size={14} aria-hidden="true" />{problem}</p>}
+      {problem === null ? null : <CardProblem token={token} problem={problem} />}
       {restore === null ? null : (
         <RestoreKeyboard restore={() => restoreKeyboard(token, restore.boardId)} boardName={restore.boardName} doing={restore.doing} onRestored={again} />
       )}
@@ -305,6 +307,22 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
         <CopyCommand command={command} />
       </details>
     </article>
+  );
+}
+
+/**
+ * A card's failed drop, read from this Mac or Start blank (R9-05): the sentence, then Restart keyloom and the log for a failure no screen
+ * planned for. The card's own controls stay its Try again: each drop is a new file.
+ */
+export function CardProblem({ token, problem }: { token: string; problem: PageFailure }) {
+  return (
+    <div className="board-card-problem" role="alert">
+      <TriangleAlert size={14} aria-hidden="true" />
+      <div>
+        <p>{problem.message}</p>
+        <div className="unexpected-actions"><UnexpectedWayOut token={token} failure={problem} primary={false} /></div>
+      </div>
+    </div>
   );
 }
 

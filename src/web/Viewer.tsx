@@ -2353,7 +2353,11 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                   boardName={boardDisplayName(board.name)}
                   layerId={layer.id}
                   layerName={layerNameOf}
-                  onBack={() => setComparing(null)}
+                  onBack={() => {
+                    // A version that is gone may still be in the list History read earlier, so Back reads it again (PR #310 review).
+                    setComparing(null);
+                    history.reload();
+                  }}
                   onRetry={() => void compareWith(comparing.milestone)}
                   onClose={() => setHistoryOpen(false)}
                   onShowLayer={(id) => setLayerId(id)}
@@ -2537,6 +2541,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "delete" ? (
         <DeleteConfigDialog
+          token={token}
           name={configDialog.config.name}
           onDelete={async () => {
             await deleteConfig(token, configDialog.config.id, configDialog.config.name);
@@ -2548,6 +2553,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "rename" ? (
         <RenameDialog
+          token={token}
           current={summary.name}
           onRename={async (name) => {
             await renameConfig(token, summary.id, name);
@@ -2558,6 +2564,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "put-on" ? (
         <ConfirmDialog
+          token={token}
           title={`Put ${configDialog.target.name} on your ${boardDisplayName(board.name)}?`}
           lines={[
             // kanata has nothing to build: keyloom writes the config and kanata reloads it.
@@ -2573,6 +2580,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
         />
       ) : configDialog?.kind === "put-version" ? (
         <ConfirmDialog
+          token={token}
           title={`Put ${versionTitle(configDialog.milestone.version)} on your ${boardDisplayName(board.name)}?`}
           lines={[
             configDialog.milestone.version.revisionId === revision.id

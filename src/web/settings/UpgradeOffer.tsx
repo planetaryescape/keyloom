@@ -1,8 +1,8 @@
 import { EyeOff, LoaderCircle, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { FailureNote } from "../shell/UnexpectedWayOut.tsx";
-import { type PageFailure, wayOutFor } from "../shell/unexpected.ts";
-import { UPGRADE_REFUSED, upgradeFailure } from "./upgrade-words.ts";
+import { type PageFailure, failsAgain } from "../shell/unexpected.ts";
+import { upgradeFailure, upgradeRefused } from "./upgrade-words.ts";
 import "./settings.css";
 
 interface Props {
@@ -43,7 +43,7 @@ export function UpgradeOffer({ offer, onUpgrade, token, refused, onRefused, onHi
   if (refused) {
     return (
       <div className="upgrade-offer" role="group" aria-label="Update layout">
-        <p role="alert">{UPGRADE_REFUSED}</p>
+        <p role="alert">{upgradeRefused(WORDS(offer))}</p>
         <button type="button" className="button" onClick={onHide}>
           <EyeOff size={14} aria-hidden="true" />
           Hide this
@@ -51,7 +51,7 @@ export function UpgradeOffer({ offer, onUpgrade, token, refused, onRefused, onHi
       </div>
     );
   }
-  const repeats = problem === null || wayOutFor(problem, true)?.retry !== false;
+  const repeats = !failsAgain(problem);
   return (
     <div className="upgrade-offer" role="group" aria-label="Update layout">
       <p>This layout has {WORDS(offer)} keyloom can now edit.</p>

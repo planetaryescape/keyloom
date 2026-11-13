@@ -4,11 +4,11 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ApiError } from "../../src/web/api.ts";
 import { UpgradeOffer } from "../../src/web/settings/UpgradeOffer.tsx";
-import { UPGRADE_REFUSED, upgradeFailure } from "../../src/web/settings/upgrade-words.ts";
+import { upgradeFailure, upgradeRefused } from "../../src/web/settings/upgrade-words.ts";
 import { INTERNAL_WORDS } from "../../src/web/shell/unexpected.ts";
 
-const render = (refused: boolean) => renderToStaticMarkup(
-  <UpgradeOffer offer={{ colours: true, tapDances: true }} onUpgrade={async () => {}} token="t" refused={refused} onRefused={() => {}} onHide={() => {}} />,
+const render = (refused: boolean, offer = { colours: true, tapDances: true }) => renderToStaticMarkup(
+  <UpgradeOffer offer={offer} onUpgrade={async () => {}} token="t" refused={refused} onRefused={() => {}} onHide={() => {}} />,
 );
 
 test("the check's refusal is a refusal, by its code, never by the server's sentence", () => {
@@ -18,7 +18,7 @@ test("the check's refusal is a refusal, by its code, never by the server's sente
 
 test("a refused update shows plain words and Hide this, never Update layout again", () => {
   const html = render(true);
-  expect(html).toContain(UPGRADE_REFUSED.replace(/'/g, "&#x27;"));
+  expect(html).toContain(upgradeRefused("Oryx colours and tap dances").replace(/'/g, "&#x27;"));
   expect(html).toContain("Hide this");
   expect(html).not.toContain("Update layout</button>");
   expect(html).not.toContain("the upgrade was not saved");
@@ -28,4 +28,10 @@ test("the offer keeps Update layout until the check turns it down", () => {
   const html = render(false);
   expect(html).toContain("Update layout");
   expect(html).not.toContain("Hide this");
+});
+
+test("a refused update names only what the offer was for (PR #310 review)", () => {
+  const html = render(true, { colours: true, tapDances: false });
+  expect(html).toContain("Your Oryx colours still go to the keyboard");
+  expect(html).not.toContain("tap dances");
 });

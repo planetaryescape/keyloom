@@ -272,18 +272,23 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
 
   const stop = useCallback(() => {
     viewLife.current?.abort();
-    if (controller.current === null) return;
+    const stopping = controller.current;
+    if (stopping === null) return;
+    // A cancel that fails after the reply has ended (or a new one has started) has nothing left to stop, so it shows nothing (PR #310 review).
+    const failedStop = (error: unknown) => {
+      if (controller.current === stopping) setProblem(stopProblem(error));
+    };
     if (pendingAcceptance.current !== null) {
       const pending = pendingAcceptance.current;
       pending.stopped = true;
-      void cancelSavedRequest(token, pending.id).catch((error: unknown) => setProblem(stopProblem(error)));
+      void cancelSavedRequest(token, pending.id).catch(failedStop);
       return;
     }
     if (savedRun.current !== null) {
-      void cancelSavedRun(token, savedRun.current).catch((error: unknown) => setProblem(stopProblem(error)));
+      void cancelSavedRun(token, savedRun.current).catch(failedStop);
       return;
     }
-    controller.current.abort();
+    stopping.abort();
     dispatch({ type: "stopped" });
   }, [token]);
 

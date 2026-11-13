@@ -86,3 +86,9 @@ export function wayOutFor(failure: PageFailure, repeatable: boolean): { retry: b
   if (failure.code === "not_found" && failure.generic !== true) return null;
   return unexpectedWayOut(failure.code, repeatable);
 }
+
+/**
+ * A kept failure that a second identical request would meet again (R9-05): keyloom's catch-all, an answer the page can't read. The button
+ * that sends that request again goes, and Restart keyloom beside the sentence is the way on.
+ */
+export const failsAgain = (failure: PageFailure | null | undefined): boolean => failure != null && wayOutFor(failure, true)?.retry === false;

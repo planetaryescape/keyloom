@@ -5,7 +5,7 @@ import type { Layout } from "../../layout/schema.ts";
 import { MiniCap, SheetHead } from "../shell/Sheet.tsx";
 import { FailureNote, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
 import { RestartKeyloom } from "../shell/RestartKeyloom.tsx";
-import { type PageFailure, pageFailure, wayOutFor } from "../shell/unexpected.ts";
+import { type PageFailure, failsAgain, pageFailure, wayOutFor } from "../shell/unexpected.ts";
 import { historyWords } from "./history-words.ts";
 import type { Versions } from "./useVersions.ts";
 import { changes, versionTitle, versionWhen } from "./version-words.ts";
@@ -271,7 +271,7 @@ function NameField({ token, initial, onSave, onCancel }: { token: string; initia
       setBusy(false);
     }
   };
-  const repeats = problem === null || wayOutFor(problem, true)?.retry !== false;
+  const repeats = !failsAgain(problem);
   return (
     <form
       className="history-name-field"

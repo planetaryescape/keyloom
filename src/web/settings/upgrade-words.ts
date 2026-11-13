@@ -5,7 +5,9 @@ import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
  * The server checks the updated layout before it saves it (D-193), against the same head every time, so a refusal repeats until the
  * layout changes. The colours and tap dances stay in the layout as Oryx code, which goes to the keyboard as it is.
  */
-export const UPGRADE_REFUSED = "keyloom can't update this layout: the updated version didn't pass keyloom's checks, so nothing changed. Your Oryx colours and tap dances still go to the keyboard as they are.";
+/** `what` names what the offer was for ("Oryx colours", "Oryx tap dances", or both), so the words never name a feature the layout lacks. */
+export const upgradeRefused = (what: string): string =>
+  `keyloom can't update this layout: the updated version didn't pass keyloom's checks, so nothing changed. Your ${what} still go to the keyboard as they are.`;
 
 export type UpgradeFailure = { kind: "refused" } | ({ kind: "failed" } & PageFailure);
 
