@@ -56,12 +56,12 @@ export function useSyncToasts(sync: SyncApi, show: (toast: ToastInput) => void, 
       for (const board of sync.boards) {
         const raw = syncNotice(before.current.get(board.boardId), board);
         if (raw === null) continue;
-        const notice = noticeOnPage(raw, board, pageNow.current);
-        const page = pageNow.current;
+        const onScreen = pageNow.current;
+        const notice = noticeOnPage(raw, board, onScreen);
         const to = notice.action;
         const action = to === undefined ? undefined
-          : to.id === "open_config" ? (page === undefined ? undefined : { label: to.label, run: () => page.openConfig(to.layoutId) })
-          : to.id === "open_board" ? (page === undefined ? undefined : { label: to.label, run: () => page.openBoard(board.boardId) })
+          : to.id === "open_config" ? (onScreen === undefined ? undefined : { label: to.label, run: () => onScreen.openConfig(to.layoutId) })
+          : to.id === "open_board" ? (onScreen === undefined ? undefined : { label: to.label, run: () => onScreen.openBoard(board.boardId) })
           : buttonFor({ id: to.id, label: to.label, buildId: to.buildId }, current);
         show({ kind: notice.kind, message: notice.message, ...(notice.detail === undefined ? {} : { detail: notice.detail }), ...(action === undefined ? {} : { action }) });
       }
