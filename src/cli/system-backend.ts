@@ -1,7 +1,7 @@
 // The server's system interface over the app (rung 25). Starting Docker takes up to about two minutes, and a
 // second click should join the attempt already running rather than launch a second engine.
 import { readKarabinerConfig } from "../app/karabiner-config.ts";
-import { FORCED_RESTART_UNGUARDED, dockerReadiness, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
+import { COLIMA_FIX_UNGUARDED, FORCED_RESTART_UNGUARDED, dockerReadiness, fixColimaFiles, reasonWithHint, restartDocker, startDocker } from "../app/toolchain.ts";
 import { type InstallDeps, installJobs } from "../app/tool-install.ts";
 import type { DockerStartResponse } from "../api/system.ts";
 import type { SystemBackend } from "../server/system-backend.ts";
@@ -9,7 +9,7 @@ import type { SystemBackend } from "../server/system-backend.ts";
 // The page offers Restart for an engine keyloom can restart, so that engine's terminal hint is left out; any other keeps it (R3-04).
 const response = (r: Awaited<ReturnType<typeof startDocker>>): DockerStartResponse => (r.ok ? { ok: true, version: r.version, engine: r.engine, waitedMs: r.waitedMs } : { ok: false, reason: r.restartEngine === undefined ? reasonWithHint(r) : r.reason, engine: r.engine });
 // A restart that failed has already done what the hint says; the page offers the engine's guide and Check again instead.
-const restartResponse = (r: Awaited<ReturnType<typeof restartDocker>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }) });
+const restartResponse = (r: Awaited<ReturnType<typeof restartDocker | typeof fixColimaFiles>>): DockerStartResponse => (r.ok ? response(r) : { ok: false, reason: r.reason, engine: r.engine, ...(r.code === undefined ? {} : { code: r.code }), ...("file" in r && r.file !== undefined ? { file: r.file } : {}) });
 
 /**
  * `restartBlocker` says why a forced restart can't run now (a build, flash or container run would stop), or null; serve passes
@@ -18,11 +18,12 @@ const restartResponse = (r: Awaited<ReturnType<typeof restartDocker>>): DockerSt
  */
 export function appSystemBackend(
   installDeps: InstallDeps = {},
-  docker: { restart?: typeof restartDocker; start?: typeof startDocker; restartBlocker?: () => string | null } = {},
+  docker: { restart?: typeof restartDocker; start?: typeof startDocker; fixFiles?: typeof fixColimaFiles; restartBlocker?: () => string | null } = {},
 ): SystemBackend & { stopInstalls: () => Promise<void> } {
   let starting: Promise<DockerStartResponse> | null = null;
   let restarting: Promise<DockerStartResponse> | null = null;
   let forcing: Promise<DockerStartResponse> | null = null;
+  let fixing: Promise<DockerStartResponse> | null = null;
   const installs = installJobs(installDeps);
   return {
     docker: () => dockerReadiness(),
@@ -45,6 +46,14 @@ export function appSystemBackend(
       if (blocker === undefined) return { ok: false, reason: FORCED_RESTART_UNGUARDED, engine: null, code: "build_running" };
       forcing = (docker.restart ?? restartDocker)({ force: true, blocker }).then(restartResponse).finally(() => { forcing = null; });
       return forcing;
+    },
+    // Stopping the other copy of Colima ends whatever it runs, so the fix asks the same blocker as a forced restart, inside the lock (D-533).
+    fixColimaFiles: async () => {
+      if (fixing !== null) return fixing;
+      const blocker = docker.restartBlocker;
+      if (blocker === undefined) return { ok: false, reason: COLIMA_FIX_UNGUARDED, engine: null, code: "build_running" };
+      fixing = (docker.fixFiles ?? fixColimaFiles)({ blocker }).then(restartResponse).finally(() => { fixing = null; });
+      return fixing;
     },
   };
 }

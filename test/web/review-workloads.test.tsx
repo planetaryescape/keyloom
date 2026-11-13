@@ -85,7 +85,7 @@ test("tests that stopped for Docker show the Docker callout from the code, not t
 
 test("a readiness request that failed still offers Check again, and asks again by itself (#277 review)", () => {
   const noop = () => {};
-  const docker = { readiness: null, unanswered: true, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop };
+  const docker = { readiness: null, unanswered: true, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: null, problem: null, start: noop, cancel: noop };
   const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("couldn&#x27;t ask whether Docker is ready");
@@ -97,7 +97,7 @@ test("a readiness request that failed still offers Check again, and asks again b
 
 test("Docker installed from the activity tests says it is ready once, with Test again (R3-14)", () => {
   const noop = () => {};
-  const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, lastAction: null, start: noop, restart: noop, refresh: noop };
+  const docker = { readiness: { ok: true as const, version: "29.0", engine: "Colima", autoStart: true }, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
   const install = { state: { tool: "docker" as const, status: "succeeded" as const, phase: null, logTail: [], error: null, errorCode: null }, problem: null, start: noop, cancel: noop };
   const html = renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker, install, busy: false, onRetry: noop }));
   expect(html).toContain("Docker is installed and running. Test again to see the results.");
@@ -115,4 +115,24 @@ test("Test and review says what it waits for while no activity is chosen (R6-24)
   expect(html).toContain('aria-describedby="br-activities-why"');
   const chosen = renderToStaticMarkup(createElement(WorkloadTests, { token: "t", firmware: "zmk" as const, activities: ["prose"], evidence: undefined, busy: false, onRun: () => {} }));
   expect(chosen).not.toContain("Choose at least one activity");
+});
+
+test("a refusing Colima on a Mac offers Fix Colima's files, keeps the command below it, and keeps the button after a closed dialog (D-533)", () => {
+  const noop = () => {};
+  const access = { command: 'sudo env HOME="$HOME" colima stop; sudo chown -R "$USER" ~/.colima && colima start', note: "Colima's files belong to another account.", restartApp: null, fixFiles: true };
+  const readiness = { ok: false as const, problem: "no-access" as const, reason: "refused", engine: "Colima", canStart: false, autoStart: true, install: null, access };
+  const docker = { readiness, unanswered: false, starting: false, problem: null, problemCode: null, linkedFile: null, lastAction: null, start: noop, restart: noop, fixFiles: noop, refresh: noop };
+  const install = { state: null, problem: null, start: noop, cancel: noop };
+  const render = (d: typeof docker | Record<string, unknown>) => renderToStaticMarkup(createElement(NeedsDockerView, { words: TESTS_NEED_DOCKER, docker: d as typeof docker, install, busy: false, onRetry: noop }));
+  const offered = render(docker);
+  expect(offered).toContain("Fix Colima&#x27;s files</button>");
+  expect(offered).toContain("Or run Colima&#x27;s command in Terminal yourself");
+  expect(offered.indexOf("Fix Colima&#x27;s files</button>")).toBeLessThan(offered.indexOf("colima stop"));
+  expect(render({ ...docker, starting: true, lastAction: "fix-files" })).toContain("Fixing Colima&#x27;s files. macOS asks for your password first");
+  const cancelled = render({ ...docker, problem: "You cancelled the password dialog.", problemCode: "cancelled", lastAction: "fix-files" });
+  expect(cancelled).toContain("You closed the password dialog, so nothing changed.");
+  expect(cancelled).toContain("Fix Colima&#x27;s files</button>");
+  const failed = render({ ...docker, problem: "macOS didn't let keyloom give all of Colima's files back to you.", lastAction: "fix-files" });
+  expect(failed).not.toContain("Fix Colima&#x27;s files</button>");
+  expect(failed).toContain("Run this in Terminal to fix Colima&#x27;s files yourself");
 });

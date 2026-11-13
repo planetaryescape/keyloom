@@ -1,7 +1,7 @@
 // What the release dialog shows for Docker and for the flash step, as plain data, so the choices are tested without a
 // browser. Every state names what happened and the button that fixes it (D-488 to D-490).
 import type { FlashPlan } from "../../api/http.ts";
-import type { DockerProblem, DockerReadinessResponse } from "../../api/system.ts";
+import type { DockerProblem, DockerReadinessResponse, DockerStartResponse } from "../../api/system.ts";
 import type { InstallState, InstallableTool } from "../../api/tool-install.ts";
 
 type Alternative = { name: string; url: string };
@@ -11,6 +11,8 @@ export type DockerView =
   | { kind: "none" }
   /** A start from this page is running; `verb` says whether it starts, opens (for its CLI) or restarts the engine. */
   | { kind: "starting"; engine: string; verb: "Starting" | "Opening" | "Restarting" }
+  /** Fix Colima's files from this page is running: macOS's password dialog, then Colima starting as the person (D-533). */
+  | { kind: "fixing-files" }
   /**
    * A start from this page failed. `retry` repeats what failed, or is null when repeating it would fail the same way. `restartEngine` is
    * the engine to stop and start from scratch instead (Colima, R3-04), and `helpUrl` the engine's own troubleshooting page once that
@@ -32,9 +34,11 @@ export type DockerView =
   | { kind: "cli-missing"; app: string }
   /**
    * The daemon runs but refuses this account (D-497): the command to copy where there is one, what to do after, and Check again.
-   * `restartApp` is the Mac app keyloom can restart instead (R2-07).
+   * `restartApp` is the Mac app keyloom can restart instead (R2-07). `fix` is Fix Colima's files, for a Colima on a Mac (D-533): `offered`
+   * shows the button, which a failure other than a cancel or a running build takes away, and `note` says how the last one ended. `command`
+   * is null once a fix has found a linked file, until a fix completes, because its `chown -R` would change the very file the fix refused to.
    */
-  | { kind: "no-access"; command: string | null; note: string; restartApp: string | null }
+  | { kind: "no-access"; command: string | null; note: string; restartApp: string | null; fix: { offered: boolean; note: string | null } | null }
   /**
    * Stopped. `afterInstall` is set when this page installed Docker but its first start failed or was stopped (R2-02): Docker is
    * there, so the way on is a start, not another install.
@@ -47,8 +51,14 @@ export const COLIMA_HELP_URL = "https://colima.run/docs/faq/";
 /** Server sentences are also printed in a terminal, where `code` reads well; on the page the backticks are noise. */
 export const plain = (text: string): string => text.replace(/`/g, "");
 
-/** `lastAction` is what this page last asked for: a start, or a restart (of the Mac app, or of Colima). */
-export function dockerView(readiness: DockerReadinessResponse | null, starting: boolean, problem: string | null, install: InstallState | null, lastAction: "start" | "restart" | null = null): DockerView {
+/**
+ * `lastAction` is what this page last asked for: a start, a restart (of the Mac app, or of Colima), or Fix Colima's files. `problemCode` is
+ * the server's code for `problem`. `linkedFile` names the linked file Fix Colima's files found, while it may still be there (`linkedFileAfter`).
+ */
+export function dockerView(
+  readiness: DockerReadinessResponse | null, starting: boolean, problem: string | null, install: InstallState | null,
+  lastAction: "start" | "restart" | "fix-files" | null = null, problemCode: string | null = null, linkedFile: string | null = null,
+): DockerView {
   const down = readiness !== null && !readiness.ok ? readiness : null;
   if (install?.status === "running") return { kind: "installing", phase: install.phase ?? "installing", logTail: install.logTail };
   // A start that failed after a good install isn't an install failure: Docker is there, and the readiness below offers the start.
@@ -60,6 +70,8 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
   const restartEngine = down?.restartEngine ?? null;
   // keyloom may be starting the engine for something else, such as a build or another page (R4-04): the page follows that one.
   const elsewhere = down?.engineAction ?? null;
+  // Another page's fix keeps its own words too: its password dialog can stay open for minutes, which "Starting Colima" would misstate.
+  if ((starting ? lastAction : elsewhere) === "fix-files") return { kind: "fixing-files" };
   if (starting || elsewhere !== null) {
     const restarting = starting ? lastAction === "restart" : elsewhere === "restart";
     if (restartApp !== null) return { kind: "starting", engine: restartApp, verb: "Restarting" };
@@ -68,6 +80,11 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
   }
   // A Docker that answers now outranks how an earlier start from this page failed.
   if (problem !== null && readiness?.ok !== true) {
+    // While Docker still refuses, the fix's outcome stays beside it; once Docker needs something else, that readiness decides below.
+    if (lastAction === "fix-files" && down?.problem === "no-access" && down.access !== null) {
+      const held = commandHeld(down.access, linkedFile);
+      return noAccess(down.access, fixOutcome(problem, problemCode, held), held !== null || problemCode === "linked_file");
+    }
     if (restartApp !== null) return { kind: "start-failed", reason: plain(problem), retry: "restart", restartEngine: null, helpUrl: null };
     // A Colima that wouldn't start fails the same way again, so its way on is a restart from scratch; after that, its own guide (R3-04).
     if (restartEngine !== null) {
@@ -86,9 +103,69 @@ export function dockerView(readiness: DockerReadinessResponse | null, starting: 
       : { kind: "download", engine: i.engine, url: i.url, note: i.note, alternatives: i.alternatives };
   }
   if (down.problem === "cli-missing" && down.engine !== null) return { kind: "cli-missing", app: down.engine };
-  if (down.problem === "no-access" && down.access !== null) return { kind: "no-access", command: down.access.command, note: down.access.note, restartApp: down.access.restartApp };
+  if (down.problem === "no-access" && down.access !== null) {
+    // The server holds the command back too, so a reload or another page says the same (PR #300 CodeRabbit).
+    const held = commandHeld(down.access, linkedFile);
+    return noAccess(down.access, { offered: true, note: held }, held !== null);
+  }
   if (down.engine === null) return { kind: "other", reason: plain(down.reason), problem: down.problem };
   return { kind: "down", engine: down.engine, canStart: down.canStart, afterInstall: afterInstall(install), restartEngine };
+}
+
+type Access = NonNullable<Extract<DockerReadinessResponse, { ok: false }>["access"]>;
+
+// The server's words for a held command (`toolchain.ts`, which the page can't import); a test keeps them equal.
+export const linkedFileHeld = (file: string): string =>
+  `A file in Colima's folder, ${file}, also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.`;
+export const SCAN_INCOMPLETE_HELD = "keyloom couldn't look through all of Colima's folder for a file that also has a name somewhere else, so it doesn't offer Colima's command, which would change such a file's owner too. Fix Colima's files checks every file itself and changes nothing if it finds one.";
+
+/**
+ * Why Colima's command is held back, or null when it isn't: a linked file this page's fix found, or one the server knows of, or a look
+ * that didn't finish. The command shows only after a look that read all of ~/.colima and found none (D-533).
+ */
+function commandHeld(access: Access, linkedFile: string | null): string | null {
+  const file = linkedFile ?? access.linkedFile ?? null;
+  if (file !== null) return linkedFileHeld(file);
+  return access.scanIncomplete === true ? SCAN_INCOMPLETE_HELD : null;
+}
+
+const withHeld = (note: string, held: string | null): string => (held === null ? note : `${note} ${held}`);
+
+function noAccess(access: Access, fix: { offered: boolean; note: string | null }, noCommand = false): Extract<DockerView, { kind: "no-access" }> {
+  return { kind: "no-access", command: noCommand ? null : access.command, note: access.note, restartApp: access.restartApp, fix: access.fixFiles === true ? fix : null };
+}
+
+/**
+ * How Fix Colima's files ended, in the page's words for the codes it acts on. A closed password dialog or a running build keeps the
+ * button: the next press can work. Any other failure is shown and the button goes, because pressing it again would fail the same way;
+ * the command to copy and Check again stay (D-533). With the command held back (`held` says why, after a linked file or a look that didn't
+ * finish), the button stays, because it is then the only way on and it checks for linked files itself, and the reason stays beside the
+ * latest outcome (PR #300 CodeRabbit).
+ */
+function fixOutcome(problem: string, code: string | null, held: string | null): { offered: boolean; note: string } {
+  const reason = plain(problem).replace(/\.?$/, ".");
+  if (code === "cancelled") return { offered: true, note: withHeld("You closed the password dialog, so nothing changed.", held) };
+  if (code === "build_running") return { offered: true, note: withHeld("A build or flash is running, and stopping Colima now would stop it. Fix Colima's files once it has finished.", held) };
+  // The file may belong to macOS, so the way on is to look at it first; the button checks again once it is dealt with.
+  if (code === "linked_file") return { offered: true, note: `${reason} A file with two names can be one of macOS's own, so check what it is before anything changes its owner.` };
+  // keyloom won't run Colima as root to stop that copy (D-533); Colima's command does, as the person's own step.
+  if (code === "vm_running") {
+    return held !== null
+      ? { offered: true, note: withHeld(`${reason} Stop that copy of Colima, then press Fix Colima's files again.`, held) }
+      : { offered: false, note: `${reason} The command below stops that copy, gives the files back and starts Colima as you.` };
+  }
+  return { offered: held !== null, note: withHeld(plain(problem), held) };
+}
+
+/**
+ * The linked file the page still holds Colima's command back for after a fix ended, or null (PR #300 CodeRabbit). A linked file sets it,
+ * and only a fix that completed clears it: a cancel or a refusal that came after says nothing about the file, so its code can't bring the
+ * command back.
+ */
+export function linkedFileAfter(before: string | null, action: "start" | "restart" | "fix-files", result: DockerStartResponse): string | null {
+  if (action !== "fix-files") return before;
+  if (result.ok) return null;
+  return result.code === "linked_file" ? result.file ?? before ?? "~/.colima" : before;
 }
 
 /** How this page's own install ended, when Docker is there but stopped: its first start failed, or the person stopped it. */
@@ -104,9 +181,10 @@ export function buildBlockedReason(view: DockerView): string | null {
     case "install": case "download": case "install-failed": return "Install Docker first.";
     case "installing": return view.phase === "stopping" ? "Waiting for the install to stop." : "Waiting for Docker to finish installing.";
     case "starting": return "Waiting for Docker to start.";
+    case "fixing-files": return "Waiting for keyloom to fix Colima's files.";
     // A Colima that a restart didn't bring back fails a build the same way (R4-04b).
     case "start-failed": return view.helpUrl === null ? null : "Docker won't start, so a build would stop the same way. Fix it with Colima's guide, or install another engine.";
-    case "no-access": return "Give keyloom access to Docker first.";
+    case "no-access": return view.fix?.offered === true ? "Fix Colima's files first." : "Give keyloom access to Docker first.";
     case "cli-missing": return "Install Docker's command line tools first.";
     // An engine keyloom can't start fails the build the same way; one that only answered slowly may still come up, and the build waits for it.
     case "other": return view.problem === "slow" ? null : view.problem === "cli-missing" ? "Install Docker's command line tools first." : "Start your Docker engine first.";

@@ -1,9 +1,11 @@
 // Firmware is built in Docker, so "is the daemon up" is part of keyloom working rather than a prerequisite
 // the person has to keep in mind. This asks, and starts the engine it finds when it isn't (D-486, D-487).
 import {
-  DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
-  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, startDockerEngine,
+  COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus, type EngineFinding,
+  dockerInstall, dockerStatus, findDockerEngine, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
+import { adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
+import type { Runner } from "./remapper-setup.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
 export { type DockerStatus, dockerStatus, reasonWithHint };
@@ -26,23 +28,34 @@ export type DockerReadiness =
       restartEngine: string | null;
       /** Other engines to install, for a `restartEngine` that won't start even after a restart (R4-04b); empty otherwise. */
       alternatives: Array<{ name: string; url: string }>;
-      /** keyloom is starting or restarting the engine now, for a page or a build, so the page shows that instead of a button (R4-04). */
-      engineAction: "start" | "restart" | null;
+      /**
+       * keyloom is starting or restarting the engine, or fixing Colima's files, now, for a page or a build, so the page shows that instead
+       * of a button (R4-04, D-533).
+       */
+      engineAction: EngineAction | null;
     };
 
 /**
  * The way out of `no-access`: a command to paste where the fix needs sudo (keyloom can't answer its password prompt), otherwise a
  * sentence. Linux joins the docker group and needs a new login. Colima creates its socket readable by its owner only, so a socket
  * this account can't open belongs to another one, usually root after `sudo colima start`: that copy is stopped, the files given back
- * and Colima started as the person. The Mac apps run as the person, so reopening one gives the socket back, and `restartApp` names
+ * and Colima started as the person; on a Mac `fixFiles` says keyloom can do that itself (D-533). The Mac apps run as the person, so reopening one gives the socket back, and `restartApp` names
  * the app keyloom can restart itself (R2-07).
  */
-export type DockerAccessFix = { command: string | null; note: string; restartApp: string | null };
+export type DockerAccessFix = {
+  command: string | null; note: string; restartApp: string | null;
+  /** keyloom can run Colima's command itself, through macOS's password dialog (D-533): a Colima on a Mac. */
+  fixFiles: boolean;
+  /** A file in ~/.colima, named here in full, has a second name, so `command`, whose `chown -R` would change it, is held back (null). Readiness only. */
+  linkedFile?: string;
+  /** keyloom's look for such a file didn't finish, so `command` is held back (null) too: it is shown only after a look that did (D-533). */
+  scanIncomplete?: boolean;
+};
 
 export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine | null): DockerAccessFix {
   if (platform === "linux") {
     return {
-      command: DOCKER_GROUP_COMMAND, restartApp: null,
+      command: DOCKER_GROUP_COMMAND, restartApp: null, fixFiles: false,
       note: "It adds your account to the docker group, which Docker warns grants root-level access to this computer. Log out and back in so the change takes effect, then open keyloom again.",
     };
   }
@@ -52,11 +65,12 @@ export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine 
     return {
       // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
       command: `sudo env HOME="$HOME" colima stop${profile}; sudo chown -R "$USER" ~/.colima && colima start${profile}`, restartApp: null,
+      fixFiles: platform === "darwin",
       note: "Colima's files belong to another account, usually because Colima was started with sudo. This stops that copy, gives the files back to you and starts Colima as you. Then check again.",
     };
   }
   const app = platform === "darwin" && engine?.command[0] === "open" ? engine.name : null;
-  return { command: null, restartApp: app, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
+  return { command: null, restartApp: app, fixFiles: false, note: `Quit ${engine?.name ?? "your Docker app"} and open it again, then check again.` };
 }
 
 /** The parts a test replaces, so no test launches an app or talks to a daemon. */
@@ -68,6 +82,14 @@ export type ToolchainOverrides = {
   restartApp?: typeof restartDockerApp;
   /** Stops Colima hard and starts it again; the real one runs `colima stop --force` and `colima start`. */
   restartColima?: typeof restartColima;
+  /** Runs the osascript call for Fix Colima's files; the real one shows macOS's password dialog. */
+  adminRun?: Runner;
+  /** Stops Colima as the person after Fix Colima's files; the real one runs `colima stop`. */
+  colimaStop?: ColimaStop;
+  /** The checked paths and IDs for Fix Colima's files; the real one reads this computer. */
+  colimaPlan?: (engine: DockerEngine) => ReturnType<typeof colimaFilesPlan>;
+  /** Looks in ~/.colima, as the person, for a file with a second name; the real one runs `find`. */
+  colimaLinkedScan?: typeof colimaLinkedFileSeen;
   /** The process's environment, for the opt-out below. */
   env?: Record<string, string | undefined>;
   /** What "this computer" is, for the install advice. */
@@ -106,13 +128,39 @@ export async function dockerReadiness(over: ToolchainOverrides = {}): Promise<Do
     canStart: autoStart && engine !== null && now.kind !== "no-access" && now.kind !== "cli-missing",
     autoStart,
     install: now.kind === "not-installed" ? dockerInstall(platform, ...(over.has === undefined ? [] : [over.has])) : null,
-    access: now.kind === "no-access" ? dockerAccessFix(platform, found) : null,
+    access: now.kind === "no-access" ? await accessFix(platform, found, over) : null,
     // Only a dead daemon: a slow one is up and may be running a build that a restart would kill (D-497).
     restartEngine: colima ? found.name : null,
     alternatives: colima ? otherEngines(platform, found.name, over.has) : [],
     engineAction: engineHolder?.kind ?? null,
   };
 }
+
+/**
+ * The way to get access. Colima's command is shown only after the person's own look read all of ~/.colima and found no linked file, and
+ * while no Fix Colima's files has found one since the last fix that completed (D-533). Kept here, not only in the page, so a reload or
+ * another page can't show the `chown -R` again (PR #300 CodeRabbit).
+ */
+async function accessFix(platform: NodeJS.Platform, engine: DockerEngine | null, over: ToolchainOverrides): Promise<DockerAccessFix> {
+  const fix = dockerAccessFix(platform, engine);
+  if (!fix.fixFiles || engine === null) return fix;
+  const scan = colimaLinkedFileFound === null ? await (over.colimaLinkedScan ?? colimaLinkedFileSeen)(engine) : null;
+  // Read again after the look: a fix that finds a linked file can end while the look runs (PR #300 CodeRabbit).
+  const file = colimaLinkedFileFound ?? (scan?.kind === "found" ? scan.file : null);
+  if (file !== null) return { ...fix, command: null, linkedFile: file };
+  return scan?.kind === "none" ? fix : { ...fix, command: null, scanIncomplete: true };
+}
+
+/**
+ * Why Colima's command is held back, said in place of its note. The page says the same (`release-words.ts`, which can't import this
+ * folder); a test keeps the two equal.
+ */
+export const colimaLinkedFileHeld = (file: string): string =>
+  `A file in Colima's folder, ${file}, also has a name somewhere else, so keyloom doesn't offer Colima's command, which would change that file's owner too. Check what the file is. Fix Colima's files looks for it again and changes nothing while it is there.`;
+export const COLIMA_SCAN_INCOMPLETE_HELD = "keyloom couldn't look through all of Colima's folder for a file that also has a name somewhere else, so it doesn't offer Colima's command, which would change such a file's owner too. Fix Colima's files checks every file itself and changes nothing if it finds one.";
+
+/** The file Fix Colima's files stopped at, while no fix has completed since. Reset when this process starts; the look covers that. */
+let colimaLinkedFileFound: string | null = null;
 
 /** The engines to install instead of one that won't start: this platform's install and its alternatives, without the one that failed. */
 function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command: string) => boolean): Array<{ name: string; url: string }> {
@@ -125,13 +173,23 @@ function otherEngines(platform: NodeJS.Platform, failed: string, has?: (command:
  * --force`, which would kill a start in progress, so a restart is refused while anything holds this; a start waits its turn, then finds
  * Docker up and returns at once.
  */
-let engineHolder: { kind: "start" | "restart"; done: Promise<void> } | null = null;
+let engineHolder: { kind: EngineAction; done: Promise<void> } | null = null;
+
+/** What holds the engine: a start, a restart, or Fix Colima's files, whose password dialog can stay open for minutes (D-533). */
+type EngineAction = "start" | "restart" | "fix-files";
+
+/** The refusal for an action that would fight the one holding the engine; null when nothing holds it. */
+function engineBusy(): { ok: false; engine: null; code: "engine_busy"; reason: string } | null {
+  if (engineHolder === null) return null;
+  const what = engineHolder.kind === "fix-files" ? "fixing Colima's files" : engineHolder.kind === "restart" ? "restarting Docker" : "starting Docker";
+  return { ok: false, engine: null, code: "engine_busy", reason: `keyloom is already ${what}, for this page or for a build. Wait for that to finish, then check again.` };
+}
 
 class EngineWaitAborted extends Error {}
 
-// Waits until nothing (or, with `only`, no action of that kind) holds the engine. Each waiter checks again when it wakes.
-async function waitForEngine(signal: AbortSignal | undefined, only?: "restart"): Promise<void> {
-  while (engineHolder !== null && (only === undefined || engineHolder.kind === only)) {
+// Waits until nothing (or, with `only`, no action of those kinds) holds the engine. Each waiter checks again when it wakes.
+async function waitForEngine(signal: AbortSignal | undefined, only?: readonly EngineAction[]): Promise<void> {
+  while (engineHolder !== null && (only === undefined || only.includes(engineHolder.kind))) {
     if (signal?.aborted) throw new EngineWaitAborted();
     const held = engineHolder.done;
     await new Promise<void>((resolve) => {
@@ -146,7 +204,7 @@ async function waitForEngine(signal: AbortSignal | undefined, only?: "restart"):
   if (signal?.aborted) throw new EngineWaitAborted();
 }
 
-async function holdEngine<T>(kind: "start" | "restart", fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+async function holdEngine<T>(kind: EngineAction, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   // Checked again after every wait, in the same synchronous run as the take below, so the first waiter to wake takes it and a free lock
   // is taken without yielding.
   while (engineHolder !== null) await waitForEngine(signal);
@@ -190,11 +248,7 @@ function startDockerUnheld(opts: { onProgress?: (line: string) => void; signal?:
 export async function restartDocker(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | "build_running" }> {
   // Refused, not queued: by the time a start ends Docker is usually up, and a restart then would stop it for nothing. The code lets the
   // page follow the action that is running instead of offering the restart again (R4-04).
-  if (engineHolder !== null) {
-    const what = engineHolder.kind === "restart" ? "restarting" : "starting";
-    return { ok: false, engine: null, code: "engine_busy", reason: `keyloom is already ${what} Docker, for this page or for a build. Wait for that to finish, then check again.` };
-  }
-  return holdEngine("restart", () => restartDockerUnheld(opts));
+  return engineBusy() ?? holdEngine("restart", () => restartDockerUnheld(opts));
 }
 
 type RestartOptions = {
@@ -289,6 +343,73 @@ async function forcedRestart(opts: RestartOptions): Promise<DockerStartResult & 
   return engine.command[0] === "colima" ? (over.restartColima ?? restartColima)(engine, wait) : (over.restartApp ?? restartDockerApp)(engine, wait);
 }
 
+/**
+ * Fix Colima's files (D-533), for a Colima that refuses this account because its files belong to another one. macOS asks for the
+ * administrator password, root gives the files back (`runColimaRootSteps`), then Colima stops and starts as the person and keyloom
+ * waits for Docker. Refused while keyloom starts or restarts Docker. The stop ends whatever the other copy runs, so `blocker` is
+ * asked inside the engine lock, right before the password dialog, and the fix is refused without one, as a forced restart is (D-529).
+ */
+export async function fixColimaFiles(opts: RestartOptions = {}): Promise<DockerStartResult & { code?: "engine_busy" | ColimaFixCode; file?: string }> {
+  return engineBusy() ?? holdEngine("fix-files", () => fixColimaFilesUnheld(opts));
+}
+
+export const COLIMA_FIX_UNGUARDED = "keyloom can't tell whether a build is running here, so it didn't change Colima.";
+
+/** The codes the page acts on. `vm_running`: another account's Colima VM runs from ~/.colima, found before the dialog or by root. */
+type ColimaFixCode = "build_running" | "cancelled" | "linked_file" | "vm_running";
+
+async function fixColimaFilesUnheld(opts: RestartOptions): Promise<DockerStartResult & { code?: ColimaFixCode; file?: string }> {
+  const over = opts.overrides ?? {};
+  const now = await (over.status ?? (() => dockerStatus()))();
+  if (now.ok) return { ok: true, version: now.version, engine: "Docker", waitedMs: 0 };
+  // Asked again, because the password dialog is for this one problem and the page may be showing an old answer.
+  if (now.kind !== "no-access") return { ok: false, engine: null, reason: "Docker doesn't refuse keyloom any more, so keyloom changed nothing. Check again to see what Docker needs now." };
+  if ((over.platform ?? process.platform) !== "darwin") return { ok: false, engine: null, reason: "keyloom fixes Colima's files on a Mac only. Run Colima's command in a terminal yourself, then check again." };
+  const finding = await (over.detect ?? findDockerEngine)();
+  if (finding.kind !== "engine" || finding.engine.command[0] !== "colima") {
+    return { ok: false, engine: null, reason: "Docker here isn't run by Colima any more, so keyloom changed nothing. Check again to see what Docker needs now." };
+  }
+  const engine = finding.engine;
+  const planned = (over.colimaPlan ?? ((e: DockerEngine) => colimaFilesPlan(e, realPlanDeps())))(engine);
+  if (!planned.ok) return { ok: false, engine: engine.name, reason: planned.reason, ...(planned.code === "colima_vm_running" ? { code: "vm_running" as const } : {}) };
+  const blocked = opts.blocker === undefined ? COLIMA_FIX_UNGUARDED : opts.blocker();
+  if (blocked !== null) return { ok: false, engine: null, reason: blocked, code: "build_running" };
+  opts.onProgress?.("keyloom: asking macOS for an administrator password to fix Colima's files");
+  const root = await runColimaRootSteps(planned.plan, over.adminRun ?? adminRunner);
+  if (!root.ok) {
+    if (root.code === "colima_linked_file") {
+      const file = root.file ?? planned.plan.colimaHome;
+      colimaLinkedFileFound = file;
+      return { ok: false, engine: engine.name, reason: root.reason, code: "linked_file", file };
+    }
+    const code = root.code === "cancelled" ? "cancelled" as const : root.code === "colima_vm_running" ? "vm_running" as const : null;
+    return { ok: false, engine: engine.name, reason: root.reason, ...(code === null ? {} : { code }) };
+  }
+  colimaLinkedFileFound = null;
+  // The files are the person's now, so Colima stops and starts as them: a copy of the person's that is still up keeps the socket root
+  // made, and a start of a running Colima does nothing. The stop runs after the dialog, so a closed dialog changes nothing, and as the
+  // person, never as root (#300 review). It usually has nothing to stop; a stop that fails is said and the start still runs.
+  const profile = planned.plan.profile === null ? [] : ["--profile", planned.plan.profile];
+  const stopped = await (over.colimaStop ?? colimaStopAsPerson)(["colima", "stop", ...profile], COLIMA_STOP_MS, opts.signal);
+  if (!stopped.ok) opts.onProgress?.(`keyloom: Colima didn't stop cleanly${stopped.detail ? ` (${stopped.detail})` : ""}; starting it anyway`);
+  // `relaunch` keeps waiting while the socket still refuses as Colima comes up.
+  const fresh: DockerEngine = { ...engine, command: ["colima", "start", ...profile] };
+  const started = await (over.startEngine ?? startDockerEngine)({
+    relaunch: true,
+    detect: async () => ({ kind: "engine", engine: fresh }),
+    ...(over.status === undefined ? {} : { status: over.status }),
+    ...(opts.onProgress === undefined ? {} : { onProgress: opts.onProgress }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  });
+  return started.ok ? started : { ...started, reason: `Colima's files are yours again, but Colima didn't come up. ${started.reason.replace(/\.?$/, ".")}` };
+}
+
+/** `colima stop` as the person. Refused under `bun test`, so a forgotten fake fails its test instead of stopping the machine's Colima. */
+const colimaStopAsPerson: ColimaStop = async (command, budgetMs, signal) => {
+  if (process.env.KEYLOOM_REFUSE_SYSTEM_ACTIONS === "1") throw new Error("refusing to stop Colima in a test");
+  return runStart({ name: "Colima", command }, budgetMs, signal);
+};
+
 // Container runs other than builds that a forced restart would stop: a lab analysis, a board review's tests, `keyloom emulate`. Builds
 // are found from their own rows; these have none, so each run says what it is for as long as it may run a container (D-529).
 const containerWork = new Map<symbol, string>();
@@ -314,12 +435,14 @@ export type EnsureDockerResult =
 export async function ensureDocker(opts: { onProgress?: (line: string) => void; signal?: AbortSignal; overrides?: ToolchainOverrides } = {}): Promise<EnsureDockerResult> {
   const over = opts.overrides ?? {};
   const status = over.status ?? (() => dockerStatus());
-  // A forced restart stops every container, even on a Docker that answers. A build or replay that gets here while one runs waits for it,
-  // so it never starts a container between the restart's last check for running work and its stop (D-529).
+  // A forced restart stops every container, even on a Docker that answers, and Fix Colima's files stops Colima. A build or replay that
+  // gets here while one runs waits for it, so it never starts a container between the last check for running work and the stop (D-529,
+  // D-533).
   // The wait can take minutes, so the build log says why it has stopped moving.
   if (engineHolder?.kind === "restart") opts.onProgress?.("keyloom: waiting for keyloom to finish restarting Docker");
+  if (engineHolder?.kind === "fix-files") opts.onProgress?.("keyloom: waiting for keyloom to finish fixing Colima's files");
   try {
-    await waitForEngine(opts.signal, "restart");
+    await waitForEngine(opts.signal, ["restart", "fix-files"]);
   } catch (err) {
     if (err instanceof EngineWaitAborted) return { ok: false, engine: null, reason: "Stopped waiting for Docker." };
     throw err;

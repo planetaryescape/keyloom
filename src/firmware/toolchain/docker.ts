@@ -580,7 +580,7 @@ export async function restartDockerApp(engine: DockerEngine, opts: StartDockerOp
 /** Stops and starts the engine's VM, for `colima stop --force`'s own commands; the real one runs them. A test passes a fake. */
 export type ColimaStop = (command: string[], budgetMs: number, signal?: AbortSignal) => Promise<{ ok: boolean; detail?: string }>;
 
-const COLIMA_STOP_MS = 60_000;
+export const COLIMA_STOP_MS = 60_000;
 
 /**
  * Stops Colima without a graceful shutdown, then starts it and waits for Docker (R3-04). That is Colima's own fix for a VM that won't
