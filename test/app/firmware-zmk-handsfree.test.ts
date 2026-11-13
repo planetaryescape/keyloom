@@ -9,6 +9,7 @@ import { buildKey } from "../../src/firmware/zmk/handsfree.ts";
 import { MODULE_FILES } from "../../src/firmware/zmk/module.ts";
 import { OLD_KEY, fakeWorld, glove80Image, serialOf } from "../helpers/fake-zmk-halves.ts";
 import { fakeBootloaders, zmkEnv } from "../helpers/zmk.ts";
+import { SLOW_RUNNER_MS } from "../helpers/timeouts.ts";
 
 const half = (letter: "L" | "R") => ({ letter, volume: letter === "L" ? "GLV80LHBOOT" : "GLV80RHBOOT", serial: serialOf(OLD_KEY, letter) });
 
@@ -64,7 +65,7 @@ describe("a Glove80 flash", () => {
     for (const letter of ["L", "R"]) expect(Bun.file(join(e.dataDir, "firmware", "last-good", "moergo-glove80", `${letter}.uf2`)).size).toBeGreaterThan(0);
     // It reads back from the log, so a reload of the web app shows the same.
     expect((await getFlash(e.app, f.id)).note).toBe(f.note);
-  });
+  }, SLOW_RUNNER_MS);
 
   test("Cancel is refused once keyloom has restarted a half into its bootloader, and the flash finishes (D-506)", async () => {
     const e = await zmkEnv();
@@ -105,16 +106,21 @@ describe("a Glove80 flash", () => {
     } finally {
       reopened.db.close();
     }
-  });
+  }, SLOW_RUNNER_MS);
 
   test("halves that don't run keyloom's firmware yet get the key combo, with the reason, and the first flash is still verified", async () => {
     const e = await zmkEnv();
     const b = await built(e);
     const world = fakeWorld({ root: e.volumes, halves: [{ letter: "L", volume: "GLV80LHBOOT" }, { letter: "R", volume: "GLV80RHBOOT" }] });
     const seen: Array<string | null> = [];
-    const flashed = flashAndWait(e.app, { buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 5000, handsFree: { zmk: world.deps }, onState: (v) => seen.push(v.instruction) });
-    setTimeout(() => world.press("R"), 200);
-    setTimeout(() => world.press("L"), 900);
+    const flashed = flashAndWait(e.app, {
+      buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 5000, handsFree: { zmk: world.deps },
+      onState: (v) => {
+        seen.push(v.instruction);
+        if (v.instruction?.includes("Flash the right half")) world.press("R");
+        if (v.instruction?.includes("Flash the left half")) world.press("L");
+      },
+    });
     const f = await flashed;
     world.stop();
     expect(f.status).toBe("succeeded");
@@ -146,7 +152,7 @@ describe("a Glove80 flash", () => {
       expect(retried.note).toContain("Verified:");
       expect(world.halves.map((h) => h.serial)).toEqual([serialOf(buildKey(b.id), "L"), serialOf(buildKey(b.id), "R")]);
     } finally { world.stop(); }
-  });
+  }, SLOW_RUNNER_MS);
 
   test("a flash of a build without the markers asks for the key combo and flashes as before", async () => {
     const e = await zmkEnv();

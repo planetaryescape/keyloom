@@ -58,7 +58,7 @@ An identical document-rule problem already present before the change is reported
 | `remapper_lockout` | Escape and a Control key stay reachable on the built-in keyboard | Preserve a usable way out on the MacBook (D-247) |
 | `passthrough_layer_index` | Kept firmware source and kept keys follow their layers: the importer records which numbers are layer numbers, and generation writes each as its layer's current index. The rule refuses a change that removes a layer the code names (it says which key or line), and one that renumbers layers while a line uses a layer number in a way that can't be rewritten (arithmetic, a bitmask, a comparison by order, a name no `#define` gives a number to). It names the line. A layout stored before the numbers were read keeps the old rule: only adding at the end passes (D-360) | Oryx's RGB and custom-key code and MoErgo's layer defines use layer numbers and would silently point at the wrong layers (S3) |
 | `layer_limit` | The layer count stays within the firmware's limit, including `LAYER_STATE_8BIT` (8) where it's set | The firmware wouldn't compile, or layers above the cap would be unreachable (S3) |
-| `native_edit` | A native binding may be moved, copied or replaced by a modelled binding, but no change may introduce native source it did not import. Passthrough blocks stay unchanged | There is no confirmation bypass for editing arbitrary firmware source (D-024) |
+| `native_edit` | A native binding may be moved, copied or replaced by a modelled binding, but no change may introduce native source it did not import. Passthrough blocks stay unchanged. Setting edits accept numbers and switches with identifier names. Imported setting expressions stay unchanged or can be removed or replaced with a number or switch (D-660) | There is no confirmation bypass for editing arbitrary firmware source (D-024) |
 
 ## Layer numbers in kept code
 
@@ -102,3 +102,6 @@ The validator is where keyloom's correctness lives, so it gets the heaviest test
 - Table tests for every error and warning code, against small synthetic boards.
 - Property tests (`fast-check`). For random valid layouts and random op lists, either `validate` fails or the applied document parses, every layer is reachable, and no function is lost without a `dropFunction` op.
 - Fixtures from BK's real Moonlander and Glove80 imports, with the Option–Option and Command–Shift proposals as golden cases (D-025).
+
+
+Conditional-layer IDs must start with a letter or underscore and contain only letters, digits, underscores and hyphens (D-663). This check runs before the proposal is saved. ZMK generation checks it again before writing a node name. The agent regression in `test/agent/conditional-layers.test.ts` checks that a directive-bearing ID leaves proposals and the layout unchanged.

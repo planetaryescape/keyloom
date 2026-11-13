@@ -153,13 +153,13 @@ describe("flash", () => {
   test("flashes the right half and then the left into the volumes directory, telling the person what to do for each", async () => {
     const e = await zmkEnv();
     const b = await built(e);
-    const boot = fakeBootloaders(e.volumes, [RIGHT, LEFT], { mountAfterMs: [100], onDemand: true });
+    const boot = fakeBootloaders(e.volumes, [RIGHT, LEFT], { onDemand: "all" });
     const seen: string[] = [];
     const f = await flashAndWait(e.app, {
       buildId: b.id, volumesRoot: e.volumes, bootloaderWaitMs: 5000,
       onState: (v) => {
         if (v.instruction && seen.at(-1) !== v.instruction) seen.push(v.instruction);
-        // The left half goes into its bootloader once keyloom has asked for it.
+        if (v.instruction?.includes("Flash the right half")) boot.mount(RIGHT);
         if (v.instruction?.includes("Flash the left half")) boot.mount(LEFT);
       },
     });

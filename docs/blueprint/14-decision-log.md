@@ -11,6 +11,48 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 generated names and import limits
+
+### D-663: Conditional-layer IDs cannot introduce devicetree source.
+
+A conditional ID starts with a letter or underscore and contains only letters, digits, underscores and hyphens. Validation rejects other forms before proposal storage. The ZMK generator checks the same schema before writing a conditional node. Existing safe IDs keep their identity, including uppercase letters and underscores. Imported conditions made by the slugger still round-trip.
+
+Regression: `test/agent/conditional-layers.test.ts`, `test/validation/conditional-layers.test.ts` and `test/firmware/zmk/conditional-layers.test.ts`. A synthetic directive sequence is rejected before a proposal or revision is saved. No real firmware or hardware check is claimed.
+
+### D-664: Inspect ZIP metadata before inflating source files.
+
+QMK ZIP imports have an 8 MiB compressed limit, at most 1,024 entries, an 8 MiB per-source-file limit and a 32 MiB aggregate declared-source limit. These limits apply to CLI imports too. The importer inspects the archive directory without inflation, then inflates only the first keymap folder and its direct source neighbors. An oversized entry or total fails the import instead of silently dropping part of the input.
+
+The archive library supplies the directory metadata. keyloom does not add a ZIP parser. The existing ordinary Oryx ZIP round trip stays covered. `test/firmware/qmk/source-limits.test.ts` checks selected-folder behavior and each limit with bounded synthetic inputs.
+
+### D-665: Tool validation rejects oversized collections before element work and bounds returned errors.
+
+Zod 4.6.7 replaces the vulnerable 4.6.5 lock, including the MCP SDK's nested copy, for GHSA-mrhx-c7xc-m3w5. The override keeps all copies on the patched version. Tool errors retain at most eight issues and 200 characters per issue, plus the omitted count. Valid inputs still reach the tool unchanged.
+
+`test/agent/tool-input-limits.test.ts` verifies that 5,000 entries do not reach per-element validation when the array limit is 100. It also checks bounded error output, useful paths and no tool effect on rejection. This is a bounded allocation and error-amplification fix, not a claim that the review demonstrated memory exhaustion. Other dependency advisories remain separate findings until reachability and compatibility checks settle them.
+
+## 2026-11-13 firmware build input boundaries
+
+### D-660: Setting edits cannot introduce opaque firmware source. Clarifies D-024.
+
+A new or changed firmware setting accepts a number or a switch and an identifier name. Imported expression values remain unchanged, can be removed, or can become typed values. A change cannot add or replace an expression string through `setFirmwareSetting`. QMK generation also rejects newlines, NUL bytes, trailing line continuations and source in setting names. Direct generation still preserves imported single-line expressions. This does not turn an imported custom program into trusted code.
+
+Regression: `test/validation/firmware-setting-source.test.ts`. The CLI expression-display fixture now imports its expression instead of adding new source through a change.
+
+### D-661: Host source writes and cleanup stay inside their build workspace.
+
+A QMK board's `keymapsDir` cannot be absolute or contain traversal. Host writes reject symlink components beneath the workspace root. Generated filenames receive the same checks, and cleaning generated source requires the workspace root. QMK builds and emulation use this boundary before host writes. Stale QMK artifact removal checks its paths too. A symlink used to name the workspace itself remains supported, including macOS temporary-directory aliases.
+
+The filesystem check uses `lstat` because lexical path containment alone follows a symlink outside the workspace. It does not establish protection from concurrent hostile directory replacement. Trusted-source isolation is a separate fix, tracked in `docs/issues/build-checkout-source-integrity.md`.
+
+Regression: `test/firmware/qmk/write-source.test.ts`, plus the fake QMK build and import round-trip tests.
+
+### D-662: Configure the Glove80 binary cache without executing a downloaded installer.
+
+Nix receives the MoErgo cache URL and public signing key directly in `nix.conf`. The key was read from `https://app.cachix.org/api/v1/cache/moergo-glove80-zmk-dev` on 13 November 2026. The image no longer installs Cachix from a mutable Nix expression. The pinned base, firmware source and signature requirement remain. The Dockerfile hash changes the image tag, so an existing image built with the installer is not reused for this candidate.
+
+Regression: the missing-image journey in `test/firmware/zmk/build.test.ts` checks the emitted Dockerfile. A network-disabled, read-only container configuration probe confirms Nix accepts the cache and key while `require-sigs` stays true. A new image and compiled scratch CLI firmware build passed at `a2d0bd9b`, producing both Glove80 half families. The [issue record](../issues/glove80-mutable-cachix-installer.md) keeps the artifact hash and limits. No keyboard was flashed.
+
 ## 2026-11-13 desktop sidecar integrity
 
 ### D-569: Verify the sidecar checksum before replacing the executable.

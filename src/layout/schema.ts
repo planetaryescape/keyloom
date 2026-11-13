@@ -141,7 +141,7 @@ export type Layer = z.infer<typeof LayerSchema>;
 // "When layers A and B are both on, also turn on C" (tri-layer; D-385). Layers are named by id, so a reorder renumbers the firmware's
 // layer numbers for free. A plain length-2 array rather than z.tuple, for the same JSON-schema reason as HsvSchema.
 export const ConditionalLayerSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]*$/),
   ifLayerIds: z.array(z.string().min(1)).length(2),
   thenLayerId: z.string().min(1),
 });
