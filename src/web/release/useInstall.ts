@@ -1,6 +1,6 @@
 // One install from a button (D-488, D-489): starts it, follows its output once a second until it finishes, and calls
 // `onDone` when it ends so the dialog re-reads what is now on the computer. It can be cancelled (R2-08).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { InstallState, InstallableTool } from "../../api/tool-install.ts";
 import { cancelInstall, fetchInstall, startInstall } from "./install-api.ts";
 import { type PageFailure, failsAgain, pageFailure, wayOutFor } from "../shell/unexpected.ts";
@@ -37,8 +37,8 @@ export type Install = {
   /** `problem` with its code, so one no screen planned for offers Restart keyloom (R9-05, D-540). Optional, with `token`, for hand-built ones. */
   failure?: PageFailure | null;
   token?: string;
-  /** Reads of the running install kept failing (R10-07); `problem` says so. */
-  lost?: boolean;
+  /** The read failure that lost track of the running install (R10-07), kept apart from a failed start or cancel; `problem` says so. */
+  lost?: PageFailure | null;
   /** Reads the install at once, after it was lost; absent on hand-built ones. */
   checkAgain?: () => void;
   start: () => void;
@@ -46,10 +46,42 @@ export type Install = {
   cancel: () => void;
 };
 
+/** What the hook knows about one install: the last state read, a failed start or cancel, and the reads that failed in a row. */
+export type InstallTrack = { state: InstallState | null; failure: PageFailure | null; lost: ReturnType<typeof installLost> | null; misses: number };
+export const INSTALL_IDLE: InstallTrack = { state: null, failure: null, lost: null, misses: 0 };
+
+export type InstallEvent =
+  /** The install the server reports when the page opens, taken up only when nothing is shown yet (R3-13). */
+  | { kind: "adopt"; state: InstallState }
+  /** A read of the install, or a start or cancel the server answered: a fresh state, so earlier misses no longer count. */
+  | { kind: "read"; state: InstallState }
+  /** A read that failed. A poll's miss counts toward LOST_AFTER; Check again's (`now`) says so at once. */
+  | { kind: "miss"; failure: PageFailure; now?: true }
+  | { kind: "sent" }
+  | { kind: "command_failed"; failure: PageFailure };
+
+/**
+ * One step of the install's state. A lost read is newer than a start or cancel that failed before it, so it replaces that failure on screen,
+ * and its own failure picks Check again (PR #315 CodeRabbit). A start or cancel the server answered starts the install's state afresh, so a
+ * read that stopped polling earlier never keeps a new install from being followed.
+ */
+export function installTrack(track: InstallTrack, event: InstallEvent): InstallTrack {
+  switch (event.kind) {
+    case "adopt": return track.state === null ? { ...track, state: event.state } : track;
+    case "read": return { ...track, state: event.state, lost: null, misses: 0 };
+    case "miss": {
+      const misses = track.misses + 1;
+      if (event.now !== true && misses < LOST_AFTER) return { ...track, misses };
+      return { ...track, misses, failure: null, lost: installLost(event.failure) };
+    }
+    case "sent": return { ...track, failure: null };
+    case "command_failed": return { ...track, failure: event.failure };
+  }
+}
+
 export function useInstall(token: string, tool: InstallableTool, onDone: () => void): Install {
-  const [state, setState] = useState<InstallState | null>(null);
-  const [failure, setFailure] = useState<PageFailure | null>(null);
-  const [lost, setLost] = useState<ReturnType<typeof installLost> | null>(null);
+  const [track, dispatch] = useReducer(installTrack, INSTALL_IDLE);
+  const { state, failure, lost } = track;
   // A start or a cancel that failed is the newer thing to say; a lost install says so otherwise.
   const shown = failure ?? lost?.failure ?? null;
   const problem = shown?.message ?? null;
@@ -57,11 +89,8 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   done.current = onDone;
   const running = state?.status === "running";
   const reading = running && lost?.keepReading !== false;
-  const misses = useRef(0);
   const read = useCallback((next: InstallState) => {
-    misses.current = 0;
-    setLost(null);
-    setState(next);
+    dispatch({ kind: "read", state: next });
     if (installEnded(next)) done.current();
   }, []);
 
@@ -71,7 +100,7 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
     const controller = new AbortController();
     fetchInstall(token, tool, controller.signal)
       .then((now) => {
-        if (adoptOnMount(now)) setState((shown) => shown ?? now);
+        if (adoptOnMount(now)) dispatch({ kind: "adopt", state: now });
       })
       .catch(() => undefined);
     return () => controller.abort();
@@ -87,8 +116,7 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
         // on screen for ever with nothing said (R10-07).
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
-          misses.current += 1;
-          if (misses.current >= LOST_AFTER) setLost(installLost(pageFailure(err, "keyloom couldn't read the install.")));
+          dispatch({ kind: "miss", failure: pageFailure(err, "keyloom couldn't read the install.") });
         });
     }, POLL_MS);
     return () => {
@@ -100,22 +128,25 @@ export function useInstall(token: string, tool: InstallableTool, onDone: () => v
   const checkAgain = useCallback(() => {
     fetchInstall(token, tool)
       .then(read)
-      .catch((err: unknown) => setLost(installLost(pageFailure(err, "keyloom couldn't read the install."))));
+      .catch((err: unknown) => dispatch({ kind: "miss", failure: pageFailure(err, "keyloom couldn't read the install."), now: true }));
   }, [token, tool, read]);
 
+  // A start or cancel the server answered is the install's state now, so it is taken as a read without ending it: the poll reports the end.
+  const answered = useCallback((next: InstallState) => dispatch({ kind: "read", state: next }), []);
+
   const start = useCallback(() => {
-    setFailure(null);
+    dispatch({ kind: "sent" });
     startInstall(token, tool)
-      .then(setState)
-      .catch((err: unknown) => setFailure(pageFailure(err, "The install could not start.")));
-  }, [token, tool]);
+      .then(answered)
+      .catch((err: unknown) => dispatch({ kind: "command_failed", failure: pageFailure(err, "The install could not start.") }));
+  }, [token, tool, answered]);
 
   const cancel = useCallback(() => {
-    setFailure(null);
+    dispatch({ kind: "sent" });
     cancelInstall(token, tool)
-      .then(setState)
-      .catch((err: unknown) => setFailure(pageFailure(err, "The install could not be stopped.")));
-  }, [token, tool]);
+      .then(answered)
+      .catch((err: unknown) => dispatch({ kind: "command_failed", failure: pageFailure(err, "The install could not be stopped.") }));
+  }, [token, tool, answered]);
 
-  return { state, problem, failure: shown, token, lost: lost !== null, checkAgain, start, cancel };
+  return { state, problem, failure: shown, token, lost: lost?.failure ?? null, checkAgain, start, cancel };
 }

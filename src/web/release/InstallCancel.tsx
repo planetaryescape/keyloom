@@ -26,7 +26,9 @@ export function InstallStopped({ stopped }: { stopped: boolean }) {
  * beside the words is the way on then.
  */
 export function InstallLost({ install }: { install: Install }) {
-  if (install.lost !== true || install.checkAgain === undefined || !retryHelps(install.failure)) return null;
+  // The read that lost track picks the button, not a failed start or cancel shown before it (PR #315 CodeRabbit).
+  const lost = install.lost ?? null;
+  if (lost === null || install.checkAgain === undefined || !retryHelps(lost)) return null;
   return (
     <div className="callout-actions">
       <button type="button" className="button" onClick={install.checkAgain}>
