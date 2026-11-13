@@ -1,9 +1,10 @@
-import { FileText, LoaderCircle } from "lucide-react";
+import { FileText, LoaderCircle, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ServerLog } from "../../api/server-log.ts";
 import { fetchServerLog, showServerLog } from "./api-log.ts";
 import { CopyCommand } from "./CopyCommand.tsx";
-import { SHOW_LOG_LABEL, logWay } from "./log-words.ts";
+import { LOG_READ_FAILED_WORDS, SHOW_LOG_LABEL, logReadRetries, logWay } from "./log-words.ts";
+import { pageFailure } from "./unexpected.ts";
 import { inDesktopApp } from "./server-gone.ts";
 
 /**
@@ -14,15 +15,28 @@ export function ShowLog({ token }: { token: string }) {
   const [log, setLog] = useState<ServerLog | null>(null);
   const [showing, setShowing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // A read that can pass on a second try, such as a lost connection, says so with Try again, so the log never goes missing for good.
+  const [readFailed, setReadFailed] = useState(false);
+  const [reads, setReads] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    setReadFailed(false);
     // An older keyloom has no log route; the page then adds nothing, which is what it showed before.
-    fetchServerLog(token, controller.signal).then(setLog, () => {});
+    fetchServerLog(token, controller.signal).then(setLog, (error: unknown) => {
+      if (!controller.signal.aborted && logReadRetries(pageFailure(error, ""))) setReadFailed(true);
+    });
     return () => controller.abort();
-  }, [token]);
+  }, [token, reads]);
 
   const way = logWay(log, inDesktopApp());
-  if (way === null) return null;
+  if (way === null) {
+    return readFailed ? (
+      <span className="show-log">
+        <span role="alert">{LOG_READ_FAILED_WORDS}</span>
+        <button type="button" className="button" onClick={() => setReads((n) => n + 1)}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+      </span>
+    ) : null;
+  }
   const show = () => {
     setShowing(true);
     setProblem(null);

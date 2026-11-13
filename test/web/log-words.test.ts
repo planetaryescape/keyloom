@@ -1,6 +1,6 @@
 // R8-09: "The details are in keyloom's log." comes with a way to read the log.
 import { expect, test } from "bun:test";
-import { LOG_FILE_WORDS, SHOW_LOG_LABEL, TERMINAL_LOG_WORDS, logWay } from "../../src/web/shell/log-words.ts";
+import { LOG_FILE_WORDS, SHOW_LOG_LABEL, TERMINAL_LOG_WORDS, logReadRetries, logWay } from "../../src/web/shell/log-words.ts";
 import { INTERNAL_WORDS, NOT_FOUND_WORDS } from "../../src/web/shell/unexpected.ts";
 
 test("in the desktop app the log opens with a button, as the app's own problem window does", () => {
@@ -22,4 +22,13 @@ test("a keyloom started in a terminal says the log is that terminal; an older ke
 test("only an exception's words name the log, so only it gets the way to it", () => {
   expect(INTERNAL_WORDS).toContain("keyloom's log");
   expect(NOT_FOUND_WORDS).not.toContain("log");
+});
+
+test("a failed read of where the log is gets Try again only where a second read can pass (PR #305 review)", () => {
+  expect(logReadRetries({ code: "unreachable" })).toBe(true);
+  expect(logReadRetries({ code: "internal" })).toBe(true);
+  expect(logReadRetries({})).toBe(true);
+  // An older keyloom without the route, or one this page can't read: Restart keyloom beside it is the way on.
+  expect(logReadRetries({ code: "not_found" })).toBe(false);
+  expect(logReadRetries({ code: "unreadable" })).toBe(false);
 });

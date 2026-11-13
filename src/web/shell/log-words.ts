@@ -19,3 +19,15 @@ export function logWay(log: ServerLog | null, desktop: boolean): LogWay | null {
   if (log.canShow && desktop) return { show: true, path: null, words: null };
   return { show: log.canShow, path: log.path, words: LOG_FILE_WORDS };
 }
+
+/** A read of where the log is that failed for a reason a second read can pass, such as a lost connection (PR #305 review). */
+export const LOG_READ_FAILED_WORDS = "keyloom couldn't say where its log is.";
+
+/**
+ * Whether a failed read of where the log is gets its words and Try again. Not for a keyloom without the route (keyloom's catch-all
+ * `not_found`) or one that answers in a way this page can't read: reading again fails the same way, and Restart keyloom beside it says what
+ * to do, so the page adds nothing, as it did before the route existed.
+ */
+export function logReadRetries(failure: { code?: string | undefined }): boolean {
+  return failure.code !== "not_found" && failure.code !== "unreadable";
+}

@@ -795,11 +795,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   // One change set from the board or the tabs. A change that would drop the only copy of a function asks first (D-092).
   const change = useChange({ token, layoutRef, revisionId: revision.id, onChanged, onNotShown: showAppliedNotShown, onStale });
 
-  async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean } = {}): Promise<ChangeOutcome> {
+  // `onSuccess` is what the caller does once the change lands. It rides in the options, so the toast's Try again runs it too (PR #305 review).
+  async function perform(ops: ChangeOp[], summary: string, options: { dropReason?: string; quiet?: boolean; onSuccess?: () => void } = {}): Promise<ChangeOutcome> {
     setChanging(true);
     const outcome = await change(ops, summary);
     setChanging(false);
     if (outcome.ok) {
+      options.onSuccess?.();
       // A change that landed but couldn't be shown already has its toast, with Show the new layout (R6-03).
       if (outcome.shown) toasts.show({ kind: "success", message: "Applied", detail: [summary, outcome.warnings[0]].filter(Boolean).join(". ") });
     } else if (outcome.lost.length > 0 && options.dropReason !== undefined) {
@@ -846,10 +848,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           blockedReason: undoBlock,
           add: async () => {
             const added = addLayerChange(layout);
-            const outcome = await perform(added.ops, `Added ${added.name}`);
-            if (!outcome.ok) return;
-            setLayerId(added.layerId);
-            setRenamingId(added.layerId);
+            await perform(added.ops, `Added ${added.name}`, { onSuccess: () => { setLayerId(added.layerId); setRenamingId(added.layerId); } });
           },
           rename: async (id, name) => {
             if (layout.layers.some((candidate) => candidate.id !== id && candidate.name.toLowerCase() === name.toLowerCase())) {
@@ -861,8 +860,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           duplicate: async (id) => {
             const copy = duplicateLayerChange(layout, id);
             if (copy === null) return;
-            const outcome = await perform(copy.ops, `Duplicated ${layerNameOf(id)} as ${copy.name}`);
-            if (outcome.ok) setLayerId(copy.layerId);
+            await perform(copy.ops, `Duplicated ${layerNameOf(id)} as ${copy.name}`, { onSuccess: () => setLayerId(copy.layerId) });
           },
           move: async (id, toIndex) => {
             const ops = moveLayerOps(layout, id, toIndex);
@@ -1081,8 +1079,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     const what = bindingSummary(clipboard.binding, layout);
     // The history line counts the keys that changed, not the ones that already had it.
     const changed = ops.flatMap((op) => (op.op === "setBinding" ? [op.at] : []));
-    const outcome = await perform(ops, pasteSummary(layout, clipboard.binding, changed), { dropReason: `Replaced by pasting ${what}` });
-    if (outcome.ok) setChatSelection(null);
+    await perform(ops, pasteSummary(layout, clipboard.binding, changed), { dropReason: `Replaced by pasting ${what}`, onSuccess: () => setChatSelection(null) });
   }
 
   async function finishSwap(index: number) {
@@ -1095,8 +1092,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     }
     const summaryText = swapSummary(layout, swapping, to);
     setSwapping(null);
-    const outcome = await perform(ops, summaryText);
-    if (outcome.ok) setApplied(to);
+    await perform(ops, summaryText, { onSuccess: () => setApplied(to) });
   }
 
   // A drag from one key onto another swaps them; with Option held it copies instead. Both are on the layer showing.
@@ -1110,8 +1106,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
       return;
     }
     const what = bindingSummary(bindingAt(layout, a) ?? { kind: "none" }, layout);
-    const outcome = await perform(ops, copy ? copySummary(layout, a, b) : swapSummary(layout, a, b), { dropReason: `Replaced by a copy of ${what}` });
-    if (outcome.ok) setApplied(b);
+    await perform(ops, copy ? copySummary(layout, a, b) : swapSummary(layout, a, b), { dropReason: `Replaced by a copy of ${what}`, onSuccess: () => setApplied(b) });
   }
 
   // Quick assign: typed keys go to the selected keys in order and are applied together when the run ends.
@@ -1127,11 +1122,10 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     if (quick === null || quick.length === 0) return;
     const ops = quickAssignOps(quickTargets, quick);
     if (ops === null) return;
-    const outcome = await perform(ops, quickAssignSummary(layout, quickTargets, quick), { dropReason: "Replaced by typing the key" });
-    if (outcome.ok) {
-      setQuick(null);
-      setChatSelection(null);
-    }
+    await perform(ops, quickAssignSummary(layout, quickTargets, quick), {
+      dropReason: "Replaced by typing the key",
+      onSuccess: () => { setQuick(null); setChatSelection(null); },
+    });
   }
 
   // While a run is open the keyboard types into it, ahead of every other shortcut.
