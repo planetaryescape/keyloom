@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.78.2](https://github.com/planetaryescape/keyloom/compare/v0.78.1...v0.78.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* a button whose request fails the same way again goes off, and Restart keyloom leads, in the config dialogs, the import card and the mismatch page ([1ac3aab](https://github.com/planetaryescape/keyloom/commit/1ac3aab794cd1b43111512737cfa1ceafe555bb7))
+* a tall config dialog fits a phone's screen ([dbe1074](https://github.com/planetaryescape/keyloom/commit/dbe10748bb1f8c3b34c844125f895414f61bc4f7))
+* Add refused because another tab added the board offers Put a config on it, not the CLI's sentence ([747a351](https://github.com/planetaryescape/keyloom/commit/747a3510fe84f49c771f0dfc34a8c146df18d4f3))
+* clear a repair request's recheck notice once it is sent, in plain words ([242318a](https://github.com/planetaryescape/keyloom/commit/242318ab0e2e83b6825ff2ff21676e6127a0f02a))
+* drop a build re-read that a newer build or flash overtook ([81b913d](https://github.com/planetaryescape/keyloom/commit/81b913dee9b24f6cf8da49bf61106fc7fa08a7be))
+* follow a new install after reads stopped, and pick Check again from the read that lost track ([699ceb4](https://github.com/planetaryescape/keyloom/commit/699ceb4cf669bd1e696e5fd1bc134e7eb244c2fd))
+* give a reply stopped by keyloom's own exception the log and Restart keyloom ([6c401b9](https://github.com/planetaryescape/keyloom/commit/6c401b9668a4a439a536293c3b74074741460734))
+* give the keycode field a Try again that reads it again ([4edee8c](https://github.com/planetaryescape/keyloom/commit/4edee8c3d18ebf349b642417e3cfe2425339e77f))
+* kanata refusals, ready Docker engines and kept failure codes (round 10, sync and kanata) ([7a0dfaf](https://github.com/planetaryescape/keyloom/commit/7a0dfaf892eb058c8a9476306cc5195a24411d5d))
+* keep a failed Apply's code in Settings, Combos, the tuner and Repeat ([05b7078](https://github.com/planetaryescape/keyloom/commit/05b7078709f6a5fab52293521ecae21abb9609bb))
+* keep failure codes in Build and flash and Replace it, and say when keyloom loses track of an install ([5fe2556](https://github.com/planetaryescape/keyloom/commit/5fe2556ca7018f9cbc300869a3a02673a1a111c9))
+* keep the lab's catch-all and failed-cancel codes ([fd2c401](https://github.com/planetaryescape/keyloom/commit/fd2c4014587765759ea046741ead37c9fbe2ddd8))
+* keep the review's provider switch failure code ([5d9eb84](https://github.com/planetaryescape/keyloom/commit/5d9eb8464760d119923e590359853ec26b8ab041))
+* name a ready Docker's engine only from what the daemon or its context says ([00f83b2](https://github.com/planetaryescape/keyloom/commit/00f83b2ef09326a749456e25d49f76892dcdd550))
+* name the app macOS lists for a flashing permission, and keep the settings path under Details ([fd3062a](https://github.com/planetaryescape/keyloom/commit/fd3062aa0c42f41306a78e018cd98ddca7ac651c))
+* name the Docker engine behind a ready Docker, so a full disk on Docker Desktop offers its settings ([66426e4](https://github.com/planetaryescape/keyloom/commit/66426e4970ba704b3fcee16ef67777390a4e0331))
+* no dead ends in chat, the editor's panes, the lab and the review (round 10) ([b9d1bbe](https://github.com/planetaryescape/keyloom/commit/b9d1bbe5d70a62c72ba05338827d57c9fbd9d38c))
+* no dead ends in keyboards, configs, import and first run (round 10) ([d12a082](https://github.com/planetaryescape/keyloom/commit/d12a082ecc8c88a1c9bfa615839daf6dd4e56c42))
+* Not now on a plugged-in keyboard's card survives a config switch, and the card waits while the review or a dialog is open ([575efd5](https://github.com/planetaryescape/keyloom/commit/575efd50aba602f0606a71265b59f52a4de93690))
+* offer Undo only when one step reaches kanata's layout, and say kanata refused only when it did ([93d19b4](https://github.com/planetaryescape/keyloom/commit/93d19b4b12b1803bb5efb7ccc7c863802c75186e))
+* offer your other layouts from a re-read toast whose layout is gone, and keep the validator's plain words for a refused lab fix ([f7f0699](https://github.com/planetaryescape/keyloom/commit/f7f0699062436c881eefd1175d91f19b59a12ea5))
+* offer your other layouts when a layout was deleted elsewhere ([f578657](https://github.com/planetaryescape/keyloom/commit/f5786579c134d54c3c2c233f3df9cb58988d3fa9))
+* open a held setup card when a dialog closes, and keep the board chip after Not now ([a87600f](https://github.com/planetaryescape/keyloom/commit/a87600fad379daf73e0f8bc364ccff6f7b217a5f))
+* read readiness again after a start instead of naming the engine it started ([2ede2f7](https://github.com/planetaryescape/keyloom/commit/2ede2f7ff8a44cee1ce138acd509270e6703451b))
+* say a lab fix was never proposed, and stop a repair request whose conversation or layout is gone ([a3fac42](https://github.com/planetaryescape/keyloom/commit/a3fac42d24899884935766e14d4ba601a9b11b4f))
+* say when kanata refuses keyloom's config and offer Undo or the keyboard's status ([353ff65](https://github.com/planetaryescape/keyloom/commit/353ff656ed4532d8d1fb3dfd827f248691389fb1))
+* say why the checks refused a lab fix and offer Type again ([fb0a9a2](https://github.com/planetaryescape/keyloom/commit/fb0a9a2057c02191d558eedd08c7d8f76b04c4a8))
+* show Build firmware when a re-read finds the build gone ([5457e8a](https://github.com/planetaryescape/keyloom/commit/5457e8a68f4fbff622cafb683a8aa9385599c260))
+* show only the no-built-in-keyboard note on a Mac without one ([52efa59](https://github.com/planetaryescape/keyloom/commit/52efa5947942779508e7b5245633ab7e7f9c3b49))
+* stop the layout re-read toasts from reading again for ever ([79cf757](https://github.com/planetaryescape/keyloom/commit/79cf757afbc69e6a4192010c4208b20f23e0744d))
+* the QMK and ZMK search and Restore {board} keep a failure's code, and don't repeat a request that fails the same way ([feb5395](https://github.com/planetaryescape/keyloom/commit/feb5395873c66037db503574e592a98fcba7be35))
+* the setup card says keyloom has no config for the keyboard, and the welcome's lead points below only when the list shows ([0873a25](https://github.com/planetaryescape/keyloom/commit/0873a25b5d14f526c83babb5602ce17d99b30e59))
+* turn the other Forget buttons back on after one lands ([6275df4](https://github.com/planetaryescape/keyloom/commit/6275df4fc0c8dc2379dafbd5a179290bf2efc8e9))
+
 ## [0.78.1](https://github.com/planetaryescape/keyloom/compare/v0.78.0...v0.78.1) (2026-11-13)
 
 
