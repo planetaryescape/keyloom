@@ -34,7 +34,7 @@ export function EmptyChat({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-type Setup = { token: string; status: ChatProviderStatus | null; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
+type Setup = { token: string; status: ChatProviderStatus | null; reading?: boolean; onChanged: (status: ChatProviderStatus) => void; onReload: () => void };
 type ProviderId = ChatProviderStatus["providers"][number]["id"];
 /** The refused message: the provider its conversation is pinned to, and how to send it again or move it to a ready provider. */
 type Retry = { pinned: ProviderId | null; onRetry?: (() => void) | undefined; onSwitch?: ((id: ProviderId) => void) | undefined };

@@ -223,18 +223,31 @@ interface Props {
   only?: readonly Provider["id"][];
   /** Opens this provider's field over a saved key, after the provider refused it. */
   replacing?: Provider["id"] | null;
+  /** The status is being read: with no status yet, that is a wait, not a failure (R8-16). */
+  reading?: boolean;
 }
+
+/** What setup says before it has a status (R8-16): a read on its way opens setup when it ends; only a read that ended without one failed. */
+export const SETUP_READING_WORDS = "keyloom is still reading which models are set up.";
+export const SETUP_UNREAD_WORDS = "keyloom couldn't read which models are set up.";
 
 /**
  * The one place a model is set up (D-496): paste an Anthropic or OpenRouter key, which keyloom checks and keeps in the system
  * keyring, or sign in with Codex. Chat, the picker, the review and the account failures all lead here. A saved key is used from
  * the next message, with no restart. While Codex sign-in waits, `useProviderStatus` polls, so this stays a view.
  */
-export function ModelSetup({ token, status, onChanged, onReload, only, replacing = null }: Props) {
+export function ModelSetup({ token, status, onChanged, onReload, only, replacing = null, reading = false }: Props) {
+  if (status === null && reading) {
+    return (
+      <div className="setup-unread" role="status">
+        <p><LoaderCircle size={14} className="spin" aria-hidden="true" /> {SETUP_READING_WORDS}</p>
+      </div>
+    );
+  }
   if (status === null) {
     return (
       <div className="setup-unread" role="alert">
-        <p>keyloom couldn't read which models are set up.</p>
+        <p>{SETUP_UNREAD_WORDS}</p>
         <button type="button" className="button" onClick={onReload}>
           <RefreshCw size={14} aria-hidden="true" />
           Try again

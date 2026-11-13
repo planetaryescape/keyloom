@@ -1,6 +1,8 @@
-import { ArrowLeft, LoaderCircle, MessageSquareText, RefreshCw } from "lucide-react";
+import { ArrowLeft, LoaderCircle, MessageSquareText } from "lucide-react";
 import { useState } from "react";
 import type { ConversationSummary } from "../../api/http.ts";
+import { RetryOrRestart, UnexpectedWayOut } from "../shell/UnexpectedWayOut.tsx";
+import type { PageFailure } from "../shell/unexpected.ts";
 import type { History } from "./useChat.ts";
 
 const when = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -14,17 +16,18 @@ const outcomeWords = (outcome: Outcome): string =>
 const wholeWords = (title: string): string => (title.length >= 60 && !title.endsWith("…") && title.includes(" ") ? `${title.slice(0, title.lastIndexOf(" "))}…` : title);
 
 interface Props {
+  token: string;
   history: History;
   currentId: string | null;
   onBack: () => void;
   onReload: () => void;
-  /** Null means open; undefined means canceled or replaced; a string is an error. */
-  onOpen: (id: string) => Promise<string | null | undefined>;
+  /** Null means open; undefined means canceled or replaced; anything else is the failure. */
+  onOpen: (id: string) => Promise<PageFailure | null | undefined>;
 }
 
-export function ConversationList({ history, currentId, onBack, onReload, onOpen }: Props) {
+export function ConversationList({ token, history, currentId, onBack, onReload, onOpen }: Props) {
   const [opening, setOpening] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<PageFailure | null>(null);
 
   async function open(id: string) {
     setOpening(id);
@@ -40,13 +43,19 @@ export function ConversationList({ history, currentId, onBack, onReload, onOpen 
         <ArrowLeft size={14} aria-hidden="true" />
         Back to chat
       </button>
-      {failure === null ? null : <p className="chat-inline-error" role="alert">{failure}</p>}
+      {failure === null ? null : (
+        // The row stays pressable, so it is the Try again; an answer that fails the same way every time also gets Restart keyloom (R8-03).
+        <div className="chat-inline-error" role="alert">
+          <p>{failure.message}</p>
+          <UnexpectedWayOut token={token} failure={failure} />
+        </div>
+      )}
       {history.status === "loading" || history.status === "idle" ? (
         <p className="muted" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading conversations…</p>
       ) : history.status === "error" ? (
         <div className="chat-inline-error" role="alert">
           <p>{history.message}</p>
-          <button type="button" className="button" onClick={onReload}><RefreshCw size={14} aria-hidden="true" />Try again</button>
+          <RetryOrRestart token={token} failure={history} onRetry={onReload} />
         </div>
       ) : history.items.length === 0 ? (
         <p className="muted">No earlier conversations about this layout yet.</p>

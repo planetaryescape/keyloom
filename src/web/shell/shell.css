@@ -1685,3 +1685,8 @@ a.menu-item {
   align-items: center;
   gap: var(--space-2);
 }
+
+/* A failure opened from a toast's Restart keyloom (R8-03): the sentence in the error colour, its buttons in the foot. */
+.restart-dialog .layer-dialog-lead[data-tone="error"] {
+  color: var(--color-error);
+}

@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ChangeOp } from "../../layout/change.ts";
 import { ApiError } from "../api.ts";
 import { applyChange } from "../api-write.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { lostFunctionsIn } from "./lost-functions.ts";
 import { readAfterApply } from "./read-after-apply.ts";
 
@@ -9,7 +10,7 @@ export type ChangeOutcome =
   // `shown` is false when the change was written but the new layout couldn't be read back; `onNotShown` has already said so (R6-03).
   | { ok: true; warnings: string[]; shown: boolean }
   // `lost` holds the functions the change would drop when that is the only thing wrong with it: the person can choose to drop them (D-092).
-  | { ok: false; message: string; problems: string[]; lost: string[]; stale: boolean };
+  | { ok: false; message: string; problems: string[]; lost: string[]; stale: boolean; failure?: PageFailure };
 
 interface Input {
   token: string;
@@ -48,7 +49,9 @@ export async function applyOps({ token, layoutRef, revisionId, onChanged, onNotS
       const onlyLost = lost.length > 0 && lost.length === error.validation.errors.length;
       return refused("keyloom refused this change. Nothing was saved.", { problems, lost: onlyLost ? lost.map((entry) => entry.function) : [] });
     }
-    return refused(error instanceof Error ? error.message : "The change could not be applied.");
+    // Kept whole, so an answer that fails the same way every time offers Restart keyloom, not just its words (R8-03).
+    const failure = pageFailure(error, "The change could not be applied.");
+    return refused(failure.message, { failure });
   }
 }
 

@@ -9,6 +9,7 @@ export type OpenRequestedView = (view: AgentView, signal: AbortSignal) => Promis
 export type ChatDrafts = NonNullable<ChatRequest["drafts"]>;
 import { ApiError } from "../api.ts";
 import { removeOrGone } from "../api-write.ts";
+import { type PageFailure, pageFailure } from "../shell/unexpected.ts";
 import { cancelSavedRequest, cancelSavedRun, fetchConversation, fetchConversations, forgetPriority, latestSavedRun, observeSavedRun, startSavedChat, streamObservedChat } from "./api-chat.ts";
 import { EMPTY, isStreaming, lastUser, transcriptReducer, type Action, type AssistantTurn } from "./transcript.ts";
 
@@ -22,7 +23,7 @@ export type History =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; items: ConversationSummary[] }
-  | { status: "error"; message: string };
+  | ({ status: "error" } & PageFailure);
 
 function classify(error: unknown): Problem {
   if (error instanceof ApiError) {
@@ -292,13 +293,13 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     try {
       setHistory({ status: "ready", items: await fetchConversations(token, layoutRef, new AbortController().signal) });
     } catch (error) {
-      setHistory({ status: "error", message: error instanceof Error ? error.message : "Couldn't load your conversations." });
+      setHistory({ status: "error", ...pageFailure(error, "Couldn't load your conversations.") });
     }
   }, [token, layoutRef]);
 
-  /** Resolves to null once showing, an error message on failure, or undefined if canceled or replaced. */
+  /** Resolves to null once showing, the failure, or undefined if canceled or replaced. */
   const open = useCallback(
-    async (id: string): Promise<string | null | undefined> => {
+    async (id: string): Promise<PageFailure | null | undefined> => {
       viewLife.current?.abort();
       handoff.current = undefined;
       controller.current?.abort();
@@ -322,7 +323,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
       } catch (error) {
         if (controller.current !== mine || mine.signal.aborted) return undefined;
         controller.current = null;
-        return error instanceof Error ? error.message : "Couldn't open that conversation.";
+        return pageFailure(error, "Couldn't open that conversation.");
       }
     },
     [token, storageKey, observe],

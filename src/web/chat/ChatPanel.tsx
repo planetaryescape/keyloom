@@ -471,7 +471,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
   // A conversation keeps its provider, so switching after an account failure starts a new one with the failed message back in the box.
   const usedProvider = transcript.pinned?.provider ?? status?.active?.provider;
   const readyOthers = (status?.providers ?? []).filter((p) => p.ready && p.id !== usedProvider).map((p) => ({ id: p.id, name: PROVIDER_NAMES[p.id] }));
-  const setup = { token, status, onChanged: provider.replace, onReload: reloadProvider };
+  const setup = { token, status, reading: provider.reading, onChanged: provider.replace, onReload: reloadProvider };
   // A message refused for a missing key stays in the box; a ready provider takes it in a new conversation, sent when BK is ready.
   // Every switch says when it fails, and can be asked again (R4-18); until it succeeds nothing else changes.
   const choose = (id: keyof typeof PROVIDER_NAMES, then: () => void) => {
@@ -506,7 +506,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     if (id === null) return;
     const failed = await chat.open(id);
     // null: shown; undefined: replaced by another open, which says its own outcome.
-    if (failed !== null && failed !== undefined) throw new Error(failed);
+    if (failed !== null && failed !== undefined) throw new Error(failed.message);
   };
 
   // A revised-proposal request that went out of date (R7-14): the proposal's card holds the recovery action, so this drops the request and
@@ -515,7 +515,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     if (source.conversationId !== undefined && source.conversationId !== transcript.conversationId) {
       const failed = await chat.open(source.conversationId);
       if (failed === undefined) return;
-      if (failed !== null) { setRecoveryNotice(`keyloom couldn't open that proposal's conversation. ${failed} Your request is kept.`); return; }
+      if (failed !== null) { setRecoveryNotice(`keyloom couldn't open that proposal's conversation. ${failed.message} Your request is kept.`); return; }
     }
     setRecoveryNotice(null);
     onRepairSent?.(id);
@@ -619,6 +619,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
 
       {view === "decisions" ? (
         <DecisionsView
+          token={token}
           state={decisions.state}
           layout={layout}
           onBack={() => setView("chat")}
@@ -634,6 +635,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         />
       ) : view === "history" ? (
         <ConversationList
+          token={token}
           history={chat.history}
           currentId={transcript.conversationId}
           onBack={() => setView("chat")}

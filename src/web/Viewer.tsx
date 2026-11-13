@@ -11,8 +11,9 @@ import { bindingLegend } from "../layout/legend.ts";
 import type { ApplyResponse, BoardChoice, ChatPresentation, ChatSelection, LayoutDetail, LayoutSummary as Summary, ProposalCard } from "../api/http.ts";
 import { describeKey } from "../layout/describe.ts";
 import { ApiError } from "./api.ts";
+import { RestartDialog } from "./shell/RestartDialog.tsx";
 import { RestartKeyloom } from "./shell/RestartKeyloom.tsx";
-import { unexpectedWayOut } from "./shell/unexpected.ts";
+import { type PageFailure, unexpectedWayOut, wayOutFor } from "./shell/unexpected.ts";
 import { request, undoChange, upgradeStoredLayout } from "./api-write.ts";
 import { CollectionKeyboardSchema } from "../api/keyboards.ts";
 import { useBarFit } from "./chat/bar-fit.ts";
@@ -341,6 +342,8 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   const [selectMode, setSelectMode] = useState(false);
   const [quick, setQuick] = useState<readonly string[] | null>(null);
   const [pendingDrop, setPendingDrop] = useState<{ ops: ChangeOp[]; summary: string; lost: string[]; reason: string } | null>(null);
+  // A board change that hit a failure no screen planned for, opened from its toast's Restart keyloom (R8-03).
+  const [unexpected, setUnexpected] = useState<{ failure: PageFailure; retry?: () => void } | null>(null);
   const [changing, setChanging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const keyboard = useRef<KeyboardHandle>(null);
@@ -800,7 +803,13 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
     } else if (outcome.lost.length > 0 && options.dropReason !== undefined) {
       setPendingDrop({ ops, summary, lost: outcome.lost, reason: options.dropReason });
     } else if (options.quiet !== true && !outcome.stale) {
-      toasts.show({ kind: "error", message: outcome.message, detail: outcome.problems.slice(0, 2).join(" ") });
+      // An answer that fails the same way every time, or an exception, needs Restart keyloom, which can't live in a toast (R8-03).
+      const failure = outcome.failure;
+      const way = failure === undefined ? null : wayOutFor(failure, true);
+      const restart = failure === undefined || way === null
+        ? {}
+        : { action: { label: "Restart keyloom", run: () => setUnexpected({ failure, ...(way.retry ? { retry: () => void perform(ops, summary, options) } : {}) }) } };
+      toasts.show({ kind: "error", message: outcome.message, detail: outcome.problems.slice(0, 2).join(" "), ...restart });
     }
     return outcome;
   }
@@ -2556,6 +2565,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           onClose={() => setConfigDialog(null)}
         />
       ) : null}
+      {unexpected === null ? null : (
+        <RestartDialog token={token} title="keyloom couldn't make that change" failure={unexpected.failure} {...(unexpected.retry === undefined ? {} : { onRetry: unexpected.retry })} onClose={() => setUnexpected(null)} />
+      )}
       {pendingDrop === null ? null : (
         <DropConfirm
           summary={pendingDrop.summary}
