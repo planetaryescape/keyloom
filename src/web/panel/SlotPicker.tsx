@@ -66,7 +66,7 @@ export function SlotPicker({
   const optionId = (item: PickerItem) => `${id}-${item.id}`;
 
   useEffect(() => {
-    if (autoFocus) input.current?.focus();
+    if (autoFocus) input.current?.focus({ preventScroll: true });
   }, [autoFocus]);
 
   // A new tab or search starts the cursor at the first tile, which is what Enter takes.

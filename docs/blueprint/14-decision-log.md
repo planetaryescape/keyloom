@@ -3377,3 +3377,11 @@ The flash confirmation uses `--surface-2` and `--line-2`, with its warning icon 
 ### D-602: A key-card label that cannot fit keeps its full name below the key. Extends D-600. (2026-11-13)
 
 Firmware identifiers can exceed the key's height even after wrapping at the font floor. The card measures the rendered label as fonts load and the preview resizes. When the full label cannot fit, the cap shows its plain legend. If that also cannot fit, it shows "Tap". A separate caption below the cap and modifier controls prints the full name, without truncation. The slot's tooltip and accessible name also keep it. Ordinary labels stay on the cap.
+
+### D-603: Advanced board prints that cannot fit use the plain tap legend. Extends D-101 and D-602. (2026-11-13)
+
+The board measures firmware text against its actual face, including height. If the full print cannot fit at the legend floor, the cap shows its plain tap legend. If that also cannot fit, it shows an explicit detail marker (`…`). The tooltip and accessible description retain the full firmware name. Opening the key card shows the full name, with D-602's caption when needed. The stored binding stays unchanged. This replaces clipped firmware fragments on small and upright thumb keys.
+
+### D-604: Opening a key picker on a phone expands the existing sheet and keeps the preview visible. (2026-11-13)
+
+The picker opens with the card body at its top. Search keeps keyboard focus without scrolling. The phone sheet uses its existing full height so the compact key and search fit together. The sheet's resize controls still work. Scrolling the entire picker into view hid the key behind the card heading, so that behavior is replaced.

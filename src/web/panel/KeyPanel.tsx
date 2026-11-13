@@ -89,6 +89,8 @@ interface Props {
   advanced: boolean;
   /** Focus the picker when the panel was just opened by a click or Enter; false when it followed the selection. */
   autoFocus: boolean;
+  /** Make room for the key preview and picker on a narrow screen. */
+  onPickerOpen?: () => void;
   /** The person tried to select another key while this draft had unsaved changes. */
   blocked: boolean;
   onDraft: (state: DraftState) => void;
@@ -133,7 +135,7 @@ type OpenPicker = { slot: SlotName; tab: PickerTab } | null;
 // applied change starts it fresh from the saved layout.
 export function KeyPanel(props: Props) {
   const {
-    token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, blocked, onDraft, resume, placements, placing,
+    token, layoutRef, layout, revisionId, layerId, position, finger, homeRow, advanced, autoFocus, onPickerOpen, blocked, onDraft, resume, placements, placing,
     onPlace, onUnplace, onClose, onApplied, onTuned, onStale, onShowLatest, onShowLayer, actions, actionsNote = null, notice, keycap, led, reach, onPointAt, handle,
   } = props;
   const layerIndex = layout.layers.findIndex((layer) => layer.id === layerId);
@@ -332,13 +334,14 @@ export function KeyPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picker]);
 
-  // Opening a picker brings it into view inside the card, which may be short in a small window.
+  // Keep the edited key visible. Scrolling the whole picker into view hides the hero on short screens.
   const pickerSlot = picker?.slot ?? null;
   useEffect(() => {
     if (pickerSlot === null) return;
-    const frame = window.requestAnimationFrame(() => root.current?.querySelector(".card-picker")?.scrollIntoView({ block: "nearest" }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [pickerSlot]);
+    onPickerOpen?.();
+    const scroller = root.current?.querySelector(".card-scroll");
+    if (scroller !== null && scroller !== undefined) scroller.scrollTop = 0;
+  }, [pickerSlot, onPickerOpen]);
 
   if (draft === null || layer === undefined || original === undefined) return null;
 

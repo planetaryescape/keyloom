@@ -1,0 +1,44 @@
+{
+  "release": "v0.80.1",
+  "verifiedAt": "2026-11-13T18:26:03.708816+00:00",
+  "sourceCommit": "8fcb1829e5f685efc91ab0652c229c503f6c1a15",
+  "sourceTree": "fce2296491b9f9c011f8dad8c515549d56a750f6",
+  "uiMerge": "4fff2c57aee7e356495e88eed4d0ff2000303525",
+  "testedUiHead": "a9b29b2024de610d243fcddec1ba28b5d9504418",
+  "workflows": {
+    "releaseCi": 43477771276,
+    "uiPostMergeCi": 43477684655,
+    "releasePostMergeCi": 43479077228,
+    "publication": 43479077313,
+    "all": "success"
+  },
+  "desktopZipSha256": "dc017c56f5731f231bfe125e9ae96c035c4376c4ddf2065c584abaee42dd5fbc",
+  "installedCliSha256": "a415c51127b092814b65e87f60af1db67d8e6de97507ff626c7aea290a291cee",
+  "delivery": "unchanged signed desktop sidecar",
+  "standaloneCli": {
+    "checksumVerified": true,
+    "strictSignaturePassed": false,
+    "issue": "docs/issues/standalone-macos-cli-signature.md"
+  },
+  "installedVersions": {
+    "desktop": "0.80.1",
+    "cli": "0.80.1",
+    "liveServer": "0.80.1"
+  },
+  "strictAppSignature": true,
+  "strictCliDeveloperIdSignature": true,
+  "gatekeeper": "Notarized Developer ID",
+  "installedBundleMatchesArchive": true,
+  "normalQuitAndReopen": true,
+  "restoredView": "Corne Choc Pro BT / Default layer / dark / no key card",
+  "layoutHeadsUnchanged": 9,
+  "revisionDocumentsUnchanged": 35,
+  "flashRecordsUnchanged": 31,
+  "hardwareWrites": false,
+  "localResigning": false,
+  "round2Pending": [
+    "Compact board labels",
+    "Phone picker focus scrolling"
+  ],
+  "evidenceOwner": "keyloom-design-review/release-0.80.1/evidence"
+}

@@ -1829,6 +1829,9 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
   }, [viewRequest, sidebar]);
   useEffect(() => () => viewRequest?.resolve({ version: 1, status: "unavailable", reason: "cancelled" }), [viewRequest]);
 
+  const expandKeyPicker = useCallback(() => {
+    if (narrow) setSheet("full");
+  }, [narrow]);
   if (layer === undefined) return null;
   function repairState(): "current" | "checking" | "stale" {
     if (repairDraft === null || revision.id !== repairDraft.headRevisionId) return "stale";
@@ -1956,6 +1959,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
                 homeRow={(board.rows.home ?? []).includes(editing.position)}
                 advanced={advanced}
                 autoFocus={editing.focus}
+                onPickerOpen={expandKeyPicker}
                 blocked={blocked}
                 onDraft={(next) => {
                   setDraft(next);

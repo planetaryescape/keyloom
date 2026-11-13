@@ -1,6 +1,6 @@
 import { Bookmark, Check } from "lucide-react";
 import { animate } from "motion";
-import { useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from "react";
 import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
 import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
@@ -14,6 +14,8 @@ type CapLegend = Pick<Legend, "tap" | "hold" | "double" | "tapHold">;
 interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"> {
   tone: Tone;
   legend: CapLegend;
+  /** Plain tap legend when the full firmware print cannot fit. */
+  compactTap?: string;
   /** Pixels per key unit. */
   unit: number;
   /** The smallest legend, in px; phones allow 10 (18#legends-stay-readable). */
@@ -83,9 +85,32 @@ function shortenToFit(text: string | null, width: number, px: { unit: number; fl
 }
 
 /** The printing on one cap: the tap on the top face, the hold (or a tap dance's double tap) printed on the front skirt. */
-function Print({ legend, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: FrontMode; className: string }) {
+function Print({ legend, compactTap, unit, width, floorPx, reach, breakable, symbols, className }: { legend: CapLegend; compactTap?: string | undefined; unit: number; width: number; floorPx: number | undefined; reach: string | null | undefined; breakable: boolean; symbols: FrontMode; className: string }) {
+  const printRef = useRef<HTMLSpanElement>(null);
+  const [detail, setDetail] = useState(false);
+  const [compactFits, setCompactFits] = useState(false);
+  useLayoutEffect(() => {
+    const print = printRef.current;
+    if (!breakable || print === null) { setDetail(false); return; }
+    const tap = print.querySelector<HTMLElement>(".cap-tap:not(.cap-compact-probe)");
+    const face = print.querySelector<HTMLElement>(".cap-face");
+    const front = print.querySelector<HTMLElement>(".cap-front");
+    const compact = print.querySelector<HTMLElement>(".cap-compact-probe");
+    const check = () => {
+      setCompactFits(compact !== null && face !== null && compact.scrollWidth <= face.clientWidth + 1 && compact.offsetHeight <= face.clientHeight + 1);
+      setDetail(
+        (tap !== null && face !== null && (tap.scrollWidth > face.clientWidth + 1 || tap.offsetHeight > face.clientHeight + 1)) ||
+        (front !== null && front.scrollWidth > front.clientWidth + 1),
+      );
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    for (const element of [print, face, tap, front, compact]) if (element !== null) observer.observe(element);
+    return () => observer.disconnect();
+  }, [breakable, legend.tap, legend.hold, legend.double, compactTap, unit, width, floorPx]);
   const floor = floorPx === undefined ? {} : { floor: floorPx };
   const tap = fitLegend(legend.tap, width, tapRange(legend.tap), { unit, ...floor }, isCondensed(legend.tap));
+  const compactFit = fitLegend(compactTap ?? "…", width, tapRange(compactTap ?? "…"), { unit, ...floor }, isCondensed(compactTap ?? "…"));
   const holdText = legend.hold === undefined ? null : frontWords(legend.hold, symbols);
   const doubleText = legend.double === undefined ? null : `2× ${legend.double}`;
   // The front carries the hold; a tap dance with no hold prints its double tap there instead, and with a hold, in the top corner.
@@ -101,8 +126,10 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
   const frontSize = front === null ? 0 : (showDot && withDot !== null ? withDot : fitLegend(front, width, HOLD_SIZE, { unit, ...floor }, true)).size;
   const stretch = isCondensed(legend.tap) ? "condensed" : undefined;
   return (
-    <span className={className}>
+    <span ref={printRef} className={className} data-detail={detail} data-firmware={breakable}>
       <span className="cap-face">
+        {breakable && compactTap !== undefined ? <span className="cap-tap cap-compact-probe" data-stretch={isCondensed(compactTap) ? "condensed" : undefined} style={{ fontSize: compactFit.size * unit }} aria-hidden="true">{withSpaceMark(compactTap)}</span> : null}
+        {detail ? <span className="cap-detail" style={compactFits ? { fontSize: compactFit.size * unit } : undefined} data-stretch={isCondensed(compactTap ?? "") ? "condensed" : undefined} aria-hidden="true">{compactFits && compactTap !== undefined ? withSpaceMark(compactTap) : "…"}</span> : null}
         {legend.tap === "" ? null : (
           <span className="cap-tap" data-stretch={stretch} style={{ fontSize: tap.size * unit }}>
             {breakable ? breakAtSeams(legend.tap) : withSpaceMark(legend.tap)}
@@ -125,7 +152,7 @@ function Print({ legend, unit, width, floorPx, reach, breakable, symbols, classN
 // the legends printed on the top and the front. Kind is not drawn at rest; Inspect tints the face by kind (D-264). The selection,
 // draft and remembered marks are each their own element so they can show together.
 export function Cap({
-  tone, legend, unit, floorPx, width, as = "button", legendTurn, printBox, keycap, led, reach, outgoing = null,
+  tone, legend, compactTap, unit, floorPx, width, as = "button", legendTurn, printBox, keycap, led, reach, outgoing = null,
   rippleMs = 0, frontMode = "both", pressed, pending = false, remembered = false, breakable = false, shape, style, ...rest
 }: CapProps) {
   const body = useRef<HTMLSpanElement>(null);
@@ -142,9 +169,11 @@ export function Cap({
 
   const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg`, ...(printBox === undefined ? {} : { "--print-w": `${printBox.w * unit}px`, "--print-h": `${printBox.h * unit}px` }) } as CSSProperties);
   const print = (value: CapLegend, className: string) => (
-    <Print legend={value} unit={unit} width={printBox?.w ?? width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
+    <Print legend={value} compactTap={value === legend ? compactTap : undefined} unit={unit} width={printBox?.w ?? width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
+  const source = breakable ? [legend.tap, legend.hold, legend.double].filter((text) => text !== undefined).join(" / ") : null;
+  const sourceTitle = source === null ? rest.title : `${rest.title ?? ""}\n${source}\nOpen the key card for the full firmware name.`;
   // A shaped cap is clipped to its outline: the body, its dished top (inset as .cap-top is) and the light under it. Rings can't be a
   // box-shadow on a clipped body, so the outline is also drawn as a line for the focus and selection states to colour.
   const clip = (x: number, y: number, w: number, h: number, r: number) => (shape === undefined ? undefined : `path("${shapePath(shape.outline, x, y, w, h, r)}")`);
@@ -193,7 +222,7 @@ export function Cap({
     );
   }
   return (
-    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-shaped={shape !== undefined} data-upright={legendTurn !== undefined} style={capStyle} {...rest}>
+    <button type="button" className="cap" data-tone={tone} data-led={led !== undefined} data-keycap={keycap} data-shaped={shape !== undefined} data-upright={legendTurn !== undefined} style={capStyle} {...rest} title={sourceTitle} aria-description={source ?? rest["aria-description"]}>
       {children}
     </button>
   );

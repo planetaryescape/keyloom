@@ -39,3 +39,11 @@ The PR review reproduced a second overflow at `3ca47000`: a long Kanata tap-danc
 The card now measures the rendered label with `ResizeObserver`. A label that cannot fit uses the plain tap legend on the key and keeps its full name in a separate caption below the controls (D-602). The measurement remains live when fonts load, the preview resizes or the binding changes. The plain legend also gets a fit check.
 
 `test/web/hero-cap-fit.fixture.html` runs browser checks on the real component and bundled font. It covers both sizes, filled corners, long identifiers, unbroken text, full captions, accessible names and changes between long and short labels. The same fixture fails against the prior component on the long identifier.
+
+## Compact board prints keep the source available
+
+The follow-up at release `v0.80.1` (`8fcb1829`) reproduced eight clipped Advanced tap prints on the Moonlander at 390×844. The board now measures the full print against the rendered face. A print that cannot fit shows the plain tap legend, or `…` if that also cannot fit. Hover exposes the unchanged source. The accessible description carries it too. Opening the key card reveals the full name. D-603 records the policy.
+
+`test/web/board-cap-fit.fixture.html` exercises the real cap and bundled font with nine names, an unbounded plain label, live resizing and accessible source checks. Repeat the real editor flow above on both phone halves and a desktop. Check the full-name tooltip and open the key card from a compact print.
+
+Opening a picker now expands the existing phone sheet to full height. Its body starts at the compact preview and search receives focus without scrolling. Type a search, move through results with arrows, and close with Escape. The preview and search must both remain visible. D-604 records this behavior.
