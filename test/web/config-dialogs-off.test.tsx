@@ -1,4 +1,4 @@
-// R10-05: the config dialogs' turned-off state, driven through the real components. A confirm that keyloom answers with its catch-all
+// R10-05 and R10-07: the config dialogs' and Restore {board}'s turned-off state, driven through the real components. A confirm that keyloom answers with its catch-all
 // `not_found` or an unreadable answer would fail the same way if pressed again, so it goes off and Restart keyloom is the primary button.
 // An exception can pass on a second try, so its confirm stays and stays primary. happy-dom gives React a document; fetch is a fake that
 // answers only the restart info, the log's place and the versions list, so nothing reaches a server.
@@ -28,6 +28,7 @@ const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { ApiError } = await import("../../src/web/api.ts");
 const { ConfirmDialog, DeleteConfigDialog, NewConfigDialog, RenameDialog } = await import("../../src/web/configs/ConfigDialogs.tsx");
+const { RestoreKeyboard } = await import("../../src/web/keyboards/RestoreKeyboard.tsx");
 const { INTERNAL_WORDS, NOT_FOUND_WORDS, UNREADABLE_WORDS } = await import("../../src/web/shell/unexpected.ts");
 
 const mismatch = () => new ApiError(404, NOT_FOUND_WORDS, { code: "not_found", generic: true });
@@ -171,5 +172,25 @@ describe("DeleteConfigDialog", () => {
     await type("#config-delete", "Old");
     await press("Delete Old");
     expect(after("Delete Old")).toEqual({ confirmShown: true, confirmOff: false, restartPrimary: false });
+  });
+});
+
+// R10-07: Restore {board} beside a config refused for a removed keyboard keeps its failure's code.
+describe("RestoreKeyboard", () => {
+  const restore = (fails: () => Error) => (
+    <RestoreKeyboard token="t" restore={async () => { throw fails(); }} boardName="Glove80" doing="make this config" onRestored={() => {}} />
+  );
+
+  test("a restore keyloom answers unreadably turns Restore off and makes Restart keyloom primary", async () => {
+    await mount(restore(unreadable));
+    await press("Restore Glove80");
+    expect(document.body.textContent).toContain(`keyloom couldn't restore the Glove80. ${UNREADABLE_WORDS}`);
+    expect(after("Restore Glove80")).toEqual({ confirmShown: true, confirmOff: true, restartPrimary: true });
+  });
+
+  test("an exception keeps Restore as the Try again, with Restart keyloom beside it", async () => {
+    await mount(restore(exception));
+    await press("Restore Glove80");
+    expect(after("Restore Glove80")).toEqual({ confirmShown: true, confirmOff: false, restartPrimary: false });
   });
 });

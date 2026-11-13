@@ -141,8 +141,9 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
   // The Put step's map that failed replaces "Mapping it…"; Try again reads it again (R6-05).
   const [putFailure, setPutFailure] = useState<PutProblem | null>(null);
   const [putAttempt, setPutAttempt] = useState(0);
-  // A failed QMK and ZMK search, apart from other problems, so its alert carries Search again (R6-19).
-  const [searchProblem, setSearchProblem] = useState<string | null>(null);
+  // A failed QMK and ZMK search, apart from other problems, so its alert carries Search again (R6-19). Kept whole, so one that fails the
+  // same way every time offers Restart keyloom in place of Search again (R10-07).
+  const [searchProblem, setSearchProblem] = useState<PageFailure | null>(null);
   // A config refused because its keyboard was removed (R6-08): the page offers Restore, then does this again.
   const [removed, setRemoved] = useState<"blank" | "make" | null>(null);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
@@ -244,7 +245,7 @@ export function useNewKeyboard(token: string, keyboards: readonly DetectedKeyboa
         setFoundFor(text.trim());
       }
     } catch (e) {
-      if (searchSequence.current === sequence) setSearchProblem(message(e));
+      if (searchSequence.current === sequence) setSearchProblem(pageFailure(e, "That didn't work."));
     }
   }, [token]);
 

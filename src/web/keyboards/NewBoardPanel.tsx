@@ -113,7 +113,7 @@ function KnownBoard({ flow, known }: { flow: NewKeyboard; known: KnownWays }) {
         <button type="button" className="sheet-action" onClick={flow.backToCard}><ArrowLeft size={13} aria-hidden="true" />Pick another keyboard</button>
       </p>
       {flow.removed === "blank" && board !== null ? (
-        <RestoreKeyboard restore={() => flow.restoreKeyboard(board.id)} boardName={board.name} doing="start a config" onRestored={start} />
+        <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(board.id)} boardName={board.name} doing="start a config" onRestored={start} />
       ) : null}
     </div>
   );
@@ -400,7 +400,7 @@ function Put({ flow, sources, preview, onMade }: { flow: NewKeyboard; sources: r
           </div>
         )}
         {flow.removed === null ? null : (
-          <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
+          <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing={flow.removed === "make" ? "make this config" : "start a config"}
             onRestored={() => (flow.removed === "make" ? make() : start())} />
         )}
         <FlowProblem flow={flow} />

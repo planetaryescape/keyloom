@@ -64,7 +64,7 @@ export function SetupCard({ flow, boards = [], hasConfigs, onImport, onMade }: {
         </div>
       </div>
       {flow.removed === null ? null : (
-        <RestoreKeyboard restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
+        <RestoreKeyboard token={flow.token} restore={() => flow.restoreKeyboard(step.boardId)} boardName={step.boardName} doing="start this config" onRestored={startBlank} />
       )}
       <FlowProblem flow={flow} />
       <footer className="nb-foot">

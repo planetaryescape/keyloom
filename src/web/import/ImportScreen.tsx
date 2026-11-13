@@ -290,7 +290,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
       </div>
       {problem === null ? null : <CardProblem token={token} problem={problem} primary={off("mac") || off("blank")} />}
       {restore === null ? null : (
-        <RestoreKeyboard restore={() => restoreKeyboard(token, restore.boardId)} boardName={restore.boardName} doing={restore.doing} onRestored={again} />
+        <RestoreKeyboard token={token} restore={() => restoreKeyboard(token, restore.boardId)} boardName={restore.boardName} doing={restore.doing} onRestored={again} />
       )}
       {refused?.refusal.kind === "other_board" ? (
         <OtherBoard filename={refused.file?.name ?? "This file"} refusal={refused.refusal} here={board} busy={busy}

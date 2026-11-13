@@ -321,7 +321,7 @@ export function NewConfigDialog({ token, source, boardId, boardName, start: init
         {choice("file", "A file", "Oryx, QMK keymap.c or ZMK .keymap")}
       </fieldset>
       <p id="config-name-waits" className="config-waits">{waits}</p>
-      {removed ? <RestoreKeyboard restore={() => restoreKeyboard(token, boardId)} boardName={boardName} doing="make this config" onRestored={go} /> : null}
+      {removed ? <RestoreKeyboard token={token} restore={() => restoreKeyboard(token, boardId)} boardName={boardName} doing="make this config" onRestored={go} /> : null}
       {problem === null ? null : <FailureNote token={token} failure={problem} className="config-problem" primary={stuck && start !== "file"} />}
     </ConfigDialog>
   );
