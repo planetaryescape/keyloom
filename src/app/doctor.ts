@@ -13,6 +13,7 @@ import { imageTag } from "../firmware/zmk/image.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
 import { LOW_DISK_BYTES, dockerFreeSpace } from "../firmware/toolchain/docker.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
+import { findTool } from "../firmware/toolchain/kept-tools.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
 import { listBoardDefinitions } from "./boards.ts";
@@ -209,12 +210,12 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     }
   }
 
-  const zapp = which("zapp");
+  const zapp = findTool("zapp");
   checks.push({
     name: "zapp",
     ok: true,
     ...(zapp ? {} : { warn: true }),
-    detail: zapp ?? (process.platform === "darwin" ? "not on PATH; install it with `brew install zapp` to flash from keyloom" : "not on PATH; install it from https://github.com/zsa/zapp/releases, with ZSA's udev rules, to flash from keyloom"),
+    detail: zapp ?? (process.platform === "darwin" ? "not on PATH; install it with `brew install zapp`, or run `keyloom doctor --download zapp`, to flash from keyloom" : "not on PATH; install it from https://github.com/zsa/zapp/releases, with ZSA's udev rules, to flash from keyloom"),
   });
 
   // The DFU tools a derived board's flash recipe runs (22, D-365). keyloom doesn't install them; a warning names the formula.

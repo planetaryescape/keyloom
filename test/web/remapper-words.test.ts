@@ -85,6 +85,58 @@ describe("setupSteps", () => {
     expect(cancelled).toMatchObject({ problem: null, detail: "You cancelled the install. Nothing else changed.", actions: [{ id: { kind: "install_kanata" }, label: "Install kanata" }], link: null });
   });
 
+  test("keyloom's downloaded kanata changed since the download: the step says so and offers Get kanata, never a password step (D-560)", () => {
+    const changed = [...fresh, f("kanata_kept_changed", "fail")];
+    const steps = setupSteps(status(changed, { canInstall: false, canDownload: true }));
+    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "start", "permissions"]);
+    expect(steps[0]).toMatchObject({
+      key: "kanata", title: "Get kanata", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }],
+      detail: expect.stringMatching(/^keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't use it or set it up\. Homebrew isn't on this Mac/),
+    });
+    expect(steps.flatMap((s) => s.actions.map((a) => a.id.kind))).not.toContain("start_kanata");
+    expect(setupFailure("kanata_kept_changed", "x")).toEqual({ text: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't set it up. Get kanata again to replace it.", link: null });
+  });
+
+  test("no Homebrew: Get kanata downloads, checks and keeps kanata itself, with its progress and Cancel, then the setup carries on (D-560)", () => {
+    const noBrew = { canInstall: false, canDownload: true };
+    const steps = setupSteps(status(fresh, noBrew));
+    expect(steps[0]).toMatchObject({
+      key: "kanata", state: "todo", title: "Get kanata", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }], link: null,
+      detail: "kanata is the remapper keyloom writes your MacBook layout for. Homebrew isn't on this Mac, so keyloom downloads kanata 1.12.0 from its official release on GitHub, checks it and keeps it in keyloom's own folder.",
+    });
+    expect(steps[2]).toMatchObject({ key: "start", detail: "Get kanata first.", actions: [] });
+    const lines = ["keyloom: downloading kanata 1.12.0 from https://github.com/jtroo/kanata/releases/download/v1.12.0/macos-binaries-arm64.zip", "keyloom: 0.6 of 2.4 MB"];
+    expect(setupSteps(status(fresh, { ...noBrew, install: job({ action: "download", log: lines }) }))[0]).toMatchObject({
+      title: "Getting kanata…", detail: "keyloom is downloading kanata 1.12.0 from its release on GitHub, then checks it against the checksum keyloom carries.",
+      actions: [{ id: { kind: "cancel_install" }, label: "Cancel download" }], log: lines, link: null,
+    });
+    const cancelled = setupSteps(status(fresh, { ...noBrew, install: job({ action: "download", state: "cancelled", failure: { code: "cancelled", reason: "x" } }) }))[0];
+    expect(cancelled).toMatchObject({ title: "Get kanata", detail: "You cancelled the download. Nothing else changed.", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }] });
+    // Once kanata is kept, the doctor finds it and the step is done.
+    expect(setupSteps(status([f("kanata_version", "ok"), ...fresh.slice(1)], { ...noBrew, install: job({ action: "download", state: "succeeded" }) }))[0]).toMatchObject({ state: "done", title: "kanata is installed" });
+  });
+
+  test("a download that didn't match says so, with Try again and kanata's release page (D-560)", () => {
+    const reason = "The file keyloom downloaded isn't kanata 1.12.0 as released: its checksum doesn't match. keyloom kept none of it. Try again, and if it happens again, get kanata from its release page.";
+    const failed = setupSteps(status(fresh, { canInstall: false, canDownload: true, install: job({ action: "download", state: "failed", log: ["keyloom: nothing was kept"], failure: { code: "checksum_mismatch", reason } }) }))[0];
+    expect(failed).toMatchObject({
+      title: "Get kanata", problem: reason, log: ["keyloom: nothing was kept"], actions: [{ id: { kind: "download_kanata" }, label: "Try again" }],
+      link: { href: "https://github.com/jtroo/kanata/releases/tag/v1.12.0", label: "Open kanata's release page" },
+    });
+  });
+
+  test("a failed Homebrew install offers keyloom's own download as a button, not a link (D-560)", () => {
+    const failed = setupSteps(status(fresh, { canDownload: true, install: job({ state: "failed", failure: { code: "failed", reason: "Homebrew couldn't install kanata: Error: boom" } }) }))[0];
+    expect(failed).toMatchObject({ actions: [{ id: { kind: "install_kanata" }, label: "Try again" }, { id: { kind: "download_kanata" }, label: "Download kanata" }], link: null });
+  });
+
+  test("no Homebrew and no release file for this processor: the releases page, said plainly (D-560)", () => {
+    const steps = setupSteps(status(fresh, { canInstall: false, canDownload: false }));
+    expect(steps[0]).toMatchObject({ title: "Install kanata", actions: [], link: { href: "https://github.com/jtroo/kanata/releases", label: "Download kanata" } });
+    expect(steps[0]?.detail).toContain("kanata's release has no download for this Mac's processor");
+    expect(setupFailure("no_asset", "kanata's release has no download for this Mac's processor, so keyloom can't get it.")).toMatchObject({ link: { label: "Open kanata's releases page" } });
+  });
+
   test("an older Homebrew kanata offers Update kanata, with its progress and Cancel; any other mismatch links the release (R2-10)", () => {
     const old = [f("kanata_version", "warn"), ...running.slice(1)];
     const brew = setupSteps(status(old, { kanata: k({ version: "1.11.0", update: "brew" }) }))[0];

@@ -1,7 +1,11 @@
 // Installing Docker and flash tools from a button (D-488, D-489). Every runner here is a fake: no test runs brew,
 // colima or docker, and the preload refuses a real install if one is forgotten.
 import { describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { type InstallRunner, brewFormulae, canInstall, installJobs, installTool } from "../../src/app/tool-install.ts";
+import { serving, testPins, zappTar } from "../helpers/tool-download.ts";
+import { tempDir } from "../helpers/tmp.ts";
 
 const mac = { platform: "darwin" as const, has: (c: string) => c === "brew" };
 
@@ -58,7 +62,8 @@ describe("installTool", () => {
 
   test("no Homebrew, or not a Mac: nothing runs, and the code says why", async () => {
     const { runner, calls } = recorder();
-    expect(await installTool("zapp", () => undefined, { platform: "darwin", has: () => false, runner })).toMatchObject({ ok: false, code: "no_brew" });
+    // Zapp is downloaded instead on a Mac without Homebrew (D-561), so a tool keyloom pins no release for stands in here.
+    expect(await installTool("avrdude", () => undefined, { platform: "darwin", has: () => false, runner })).toMatchObject({ ok: false, code: "no_brew" });
     expect(await installTool("docker", () => undefined, { platform: "linux", has: () => true, runner })).toMatchObject({ ok: false, code: "no_brew" });
     expect(calls).toEqual([]);
     expect(canInstall(mac)).toBe(true);
@@ -164,5 +169,42 @@ describe("installJobs", () => {
     await Bun.sleep(5);
     expect(startSignal?.aborted).toBe(true);
     expect(jobs.get("docker")).toMatchObject({ status: "cancelled", errorCode: null });
+  });
+});
+
+describe("Get Zapp, on a Mac without Homebrew (D-561)", () => {
+  const noBrew = { platform: "darwin" as const, has: () => false };
+
+  test("downloads Zapp's pinned release instead of running brew, in the downloading phase", async () => {
+    const dir = tempDir("keyloom-kept-");
+    const { runner, calls } = recorder();
+    const phases: string[] = [];
+    const out = await installTool("zapp", () => undefined, { ...noBrew, runner, download: { fetch: serving(zappTar).fetch, dir, arch: "arm64", pins: testPins() } }, (p) => phases.push(p));
+    expect(out).toEqual({ ok: true });
+    expect(calls).toEqual([]);
+    expect(phases).toEqual(["downloading"]);
+    expect(readdirSync(dir)).toEqual(["zapp"]);
+  });
+
+  test("a download that doesn't match ends the job failed with its code, so the page can say why", async () => {
+    const dir = tempDir("keyloom-kept-");
+    const jobs = installJobs({ ...noBrew, download: { fetch: serving(new Uint8Array([9])).fetch, dir, arch: "arm64", pins: testPins() } });
+    jobs.start("zapp");
+    for (let i = 0; i < 50 && jobs.get("zapp").status === "running"; i++) await Bun.sleep(5);
+    expect(jobs.get("zapp")).toMatchObject({ status: "failed", errorCode: "checksum_mismatch", error: expect.stringContaining("Zapp 1.0.2") });
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  test("Homebrew stays first where it is, and only Zapp is downloaded", async () => {
+    const { runner, calls } = recorder();
+    await installTool("zapp", () => undefined, { ...mac, runner, download: { fetch: serving(zappTar).fetch, dir: tempDir("keyloom-kept-"), arch: "arm64", pins: testPins() } });
+    expect(calls).toEqual([["brew", "install", "zapp"]]);
+    const dfu = await installTool("dfu-util", () => undefined, { ...noBrew, runner, download: { arch: "arm64" } });
+    expect(dfu).toMatchObject({ ok: false, code: "no_brew" });
+  });
+
+  test("a processor with no Zapp release falls back to the Homebrew answer: keyloom can't install it here", async () => {
+    const out = await installTool("zapp", () => undefined, { ...noBrew, download: { arch: "ppc64", dir: join(tempDir("keyloom-kept-"), "bin") } });
+    expect(out).toMatchObject({ ok: false, code: "no_brew" });
   });
 });

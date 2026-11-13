@@ -132,7 +132,7 @@ describe("flashStepView", () => {
   test("a manual board gets its file, a missing tool its install, and anything else the Flash button", () => {
     expect(flashStepView({ manual: "Use QMK Toolbox.", tool: null, canReveal: false })).toEqual({ kind: "manual", instructions: "Use QMK Toolbox.", canReveal: false });
     expect(flashStepView({ manual: null, tool: { name: "zapp", installed: false, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true }))
-      .toEqual({ kind: "needs-tool", tool: "zapp", name: "Zapp", canInstall: true, url: "https://github.com/zsa/zapp" });
+      .toEqual({ kind: "needs-tool", tool: "zapp", name: "Zapp", canInstall: true, canDownload: false, url: "https://github.com/zsa/zapp" });
     expect(flashStepView({ manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "u" }, canReveal: true })).toEqual({ kind: "flash" });
     expect(flashStepView({ manual: null, tool: null, canReveal: true })).toEqual({ kind: "flash" });
   });

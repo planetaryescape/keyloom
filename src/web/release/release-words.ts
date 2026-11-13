@@ -60,7 +60,8 @@ export function dockerView(
   lastAction: "start" | "restart" | "fix-files" | null = null, problemCode: string | null = null, linkedFile: string | null = null,
 ): DockerView {
   const down = readiness !== null && !readiness.ok ? readiness : null;
-  if (install?.status === "running") return { kind: "installing", phase: install.phase ?? "installing", logTail: install.logTail };
+  // Docker is never downloaded by keyloom itself (that is Zapp's way without Homebrew, D-561), so a download reads as its install.
+  if (install?.status === "running") return { kind: "installing", phase: install.phase === null || install.phase === "downloading" ? "installing" : install.phase, logTail: install.logTail };
   // A start that failed after a good install isn't an install failure: Docker is there, and the readiness below offers the start.
   if (install?.status === "failed" && install.errorCode !== "start_failed" && !(readiness?.ok ?? false)) {
     return { kind: "install-failed", reason: plain(install.error ?? "The install failed."), logTail: install.logTail, alternatives: down?.install?.alternatives ?? [] };
@@ -216,13 +217,18 @@ export type FlashStepView =
   | { kind: "flash" }
   /** keyloom can't flash this board: its steps, with the file to download or show. */
   | { kind: "manual"; instructions: string; canReveal: boolean }
-  /** The flash tool is missing: install it, or link its page where keyloom can't. */
-  | { kind: "needs-tool"; tool: InstallableTool; name: string; canInstall: boolean; url: string };
+  /**
+   * The flash tool is missing: install it with Homebrew, download its pinned release where Homebrew isn't (`canDownload`, Zapp, D-561), or
+   * link its page where keyloom can do neither.
+   */
+  | { kind: "needs-tool"; tool: InstallableTool; name: string; canInstall: boolean; canDownload: boolean; url: string };
 
 export function flashStepView(plan: FlashPlan): FlashStepView {
   if (plan.manual !== null) return { kind: "manual", instructions: plan.manual, canReveal: plan.canReveal };
   if (plan.tool !== null && !plan.tool.installed) {
-    return { kind: "needs-tool", tool: plan.tool.name, name: toolName(plan.tool.name), canInstall: plan.tool.canInstall, url: plan.tool.url };
+    return {
+      kind: "needs-tool", tool: plan.tool.name, name: toolName(plan.tool.name), canInstall: plan.tool.canInstall, canDownload: plan.tool.canDownload === true, url: plan.tool.url,
+    };
   }
   return { kind: "flash" };
 }

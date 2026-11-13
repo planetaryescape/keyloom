@@ -15,6 +15,7 @@ import { type RemapperPaths, remapperPaths } from "../firmware/kanata/paths.ts";
 import { identityLayout } from "../firmware/kanata/identity.ts";
 import { ROOT_KANATA_PATH, launchDaemonPlist } from "../firmware/kanata/plist.ts";
 import { type DaemonInstall, rootInstallCommand } from "../firmware/kanata/daemon-install.ts";
+import { isKeptPath, isPinnedProgram } from "../firmware/toolchain/kept-tools.ts";
 import { getBoardSync, recordHandsFreeProof, recordKanataSeen } from "../persistence/syncs.ts";
 import { showBoard } from "./boards.ts";
 import type { App } from "./context.ts";
@@ -138,7 +139,7 @@ export async function disableRemapperFor(boardId: string, over: RemapperOverride
 }
 
 /** Why the daemon can't be installed with this kanata. */
-export type DaemonInstallBlock = { code: "no_kanata" | "kanata_unreadable" | "kanata_allows_cmd" | "kanata_cmd_unknown"; reason: string };
+export type DaemonInstallBlock = { code: "no_kanata" | "kanata_unreadable" | "kanata_kept_changed" | "kanata_allows_cmd" | "kanata_cmd_unknown"; reason: string };
 
 export type SetupOutcome = {
   plistPath: string;
@@ -177,6 +178,11 @@ async function daemonInstallFor(env: RemapperEnv, over: RemapperOverrides, plist
     return { blocked: { code: "kanata_unreadable", reason: `keyloom couldn't read kanata at ${source}.` }, kanataPath: source };
   }
   const sha256 = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  // keyloom's own downloaded kanata sits in a folder the person's account can write, so it is trusted only while these bytes are still the
+  // release keyloom pinned (D-560). Anything else there is refused before it runs, and Get kanata replaces it; no password step is offered.
+  if (isKeptPath("kanata", source) && !isPinnedProgram("kanata", bytes)) {
+    return { blocked: { code: "kanata_kept_changed", reason: "keyloom's copy of kanata changed since keyloom downloaded it, so keyloom won't set it up. Get kanata again to replace it." }, kanataPath: source };
+  }
   const dir = await mkdtemp(join(tmpdir(), "keyloom-cmd-probe-"));
   let probe: { ok: boolean; output: string };
   try {
