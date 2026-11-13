@@ -27,14 +27,11 @@ export function toolRunning(view: NeedsTool, state: InstallState): string {
   return `Installing ${view.name} with Homebrew. This takes a minute or two.`;
 }
 
-const DOWNLOAD_CODES: ReadonlySet<InstallState["errorCode"]> = new Set(["unsupported_platform", "no_asset", "download_failed", "checksum_mismatch", "write_failed"]);
-
 /**
- * What a failed install says, and whether Try again can help. A download that found no release file for this computer fails the same way
- * every time, so it offers only the tool's page and Check again.
+ * What a failed install says. The server downloads only where the plan offered Get (`downloadsHere`), so the way the step offered is the
+ * way that failed.
  */
-export function toolFailed(view: NeedsTool, state: InstallState): { text: string; retry: boolean } {
+export function toolFailed(view: NeedsTool, state: InstallState): string {
   const reason = plain(state.error ?? "");
-  if (!DOWNLOAD_CODES.has(state.errorCode)) return { text: `${view.name} didn't install. ${reason}`.trim(), retry: true };
-  return { text: `keyloom couldn't get ${view.name}. ${reason}`.trim(), retry: state.errorCode !== "no_asset" && state.errorCode !== "unsupported_platform" };
+  return (toolWay(view) === "download" ? `keyloom couldn't get ${view.name}. ${reason}` : `${view.name} didn't install. ${reason}`).trim();
 }

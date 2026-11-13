@@ -23,7 +23,7 @@ describe("downloadToolWithProgress", () => {
     const { fetch, asked } = serving(zappTar);
     const lines: string[] = [];
     const out = await downloadToolWithProgress("zapp", (l) => lines.push(l), { ...mac, dir: tempDir("keyloom-kept-"), fetch, inUse: () => "/opt/homebrew/bin/zapp" });
-    expect(out).toMatchObject({ ok: true, already: true });
+    expect(out).toEqual({ ok: true, path: "/opt/homebrew/bin/zapp" });
     expect(lines).toEqual(["keyloom: zapp is already at /opt/homebrew/bin/zapp, so nothing was downloaded"]);
     expect(asked).toEqual([]);
   });

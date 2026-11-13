@@ -6,7 +6,7 @@ import { findKanata } from "../firmware/kanata/binary.ts";
 import { daemonInstallScript, rootScriptFailure, shellQuote } from "../firmware/kanata/daemon-install.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
-import { type DownloadDeps, canDownload, downloadTool } from "./tool-download.ts";
+import { type DownloadDeps, canDownload, downloadReady, downloadTool } from "./tool-download.ts";
 
 export { daemonInstallScript, shellQuote } from "../firmware/kanata/daemon-install.ts";
 
@@ -240,8 +240,13 @@ export async function remapperSetupStatus(boardId: string, deps: SetupDeps, inst
 
 export type ActionResult = { ok: true } | { ok: false; code: string; reason: string };
 
-const canDownloadKanata = (deps: SetupDeps): boolean =>
-  canDownload("kanata", { platform: deps.platform, ...(deps.download?.arch === undefined ? {} : { arch: deps.download.arch }) });
+// Whether a download is possible here, Homebrew or not: a failed Homebrew install offers it too. (The flash plan's `canDownload` is narrower:
+// it is the way keyloom gets Zapp, so only without Homebrew.)
+const canDownloadKanata = (deps: SetupDeps): boolean => canDownload("kanata", { ...deps.download, platform: deps.platform });
+function downloadPrecheck(deps: SetupDeps): ActionResult {
+  const ready = downloadReady("kanata", { ...deps.download, platform: deps.platform });
+  return ready.ok ? { ok: true } : ready;
+}
 
 /**
  * `brew install kanata`, `brew upgrade kanata` for Update kanata, or `brew reinstall kanata`. Homebrew asks nothing for a formula, so it
@@ -249,8 +254,7 @@ const canDownloadKanata = (deps: SetupDeps): boolean =>
  */
 export async function installKanata(deps: SetupDeps, action: KanataInstallAction, opts: { signal: AbortSignal; onLine: (line: string) => void }): Promise<ActionResult> {
   if (action === "download") {
-    const ready = downloadPrecheck(deps);
-    if (!ready.ok) return ready;
+    // downloadTool refuses a Mac it can't serve with the same codes as the job's precheck.
     const got = await downloadTool("kanata", opts.onLine, { ...deps.download, platform: deps.platform }, opts.signal);
     if (!got.ok) return got;
     // The kanata keyloom uses is the first one found; one on PATH or from Homebrew comes before keyloom's own copy.
@@ -270,14 +274,6 @@ export async function installKanata(deps: SetupDeps, action: KanataInstallAction
   if (r.aborted || opts.signal.aborted) return { ok: false, code: "cancelled", reason: `You cancelled the ${what}.` };
   if (r.code !== 0) return { ok: false, code: "failed", reason: `Homebrew couldn't ${what} kanata: ${lastLine(lines.join("\n")) || `brew exited ${r.code ?? "from a signal"}`}` };
   return deps.kanata() === undefined ? { ok: false, code: "failed", reason: "Homebrew finished, but keyloom still can't find kanata." } : { ok: true };
-}
-
-function downloadPrecheck(deps: SetupDeps): ActionResult {
-  if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "keyloom gets kanata on macOS only." };
-  if (!canDownloadKanata(deps)) {
-    return { ok: false, code: "no_asset", reason: "kanata's release has no download for this Mac's processor, so keyloom can't get it. Its release page lists what there is." };
-  }
-  return { ok: true };
 }
 
 function installPrecheck(deps: SetupDeps): { ok: true; brew: string } | { ok: false; code: string; reason: string } {

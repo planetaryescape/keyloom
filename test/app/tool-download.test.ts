@@ -124,7 +124,6 @@ describe("the pins", () => {
   test("every pin is an official GitHub release file over HTTPS, of its own tag, with two SHA-256 values", () => {
     const repos = { kanata: "jtroo/kanata", zapp: "zsa/zapp" } as const;
     for (const [tool, pin] of Object.entries(PINNED_TOOLS) as Array<[keyof typeof repos, PinnedTool]>) {
-      expect(pin.releasePage).toBe(`https://github.com/${repos[tool]}/releases/tag/v${pin.version}`);
       expect(Object.keys(pin.assets).sort()).toEqual(["arm64", "x64"]);
       for (const asset of Object.values(pin.assets)) {
         expect(asset.url.startsWith(`https://github.com/${repos[tool]}/releases/download/v${pin.version}/`)).toBe(true);

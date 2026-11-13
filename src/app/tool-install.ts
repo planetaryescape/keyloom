@@ -4,7 +4,7 @@
 import { BREW_FORMULA } from "../firmware/qmk/dfu-flash.ts";
 import { DOCKER_BREW_FORMULAE, type DockerStartResult, colimaEngine, startDockerEngine } from "../firmware/toolchain/docker.ts";
 import { run, which } from "../firmware/toolchain/run.ts";
-import { type DownloadDeps, type DownloadErrorCode, canDownload, downloadTool } from "./tool-download.ts";
+import { type DownloadDeps, type DownloadErrorCode, canDownload, downloadTool, isKeptTool } from "./tool-download.ts";
 
 export const INSTALLABLE_TOOLS = ["docker", "zapp", "dfu-util", "dfu-programmer", "avrdude", "codex"] as const;
 export type InstallableTool = (typeof INSTALLABLE_TOOLS)[number];
@@ -63,6 +63,14 @@ export function canInstall(deps: Pick<InstallDeps, "has" | "platform"> = {}): bo
   return (deps.platform ?? process.platform) === "darwin" && has("brew");
 }
 
+/**
+ * Whether keyloom gets a missing tool by downloading its pinned release (D-561): a tool it pins (Zapp), no Homebrew, and a release file for
+ * this Mac. Homebrew stays first where it is: it keeps the tool up to date. The flash plan's Get Zapp and the install job both ask this.
+ */
+export function downloadsHere(tool: InstallableTool, deps: Pick<InstallDeps, "has" | "platform" | "download"> = {}): boolean {
+  return isKeptTool(tool) && !canInstall(deps) && canDownload(tool, { ...deps.download, platform: deps.platform });
+}
+
 // A fresh Homebrew can update itself first, and Colima's first start downloads its VM image: both can take minutes.
 const BREW_TIMEOUT_MS = 20 * 60_000;
 const COLIMA_START_TIMEOUT_MS = 15 * 60_000;
@@ -86,11 +94,9 @@ const CANCELLED: InstallOutcome = { ok: false, code: "cancelled", reason: "The i
  */
 export async function installTool(tool: InstallableTool, onLine: (line: string) => void, deps: InstallDeps = {}, onPhase?: (phase: "installing" | "downloading" | "starting") => void, signal?: AbortSignal): Promise<InstallOutcome> {
   const runner = deps.runner ?? realRunner;
-  // Without Homebrew, keyloom gets Zapp's pinned release itself (D-561). Homebrew stays first where it is: it keeps Zapp up to date.
-  const platform = deps.platform ?? process.platform;
-  if (tool === "zapp" && !canInstall(deps) && canDownload("zapp", { platform, ...(deps.download?.arch === undefined ? {} : { arch: deps.download.arch }) })) {
+  if (isKeptTool(tool) && downloadsHere(tool, deps)) {
     onPhase?.("downloading");
-    const got = await downloadTool("zapp", onLine, { ...deps.download, platform }, signal);
+    const got = await downloadTool(tool, onLine, { ...deps.download, platform: deps.platform }, signal);
     if (got.ok) return { ok: true };
     return got.code === "cancelled" ? CANCELLED : { ok: false, code: got.code, reason: got.reason };
   }

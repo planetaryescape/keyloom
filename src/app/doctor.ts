@@ -8,12 +8,12 @@ import { SchemaTooNewError, assertSchemaKnown } from "../persistence/schema-guar
 import { DEFAULT_MODELS } from "../agent/provider.ts";
 import { qmkRevision } from "../firmware/qmk/board-config.ts";
 import { BREW_FORMULA, type DfuTool } from "../firmware/qmk/dfu-flash.ts";
-import { findZapp } from "../firmware/qmk/flash.ts";
 import { zmkRevision } from "../firmware/zmk/board-config.ts";
 import { imageTag } from "../firmware/zmk/image.ts";
 import { type CheckoutSpec, checkoutState } from "../firmware/toolchain/checkout.ts";
 import { LOW_DISK_BYTES, dockerFreeSpace } from "../firmware/toolchain/docker.ts";
 import { capture, which } from "../firmware/toolchain/run.ts";
+import { findTool } from "../firmware/toolchain/kept-tools.ts";
 import { MIGRATIONS } from "../persistence/migrations.ts";
 import { databasePath, dataDir as resolveDataDir } from "../persistence/paths.ts";
 import { listBoardDefinitions } from "./boards.ts";
@@ -210,7 +210,7 @@ export async function runToolchainChecks(): Promise<DoctorCheck[]> {
     }
   }
 
-  const zapp = findZapp();
+  const zapp = findTool("zapp");
   checks.push({
     name: "zapp",
     ok: true,

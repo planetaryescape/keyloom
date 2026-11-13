@@ -2,22 +2,20 @@
 // release over HTTPS, checks the file's SHA-256 against the value pinned here, takes the one program it needs out of the archive, checks that
 // too, and only then writes it into its own folder (src/firmware/toolchain/kept-tools.ts). Nothing is written, and nothing runs, before both
 // checks pass. There is no "latest": a new version is a new pin in this file, checked by hand.
-import { randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
 import { findKanata } from "../firmware/kanata/binary.ts";
-import { findZapp } from "../firmware/qmk/flash.ts";
-import { KEPT_TOOLS, type KeptTool, keptToolsDir } from "../firmware/toolchain/kept-tools.ts";
+import { KEPT_TOOLS, type KeptTool, findTool, isKeptTool, keptToolsDir } from "../firmware/toolchain/kept-tools.ts";
+import { writeFresh } from "../firmware/toolchain/write-fresh.ts";
 
-export { KEPT_TOOLS, type KeptTool };
+export { KEPT_TOOLS, type KeptTool, isKeptTool };
 
 export type DownloadArch = "arm64" | "x64";
 
 /** One release file: where it is, what it hashes to, and the program inside it with that program's own hash. */
 export type PinnedAsset = { url: string; size: number; sha256: string; archive: "zip" | "tar.gz"; member: string; binarySha256: string };
 
-export type PinnedTool = { name: string; version: string; releasePage: string; assets: Partial<Record<DownloadArch, PinnedAsset>> };
+export type PinnedTool = { name: string; version: string; assets: Partial<Record<DownloadArch, PinnedAsset>> };
 
 /**
  * The pins. Read from `gh release view` and from the files themselves on 2026-11-13: each archive was downloaded once, its SHA-256 compared
@@ -28,7 +26,6 @@ export const PINNED_TOOLS: Record<KeptTool, PinnedTool> = {
   kanata: {
     name: "kanata",
     version: "1.12.0",
-    releasePage: "https://github.com/jtroo/kanata/releases/tag/v1.12.0",
     assets: {
       arm64: {
         url: "https://github.com/jtroo/kanata/releases/download/v1.12.0/macos-binaries-arm64.zip", size: 2_367_443,
@@ -45,7 +42,6 @@ export const PINNED_TOOLS: Record<KeptTool, PinnedTool> = {
   zapp: {
     name: "Zapp",
     version: "1.0.2",
-    releasePage: "https://github.com/zsa/zapp/releases/tag/v1.0.2",
     assets: {
       arm64: {
         url: "https://github.com/zsa/zapp/releases/download/v1.0.2/zapp-macos-aarch64.tar.gz", size: 3_229_402,
@@ -71,8 +67,8 @@ export type DownloadDeps = {
   fetch?: Fetcher;
   /** Where the tool is kept; the default is keptToolsDir(). */
   dir?: string;
-  platform?: NodeJS.Platform;
-  arch?: string;
+  platform?: NodeJS.Platform | undefined;
+  arch?: string | undefined;
   /** The pins; tests pin small archives they build themselves. The default is PINNED_TOOLS. */
   pins?: Record<KeptTool, PinnedTool>;
 };
@@ -95,6 +91,20 @@ export function pinnedAsset(tool: KeptTool, deps: Pick<DownloadDeps, "platform" 
 /** Whether keyloom can download this tool here: a Mac whose processor has a pinned release file. */
 export const canDownload = (tool: KeptTool, deps: Pick<DownloadDeps, "platform" | "arch"> = {}): boolean => pinnedAsset(tool, deps) !== null;
 
+/**
+ * The file to download here, or why keyloom can't download this tool on this computer. A job checks it before it starts, so a refusal is an
+ * answer at once; downloadTool checks it again itself.
+ */
+export function downloadReady(tool: KeptTool, deps: Pick<DownloadDeps, "platform" | "arch" | "pins"> = {}): { ok: true; asset: PinnedAsset } | Extract<DownloadOutcome, { ok: false }> {
+  const pin = (deps.pins ?? PINNED_TOOLS)[tool];
+  if ((deps.platform ?? process.platform) !== "darwin") return { ok: false, code: "unsupported_platform", reason: `keyloom downloads ${pin.name} on a Mac only.` };
+  const asset = pinnedAsset(tool, deps);
+  if (asset === null) {
+    return { ok: false, code: "no_asset", reason: `${pin.name} ${pin.version}'s release has no download for this Mac's processor, so keyloom can't get it. Its release page lists what there is.` };
+  }
+  return { ok: true, asset };
+}
+
 const sha256 = (bytes: Uint8Array): string => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 const megabytes = (n: number): string => (n / 1_000_000).toFixed(1);
 
@@ -103,14 +113,10 @@ const megabytes = (n: number): string => (n / 1_000_000).toFixed(1);
  * Every failure has a code the page maps to words and a reason written for a person.
  */
 export async function downloadTool(tool: KeptTool, onLine: (line: string) => void, deps: DownloadDeps = {}, signal?: AbortSignal): Promise<DownloadOutcome> {
-  const pins = deps.pins ?? PINNED_TOOLS;
-  const pin = pins[tool];
-  const platform = deps.platform ?? process.platform;
-  if (platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: `keyloom downloads ${pin.name} on a Mac only.` };
-  const asset = pinnedAsset(tool, { platform, arch: deps.arch ?? process.arch, pins });
-  if (asset === null) {
-    return { ok: false, code: "no_asset", reason: `${pin.name} ${pin.version}'s release has no download for this Mac's processor, so keyloom can't get it. Its release page lists what there is.` };
-  }
+  const ready = downloadReady(tool, deps);
+  if (!ready.ok) return ready;
+  const { asset } = ready;
+  const pin = (deps.pins ?? PINNED_TOOLS)[tool];
   const cancelled: DownloadOutcome = { ok: false, code: "cancelled", reason: "You cancelled the download. keyloom kept nothing." };
   const failed = (detail: string): DownloadOutcome => ({ ok: false, code: "download_failed", reason: `keyloom couldn't download ${pin.name}: ${detail}. Check that this computer is online, then try again.` });
   const mismatch: DownloadOutcome = {
@@ -148,53 +154,36 @@ export async function downloadTool(tool: KeptTool, onLine: (line: string) => voi
 
   const dir = deps.dir ?? keptToolsDir();
   const path = join(dir, tool);
-  // Written beside its final name and renamed into place, so a lookup never finds half a program.
-  const part = join(dir, `.${tool}.${randomBytes(6).toString("hex")}.part`);
   try {
-    mkdirSync(dir, { recursive: true, mode: 0o755 });
-    writeFileSync(part, program, { mode: 0o755 });
-    // The mode given to writeFileSync goes through the umask; a program has to be executable whatever the umask is.
-    chmodSync(part, 0o755);
-    renameSync(part, path);
+    // Written beside its final name, made executable, then renamed into place, so a lookup never finds half a program.
+    await writeFresh(path, program, { mode: 0o755 });
   } catch (err) {
-    removeQuietly(part);
     return { ok: false, code: "write_failed", reason: `keyloom checked ${pin.name} but couldn't save it in ${dir}: ${err instanceof Error ? err.message : String(err)}` };
   }
   onLine(`keyloom: kept ${pin.name} ${pin.version} in ${dir}`);
   return { ok: true, path };
 }
 
-/** Removes a half-written file. Bun's `rmSync` with `force` still throws when a parent isn't a folder (EFAULT, bun 1.3.14), so it is caught. */
-function removeQuietly(path: string): void {
-  try {
-    rmSync(path, { force: true });
-  } catch {
-    // Nothing was written there.
-  }
-}
-
-/** The whole body, or null once it is larger than `size`. `progress` is called at each quarter. */
+/**
+ * The whole body, or null once it is larger than `size`. The pin gives the size, so the bytes go straight into one buffer of that size.
+ * `progress` is called at each quarter.
+ */
 async function readCapped(body: ReadableStream<Uint8Array>, size: number, progress: (got: number) => void): Promise<Uint8Array | null> {
-  const chunks: Uint8Array[] = [];
+  const all = new Uint8Array(size);
   let got = 0;
   let quarter = 0;
   for await (const chunk of body) {
+    if (got + chunk.byteLength > size) return null;
+    all.set(chunk, got);
     got += chunk.byteLength;
-    if (got > size) return null;
-    chunks.push(chunk);
     const now = Math.floor((got / size) * 4);
     if (now > quarter) {
       quarter = now;
       progress(got);
     }
   }
-  const all = new Uint8Array(got);
-  let at = 0;
-  for (const chunk of chunks) {
-    all.set(chunk, at);
-    at += chunk.byteLength;
-  }
-  return all;
+  // A shorter body is not the release file either; the hash refuses it.
+  return all.subarray(0, got);
 }
 
 /**
@@ -213,4 +202,4 @@ async function extract(bytes: Uint8Array, asset: PinnedAsset): Promise<Uint8Arra
 }
 
 /** The copy of a tool keyloom would use now, from every place it looks: a kanata or Zapp the person installed comes before keyloom's own. */
-export const toolInUse = (tool: KeptTool): string | undefined => (tool === "kanata" ? findKanata() : findZapp() ?? undefined);
+export const toolInUse = (tool: KeptTool): string | undefined => (tool === "kanata" ? findKanata() : findTool(tool));

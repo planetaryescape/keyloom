@@ -33,11 +33,9 @@ describe("the missing tool's step", () => {
     expect(toolRunning(view(false, true), state({ phase: "stopping" }))).toBe("Stopping the install.");
   });
 
-  test("a failed download says keyloom couldn't get it, with Try again unless it fails the same way every time", () => {
-    const mismatch = toolFailed(view(false, true), state({ status: "failed", errorCode: "checksum_mismatch", error: "The file keyloom downloaded isn't Zapp 1.0.2 as released." }));
-    expect(mismatch).toEqual({ text: "keyloom couldn't get Zapp. The file keyloom downloaded isn't Zapp 1.0.2 as released.", retry: true });
-    expect(toolFailed(view(false, true), state({ status: "failed", errorCode: "no_asset", error: "No release file." })).retry).toBe(false);
-    expect(toolFailed(view(true), state({ status: "failed", errorCode: "brew_failed", error: "Homebrew stopped with exit code 1." })))
-      .toEqual({ text: "Zapp didn't install. Homebrew stopped with exit code 1.", retry: true });
+  test("a failed download says keyloom couldn't get it; a failed Homebrew install says it didn't install", () => {
+    expect(toolFailed(view(false, true), state({ status: "failed", errorCode: "checksum_mismatch", error: "The file keyloom downloaded isn't Zapp 1.0.2 as released." })))
+      .toBe("keyloom couldn't get Zapp. The file keyloom downloaded isn't Zapp 1.0.2 as released.");
+    expect(toolFailed(view(true), state({ status: "failed", errorCode: "brew_failed", error: "Homebrew stopped with exit code 1." }))).toBe("Zapp didn't install. Homebrew stopped with exit code 1.");
   });
 });

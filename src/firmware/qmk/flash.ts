@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import type { FlashNote, FlashPermissionCode, FlashResult, FlashState } from "../toolchain/flash-state.ts";
 import { type LogSink, run, which } from "../toolchain/run.ts";
-import { keptTool } from "../toolchain/kept-tools.ts";
+import { findTool } from "../toolchain/kept-tools.ts";
 import { holdKeyboardWrite } from "../toolchain/write-guard.ts";
 import { dfuProblem } from "./dfu.ts";
 
@@ -33,9 +33,6 @@ export const zappMissing = (platform: NodeJS.Platform = process.platform): strin
   platform === "darwin"
     ? "zapp isn't installed. Install it with `brew install zapp`, or run `keyloom doctor --download zapp` to have keyloom get it, then flash again."
     : "zapp isn't installed. Download it from https://github.com/zsa/zapp/releases, add ZSA's udev rules from that repository so it can reach the keyboard without root, then flash again.";
-
-/** The Zapp on PATH, or the one keyloom downloaded on a Mac without Homebrew (D-561). */
-export const findZapp = (): string | null => which("zapp") ?? keptTool("zapp") ?? null;
 
 /** What to press, with how long keyloom will wait for it (the CLI's --wait changes that). */
 export const resetInstruction = (waitMs: number = BOOTLOADER_WAIT_MS): string =>
@@ -88,7 +85,8 @@ export async function flashWithZapp(input: FlashInput): Promise<FlashResult> {
   };
 
   // Never a bare name that spawn might resolve against a different PATH: what is checked is what runs.
-  const zapp = input.zapp === undefined ? findZapp() : existsSync(input.zapp) ? input.zapp : null;
+  // On PATH, or keyloom's own copy on a Mac without Homebrew (D-561).
+  const zapp = input.zapp === undefined ? findTool("zapp") : existsSync(input.zapp) ? input.zapp : null;
   if (!zapp) return fail(zappMissing());
 
   const file = Bun.file(input.artifactPath);

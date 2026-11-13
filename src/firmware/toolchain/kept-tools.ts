@@ -4,9 +4,11 @@
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { which } from "./run.ts";
 
 export const KEPT_TOOLS = ["kanata", "zapp"] as const;
 export type KeptTool = (typeof KEPT_TOOLS)[number];
+export const isKeptTool = (name: string): name is KeptTool => (KEPT_TOOLS as readonly string[]).includes(name);
 
 /**
  * `~/Library/Application Support/keyloom/bin`, or `KEYLOOM_TOOLS_DIR`. The test preload points that at a scratch folder, so no test
@@ -25,4 +27,12 @@ export function keptTool(tool: KeptTool, env: Record<string, string | undefined>
   } catch {
     return undefined;
   }
+}
+
+/**
+ * A program on PATH, or keyloom's kept copy of one it downloads. Every lookup of such a tool goes through here, so what a check finds is
+ * what a run uses (D-561). kanata adds its own places first (findKanata).
+ */
+export function findTool(name: string, env: Record<string, string | undefined> = process.env): string | undefined {
+  return which(name) ?? (isKeptTool(name) ? keptTool(name, env) : undefined);
 }

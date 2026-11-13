@@ -16,11 +16,11 @@ export const zappTar = await new Bun.Archive({ zapp: ZAPP, LICENSE: "MIT" }, { c
 export function testPins(over: { binary?: Uint8Array } = {}): Record<"kanata" | "zapp", PinnedTool> {
   return {
     kanata: {
-      name: "kanata", version: "1.12.0", releasePage: "https://github.com/jtroo/kanata/releases/tag/v1.12.0",
+      name: "kanata", version: "1.12.0",
       assets: { arm64: { url: "https://github.com/jtroo/kanata/releases/download/v1.12.0/k.zip", size: kanataZip.byteLength, sha256: sha(kanataZip), archive: "zip", member: "kanata_macos_arm64", binarySha256: sha(over.binary ?? KANATA) } },
     },
     zapp: {
-      name: "Zapp", version: "1.0.2", releasePage: "https://github.com/zsa/zapp/releases/tag/v1.0.2",
+      name: "Zapp", version: "1.0.2",
       assets: { arm64: { url: "https://github.com/zsa/zapp/releases/download/v1.0.2/z.tar.gz", size: zappTar.byteLength, sha256: sha(zappTar), archive: "tar.gz", member: "zapp", binarySha256: sha(ZAPP) } },
     },
   };

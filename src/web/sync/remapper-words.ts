@@ -155,7 +155,7 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     steps.push(step({
       key: "start", state: "todo", title: "Start kanata",
       // Named after the kanata step's own button: Get kanata on a Mac without Homebrew (D-560).
-      detail: !ready ? (!status.canInstall && status.canDownload === true ? "Get kanata first." : "Install kanata first.") : replaced ? "Deal with the kanata change above first." : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
+      detail: !ready ? (kanataWay(status) === "download" ? "Get kanata first." : "Install kanata first.") : replaced ? "Deal with the kanata change above first." : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
       actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [],
     }));
   }
@@ -229,6 +229,9 @@ function noBuiltInKeyboard(): SetupStep {
   });
 }
 
+/** How the checklist gets kanata: Homebrew first, else keyloom's own download (D-560), else kanata's releases page. */
+const kanataWay = (status: RemapperSetupResponse): "brew" | "download" | "page" => (status.canInstall ? "brew" : status.canDownload === true ? "download" : "page");
+
 /**
  * kanata isn't on this Mac. With Homebrew, Install kanata. Without it, Get kanata: keyloom downloads kanata's pinned release, checks it and
  * keeps it in its own folder (D-560). A failed Homebrew install offers the download too, so it never ends at a link. Only a Mac whose
@@ -236,20 +239,23 @@ function noBuiltInKeyboard(): SetupStep {
  */
 function kanataMissing(status: RemapperSetupResponse): SetupStep {
   const canDownload = status.canDownload === true;
+  const way = kanataWay(status);
   const job = installJob(status, "download", "Get kanata") ?? installJob(status, "install", "Install kanata");
   const brewFailed = status.install.action === "install" && status.install.state === "failed";
   const downloadFailed = status.install.action === "download" && status.install.state === "failed";
   const lead = "kanata is the remapper keyloom writes your MacBook layout for.";
-  const detail = status.canInstall
-    ? lead
-    : canDownload
-      ? `${lead} Homebrew isn't on this Mac, so keyloom downloads kanata ${status.kanata.wanted} from its official release on GitHub, checks it and keeps it in keyloom's own folder.`
-      : `${lead} Homebrew isn't on this Mac, and kanata's release has no download for this Mac's processor. Its releases page lists what there is.`;
-  const first: SetupStep["actions"] = status.canInstall ? [{ id: { kind: "install_kanata" }, label: "Install kanata" }] : canDownload ? [{ id: { kind: "download_kanata" }, label: "Get kanata" }] : [];
-  const actions = job?.actions ?? first;
+  const FIRST = {
+    brew: { title: "Install kanata", detail: lead, actions: [{ id: { kind: "install_kanata" }, label: "Install kanata" }] },
+    download: {
+      title: "Get kanata", actions: [{ id: { kind: "download_kanata" }, label: "Get kanata" }],
+      detail: `${lead} Homebrew isn't on this Mac, so keyloom downloads kanata ${status.kanata.wanted} from its official release on GitHub, checks it and keeps it in keyloom's own folder.`,
+    },
+    page: { title: "Install kanata", actions: [], detail: `${lead} Homebrew isn't on this Mac, and kanata's release has no download for this Mac's processor. Its releases page lists what there is.` },
+  } satisfies Record<typeof way, Pick<SetupStep, "title" | "detail" | "actions">>;
+  const actions = job?.actions ?? FIRST[way].actions;
   return step({
-    key: "kanata", state: "todo", title: job?.title ?? (!status.canInstall && canDownload ? "Get kanata" : "Install kanata"), whileRunning: true,
-    detail: job?.detail ?? detail,
+    key: "kanata", state: "todo", title: job?.title ?? FIRST[way].title, whileRunning: true,
+    detail: job?.detail ?? FIRST[way].detail,
     // After a failed Homebrew install, keyloom's own download is the other way, as a button.
     actions: brewFailed && canDownload ? [...actions, { id: { kind: "download_kanata" }, label: "Download kanata" }] : actions,
     log: job?.log ?? null, problem: job?.problem ?? null,
