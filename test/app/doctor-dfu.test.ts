@@ -15,13 +15,14 @@ const dfuBoard = async (flash: Record<string, unknown>) => loadBoardDir(await te
 describe("doctor and the DFU tools", () => {
   test("a board that needs dfu-programmer gets a warning with the brew command when it is missing, and the path when it isn't", async () => {
     setUserBoards([await dfuBoard({ kind: "dfu-tool", tool: "dfu-programmer", mcu: "atmega32u4", bootloader: "03eb:2ff4", enter: "Press reset." })]);
-    // The tests' PATH carries refusing stand-ins for the real tools (test/helpers/no-real-flash.ts); a bare PATH is how "not installed" looks.
-    process.env.PATH = "/usr/bin:/bin";
+    // Keep Docker fake while removing the flash-tool stand-ins. CI can have a real Docker CLI in /usr/bin.
+    const missingBin = fakeBinDir({ docker: "exit 1" });
+    process.env.PATH = `${missingBin}:/usr/bin:/bin`;
     const missing = (await runToolchainChecks()).find((c) => c.name === "dfu-programmer");
     expect(missing).toMatchObject({ ok: true, warn: true });
     expect(missing?.detail).toContain("brew install dfu-programmer");
 
-    const bin = fakeBinDir({ "dfu-programmer": "exit 0" });
+    const bin = fakeBinDir({ docker: "exit 1", "dfu-programmer": "exit 0" });
     process.env.PATH = `${bin}:/usr/bin:/bin`;
     const present = (await runToolchainChecks()).find((c) => c.name === "dfu-programmer");
     expect(present?.warn).toBeUndefined();
@@ -30,7 +31,8 @@ describe("doctor and the DFU tools", () => {
 
   test("only the tools a board needs are checked", async () => {
     setUserBoards([await dfuBoard({ kind: "dfu-tool", tool: "dfu-util", bootloader: "0483:df11", enter: "Press reset." })]);
-    process.env.PATH = "/usr/bin:/bin";
+    const bin = fakeBinDir({ docker: "exit 1" });
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
     const names = (await runToolchainChecks()).map((c) => c.name);
     expect(names).toContain("dfu-util");
     expect(names).not.toContain("dfu-programmer");
