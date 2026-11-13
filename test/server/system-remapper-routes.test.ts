@@ -1,7 +1,7 @@
 // The remapper setup and System Settings routes (src/api/system-remapper.ts, D-492, D-493), over a fake backend: the allowlist
 // refuses a pane it doesn't name before the backend is asked, and every route needs the token.
 import { afterAll, describe, expect, test } from "bun:test";
-import { RemapperSetupResponseSchema, SetupActionResponseSchema, type SettingsPaneName } from "../../src/api/system-remapper.ts";
+import { KanataLogResponseSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, type SettingsPaneName } from "../../src/api/system-remapper.ts";
 import { type RemapperSetupBackend, handleRemapperSetupRoute } from "../../src/server/system-remapper-routes.ts";
 
 const TOKEN = "t".repeat(43);
@@ -12,7 +12,9 @@ function serve() {
   const opened: SettingsPaneName[] = [];
   const started: string[] = [];
   const installs: string[] = [];
+  const restarted: string[] = [];
   let cancels = 0;
+  let logReads = 0;
   const backend: RemapperSetupBackend = {
     status: async () => ({
       platform: "darwin", canInstall: true, install: { state: "idle", action: null, log: [], failure: null }, kanata: { version: null, wanted: "1.12.0", update: null, path: null, copyVersion: null },
@@ -21,6 +23,8 @@ function serve() {
     installKanata: async (action) => (installs.push(action), action === "install" ? { ok: false, code: "no_brew", reason: "Homebrew isn't installed" } : { ok: true }),
     cancelInstall: async () => (cancels++, { ok: false, code: "not_running", reason: "No kanata install is running." }),
     startKanata: async (boardId) => (started.push(boardId), { ok: true }),
+    restartKanata: async (boardId) => (restarted.push(boardId), { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." }),
+    kanataLog: async () => (logReads++, { ok: true, lines: ["one", "two"] }),
     openSettings: async (pane) => (opened.push(pane), { ok: true }),
   };
   const server = Bun.serve({ port: 0, fetch: async (r) => (await handleRemapperSetupRoute(r, new URL(r.url), backend, TOKEN)) ?? new Response("not mine", { status: 404 }) });
@@ -28,7 +32,7 @@ function serve() {
   const call = (path: string, init: RequestInit = {}, token: string | null = TOKEN) =>
     fetch(`http://127.0.0.1:${server.port}${path}`, { ...init, headers: { ...(token ? { "x-keyloom-token": token } : {}), ...init.headers } });
   const post = (path: string, body: unknown, token: string | null = TOKEN) => call(path, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }, token);
-  return { call, post, opened, started, installs, cancels: () => cancels };
+  return { call, post, opened, started, restarted, installs, cancels: () => cancels, logReads: () => logReads };
 }
 
 describe("remapper setup routes", () => {
@@ -73,6 +77,22 @@ describe("remapper setup routes", () => {
     expect((await post("/api/system/remapper/start", { boardId: "apple/macbook-ansi" })).status).toBe(200);
     expect(started).toEqual(["apple/macbook-ansi"]);
     expect((await post("/api/system/remapper/start", {})).status).toBe(400);
+  });
+
+  test("restart names the board and answers with the backend's code; the log read takes an empty body and needs the token (R11-02)", async () => {
+    const { post, restarted, logReads } = serve();
+    const res = await post("/api/system/remapper/restart", { boardId: "apple/macbook-ansi" });
+    expect(res.status).toBe(200);
+    expect(SetupActionResponseSchema.parse(await res.json())).toMatchObject({ ok: false, code: "still_not_answering" });
+    expect((await post("/api/system/remapper/restart", {})).status).toBe(400);
+    expect((await post("/api/system/remapper/restart", { boardId: "apple/macbook-ansi" }, null)).status).toBe(401);
+    expect(restarted).toEqual(["apple/macbook-ansi"]);
+
+    const log = await post("/api/system/remapper/log", {});
+    expect(KanataLogResponseSchema.parse(await log.json())).toEqual({ ok: true, lines: ["one", "two"] });
+    expect((await post("/api/system/remapper/log", { path: "/etc/master.passwd" })).status).toBe(400);
+    expect((await post("/api/system/remapper/log", {}, null)).status).toBe(401);
+    expect(logReads()).toBe(1);
   });
 
   test("open-settings opens a listed pane and refuses anything else before the backend sees it", async () => {

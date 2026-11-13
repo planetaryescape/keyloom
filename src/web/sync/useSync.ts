@@ -6,7 +6,7 @@ import type { DetectedKeyboard } from "../../api/detected-keyboards.ts";
 import type { ReviewEvent } from "../../api/review.ts";
 import { createEventParser } from "./events.ts";
 import { retryWhileBusy } from "./busy-retry.ts";
-import { RemapperSetupResponseSchema, SetupActionResponseSchema, type KanataInstallAction, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
+import { KanataLogResponseSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, type KanataInstallAction, type KanataLogResponse, type RemapperSetupResponse, type SettingsPaneName, type SetupActionResponse } from "../../api/system-remapper.ts";
 
 export interface SyncApi {
   /** The session token, for the ways out a sync screen offers itself, such as Restart keyloom (R9-05). */
@@ -50,6 +50,10 @@ export interface SyncApi {
     installKanata: (action?: KanataInstallAction) => Promise<SetupActionResponse>;
     cancelInstall: () => Promise<SetupActionResponse>;
     startKanata: (boardId: string) => Promise<SetupActionResponse>;
+    /** Restarts kanata's installed service through macOS's password dialog, then waits for kanata to answer (R11-02). */
+    restartKanata: (boardId: string) => Promise<SetupActionResponse>;
+    /** kanata's last log lines, read through macOS's password dialog (R11-02). */
+    kanataLog: () => Promise<KanataLogResponse>;
     openSettings: (pane: SettingsPaneName) => Promise<SetupActionResponse>;
   };
 }
@@ -170,6 +174,8 @@ export function useSync(token: string): SyncApi {
       installKanata: (action = "install") => request("POST", "/api/system/remapper/install-kanata", token, SetupActionResponseSchema, undefined, { action }),
       cancelInstall: () => request("POST", "/api/system/remapper/install-kanata/cancel", token, SetupActionResponseSchema, undefined, {}),
       startKanata: (boardId) => request("POST", "/api/system/remapper/start", token, SetupActionResponseSchema, undefined, { boardId }),
+      restartKanata: (boardId) => request("POST", "/api/system/remapper/restart", token, SetupActionResponseSchema, undefined, { boardId }),
+      kanataLog: () => request("POST", "/api/system/remapper/log", token, KanataLogResponseSchema, undefined, {}),
       openSettings: (pane) => request("POST", "/api/system/open-settings", token, SetupActionResponseSchema, undefined, { pane }),
     },
     replaceForeign: async (layoutId) => {

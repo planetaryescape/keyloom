@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, ExternalLink, FilePlus2, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CircleCheck, ExternalLink, FilePlus2, FileUp, Laptop, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BoardChoice, ImportResponse } from "../../api/http.ts";
 import { boardDisplayName } from "../shell/Header.tsx";
@@ -6,7 +6,7 @@ import { CopyCommand } from "../shell/CopyCommand.tsx";
 import { RestoreKeyboard, keyboardRemoved } from "../keyboards/RestoreKeyboard.tsx";
 import { restoreKeyboard } from "../keyboards/api-keyboards.ts";
 import { CONTRIBUTION_GUIDE } from "../keyboards/search-words.ts";
-import { activitiesFor, importRefusal, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type Refused } from "./import-words.ts";
+import { activitiesFor, importRefusal, importedNote, otherBoardWords, restoreFor, retryFor, type ImportRefusal, type ImportedNote, type Refused } from "./import-words.ts";
 import { createConfig } from "../configs/api-configs.ts";
 import { ApiError, fetchLayouts } from "../api.ts";
 import { IMPORTED_UNREADABLE, fetchBoards, readKarabinerConfig, uploadLayout } from "./api-import.ts";
@@ -35,16 +35,30 @@ interface Props {
   first?: boolean;
   /** Opened from one board's setup card: only that board's card shows, with a way to show every card (R7-13). */
   only?: string | null | undefined;
+  /**
+   * True from when a card sends a file until it has opened the layout or failed (R11-01). The first-run screen is shown only while there
+   * are no layouts, and the new layout's event can arrive before the import's answer, so the screen behind it holds while this is true:
+   * otherwise the note the card shows after the import would never be seen.
+   */
+  onHold?: ((holding: boolean) => void) | undefined;
 }
 
 // What the app shows with no layouts, and from the layout menu's "Import a layout" (18#states): one card per board, each
 // saying which file to export and taking it by drop, so no terminal is needed. The CLI command stays underneath.
-export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLabel = "Back to your layouts", first = onBack === undefined, only = null }: Props) {
+export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLabel = "Back to your layouts", first = onBack === undefined, only = null, onHold }: Props) {
   const [boards, setBoards] = useState<Boards>({ status: "loading" });
   const [showAll, setShowAll] = useState(false);
   const shown = boards.status === "ready" ? cardsFor(boards.boards, showAll ? null : only) : [];
   const [attempt, setAttempt] = useState(0);
   const [activities, setActivities] = useState<ReviewActivity[]>([]);
+  // Several cards can hold the screen at once (one uploading, one showing its note): the screen is held while any of them holds it, so one
+  // card letting go never releases another's (PR #319 CodeRabbit).
+  const holders = useRef(new Set<string>());
+  const holdFor = (id: string) => (on: boolean) => {
+    if (on) holders.current.add(id);
+    else holders.current.delete(id);
+    onHold?.(holders.current.size > 0);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,7 +100,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
           <ul className="board-cards" aria-label="Supported keyboards">
             {shown.map((board) => (
               <li key={board.id}>
-                <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} />
+                <BoardCard board={board} boards={boards.boards} token={token} onImported={onImported} onStartedBlank={onStartedBlank} activities={activities} onHold={onHold === undefined ? undefined : holdFor(board.id)} />
               </li>
             ))}
           </ul>
@@ -129,7 +143,10 @@ function inOrder(boards: readonly BoardChoice[]): BoardChoice[] {
 }
 
 /** One board's card. `activities`: what is ticked above the cards, unfiltered, because Import it as … can send the file to a board that takes tests (#299 review). */
-export function BoardCard({ board, boards, token, onImported, onStartedBlank, activities }: { board: BoardChoice; boards: readonly BoardChoice[]; token: string; onImported: (result: ImportResponse) => void; onStartedBlank: (layoutId: string) => void; activities: ReviewActivity[] }) {
+export function BoardCard({ board, boards, token, onImported, onStartedBlank, activities, onHold }: {
+  board: BoardChoice; boards: readonly BoardChoice[]; token: string; onImported: (result: ImportResponse) => void; onStartedBlank: (layoutId: string) => void; activities: ReviewActivity[];
+  onHold?: ((holding: boolean) => void) | undefined;
+}) {
   const guide = guideFor(board);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -147,6 +164,23 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
   const [nothingToRead, setNothingToRead] = useState(false);
   // A refusal keyloom can act on (R6-08, R6-18), with what was refused and where it went, so Restore or Import it as … does it again.
   const [refused, setRefused] = useState<Refused | null>(null);
+  // Saved, with something to tell first: the Karabiner edit the card promises, or the importer's warnings (R11-01). The card shows them
+  // in place of the drop zone, and Open … goes on to the layout.
+  const [imported, setImported] = useState<{ result: ImportResponse; note: ImportedNote } | null>(null);
+  // A card that goes away while it holds the screen behind it (Back to choosing a keyboard) lets go, or that screen would stay up for good.
+  const holding = useRef(false);
+  const hold = (on: boolean) => { holding.current = on; onHold?.(on); };
+  const holdRef = useRef(onHold);
+  holdRef.current = onHold;
+  // Whether the card is still on screen: an upload or a read that ends after Back must not take the screen again (PR #319 CodeRabbit).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (holding.current) holdRef.current?.(false);
+    };
+  }, []);
   const picker = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const command = importCommand(board, activitiesFor(board, activities));
@@ -157,7 +191,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
    */
   async function take(files: FileList | readonly File[] | null, as: BoardChoice = board, by: CardAction = "file") {
     const file = files?.[0];
-    if (file === undefined || busy || saved) return;
+    if (file === undefined || busy || saved || imported !== null) return;
     // A file keyloom already read as its own export goes to the board it names, whatever that board's own editor exports.
     if (as === board && !acceptsFile(guide, file.name)) {
       fail({ message: `${file.name} isn't a ${guide.accepts} file. ${guide.steps}` }, "file");
@@ -166,14 +200,22 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     setBusy(true);
     setProblem(null);
     setRefused(null);
+    hold(true);
+    let held = false;
     try {
-      onImported(await uploadLayout(token, as.id, file, activitiesFor(as, activities)));
+      const result = await uploadLayout(token, as.id, file, activitiesFor(as, activities));
+      const note = importedNote(result);
+      held = note !== null;
+      if (!mounted.current) held = false;
+      else if (note !== null) setImported({ result, note });
+      else onImported(result);
     } catch (error) {
       if (error instanceof ApiError && error.code === IMPORTED_UNREADABLE) setSaved(true);
       const refusal = importRefusal(error, boards, as);
       if (refusal !== null) setRefused({ refusal, file, as });
       else fail(pageFailure(error, "The import didn't go through."), by);
     } finally {
+      if (!held) hold(false);
       setBusy(false);
       // The same file can be chosen again after a fix.
       if (picker.current !== null) picker.current.value = "";
@@ -195,6 +237,8 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
     } finally {
       setBusy(false);
     }
+    // Back while keyloom read Karabiner's settings: the card is gone, so nothing is imported and nothing takes the screen.
+    if (!mounted.current) return;
     await take([file], board, "mac");
   }
 
@@ -255,6 +299,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
         <h3 id={titleId}>{board.name}</h3>
         <p className="muted">{board.vendor} · {board.keyCount} keys</p>
       </header>
+      {imported !== null ? <ImportedNoteView note={imported.note} onOpen={() => { hold(false); onImported(imported.result); }} /> : <>
       <p className="board-card-steps">{guide.steps}</p>
       {guide.link === undefined && !guide.readFromMac ? null : (
         <div className="board-card-actions">
@@ -288,6 +333,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
           onChange={(event) => void take(event.currentTarget.files)}
         />
       </div>
+      </>}
       {problem === null ? null : <CardProblem token={token} problem={problem} primary={off("mac") || off("blank")} />}
       {restore === null ? null : (
         <RestoreKeyboard token={token} restore={() => restoreKeyboard(token, restore.boardId)} boardName={restore.boardName} doing={restore.doing} onRestored={again} />
@@ -308,13 +354,42 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
           Reload
         </button>
       ) : null}
-      {/* The terminal way stays, folded: most people never need it (23#chrome-recedes). */}
-      <details className="board-card-terminal">
-        <summary>Or from the terminal</summary>
-        {/* The shared Copy says when the clipboard refused, and selects the command instead (R6-15). */}
-        <CopyCommand command={command} />
-      </details>
+      {/* The terminal way stays, folded: most people never need it (23#chrome-recedes). Not after an import, which it would repeat. */}
+      {imported === null ? (
+        <details className="board-card-terminal">
+          <summary>Or from the terminal</summary>
+          {/* The shared Copy says when the clipboard refused, and selects the command instead (R6-15). */}
+          <CopyCommand command={command} />
+        </details>
+      ) : null}
     </article>
+  );
+}
+
+/**
+ * An import that has something to say before the layout opens (R11-01): the Karabiner entry with Copy, which keyloom can't add itself
+ * because it never writes karabiner.json (D-233), and the importer's warnings. Open … is the way on.
+ */
+function ImportedNoteView({ note, onOpen }: { note: ImportedNote; onOpen: () => void }) {
+  return (
+    <div className="board-card-imported" role="status">
+      <p className="board-card-imported-title"><CircleCheck size={14} aria-hidden="true" /> {note.title}</p>
+      {note.karabiner === null ? null : (
+        <>
+          <p>{note.karabiner.text}</p>
+          <CopyCommand command={note.karabiner.entry} noun="entry" />
+          {note.karabiner.unimported === null ? null : <p>{note.karabiner.unimported}</p>}
+        </>
+      )}
+      {note.warnings.length === 0 ? null : (
+        <ul className="board-card-warnings" aria-label="What keyloom noted while importing">
+          {note.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      )}
+      <button type="button" className="button button-primary board-card-reload" onClick={onOpen}>
+        {note.open} <ArrowRight size={14} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

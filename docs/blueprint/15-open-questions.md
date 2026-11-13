@@ -178,6 +178,10 @@ The same 15 home-row-mod scenarios, with 10 QMK option sets, went through keyloo
 
 [S30](../research/spikes/S30.md) and [S31](../research/spikes/S31.md) need BK at the keyboard and an administrator password. [S32](../research/spikes/S32.md) and [S36](../research/spikes/S36.md) need him to press keys under `kanata -d`. The MacBook board's geometry says `verified: false` until S36, and the F-row and fn names are assumptions until S32.
 
+Open since round 11 (D-559), for S30 to settle on hardware:
+- What kanata 1.12.0 does when its service starts it before macOS allows Input Monitoring and Accessibility: whether it exits, keeps running with its port closed, or opens its port and remaps nothing, and what it writes to its log. The checklist's "installed, but kanata isn't answering" step covers a closed port; the other two outcomes would need their own words.
+- Whether the Karabiner VirtualHID driver needs activating (`Karabiner-VirtualHIDDevice-Manager activate`) and `Karabiner-VirtualHIDDevice-Daemon` starting on a Mac without Karabiner-Elements running, how keyloom could read that state without root, and whether keyloom should start the daemon as root. keyloom has no step for it: the checklist only waits for the driver to be installed.
+
 ### S21 result (2026-10-15)
 
 No. At `ce69e85` the Glove80's underglow fills one buffer with one effect, and the only per-LED colours are fixed status LEDs on the left half, with a magenta layer indicator. A key's own colour on a layer exists only in the open community pull request `moergo-sc/zmk#36`, which is on another base and unmerged. The Glove80 therefore gets no lighting model; the board says why and the agent says it plainly. See [../research/spikes/S21.md](../research/spikes/S21.md).

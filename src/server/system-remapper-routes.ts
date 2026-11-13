@@ -3,8 +3,8 @@
 import { z } from "zod";
 import type { ApiErrorBody } from "../api/http.ts";
 import {
-  InstallKanataRequestSchema, OpenSettingsRequestSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, StartKanataRequestSchema,
-  type KanataInstallAction, type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
+  InstallKanataRequestSchema, KanataLogResponseSchema, OpenSettingsRequestSchema, RemapperSetupResponseSchema, SetupActionResponseSchema, StartKanataRequestSchema,
+  type KanataInstallAction, type KanataLogResponse, type RemapperSetupResponse, type SetupActionResponse, type SettingsPaneName,
 } from "../api/system-remapper.ts";
 import { checkToken } from "./guard.ts";
 
@@ -16,6 +16,10 @@ export interface RemapperSetupBackend {
   /** Stops the running install. */
   cancelInstall(): Promise<SetupActionResponse>;
   startKanata(boardId: string): Promise<SetupActionResponse>;
+  /** Restarts kanata's installed service and waits for kanata to answer on the board's port (R11-02). */
+  restartKanata(boardId: string): Promise<SetupActionResponse>;
+  /** kanata's last log lines, read as root through macOS's password dialog (R11-02). */
+  kanataLog(): Promise<KanataLogResponse>;
   openSettings(pane: SettingsPaneName): Promise<SetupActionResponse>;
 }
 
@@ -24,12 +28,14 @@ const MAX_BODY_BYTES = 10_000;
 
 const errorResponse = (status: number, code: string, message: string): Response => Response.json({ error: { code, message } } satisfies ApiErrorBody, { status });
 
-type Action = "status" | "install" | "cancel" | "start" | "settings";
+type Action = "status" | "install" | "cancel" | "start" | "restart" | "log" | "settings";
 const ROUTES: ReadonlyArray<{ method: "GET" | "POST"; path: string; action: Action }> = [
   { method: "GET", path: "/api/system/remapper", action: "status" },
   { method: "POST", path: "/api/system/remapper/install-kanata", action: "install" },
   { method: "POST", path: "/api/system/remapper/install-kanata/cancel", action: "cancel" },
   { method: "POST", path: "/api/system/remapper/start", action: "start" },
+  { method: "POST", path: "/api/system/remapper/restart", action: "restart" },
+  { method: "POST", path: "/api/system/remapper/log", action: "log" },
   { method: "POST", path: "/api/system/open-settings", action: "settings" },
 ];
 
@@ -62,8 +68,9 @@ export async function handleRemapperSetupRoute(request: Request, url: URL, backe
     }
     const body = await readBody(request);
     if (body instanceof Response) return body;
-    if (route.action === "cancel") {
+    if (route.action === "cancel" || route.action === "log") {
       if (!EmptyBody.safeParse(body).success) return errorResponse(400, "schema", "The request body must be an empty object.");
+      if (route.action === "log") return Response.json(KanataLogResponseSchema.parse(await backend.kanataLog()));
       return Response.json(SetupActionResponseSchema.parse(await backend.cancelInstall()));
     }
     if (route.action === "install") {
@@ -71,10 +78,11 @@ export async function handleRemapperSetupRoute(request: Request, url: URL, backe
       if (!parsed.success) return errorResponse(400, "schema", "Send {} or { action: \"install\" | \"upgrade\" | \"reinstall\" | \"download\" }.");
       return Response.json(SetupActionResponseSchema.parse(await backend.installKanata(parsed.data.action ?? "install")));
     }
-    if (route.action === "start") {
+    if (route.action === "start" || route.action === "restart") {
       const parsed = StartKanataRequestSchema.safeParse(body);
       if (!parsed.success) return errorResponse(400, "schema", "Send { boardId }.");
-      return Response.json(SetupActionResponseSchema.parse(await backend.startKanata(parsed.data.boardId)));
+      const answer = route.action === "start" ? await backend.startKanata(parsed.data.boardId) : await backend.restartKanata(parsed.data.boardId);
+      return Response.json(SetupActionResponseSchema.parse(answer));
     }
     // Only a pane on the list is opened; anything else is refused before the computer is asked.
     const parsed = OpenSettingsRequestSchema.safeParse(body);

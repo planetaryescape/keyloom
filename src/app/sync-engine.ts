@@ -19,7 +19,7 @@ import { transact } from "../persistence/transaction.ts";
 import { latestVerifiedVersionOnBoard } from "../persistence/versions.ts";
 import { type LayoutRow, findLayoutRow, findRevision, listLayoutRows } from "../persistence/layouts.ts";
 import {
-  type BoardSyncRow, type SyncFailure, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
+  type BoardSyncRow, type SyncFailure, type SyncFinish, type SyncRow, activeSyncs, claimSync, finishSync, findSync, getBoardSync, hasEarlierRevision, lastSucceededSync, lastSyncOfBoard, lastSyncOfRevision, newSyncId,
   progressSync, recordKanataSeen, revisionLine, setAutoSyncChoice, setPaused as storePaused,
 } from "../persistence/syncs.ts";
 import type { FlashNote, FlashState } from "../firmware/toolchain/flash-state.ts";
@@ -99,6 +99,8 @@ export type BoardSyncView = {
   last: SyncRunView | null;
   /** Observed firmware/build or remapper revision marker, not a full keymap readback. Internal subscribers only. */
   reviewDeviceKey?: string;
+  /** A remapper's failed apply only: the config has one version, so there is no earlier one to go back to (R11-04). */
+  firstVersion?: boolean;
 };
 
 export type SyncOptions = {
@@ -527,6 +529,8 @@ export class SyncEngine {
       boardId: b.boardId, boardName: b.boardName, remapper: isRemapper(b.boardId), layoutId: b.layout.id, layoutName: b.layout.name, headRevisionId: b.layout.headRevisionId,
       reviewDeviceKey: JSON.stringify(b.reading.state === "keyloom" ? { ...b.reading, keys: [...b.reading.keys].sort(), missingHalves: [...(b.reading.missingHalves ?? [])].sort() } : b.reading),
       otherLayouts: b.layouts.filter((l) => l.id !== b.layout.id && l.archivedAt === null).length, state,
+      // Read only where the line reads it (a failed apply with no count), so the views built every tick don't ask the database for every board.
+      ...(isRemapper(b.boardId) && state.kind === "behind" && state.why === "failed" && state.changes === null ? { firstVersion: !hasEarlierRevision(this.app.db, b.layout.id, b.layout.headRevisionId) } : {}),
       auto: {
         on: b.facts.auto.on && !b.facts.auto.paused, choice: bs.autoSync, paused: bs.paused, proven: bs.provenAt !== null, provenAt: bs.provenAt,
         dueAt: state.kind === "behind" && state.why === "waiting" ? b.layout.updatedAt + this.quietMs : null,

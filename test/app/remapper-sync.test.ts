@@ -108,6 +108,25 @@ describe("the MacBook's sync state", () => {
     expect(view.last).toMatchObject({ failure: "build", errorCode: "kanata_setup", buildId: null });
   });
 
+  // R11-04: the line says there is no earlier version only when the config has one; the flag rides only on a failed apply.
+  test("a failed apply says whether the config has an earlier version to go back to", async () => {
+    const world = make({ proven: true });
+    world.deps.remapper!.apply = async () => ({ ok: false, step: "check", error: "kanata --check refused the new config, so nothing was changed: x", code: "kanata_refused" });
+    const e = world.engine();
+    await e.start();
+    const view = () => e.views().find((v) => v.boardId === MAC)!;
+    expect(view().firstVersion).toBeUndefined();
+    const run = await e.syncNow(world.layoutId);
+    if (run.kind !== "started") throw new Error("sync did not start");
+    await run.done;
+    expect(view().state).toMatchObject({ kind: "behind", why: "failed" });
+    expect(view().firstVersion).toBe(true);
+    edit(world);
+    const again = await e.syncNow(world.layoutId);
+    if (again.kind === "started") await again.done;
+    expect(view().firstVersion).toBe(false);
+  });
+
   test("an edit makes it behind by one change, and the next sync catches up", async () => {
     const world = make();
     const e = world.engine();

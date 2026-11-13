@@ -11,18 +11,29 @@ export const recheckAfter = (id: { kind: string }): "now" | "on_return" => (id.k
 
 export type SetupActionId =
   | { kind: "install_kanata" } | { kind: "update_kanata" } | { kind: "reinstall_kanata" } | { kind: "download_kanata" } | { kind: "cancel_install" } | { kind: "start_kanata" }
+  | { kind: "restart_kanata" } | { kind: "show_kanata_log" }
   | { kind: "open_settings"; pane: SettingsPaneName };
+
+/** A step's button. `off`: shown but not pressable, because a step above has to be done first; the step's detail says which (R11-02). */
+export type SetupAction = { id: SetupActionId; label: string; off?: boolean };
+
+/** The Karabiner edit in words, for the import card and the checklist's Karabiner step alike (R11-01). keyloom never writes karabiner.json (D-233). */
+export const KARABINER_ENTRY_WORDS = "add this entry to the \"devices\" list of your profile in karabiner.json. Your rules stay in the file, and removing the entry turns them back on.";
 
 export interface SetupStep {
   key: string;
   state: "done" | "todo" | "note";
   title: string;
   detail: string | null;
-  actions: Array<{ id: SetupActionId; label: string }>;
+  actions: SetupAction[];
   /** A page to open when keyloom can't do the step itself. */
   link: { href: string; label: string } | null;
-  /** The last lines Homebrew printed, while it installs or updates kanata, or Get kanata's download progress. */
+  /** Text to copy that keyloom can't put in place itself, such as the Karabiner entry (R11-01). */
+  copy: { text: string; noun: string } | null;
+  /** The last lines Homebrew printed while it installs or updates kanata, Get kanata's download progress, or kanata's own log once read (R11-02). */
   log: string[] | null;
+  /** What `log` holds, for a screen reader. */
+  logLabel: string;
   /** Why the last try at this step failed. */
   problem: string | null;
   /** Shown while kanata runs too: these need doing even when the keyboard types the layout. */
@@ -39,7 +50,9 @@ const driverPage = (version: string | null) =>
 export const KANATA_COPY_DIR = "/Library/Application Support/keyloom";
 const LOG_LINES = 6;
 
-const step = (s: Pick<SetupStep, "key" | "state" | "title"> & Partial<SetupStep>): SetupStep => ({ detail: null, actions: [], link: null, log: null, problem: null, whileRunning: false, ...s });
+const step = (s: Pick<SetupStep, "key" | "state" | "title"> & Partial<SetupStep>): SetupStep => ({
+  detail: null, actions: [], link: null, copy: null, log: null, logLabel: "What Homebrew printed last", problem: null, whileRunning: false, ...s,
+});
 
 /** How each job is named on its step, and the button that runs it: Homebrew's three, and Get kanata's download without Homebrew (D-560). */
 const JOBS: Record<KanataInstallAction, { running: string; noun: string; button: string; retry: SetupActionId }> = {
@@ -82,12 +95,18 @@ function installJob(status: RemapperSetupResponse, action: KanataInstallAction, 
   return null;
 }
 
+/** What the checklist knows beyond the status read: kanata's log lines, once Show kanata's log has read them (R11-02). */
+export type SetupExtras = { kanataLog?: string[] | null };
+
 /**
  * The steps in the order they have to happen: kanata, its driver, starting it, then macOS's permissions for the copy it starts. A Mac with
  * no built-in keyboard (a Mac mini or a Mac Studio) gets only the note that says so: kanata would have nothing to remap, so installing it,
  * the password dialog and the permissions would lead nowhere (R10-14, PR #315 review).
+ *
+ * Once kanata's service is installed and kanata doesn't answer (R11-02), the permissions step comes before the service's step: macOS can
+ * only be asked to allow the copy after the first start made it, and kanata needs those grants to run.
  */
-export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
+export function setupSteps(status: RemapperSetupResponse, extras: SetupExtras = {}): SetupStep[] {
   const mac = status.platform === "darwin";
   const find = (code: string) => status.findings.find((f) => f.code === code);
   if (find("keyboard_name")?.status === "fail") return [noBuiltInKeyboard()];
@@ -118,6 +137,8 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
   }
 
   const driver = find("driver_missing") ?? find("driver_mismatch");
+  // kanata types through the driver, so nothing below starts it before the driver is in (R11-02).
+  const driverReady = driver === undefined || driver.status === "ok";
   if (driver !== undefined) {
     const ok = driver.status === "ok";
     steps.push(step({
@@ -142,51 +163,71 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     const what = `${path ?? "The kanata keyloom finds"} is ${version === null ? "a version keyloom couldn't read" : `version ${version}`}, and kanata's background service runs ${copyVersion === null ? "a version keyloom couldn't read" : `version ${copyVersion}`}. Homebrew didn't make this change, so keyloom won't copy it with your password.`;
     steps.push(step({
       key: "replaced", state: "todo", title: job?.title ?? title, whileRunning: true,
-      detail: job?.detail ?? `${what} ${fromBrew ? "Reinstall kanata to put Homebrew's own kanata back." : "If you installed this kanata yourself, set up with it. macOS asks for your password."}`,
+      detail: job?.detail ?? `${what} ${fromBrew ? "Reinstall kanata to put Homebrew's own kanata back." : `If you installed this kanata yourself, set up with it. macOS asks for your password.${driverReady ? "" : " Install the driver above first."}`}`,
+      // Setting up starts kanata, which needs the driver, so the button waits for it like Set up and start kanata (PR #319 CodeRabbit).
       actions: job?.actions ?? (fromBrew
         ? status.canInstall ? [{ id: { kind: "reinstall_kanata" }, label: "Reinstall kanata" }] : []
-        : mac ? [{ id: { kind: "start_kanata" }, label: "Set up with this kanata" }] : []),
+        : mac ? [{ id: { kind: "start_kanata" }, label: "Set up with this kanata", off: !driverReady }] : []),
       log: job?.log ?? null, problem: job?.problem ?? null,
       link: fromBrew && !status.canInstall ? { href: KANATA_RELEASES, label: "Download kanata" } : null,
     }));
   }
+  // Installed, but kanata doesn't answer (R11-02): the doctor reads the port as `warn` only while the service is installed. Setting up again
+  // would only do the same, so the step restarts the service, unless kanata changed since setup, which Set up and start kanata copies.
+  const notAnswering = port?.status === "warn" && daemon?.status === "ok" && ready && !replaced
+    && find("kanata_updated")?.status !== "warn" && find("daemon_outdated")?.status !== "warn";
+  const permissions = find("permissions") === undefined ? null : step({
+    key: "permissions", state: "todo", title: "Allow kanata in Privacy & Security",
+    // The kanata to allow is the copy Set up and start kanata makes, so before that step this one says so (R10-03): until then there is
+    // nothing in Privacy & Security to turn on.
+    detail: startable && !notAnswering
+      ? `After the Start kanata step above, turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}, which that step puts there. macOS doesn't let keyloom check this.`
+      : `Turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}. macOS doesn't let keyloom check this.`,
+    actions: mac ? [{ id: { kind: "open_settings", pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { kind: "open_settings", pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
+  });
   if (port?.status === "ok") steps.push(step({ key: "start", state: "done", title: "kanata is running" }));
-  else if (startable) {
+  else if (notAnswering) {
+    if (permissions !== null) steps.push(permissions);
+    const lines = extras.kanataLog ?? null;
+    steps.push(step({
+      key: "start", state: "todo", title: "kanata's service is installed, but kanata isn't answering",
+      detail: !driverReady ? "Install the driver above first."
+        : `Restart its service to start kanata again. If kanata isn't on in both panes above yet, turn it on there first, so kanata starts with them. macOS asks for your password. Show kanata's log to see what kanata wrote.${lines !== null && lines.length === 0 ? " kanata's log has nothing in it yet." : ""}`,
+      actions: mac ? [
+        { id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: !driverReady },
+        { id: { kind: "show_kanata_log" }, label: "Show kanata's log" },
+      ] : [],
+      log: lines !== null && lines.length > 0 ? lines : null, logLabel: "What kanata wrote last",
+    }));
+  } else if (startable) {
     steps.push(step({
       key: "start", state: "todo", title: "Start kanata",
       // Named after the kanata step's own button: Get kanata on a Mac without Homebrew (D-560).
-      detail: !ready ? (kanataWay(status) === "download" ? "Get kanata first." : "Install kanata first.") : replaced ? "Deal with the kanata change above first." : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
-      actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [],
+      detail: !ready ? (kanataWay(status) === "download" ? "Get kanata first." : "Install kanata first.") : replaced ? "Deal with the kanata change above first." : !driverReady ? "Install the driver above first."
+        : "macOS asks for your password to copy kanata where only macOS can change it, install its background service and start it.",
+      // Off, not hidden, while the driver is still to do: the person sees what comes next, and why it can't run yet (R11-02).
+      actions: mac && ready && !replaced ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: !driverReady }] : [],
     }));
   }
-  // The kanata to allow is the copy Set up and start kanata makes, so this step comes after it, and says so while that step is still to do
-  // (R10-03): before it, there is nothing in Privacy & Security to turn on.
-  if (find("permissions") !== undefined) {
-    steps.push(step({
-      key: "permissions", state: "todo", title: "Allow kanata in Privacy & Security",
-      detail: startable
-        ? `After the Start kanata step above, turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}, which that step puts there. macOS doesn't let keyloom check this.`
-        : `Turn kanata on under Input Monitoring and under Accessibility. The kanata to allow is keyloom's copy, in ${KANATA_COPY_DIR}. macOS doesn't let keyloom check this.`,
-      actions: mac ? [{ id: { kind: "open_settings", pane: "input_monitoring" }, label: "Open Input Monitoring settings" }, { id: { kind: "open_settings", pane: "accessibility" }, label: "Open Accessibility settings" }] : [],
-    }));
-  }
+  if (permissions !== null && !notAnswering) steps.push(permissions);
 
   // The daemon runs keyloom's own copy of kanata (D-498). While kanata is stopped, Start kanata above copies it again, so this step
   // only appears while it runs.
   if (!startable) {
     const updated = find("kanata_updated");
     const outdated = find("daemon_outdated");
-    const again: Array<{ id: SetupActionId; label: string }> = mac ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }] : [];
+    const again: SetupAction[] = mac ? [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: !driverReady }] : [];
+    const needsDriver = driverReady ? "" : " Install the driver above first.";
     if (updated?.status === "warn") {
       const { path, version } = status.kanata;
       steps.push(step({
         key: "copy", state: "todo", title: "kanata was updated. Set it up again", whileRunning: true, actions: again,
-        detail: `Homebrew updated kanata${version === null ? "" : ` to ${version}`}${path === null ? "" : `, at ${path}`}. kanata's background service still runs the kanata from before. Setting up again copies the new one, and macOS asks for your password.`,
+        detail: `Homebrew updated kanata${version === null ? "" : ` to ${version}`}${path === null ? "" : `, at ${path}`}. kanata's background service still runs the kanata from before. Setting up again copies the new one, and macOS asks for your password.${needsDriver}`,
       }));
     } else if (outdated?.status === "warn") {
       steps.push(step({
         key: "copy", state: "todo", title: "Set kanata up again", whileRunning: true, actions: again,
-        detail: `kanata's background service runs kanata from a folder apps running as you can change. Setting up again runs keyloom's own copy, in ${KANATA_COPY_DIR}, which only macOS can change. macOS asks for your password.`,
+        detail: `kanata's background service runs kanata from a folder apps running as you can change. Setting up again runs keyloom's own copy, in ${KANATA_COPY_DIR}, which only macOS can change. macOS asks for your password.${needsDriver}`,
       }));
     }
   }
@@ -206,7 +247,10 @@ export function setupSteps(status: RemapperSetupResponse): SetupStep[] {
     const installed = find("karabiner_elements") !== undefined;
     steps.push(step({
       // While kanata runs is when both remappers grab the keyboard, so the running view keeps this step (whileRunning).
-      key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", whileRunning: true, detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.",
+      key: "karabiner", state: "note", title: "Karabiner-Elements also takes this keyboard", whileRunning: true,
+      // The edit the Karabiner import showed, here too (R11-01): keyloom never writes karabiner.json (D-233), so the person adds it.
+      detail: `In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it.${status.karabinerEntry === undefined ? "" : ` Or ${KARABINER_ENTRY_WORDS}`}`,
+      copy: status.karabinerEntry === undefined ? null : { text: status.karabinerEntry, noun: "entry" },
       actions: mac && installed ? [{ id: { kind: "open_settings", pane: "karabiner_elements" }, label: "Open Karabiner-Elements" }] : [],
     }));
   }
@@ -271,13 +315,25 @@ function kanataMissing(status: RemapperSetupResponse, keptChanged: boolean): Set
 /** The steps that still need doing while kanata runs: an update, setting it up again, or a kanata changed outside Homebrew. */
 export const attentionSteps = (status: RemapperSetupResponse): SetupStep[] => setupSteps(status).filter((s) => s.whileRunning && s.state !== "done");
 
-/** What to say, and where to go, for a setup step that didn't work. */
-export type SetupFailure = { text: string; link: SetupStep["link"] };
+/** What to say, and where to go, for a setup step that didn't work; `action` is a step's button that gets past it (R11-02). */
+export type SetupFailure = { text: string; link: SetupStep["link"]; action?: SetupAction };
 
-/** The SetupFailure for a step's code. */
-export function setupFailure(code: string, reason: string): SetupFailure {
+const SET_UP_AGAIN: SetupAction = { id: { kind: "start_kanata" }, label: "Set up and start kanata" };
+
+/** The SetupFailure for a step's code. `kind` is the button that was pressed, for the words of a closed password dialog. */
+export function setupFailure(code: string, reason: string, kind?: SetupActionId["kind"]): SetupFailure {
   switch (code) {
-    case "cancelled": return { text: "You cancelled the password dialog, so kanata didn't start. Press the button again when you're ready.", link: null };
+    case "cancelled":
+      if (kind === "restart_kanata") return { text: "You cancelled the password dialog, so kanata's service wasn't restarted. Press Restart kanata's service again when you're ready.", link: null };
+      if (kind === "show_kanata_log") return { text: "You cancelled the password dialog, so keyloom didn't read kanata's log. Press Show kanata's log again when you're ready.", link: null };
+      return { text: "You cancelled the password dialog, so kanata didn't start. Press the button again when you're ready.", link: null };
+    // Restart kanata's service ran, and kanata still didn't answer after it (R11-02). The step's own Show kanata's log, right above, is
+    // what can say more, so the line adds no second one.
+    case "still_not_answering": return { text: "keyloom restarted kanata's service, but kanata still doesn't answer. Check that kanata is on in both Privacy & Security panes above, then restart it again, or show kanata's log.", link: null };
+    // The restart script found a service setup didn't make, so it restarted nothing (daemon-service.ts); setting up again makes it.
+    case "service_missing":
+    case "service_outdated": return { text: "kanata's background service isn't the one keyloom sets up, so keyloom restarted nothing. Set kanata up again to replace it. macOS asks for your password.", link: null, action: SET_UP_AGAIN };
+    case "log_missing": return { text: "kanata has no log yet: its service writes one once kanata starts.", link: null };
     case "no_kanata": return { text: "Install kanata first.", link: null };
     // Get kanata on a Mac whose processor has no kanata release file (D-560).
     case "no_asset": return { text: reason, link: { href: KANATA_RELEASES, label: "Open kanata's releases page" } };

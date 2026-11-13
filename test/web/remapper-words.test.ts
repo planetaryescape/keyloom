@@ -58,12 +58,50 @@ describe("setupSteps", () => {
     expect(attentionSteps(status([f("kanata_missing", "fail"), f("port_closed", "ok")])).map((s) => s.key)).toContain("kanata");
   });
 
-  test("kanata installed and stopped (the exit chord): Start is the button, and it names the password dialog", () => {
+  // R11-02 replaces "Set up and start kanata" here: the service is installed, so setting up again would do the same. A restart starts a
+  // service the exit chord stopped too.
+  test("kanata's service installed and kanata not answering (the first start before the grant, or the exit chord): Restart and the log, after the permissions", () => {
     const steps = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn")]));
     const start = steps.find((s) => s.key === "start");
-    expect(start?.actions).toEqual([{ id: { kind: "start_kanata" }, label: "Set up and start kanata" }]);
+    expect(start?.title).toBe("kanata's service is installed, but kanata isn't answering");
+    expect(start?.actions).toEqual([{ id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: false }, { id: { kind: "show_kanata_log" }, label: "Show kanata's log" }]);
     expect(start?.detail).toContain("password");
+    expect(start?.detail).not.toContain("install its background service");
+    // The grant comes after the first start, so in this state the permissions step comes first, and doesn't say "after the step above".
+    expect(steps.map((s) => s.key)).toEqual(["kanata", "driver", "permissions", "start"]);
+    expect(steps.find((s) => s.key === "permissions")?.detail).not.toContain("After");
     expect(steps.filter((s) => s.state === "done").map((s) => s.key)).toEqual(["kanata", "driver"]);
+  });
+
+  test("Start, and Restart kanata's service, stay off until the driver is in, with the reason beside them (R11-02)", () => {
+    const noDriver = setupSteps(status([f("kanata_version", "ok"), f("driver_missing", "fail"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail")]));
+    expect(noDriver.find((s) => s.key === "start")).toMatchObject({ detail: "Install the driver above first.", actions: [{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: true }] });
+    const wrongDriver = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "fail"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn")]));
+    const restart = wrongDriver.find((s) => s.key === "start");
+    expect(restart?.detail).toBe("Install the driver above first.");
+    // The log is still worth reading; only the restart waits for the driver.
+    expect(restart?.actions).toEqual([{ id: { kind: "restart_kanata" }, label: "Restart kanata's service", off: true }, { id: { kind: "show_kanata_log" }, label: "Show kanata's log" }]);
+    // With the driver in, nothing is off.
+    const ready = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "fail"), f("port_closed", "fail")]));
+    expect(ready.find((s) => s.key === "start")?.actions).toEqual([{ id: { kind: "start_kanata" }, label: "Set up and start kanata", off: false }]);
+  });
+
+  test("kanata's log, once read, shows in the not-answering step; an empty log says so (R11-02)", () => {
+    const notAnswering = [f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn")];
+    expect(setupSteps(status(notAnswering)).find((s) => s.key === "start")?.log).toBeNull();
+    const read = setupSteps(status(notAnswering), { kanataLog: ["one", "two"] }).find((s) => s.key === "start");
+    expect(read).toMatchObject({ log: ["one", "two"], logLabel: "What kanata wrote last" });
+    const empty = setupSteps(status(notAnswering), { kanataLog: [] }).find((s) => s.key === "start");
+    expect(empty?.log).toBeNull();
+    expect(empty?.detail).toEndWith("kanata's log has nothing in it yet.");
+  });
+
+  test("a service that runs an old or changed kanata keeps Set up and start kanata, not a restart that would run the same kanata (R11-02)", () => {
+    for (const changed of [f("kanata_updated", "warn"), f("daemon_outdated", "warn")]) {
+      const steps = setupSteps(status([f("kanata_version", "ok"), f("driver_mismatch", "ok"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "warn"), changed]));
+      expect(steps.find((s) => s.key === "start")?.actions.map((a) => a.id.kind)).toEqual(["start_kanata"]);
+      expect(steps.flatMap((s) => s.actions).some((a) => a.id.kind === "restart_kanata")).toBe(false);
+    }
   });
 
   test("an install in progress shows Homebrew's last lines and Cancel, not a second Install; no Homebrew links the download instead", () => {
@@ -212,6 +250,15 @@ describe("setupSteps", () => {
     expect(attentionSteps(status([...running, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])).find((s) => s.key === "karabiner")?.actions).toHaveLength(1);
   });
 
+  test("the Karabiner step carries the entry to copy, as the import showed it (R11-01)", () => {
+    const entry = '{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }';
+    const step = setupSteps(status([...fresh, f("karabiner_config", "warn")], { karabinerEntry: entry })).find((s) => s.key === "karabiner");
+    expect(step?.copy).toEqual({ text: entry, noun: "entry" });
+    expect(step?.detail).toContain("add this entry to the \"devices\" list of your profile in karabiner.json");
+    // An older keyloom sends no entry: the step says only what it said before.
+    expect(setupSteps(status([...fresh, f("karabiner_config", "warn")])).find((s) => s.key === "karabiner")).toMatchObject({ copy: null, detail: "In Karabiner-Elements, turn off its rules for the built-in keyboard, or both remappers grab it." });
+  });
+
   test("no step shows a command to paste", () => {
     const all = [
       ...setupSteps(status([...fresh, f("karabiner_config", "warn"), f("karabiner_elements", "warn")])),
@@ -219,6 +266,7 @@ describe("setupSteps", () => {
       ...attentionSteps(status([...running, f("daemon_outdated", "warn")])),
       ...attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: "/usr/local/bin/kanata" }) })),
       ...attentionSteps(status([...running, f("kanata_replaced", "warn")], { kanata: k({ path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) })),
+      ...setupSteps(status([...running.slice(0, 4), f("port_closed", "warn")]), { kanataLog: [] }),
     ];
     for (const s of all) expect(`${s.title} ${s.detail ?? ""}`).not.toMatch(/`|sudo|keyloom (doctor|remap|import)|brew install/);
   });
@@ -244,6 +292,23 @@ describe("setupFailure", () => {
     expect(setupFailure("kanata_cmd_unknown", "keyloom couldn't tell.")).toMatchObject({ text: expect.stringContaining("keyloom couldn't tell."), link: { label: "Download kanata" } });
   });
 
+  test("a closed password dialog names what didn't happen, for the restart and the log too (R11-02)", () => {
+    expect(setupFailure("cancelled", "x", "restart_kanata").text).toBe("You cancelled the password dialog, so kanata's service wasn't restarted. Press Restart kanata's service again when you're ready.");
+    expect(setupFailure("cancelled", "x", "show_kanata_log").text).toBe("You cancelled the password dialog, so keyloom didn't read kanata's log. Press Show kanata's log again when you're ready.");
+    expect(setupFailure("cancelled", "x", "start_kanata").text).toContain("kanata didn't start");
+  });
+
+  test("a restart kanata didn't answer points at the log; a service setup didn't make offers setting up again (R11-02)", () => {
+    // The step's own Show kanata's log is right above the line, so the line adds no second one.
+    expect(setupFailure("still_not_answering", "x", "restart_kanata")).toEqual({ text: expect.stringContaining("or show kanata's log"), link: null });
+    for (const code of ["service_missing", "service_outdated"]) {
+      const failure = setupFailure(code, "x", "restart_kanata");
+      expect(failure).toMatchObject({ action: { id: { kind: "start_kanata" }, label: "Set up and start kanata" } });
+      expect(failure.text).toContain("restarted nothing");
+    }
+    expect(setupFailure("log_missing", "x", "show_kanata_log")).toMatchObject({ text: "kanata has no log yet: its service writes one once kanata starts.", link: null });
+  });
+
   test("a kanata swapped while the password dialog was open says nothing was installed and how to go on", () => {
     expect(setupFailure("kanata_swapped", "x")).toEqual({ text: expect.stringContaining("installed nothing. Press the button again"), link: null });
   });
@@ -266,4 +331,21 @@ describe("a built-in keyboard keyloom doesn't know by name", () => {
     expect(setupSteps(status([...running, f("keyboard_name", "ok")])).some((s) => s.key === "keyboard-name")).toBe(false);
     expect(setupSteps(status([...running, f("keyboard_name", "unknown")])).some((s) => s.key === "keyboard-name")).toBe(false);
   });
+});
+
+test("every button that sets kanata up waits for the driver step, with the reason beside it (PR #319 CodeRabbit)", () => {
+  const noDriver = [f("kanata_version", "ok"), f("driver_mismatch", "fail"), f("permissions", "unknown"), f("daemon_missing", "ok"), f("port_closed", "ok")];
+  const cases = [
+    // A kanata the person installed outside Homebrew: Set up with this kanata.
+    attentionSteps(status([...noDriver, f("kanata_replaced", "warn")], { kanata: k({ version: "1.12.0", path: "/usr/local/bin/kanata", copyVersion: "1.11.0" }) })),
+    // A running service on an updated or old kanata: Set up and start kanata.
+    attentionSteps(status([...noDriver, f("kanata_updated", "warn")], { kanata: k({ version: "1.12.0", path: "/opt/homebrew/Cellar/kanata/1.12.0/bin/kanata" }) })),
+    attentionSteps(status([...noDriver, f("daemon_outdated", "warn")])),
+  ];
+  for (const steps of cases) {
+    const starts = steps.flatMap((s) => s.actions).filter((a) => a.id.kind === "start_kanata");
+    expect(starts.length).toBeGreaterThan(0);
+    for (const a of starts) expect(a.off).toBe(true);
+    expect(steps.some((s) => s.detail?.includes("Install the driver above first.") === true)).toBe(true);
+  }
 });

@@ -225,6 +225,12 @@ export function recordKanataSeen(db: Database, boardId: string, now = Date.now()
 
 // --- reads a sync needs from the revision history --------------------------------------------
 
+/** Whether a revision has an earlier version before it: false for a config's first version (R11-04). */
+export function hasEarlierRevision(db: Database, layoutId: string, revisionId: string): boolean {
+  const row = db.query("SELECT parent_id FROM revisions WHERE id = ? AND layout_id = ?").get(revisionId, layoutId) as { parent_id: string | null } | null;
+  return row !== null && row.parent_id !== null;
+}
+
 /** The revision IDs from `fromRevisionId` back to the first, newest first. A revision that has no parent in the table ends the walk. */
 export function revisionLine(db: Database, layoutId: string, fromRevisionId: string): string[] {
   const rows = db.query("SELECT id, parent_id FROM revisions WHERE layout_id = ?").all(layoutId) as Array<{ id: string; parent_id: string | null }>;

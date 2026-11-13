@@ -172,6 +172,9 @@ export const ImportResponseSchema = z.object({
   layers: z.number().int().nonnegative(),
   keysPerLayer: z.number().int().nonnegative(),
   warnings: z.array(z.string()),
+  // A Karabiner import's edit that stops Karabiner-Elements grabbing the built-in keyboard (R11-01): the "devices" entry to add, and the
+  // count of rules keyloom didn't import. Absent for other importers and from older senders.
+  karabinerEdit: z.object({ entry: z.string().min(1), unimported: z.number().int().nonnegative() }).optional(),
 });
 export type ImportResponse = z.infer<typeof ImportResponseSchema>;
 
@@ -712,6 +715,8 @@ export const BoardSyncSchema = z.object({
     exitChordReady: z.boolean().optional(),
   }),
   last: SyncRunSchema.nullable(),
+  // A remapper's failed apply only: the config has one version, so the line offers no way back to an earlier one (R11-04). Absent on older senders.
+  firstVersion: z.boolean().optional(),
 });
 export type BoardSync = z.infer<typeof BoardSyncSchema>;
 

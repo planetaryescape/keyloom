@@ -96,7 +96,8 @@ export function appEditorBackend(app: App, flash: Pick<FlashOptions, "volumesRoo
     importUpload: (request) =>
       translate(async () => {
         const out = await importUpload(app, request);
-        return { layoutId: out.layoutId, revisionId: out.revisionId, name: out.name, layers: out.report.layers, keysPerLayer: out.report.keysPerLayer, warnings: out.report.warnings };
+        return { layoutId: out.layoutId, revisionId: out.revisionId, name: out.name, layers: out.report.layers, keysPerLayer: out.report.keysPerLayer, warnings: out.report.warnings,
+          ...(out.report.karabinerEdit === undefined ? {} : { karabinerEdit: out.report.karabinerEdit }) };
       }),
     startBuild: (ref, request) =>
       translate(async () =>

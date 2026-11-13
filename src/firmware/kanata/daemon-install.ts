@@ -21,7 +21,11 @@ const ROOT_DEST: DaemonInstallDest = { plist: DAEMON_PLIST_PATH, kanata: ROOT_KA
  * Why the root script stopped. It prints `keyloom setup stopped (<code>): <reason>` to stderr before it exits 1, so the CLI's `sudo sh -c` shows the
  * reason and the app reads the code from osascript's "execution error" line (`rootScriptFailure`).
  */
-export const ROOT_FAILURE_CODES = ["kanata_swapped", "root_copy_failed", "root_plist_failed", "root_log_failed", "root_start_failed"] as const;
+export const ROOT_FAILURE_CODES = [
+  "kanata_swapped", "root_copy_failed", "root_plist_failed", "root_log_failed", "root_start_failed",
+  // The restart and log scripts for an installed service (daemon-service.ts, R11-02).
+  "service_missing", "service_outdated", "log_missing",
+] as const;
 export type RootFailureCode = (typeof ROOT_FAILURE_CODES)[number];
 
 /** The last `keyloom setup stopped (<code>): <reason>` line the root script printed, or null when it printed none (it didn't run, or ran an old copy). */
@@ -34,6 +38,12 @@ export function rootScriptFailure(out: string): { code: RootFailureCode; reason:
   }
   return found;
 }
+
+/**
+ * A call to the root scripts' `fail` function, with a code `rootScriptFailure` reads. The reasons have no apostrophes, so the command the
+ * CLI prints inside `sudo sh -c '…'` stays readable.
+ */
+export const failLine = (code: RootFailureCode, reason: string): string => `fail ${code} ${shellQuote(reason)}`;
 
 /**
  * Copies kanata to its root-owned place, installs keyloom's LaunchDaemon and (re)loads it, which starts kanata (RunAtLoad). A bootout
@@ -62,22 +72,20 @@ export function daemonInstallScript(input: DaemonInstall, dest: DaemonInstallDes
   const plistTo = shellQuote(dest.plist);
   const plistTemplate = shellQuote(join(dirname(dest.plist), `.${DAEMON_LABEL}.XXXXXX`));
   const log = shellQuote(dest.log);
-  // The reasons have no apostrophes, so the command the CLI prints inside `sudo sh -c '…'` stays readable.
-  const fail = (code: RootFailureCode, reason: string) => `fail ${code} ${shellQuote(reason)}`;
   return [
     `fail() { printf "keyloom setup stopped (%s): %s\\n" "$1" "$2" >&2; exit 1; };`,
-    `mkdir -p ${binDir} && chown root:wheel ${binDir} && chmod 755 ${binDir} || ${fail("root_copy_failed", `keyloom could not make ${dir} a folder only root can change.`)};`,
-    `b=$(mktemp ${binTemplate}) || ${fail("root_copy_failed", `keyloom could not create a file in ${dir}.`)};`,
-    `cp ${shellQuote(input.kanata.source)} "$b" || { rm -f "$b"; ${fail("root_copy_failed", `keyloom could not copy kanata from ${input.kanata.source}.`)}; };`,
-    `[ "$(shasum -a 256 "$b" | cut -d ' ' -f 1)" = ${sha} ] || { rm -f "$b"; ${fail("kanata_swapped", `kanata at ${input.kanata.source} changed after keyloom checked it, so nothing was installed. Set kanata up again.`)}; };`,
-    `chown root:wheel "$b" && chmod 755 "$b" && mv -f "$b" ${binTo} || { rm -f "$b"; ${fail("root_copy_failed", `keyloom could not put the kanata copy at ${dest.kanata}.`)}; };`,
-    `t=$(mktemp ${plistTemplate}) || ${fail("root_plist_failed", `keyloom could not create a file beside ${dest.plist}.`)};`,
+    `mkdir -p ${binDir} && chown root:wheel ${binDir} && chmod 755 ${binDir} || ${failLine("root_copy_failed", `keyloom could not make ${dir} a folder only root can change.`)};`,
+    `b=$(mktemp ${binTemplate}) || ${failLine("root_copy_failed", `keyloom could not create a file in ${dir}.`)};`,
+    `cp ${shellQuote(input.kanata.source)} "$b" || { rm -f "$b"; ${failLine("root_copy_failed", `keyloom could not copy kanata from ${input.kanata.source}.`)}; };`,
+    `[ "$(shasum -a 256 "$b" | cut -d ' ' -f 1)" = ${sha} ] || { rm -f "$b"; ${failLine("kanata_swapped", `kanata at ${input.kanata.source} changed after keyloom checked it, so nothing was installed. Set kanata up again.`)}; };`,
+    `chown root:wheel "$b" && chmod 755 "$b" && mv -f "$b" ${binTo} || { rm -f "$b"; ${failLine("root_copy_failed", `keyloom could not put the kanata copy at ${dest.kanata}.`)}; };`,
+    `t=$(mktemp ${plistTemplate}) || ${failLine("root_plist_failed", `keyloom could not create a file beside ${dest.plist}.`)};`,
     // `--decode` is the spelling both macOS's and GNU's base64 accept.
-    `printf %s '${encoded}' | base64 --decode > "$t" && chown root:wheel "$t" && chmod 644 "$t" && mv -f "$t" ${plistTo} || { rm -f "$t"; ${fail("root_plist_failed", `keyloom could not install ${dest.plist}.`)}; };`,
+    `printf %s '${encoded}' | base64 --decode > "$t" && chown root:wheel "$t" && chmod 644 "$t" && mv -f "$t" ${plistTo} || { rm -f "$t"; ${failLine("root_plist_failed", `keyloom could not install ${dest.plist}.`)}; };`,
     // Before the daemon starts: launchd appends to an existing log and keeps its mode, so kanata's output is readable by root only.
-    `touch ${log} && chown root:wheel ${log} && chmod 600 ${log} || ${fail("root_log_failed", `keyloom could not make ${dest.log} readable by root only, so kanata was not started.`)};`,
+    `touch ${log} && chown root:wheel ${log} && chmod 600 ${log} || ${failLine("root_log_failed", `keyloom could not make ${dest.log} readable by root only, so kanata was not started.`)};`,
     `launchctl bootout system/${DAEMON_LABEL} 2>/dev/null;`,
-    `launchctl bootstrap system ${plistTo} || { sleep 1; launchctl bootstrap system ${plistTo}; } || ${fail("root_start_failed", "macOS did not start the kanata background service (launchctl bootstrap failed).")}`,
+    `launchctl bootstrap system ${plistTo} || { sleep 1; launchctl bootstrap system ${plistTo}; } || ${failLine("root_start_failed", "macOS did not start the kanata background service (launchctl bootstrap failed).")}`,
   ].join(" ");
 }
 

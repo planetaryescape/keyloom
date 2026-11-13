@@ -102,6 +102,12 @@ export type KarabinerImport = {
   disableEdit: string;
 };
 
+/**
+ * The entry that makes Karabiner-Elements leave the built-in keyboard alone, on one line, as the page shows it with Copy (R11-01). The
+ * identifiers are what `ioreg` shows for the built-in keyboard: vendor 0, product 0.
+ */
+export const KARABINER_IGNORE_ENTRY = '{ "identifiers": { "is_keyboard": true, "product_id": 0, "vendor_id": 0 }, "ignore": true }';
+
 export function disableEditText(unimported: number): string {
   return [
     "To stop Karabiner-Elements and kanata both grabbing the built-in keyboard, add this to the \"devices\" array of the profile in your karabiner.json",
@@ -302,7 +308,7 @@ export function importKarabiner(text: string, board: BoardDefinition, sourceName
       }
       baseBindings[position] = out;
       recognised.push(`${what}: ${from} sends ${out.kind === "key" ? out.code : out.kind}`);
-      if (what === "fn_function_keys") warnings.push(`fn_function_keys: ${from} was imported as a plain key remap. Whether it acts with or without fn on the MacBook's function row is settled by the key capture in spike S32`);
+      if (what === "fn_function_keys") warnings.push(`fn_function_keys: ${from} was imported as a plain key remap. Whether it acts with or without fn on the MacBook's function row hasn't been checked yet`);
     }
   }
 
@@ -325,6 +331,8 @@ export function importKarabiner(text: string, board: BoardDefinition, sourceName
     profiles: imported.holdTapProfiles.map((p) => p.id), native: [],
     passthrough: passthrough.map((p) => ({ file: sourceName, anchor: `rule:${p.rule}`, refersToLayerIndices: false })), warnings,
   };
-  report.instructions = disableEditText(passthrough.filter((p) => !p.reason.includes("switched off")).length);
-  return { layout: imported, report, suggestedName: "macbook-from-karabiner", recognised, passthrough, disableEdit: disableEditText(passthrough.filter((p) => !p.reason.includes("switched off")).length) };
+  const unimported = passthrough.filter((p) => !p.reason.includes("switched off")).length;
+  report.instructions = disableEditText(unimported);
+  report.karabinerEdit = { entry: KARABINER_IGNORE_ENTRY, unimported };
+  return { layout: imported, report, suggestedName: "macbook-from-karabiner", recognised, passthrough, disableEdit: report.instructions };
 }

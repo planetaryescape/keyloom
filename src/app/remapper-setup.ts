@@ -4,7 +4,10 @@
 import { existsSync, realpathSync } from "node:fs";
 import { findKanata } from "../firmware/kanata/binary.ts";
 import { daemonInstallScript, rootScriptFailure, shellQuote } from "../firmware/kanata/daemon-install.ts";
+import { LOG_TAIL_LINES, kanataLogScript, kanataRestartScript } from "../firmware/kanata/daemon-service.ts";
 import type { Finding } from "../firmware/kanata/doctor.ts";
+import { KARABINER_IGNORE_ENTRY } from "../firmware/kanata/karabiner.ts";
+import { hello } from "../firmware/kanata/client.ts";
 import { type RemapperOverrides, remapperDoctor, remapperEnv, setupRemapper } from "./remapper.ts";
 import { type DownloadDeps, canDownload, downloadReady, downloadTool } from "./tool-download.ts";
 
@@ -109,6 +112,8 @@ export type RemapperSetupStatus = {
   /** The driver release keyloom's kanata works with, for its download link. */
   driverVersion: string | null;
   findings: SetupFinding[];
+  /** The karabiner.json "devices" entry that makes Karabiner-Elements leave the built-in keyboard alone, for the Karabiner step (R11-01). */
+  karabinerEntry: string;
 };
 
 const BREW_PATHS = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
@@ -180,6 +185,12 @@ export type SetupDeps = {
   brew: () => string | undefined;
   kanata: () => string | undefined;
   remapper?: RemapperOverrides;
+  /** Whether kanata answers on its port within `timeoutMs`, after Restart kanata's service; a test describes it instead of asking a real kanata. */
+  answers?: (boardId: string, timeoutMs: number) => Promise<boolean>;
+  /** The clock Restart kanata's service measures its wait with; a test passes one that its fake sleep moves. */
+  now?: () => number;
+  /** How Restart kanata's service waits between asks; a test passes one that doesn't. */
+  sleep?: (ms: number) => Promise<void>;
   /** Where and how Get kanata downloads (D-560); tests pass a fake fetcher and a scratch folder. */
   download?: DownloadDeps;
 };
@@ -235,6 +246,7 @@ export async function remapperSetupStatus(boardId: string, deps: SetupDeps, inst
     },
     driverVersion: rev.driverVersions.at(-1) ?? null,
     findings: report.findings.map(({ code, name, status, detail }) => ({ code, name, status, detail })),
+    karabinerEntry: KARABINER_IGNORE_ENTRY,
   };
 }
 
@@ -337,13 +349,80 @@ export async function startKanataDaemon(boardId: string, deps: SetupDeps): Promi
   const setup = await setupRemapper(boardId, { ...deps.remapper, kanataBin: deps.kanata });
   if (setup.install === null) return { ok: false, code: setup.blocked?.code ?? "failed", reason: setup.blocked?.reason ?? "keyloom couldn't prepare kanata's setup." };
   const r = await deps.run(adminCommand(daemonInstallScript(setup.install), ADMIN_PROMPT));
-  if (r.code === 0) return { ok: true };
-  // osascript reports a cancelled password dialog as error -128.
-  if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: "You cancelled the password dialog, so kanata wasn't started." };
-  // The root script says why it stopped (daemon-install.ts), and the code is what the page acts on.
+  return r.code === 0 ? { ok: true } : adminFailure(r, "You cancelled the password dialog, so kanata wasn't started.", "macOS couldn't start kanata");
+}
+
+export const RESTART_PROMPT = "keyloom wants to restart kanata's background service, so your MacBook keyboard can type your layout.";
+export const LOG_PROMPT = "keyloom wants to show the last lines of kanata's log, which only an administrator can read.";
+
+// kanata waits about two seconds after it starts before it takes the keyboard (S30 step 5); this leaves room for that and a slow start.
+const RESTART_WAIT_MS = 8000;
+const RESTART_ASK_EVERY_MS = 500;
+// Each ask waits at most this long for kanata's hello.
+const PROBE_MAX_MS = 1000;
+
+/**
+ * Restart kanata's service (R11-02, D-559): for a service that is installed but where kanata doesn't answer, such as after the first start,
+ * before macOS allowed kanata. One fixed root script, through macOS's password dialog: `launchctl bootout` and `bootstrap` from the plist, after checking the service
+ * runs keyloom's root-owned copy of kanata (daemon-service.ts). Then it waits for kanata to answer, so the checklist never says it worked
+ * while kanata still doesn't answer.
+ */
+export async function restartKanataService(boardId: string, deps: SetupDeps): Promise<ActionResult> {
+  if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "keyloom restarts kanata on macOS only." };
+  const r = await deps.run(adminCommand(kanataRestartScript(), RESTART_PROMPT));
+  if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so kanata's service wasn't restarted.", "macOS couldn't restart kanata's service");
+  // One hello on kanata's port per ask: an answer is all the wait needs, not the layer names a full read fetches.
+  const endpoint = remapperEnv(boardId, deps.remapper ?? {}).deps.endpoint;
+  const answers = deps.answers ?? (async (_board: string, timeoutMs: number) => (await hello(endpoint, timeoutMs), true));
+  const sleep = deps.sleep ?? Bun.sleep;
+  const now = deps.now ?? Date.now;
+  // One deadline for the asks and the waits between them: a kanata that takes the connection but never says hello costs a probe's own
+  // timeout, so each probe gets only what is left, and the whole wait stays near RESTART_WAIT_MS (PR #319 CodeRabbit).
+  const deadline = now() + RESTART_WAIT_MS;
+  // No ask starts after the deadline, and none gets more than the time left (PR #319 CodeRabbit).
+  for (let left = deadline - now(); left > 0; left = deadline - now()) {
+    if (await answers(boardId, Math.min(PROBE_MAX_MS, left)).catch(() => false)) return { ok: true };
+    const rest = deadline - now();
+    if (rest <= 0) break;
+    await sleep(Math.min(RESTART_ASK_EVERY_MS, rest));
+  }
+  return { ok: false, code: "still_not_answering", reason: "kanata's service restarted, but kanata still doesn't answer." };
+}
+
+export type KanataLogResult = { ok: true; lines: string[] } | { ok: false; code: string; reason: string };
+
+/**
+ * Show kanata's log (R11-02, D-559): its last lines, read as root through macOS's password dialog, because setup makes the log root's alone
+ * (D-498). The lines go back to the page that asked and nowhere else: keyloom doesn't keep them or write them to its own log.
+ */
+export async function readKanataLog(deps: SetupDeps): Promise<KanataLogResult> {
+  if (deps.platform !== "darwin") return { ok: false, code: "unsupported_platform", reason: "kanata's log is on macOS only." };
+  const r = await deps.run(adminCommand(kanataLogScript(), LOG_PROMPT));
+  if (r.code !== 0) return adminFailure(r, "You cancelled the password dialog, so keyloom didn't read kanata's log.", "macOS couldn't read kanata's log");
+  return { ok: true, lines: logLines(r.out) };
+}
+
+/**
+ * The log's lines as the page shows them: `do shell script` hands its output back with carriage returns for line ends, and every control
+ * character is written as its escape, so nothing in the log can redraw the page's text. The same characters as colima-files.ts's
+ * `printable`, which this file can't import: colima-files imports it.
+ */
+export function logLines(out: string): string[] {
+  const escape = (line: string) => line.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => (c === "\t" ? "\\t" : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`));
+  const lines = out.split(/\r\n|\r|\n/).map(escape);
+  while (lines.length > 0 && lines.at(-1)?.trim() === "") lines.pop();
+  return lines.slice(-LOG_TAIL_LINES);
+}
+
+/**
+ * A root script that didn't finish: the person closed the dialog (osascript's -128), the script said why (its code is what the page acts
+ * on), or osascript failed.
+ */
+function adminFailure(r: { code: number; out: string }, cancelled: string, failed: string): { ok: false; code: string; reason: string } {
+  if (/-128\b/.test(r.out)) return { ok: false, code: "cancelled", reason: cancelled };
   const root = rootScriptFailure(r.out);
   if (root !== null) return { ok: false, code: root.code, reason: root.reason };
-  return { ok: false, code: "failed", reason: `macOS couldn't start kanata: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
+  return { ok: false, code: "failed", reason: `${failed}: ${lastLine(r.out) || `osascript exited ${r.code}`}` };
 }
 
 export function lastLine(out: string): string {
