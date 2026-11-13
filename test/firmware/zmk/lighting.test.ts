@@ -72,8 +72,8 @@ test("preview masks round-trip and previous full-layer exports remain readable",
 test("the build manifest pins the RGB module and generation disables the competing strip driver", () => {
   const build = board.revisions[0]!.build;
   if (build.kind !== "zmk-west-docker") throw Error("west");
-  expect(westManifest("https://example.com/zmk", "a".repeat(40), build.boardModule, build.rgbMatrix))
-    .toContain("revision: 3166a4ec6801a5726f12a53e82cff92323116025");
+  expect(westManifest("https://example.com/zmk", board.revisions[0]!.source.sha, build.boardModule, build.rgbMatrix))
+    .toContain("3166a4ec6801a5726f12a53e82cff92323116025");
   const commands = westScript(build).split("\n").filter((line) => line.startsWith("west build"));
   expect(commands[0]).toContain("-DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=1");
   expect(commands[1]).toContain("-DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=0");

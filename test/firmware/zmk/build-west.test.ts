@@ -1,7 +1,7 @@
 // Builds an upstream-ZMK board (zmk-west-docker) against a fake `docker`: everything keyloom does around
 // west (the config files, the manifest, the container command, the bundle) without a real compile. The real
 // build is what the contributor's own run proves; see CONTRIBUTING.md.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { unzipSync } from "fflate";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -14,6 +14,11 @@ import { templateCopy } from "../../helpers/board-recipes.ts";
 import { fakeBinDir, fakeSha256Probe, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { uf2Image } from "../../helpers/zmk.ts";
+import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
+import inputs from "../../../src/firmware/zmk/west-inputs.json" with { type: "json" };
+import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
+
+setDefaultTimeout(30_000);
 
 const FAKE_DOCKER_WEST = `
 case "$1" in
@@ -37,7 +42,7 @@ exit 9
 `;
 
 async function setup() {
-  const board = await loadBoardDir(await templateCopy("zmk"));
+  const board = await loadBoardDir(await templateCopy("zmk", (b) => { b.revisions[0].source.sha = inputs.zmkSha; }));
   const dir = tempDir();
   const uf2 = join(dir, "one.uf2");
   await Bun.write(uf2, uf2Image(0xada52840, 4));
@@ -48,9 +53,12 @@ async function setup() {
     keymapName: "board",
     files: [{ path: "board.keymap", content: "// keymap\n" }, { path: "board.conf", content: "# conf\n" }],
   };
-  const bin = fakeBinDir({ docker: FAKE_DOCKER_WEST });
-  const build = (mode: string, extra: Record<string, string> = {}) =>
-    withPath(
+  const bin = fakeBinDir({ git: FAKE_WEST_GIT, docker: FAKE_DOCKER_WEST });
+  const build = async (mode: string, extra: Record<string, string> = {}) => {
+    const rev = board.definition.revisions[0]!;
+    if (rev.build.kind !== "zmk-west-docker") throw new Error("expected west recipe");
+    await seedWestSources(join(dir, "work"), westProjects(rev.source.repo, rev.source.sha, rev.build), rev.build.image);
+    return withPath(
       bin,
       () =>
         buildZmkWest({
@@ -59,7 +67,8 @@ async function setup() {
         }),
       { FAKE_MODE: mode, FAKE_DOCKER_LOG: dockerLog, FAKE_UF2: uf2, ...extra },
     );
-  return { build, dir, lines, dockerLog, board };
+  };
+  return { build, dir, lines, dockerLog, board, bin };
 }
 
 /** The failure a build ended in; a build that passed fails the test. */
@@ -74,16 +83,14 @@ describe("buildZmkWest (fake docker)", () => {
     build.targets = [{ id: "left", board: "corne_choc_pro_left" }, { id: "right", board: "corne_choc_pro_right" }];
     await s.build("ok");
     const manifest = await Bun.file(join(s.dir, "work", "config", "west.yml")).text();
-    expect(manifest).toContain("name: board-module");
-    expect(manifest).toContain("revision: " + "a".repeat(40));
+    expect(JSON.parse(manifest).manifest.projects).toContainEqual(expect.objectContaining({ name: "board-module", revision: "a".repeat(40) }));
     const script = westScript(build, true);
     expect(script).toContain("-b corne_choc_pro_left -- -DZMK_CONFIG");
     expect(script).toContain("-b corne_choc_pro_right -- -DZMK_CONFIG");
     expect(script).not.toContain("-DSHIELD=undefined");
     expect(script).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
-    // A cancelled update's git locks are cleared before the next update, which would otherwise fail on them.
-    expect(script.indexOf("-name '*.lock' -print -delete")).toBeGreaterThan(-1);
-    expect(script.indexOf("-name '*.lock' -print -delete")).toBeLessThan(script.indexOf("west update"));
+    expect(script).not.toContain("west update");
+    expect(script).not.toContain(".git");
   });
 
   test("a half with its own product name gets a conf fragment and a build flag", async () => {
@@ -127,7 +134,9 @@ describe("buildZmkWest (fake docker)", () => {
     expect(run).toContain("zmkfirmware/zmk-build-arm@sha256:");
     expect(run).toContain("west build -p always -s zmk/app -d build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/work/config");
     expect(run).toContain("-DSHIELD=board_right");
-    expect(run.indexOf("west update")).toBeLessThan(run.indexOf("west build"));
+    expect(run).not.toContain("west update");
+    expect(run).toContain("dst=/work/zephyr,readonly");
+    expect(run).toContain("dst=/work/modules/hal/nordic,readonly");
   });
 
   test("a container an earlier keyloom left in this checkout is removed before the build, and the build's own is labelled", async () => {
@@ -217,9 +226,12 @@ describe("buildZmkWest (fake docker)", () => {
 
   test("a work folder Docker can't see is reported with how to fix it", async () => {
     const s = await setup();
-    // The fake probe fails when config/west.yml isn't visible; it is written before the probe, so hide it by mode.
+    const rev = s.board.definition.revisions[0]!;
+    if (rev.build.kind !== "zmk-west-docker") throw new Error("expected west recipe");
+    for (const name of ["w2", "w3"]) await seedWestSources(join(s.dir, name), westProjects(rev.source.repo, rev.source.sha, rev.build), rev.build.image);
+    // The fake probe fails when config/west.yml is not visible.
     // An engine that can't see the folder still answers `ps`.
-    const probe = (exit: number) => withPath(fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\nexit ${exit}` }), () =>
+    const probe = (exit: number) => withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `case "$1" in rm|ps) exit 0;; esac\nexit ${exit}` }), () =>
       buildZmkWest({
         board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w2"), imageContextDir: join(s.dir, "i"),
         artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l.log")), containerName: "x",
@@ -232,7 +244,7 @@ describe("buildZmkWest (fake docker)", () => {
     expect((other as BuildFailure).message).toMatch(/exit 125/);
     expect((other as BuildFailure).message).not.toMatch(/can't see/);
     // Docker Desktop refuses a folder outside File sharing before the container starts: exit 125 with its own words (PR #303 review).
-    const denied = await withPath(fakeBinDir({ docker: `case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
+    const denied = await withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
       buildZmkWest({
         board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w3"), imageContextDir: join(s.dir, "i"),
         artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l3.log")), containerName: "x",

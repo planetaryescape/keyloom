@@ -122,8 +122,7 @@ export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> 
  * The caller holds spec.dir's lock until the container exits.
  */
 export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<void> {
-  const trusted = trustedCheckoutDir(spec);
-  await ensureSource({ ...spec, dir: trusted }, hooks);
+  const trusted = await ensureTrustedCheckout(spec, hooks);
   const staging = await mkdtemp(`${spec.dir}.stage-`);
   try {
     await cp(trusted, staging, {
@@ -140,4 +139,11 @@ export async function ensureCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Pro
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
+}
+
+/** Callers can mount this path read-only. Never mount it writable or expose its parent. */
+export async function ensureTrustedCheckout(spec: CheckoutSpec, hooks: Hooks = {}): Promise<string> {
+  const trusted = trustedCheckoutDir(spec);
+  await ensureSource({ ...spec, dir: trusted }, hooks);
+  return trusted;
 }

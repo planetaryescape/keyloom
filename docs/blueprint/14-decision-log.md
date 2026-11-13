@@ -11,6 +11,25 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-13 West builds use resolved inputs and read-only source
+
+### D-581: Replace recursive west imports with a reviewed dependency lock. Extends D-036, D-040 and D-580.
+
+`src/firmware/zmk/west-inputs.json` locks all 39 active projects for ZMK `edf5c0814fd3ea202e43aad2d68fd32e882a518c`.
+Zephyr is `dacab4875df72109b96cc8977547a0dc04875bcd`. The lock preserves ZMK's nanopb override, project paths, groups, and west commands.
+West's own manifest resolver produced the flattened project list from the pinned upstream manifests.
+The board's pinned hardware and RGB modules join that list without importing their config manifests, as before.
+A new ZMK commit requires a reviewed lock. An unknown source commit fails before any build rather than resolving mutable dependencies.
+
+Builds and emulation mount each trusted project read-only. Git metadata stays read-only too, because west uses it to locate projects.
+The writable workspace contains generated config and output. Each run recreates it without opening its old Git or west metadata.
+No build-time `west update` remains. Repository URLs, every resolved commit, and the image digest form the source-cache identity.
+The emulator's result key also includes the full resolved manifest, including hardware and RGB modules.
+
+Reason: C2 reproduced the mutable `v3.5.0+zmk-fixes` import under an otherwise pinned ZMK commit.
+The read-only mounts also prevent a prior west build or emulator from changing later source inputs.
+See [the input-lock evidence](../research/west-input-lock.md) for provenance and compatibility checks.
+
 ## 2026-11-13 Firmware workspaces cannot change later builds
 
 ### D-580: Keep trusted Git downloads outside writable build and emulation mounts. Replaces D-081's shared checkout reuse.
