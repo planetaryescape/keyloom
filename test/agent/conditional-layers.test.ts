@@ -54,3 +54,18 @@ describe("the agent and conditional layers", () => {
     expect(second.text).toContain("in the layout now");
   });
 });
+
+
+test("an agent conditional ID cannot introduce firmware source or a stored proposal", async () => {
+  const { app, layoutId } = await optionOptionApp();
+  const before = getLayout(app, layoutId);
+  const { client } = fakeAnthropic([
+    { blocks: [{ tool: "propose_changes", input: { alternatives: [alt("Synthetic source probe", [condition({ id: "probe\n#undef A\n#define A B\n" })])] } }] },
+    { blocks: [{ text: "The invalid proposal was refused." }] },
+  ]);
+  const result = await sendMessage(app, layoutId, { message: "Synthetic conditional-layer validation probe", model: anthropicModel(client) });
+  expect(result.proposals).toHaveLength(0);
+  expect(listChanges(app, layoutId)).toHaveLength(0);
+  expect(getLayout(app, layoutId).revision.id).toBe(before.revision.id);
+  expect(getLayout(app, layoutId).document).toEqual(before.document);
+});
