@@ -189,6 +189,12 @@ describe("a daemon that refuses this account (D-497)", () => {
     expect(work.stopCommand).toBe('sudo env HOME="$HOME" colima stop --profile work');
     expect(dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start"] }).stopCommand).toBe('sudo env HOME="$HOME" colima stop');
     expect(dockerAccessFix("darwin", { name: "OrbStack", command: ["open", "-a", "OrbStack"] }).stopCommand).toBeUndefined();
+    // A profile from a hand-edited Docker context is quoted in the sudo lines doctor and the page print, so it stays one argument (PR #306 review).
+    const odd = dockerAccessFix("darwin", { name: "Colima", command: ["colima", "start", "--profile", "it's; true"] });
+    expect(odd.stopCommand).toBe(`sudo env HOME="$HOME" colima stop --profile 'it'\\''s; true'`);
+    expect(odd.command).toBe(`sudo env HOME="$HOME" colima stop --profile 'it'\\''s; true'; sudo chown -R "$USER" ~/.colima && colima start --profile 'it'\\''s; true'`);
+    const args = await Bun.$`sh -c ${`printf '%s\\n' ${(odd.stopCommand ?? "").replace(/^sudo env HOME="\$HOME" /, "")}`}`.text();
+    expect(args.trimEnd().split("\n")).toEqual(["colima", "stop", "--profile", "it's; true"]);
   });
 
   describe("freeing Docker's build cache (R8-04)", () => {

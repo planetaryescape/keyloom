@@ -4,7 +4,7 @@ import {
   type BuildCachePrune, COLIMA_STOP_MS, type ColimaStop, DOCKER_GROUP_COMMAND, type DockerEngine, type DockerInstall, type DockerProblem, type DockerStartResult, type DockerStatus,
   type EngineFinding, dockerInstall, dockerStatus, findDockerEngine, pruneBuildCache, reasonWithHint, restartColima, restartDockerApp, runStart, startDockerEngine,
 } from "../firmware/toolchain/docker.ts";
-import { adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
+import { PROFILE, adminRunner, colimaFilesPlan, colimaLinkedFileSeen, realPlanDeps, runColimaRootSteps } from "./colima-files.ts";
 import type { Runner } from "./remapper-setup.ts";
 
 // The CLI asks the daemon before it installs (it may not import the toolchain itself).
@@ -66,7 +66,10 @@ export function dockerAccessFix(platform: NodeJS.Platform, engine: DockerEngine 
   }
   if (engine?.command[0] === "colima") {
     const at = engine.command.indexOf("--profile");
-    const profile = at < 0 ? "" : ` ${engine.command.slice(at, at + 2).join(" ")}`;
+    const name = at < 0 ? undefined : engine.command[at + 1];
+    // The name comes from the Docker context's host path, which nothing checks, and these lines run under sudo. A name outside Colima's
+    // own pattern is single-quoted, so a space or `;` in a hand-edited context stays one argument (PR #306 review).
+    const profile = name === undefined ? "" : ` --profile ${PROFILE.test(name) ? name : `'${name.replaceAll("'", "'\\''")}'`}`;
     // `env HOME` so sudo stops the copy that runs from this account's ~/.colima, whatever sudo does with HOME.
     const stop = `sudo env HOME="$HOME" colima stop${profile}`;
     return {
