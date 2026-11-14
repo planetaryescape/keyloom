@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.80.7](https://github.com/planetaryescape/keyloom/compare/v0.80.6...v0.80.7) (2026-11-14)
+
+
+### Bug Fixes
+
+* give import pages a complete heading hierarchy ([3d0b79d](https://github.com/planetaryescape/keyloom/commit/3d0b79d425e24ef5e9cc9ef0718dfc4d21f8ef6c))
+* give import pages a complete heading hierarchy ([7e1fc5a](https://github.com/planetaryescape/keyloom/commit/7e1fc5a8ab2ae6b6991f782aa65b96093cba4e4e))
+
 ## [0.80.6](https://github.com/planetaryescape/keyloom/compare/v0.80.5...v0.80.6) (2026-11-14)
 
 
