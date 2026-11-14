@@ -82,7 +82,7 @@ export function ImportScreen({ token, onImported, onStartedBlank, onBack, backLa
         </button>
       )}
       <header className="import-intro">
-        <h2 id="import-title">{first ? "Bring in your first layout" : "Import a layout"}</h2>
+        <h1 id="import-title">{first ? "Bring in your first layout" : "Import a layout"}</h1>
         {boards.status === "ready" ? <p>{importIntro(shown)}</p> : null}
       </header>
       {/* Tests replay a firmware build, so they are offered only beside a QMK or ZMK card; the MacBook's kanata has none (R6-25). */}
@@ -297,7 +297,7 @@ export function BoardCard({ board, boards, token, onImported, onStartedBlank, ac
         {board.keys === undefined ? null : <Silhouette keys={board.keys} display={board.display} width={220} height={84} />}
       </div>
       <header>
-        <h3 id={titleId}>{board.name}</h3>
+        <h2 id={titleId}>{board.name}</h2>
         <p className="muted">{board.vendor} · {board.keyCount} keys</p>
       </header>
       {imported !== null ? <ImportedNoteView token={token} note={imported.note} onOpen={() => { hold(false); onImported(imported.result); }} /> : <>
