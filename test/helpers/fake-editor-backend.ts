@@ -15,6 +15,8 @@ import type { LayoutSource } from "../../src/server/layout-source.ts";
 import type { Issue, ValidationResult } from "../../src/validation/result.ts";
 
 export interface FakeOptions {
+  /** Hold a build or flash phase across real HTTP requests without a wall-clock race. */
+  now?: () => number;
   buildMs?: number;
   /** How long the flash waits for the reset button, then writes for the same time again. */
   flashStepMs?: number;
@@ -102,6 +104,7 @@ export class FakeEditor implements EditorBackend {
     options: FakeOptions = {},
   ) {
     this.options = {
+      now: () => Date.now(),
       buildMs: 10_000, flashStepMs: 5_000, failBuild: false, failFlash: false, needsBoardRevision: false, failBuildDocker: false, failBuildCompile: false, failBuildStale: false, failBuildDisk: false,
       restartEngine: "Colima", failBuildFolder: null, flashResult: "verified", flashInputMonitoring: false, checkFinds: "this_build",
       flashPlan: { manual: null, tool: { name: "zapp", installed: true, canInstall: true, url: "https://github.com/zsa/zapp" }, canReveal: true },
@@ -248,7 +251,7 @@ export class FakeEditor implements EditorBackend {
     const id = `build_${++this.counter}`;
     const stale = this.options.failBuildStale === true && this.staleMount;
     const disk = this.options.failBuildDisk === true && this.diskFull;
-    const build = this.progressBuild(id, request.revisionId, Date.now(), stale, disk);
+    const build = this.progressBuild(id, request.revisionId, this.options.now(), stale, disk);
     this.builds.set(id, { build, revisionId: request.revisionId, stale, disk });
     return build;
   }
@@ -268,7 +271,7 @@ export class FakeEditor implements EditorBackend {
     const entry = this.builds.get(id);
     if (build === null || entry === undefined) throw new EditorError(404, "not_found", "No such build.");
     if (build.status !== "running") throw new EditorError(409, "build_finished", "The build has already finished.");
-    entry.cancelledAt = Date.now();
+    entry.cancelledAt = this.options.now();
     const stopped = await this.getBuild(id);
     if (stopped === null) throw new EditorError(404, "not_found", "No such build.");
     return stopped;
@@ -279,7 +282,7 @@ export class FakeEditor implements EditorBackend {
     if (build === null) throw new EditorError(404, "not_found", "No such build.");
     if (build.status !== "succeeded") throw new EditorError(409, "build_not_ready", "Only a finished build can be flashed.");
     const id = `flash_${++this.counter}`;
-    const startedAt = Date.now();
+    const startedAt = this.options.now();
     this.flashes.set(id, { flash: this.progressFlash(id, buildId, startedAt), startedAt });
     return this.progressFlash(id, buildId, startedAt);
   }
@@ -295,7 +298,7 @@ export class FakeEditor implements EditorBackend {
     if (flash === null || entry === undefined) throw new EditorError(404, "not_found", "No such flash.");
     if (flash.status === "writing") throw new EditorError(409, "flash_writing", "The flash is writing; it finishes.");
     if (flash.status !== "waiting_for_bootloader") throw new EditorError(409, "flash_finished", "The flash isn't waiting any more.");
-    entry.cancelledAt = Date.now();
+    entry.cancelledAt = this.options.now();
     return this.progressFlash(id, flash.buildId, entry.startedAt);
   }
 
@@ -314,7 +317,7 @@ export class FakeEditor implements EditorBackend {
     if (flash === null || entry === undefined) throw new EditorError(404, "not_found", "No such flash.");
     if (flash.status !== "succeeded") throw new EditorError(400, "usage", "Only a finished flash can be checked again.");
     this.checks++;
-    if (this.options.checkFinds === "this_build") entry.checkedAt = Date.now();
+    if (this.options.checkFinds === "this_build") entry.checkedAt = this.options.now();
     return { flash: this.progressFlash(id, flash.buildId, entry.startedAt), found: this.options.checkFinds };
   }
 
@@ -344,7 +347,7 @@ export class FakeEditor implements EditorBackend {
       parentId: this.head.id,
       origin,
       summary,
-      createdAt: Date.now(),
+      createdAt: this.options.now(),
       undoable: true,
       document,
     };
@@ -425,7 +428,7 @@ export class FakeEditor implements EditorBackend {
     const { buildMs, failBuildDocker, failBuildCompile } = this.options;
     const folder = this.options.failBuildFolder;
     const failBuild = this.options.failBuild || failBuildDocker || failBuildCompile === true || stale || disk || folder !== null;
-    const elapsed = Date.now() - startedAt;
+    const elapsed = this.options.now() - startedAt;
     const endsAt = failBuild ? buildMs * 0.7 : buildMs;
     const done = elapsed >= endsAt;
     const progress = Math.min(1, elapsed / buildMs);
@@ -460,14 +463,14 @@ export class FakeEditor implements EditorBackend {
         logTail: [FLASH_LOG[0] as string, "keyloom: Cancelled. Nothing was flashed."], errorCode: "cancelled", instructionCode: null, cancellable: false, checkable: false,
       };
     }
-    if (flashResult === "permission_files_and_folders" && Date.now() - startedAt >= flashStepMs * 1.5) {
+    if (flashResult === "permission_files_and_folders" && this.options.now() - startedAt >= flashStepMs * 1.5) {
       return {
         id, buildId, status: "failed", startedAt, finishedAt: startedAt + flashStepMs * 1.5, instruction: null, note: null, verified: false, cancellable: false, checkable: false,
         error: "Copying to /Volumes/GLV80RHBOOT/glove80.uf2 failed: EACCES: permission denied. The right half was not flashed. keyloom wasn't allowed to write to the drive. On macOS, give the app running keyloom access to removable volumes in System Settings > Privacy & Security > Files & Folders, then flash again.",
         errorCode: "permission_files_and_folders", instructionCode: null, logTail: ["keyloom: GLV80RHBOOT is mounted at /Volumes/GLV80RHBOOT; writing", "keyloom: Copying failed: EACCES"],
       };
     }
-    const elapsed = Date.now() - startedAt;
+    const elapsed = this.options.now() - startedAt;
     const writing = elapsed >= flashStepMs;
     const writeEnd = flashStepMs * 2;
     const failed = failFlash && elapsed >= flashStepMs * 1.5;
