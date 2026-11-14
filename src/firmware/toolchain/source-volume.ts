@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { BuildFailure, DISK_FULL_MESSAGE, diskFull } from "./build-failure.ts";
+import { BuildFailure, DISK_FULL_MESSAGE, MOUNTS_DENIED, diskFull } from "./build-failure.ts";
 import { capture, type LogSink, run } from "./run.ts";
 
 type Hooks = { log?: LogSink; onLine?: (line: string) => void; signal?: AbortSignal };
@@ -21,6 +21,9 @@ async function checked(cmd: string[], hooks: Hooks, what: string, container?: st
   });
   if (result.aborted) throw new BuildFailure("The build was cancelled.");
   if (diskFull(lines)) throw new BuildFailure(DISK_FULL_MESSAGE, "disk_full");
+  if (result.exitCode !== 0 && lines.some((line) => MOUNTS_DENIED.test(line))) {
+    throw new BuildFailure("Docker can't see the firmware source cache. Allow its folder under Docker Desktop's Settings > Resources > File sharing, or set XDG_CACHE_HOME to a folder it can see.", "folder_not_shared");
+  }
   if (result.exitCode !== 0 || result.timedOut) throw new BuildFailure(`${what} failed (${result.timedOut ? "timed out" : `exit ${result.exitCode}`}): ${lines.slice(-3).join(" | ")}`);
 }
 

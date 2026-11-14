@@ -20,6 +20,7 @@ case "$1:$2" in
     for a in "$@"; do name="$a"; done
     rm -f "$VOLUMES/$name"; exit 0;;
   run:*)
+    [ -n "$SEED_ERROR" ] && { printf '%s\\n' "$SEED_ERROR" >&2; exit 125; }
     [ "$SEED_FAIL" = 1 ] && { echo "copy failed" >&2; exit 23; }
     [ "$SEED_HANG" = 1 ] && { echo SEED_READY; exec sleep 60; }
     exit 0;;
@@ -82,4 +83,20 @@ test("a failed archive is removed before any Docker cache can be published", asy
   expect(existsSync(`${f.trusted}.source-v3.tar`)).toBe(false);
   expect(existsSync(f.record)).toBe(false);
   expect(existsSync(f.vars.CALLS)).toBe(false);
+});
+
+
+test("a denied source mount keeps folder-sharing guidance and publishes no cache, while a full disk keeps its own code", async () => {
+  for (const [output, code, message] of [
+    ["docker: Error response from daemon: Mounts denied: /cache", "folder_not_shared", "File sharing"],
+    ["The path /cache is not shared from the host", "folder_not_shared", "XDG_CACHE_HOME"],
+    ["Mounts denied: No space left on device", "disk_full", "Docker ran out of disk space"],
+  ] as const) {
+    const f = await fixture({ SEED_ERROR: output });
+    await withPath(f.bin, async () => {
+      await expect(f.prepare()).rejects.toMatchObject({ code, message: expect.stringContaining(message) });
+    }, f.vars);
+    expect(existsSync(f.record)).toBe(false);
+    expect(await Bun.file(f.vars.CALLS).text()).toContain("volume rm");
+  }
 });

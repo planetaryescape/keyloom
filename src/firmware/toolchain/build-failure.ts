@@ -40,7 +40,7 @@ export const PROBE_CLEANUP_EXIT = 87;
  * 125 with "docker: Error response from daemon: Mounts denied: The path … is not shared from the host and is not known to Docker." (PR #303
  * review). Colima mounts an empty folder instead, which the sentinel exit catches.
  */
-const MOUNTS_DENIED = /Mounts denied|is not shared from the host/i;
+export const MOUNTS_DENIED = /Mounts denied|is not shared from the host/i;
 
 /** What a full Docker disk prints, from `cp` in the container to BuildKit and git (`test/fixtures/build-logs/zmk-docker-disk-full.log`). */
 const DISK_FULL = /No space left on device/i;
