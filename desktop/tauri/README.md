@@ -22,6 +22,12 @@ The inherited bundle config says macOS 12.0; pinned Bun 1.3.14 documents a 13+ r
 
 A signed build runs on the Mac that made it without notarisation, because nothing quarantines it. A downloaded copy is refused by Gatekeeper until it is notarised.
 
+The macOS release jobs also sign and notarize the final standalone Bun CLI after compilation, before hashing and upload.
+They call `scripts/sign-device-helper.sh --bun-cli` with the existing signing credentials and this desktop's `Entitlements.plist`.
+Missing signing or notarization credentials stop CLI publication. A separate step without those credentials scratch-installs and checks the signed pair.
+Rust helper signing stays separate and receives no Bun entitlements.
+See the [standalone signature issue](../../docs/issues/standalone-macos-cli-signature.md) for historical failures and required release proof.
+
 ## The sidecar must match the app
 
 The app and its `keyloom` sidecar are one release. `fetch-sidecar.sh` with no argument downloads the *latest* release, which is not necessarily the version `build.sh` stamps on the app, so for a local build pass the binary you built (above) or set `KEYLOOM_TAG=vX.Y.Z`. The release workflow builds the sidecar from the same commit. The shell passes `--client-protocol <DESKTOP_PROTOCOL>` and a sidecar that speaks another protocol refuses to start; one too old to know the flag fails on the unknown option, and the menu bar shows `keyloom could not start: …`.

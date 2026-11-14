@@ -298,9 +298,10 @@ describe("build and flash", () => {
   });
 
   test("a waiting flash can be cancelled, a writing one can't, and the cancel says so as a code (D-501)", async () => {
-    const { call } = start(new FakeEditor(fixture, { buildMs: 50, flashStepMs: 400 }));
+    let now = Date.now();
+    const { call } = start(new FakeEditor(fixture, { buildMs: 50, flashStepMs: 400, now: () => now }));
     const build = BuildSchema.parse(await (await call("POST", "/api/layouts/moonlander-daily/builds", { revisionId: fixture.revision.id })).json());
-    await Bun.sleep(80);
+    now += 80;
     const first = FlashSchema.parse(await (await call("POST", `/api/builds/${build.id}/flashes`, {})).json());
     expect(first.cancellable).toBe(true);
     const cancelled = await call("POST", `/api/flashes/${first.id}/cancel`, {});
@@ -311,7 +312,7 @@ describe("build and flash", () => {
     expect(ApiErrorBodySchema.parse(await again.json()).error.code).toBe("flash_finished");
 
     const second = FlashSchema.parse(await (await call("POST", `/api/builds/${build.id}/flashes`, {})).json());
-    await Bun.sleep(450);
+    now += 450;
     const writing = await call("POST", `/api/flashes/${second.id}/cancel`, {});
     expect(writing.status).toBe(409);
     expect(ApiErrorBodySchema.parse(await writing.json()).error.code).toBe("flash_writing");

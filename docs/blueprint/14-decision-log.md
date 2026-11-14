@@ -11,6 +11,23 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-14 Sign the standalone macOS CLI after Bun compilation
+
+### D-666: Sign and notarize final macOS CLI bytes before publishing checksums.
+
+The standalone arm64 release CLI repeatedly failed strict signature verification, while the desktop sidecar passed Developer ID checks.
+Signing the embedded Rust helper does not sign Bun's outer executable.
+
+The release workflow reuses `scripts/sign-device-helper.sh --bun-cli` after compilation on both Mac targets.
+CLI mode requires Developer ID and notarization credentials, uses the tracked desktop `Entitlements.plist`, and refuses failed signature or notarization checks.
+The default Rust mode receives no Bun JIT entitlements.
+Signing credentials stay in the signing step. A later step verifies and scratch-installs the final pair without those credentials.
+The checksum fan-in hashes the signed assets. The desktop's later signing can still change its own sidecar bytes.
+
+Ad hoc local checks prove only seal validity and runtime behavior.
+Publisher identity and accepted notarization remain release gates. Existing published assets stay unchanged.
+See [the signature issue](../issues/standalone-macos-cli-signature.md).
+
 ## 2026-11-14 Glove80 limits combined compiler concurrency
 
 ### D-585: Give each of the two Glove80 Nix jobs two cores. Extends D-081.
