@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.80.6](https://github.com/planetaryescape/keyloom/compare/v0.80.5...v0.80.6) (2026-11-14)
+
+
+### Bug Fixes
+
+* bring saved reply recovery into view on phones ([16b3293](https://github.com/planetaryescape/keyloom/commit/16b3293b941f76a351276788f6df7a64e8aa59b4))
+* keep recovery paths open without losing drafts or repeating requests ([07cc7f2](https://github.com/planetaryescape/keyloom/commit/07cc7f2cb734296b8ee2407494abf56a340e952d))
+* preserve drafts and resume recovery without repeating requests ([ce2b80f](https://github.com/planetaryescape/keyloom/commit/ce2b80f4c979805b800e0d7329e5d46987fd2ffe))
+* retain completion bookkeeping when resuming a saved reply ([4a24544](https://github.com/planetaryescape/keyloom/commit/4a2454460a521edcccd0db9c542b83e321baa50f))
+
 ## [0.80.5](https://github.com/planetaryescape/keyloom/compare/v0.80.4...v0.80.5) (2026-11-14)
 
 
