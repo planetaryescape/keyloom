@@ -157,9 +157,15 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (zsa) {
     c.push("#define MOON_LED_LEVEL LED_LEVEL", "#ifndef ZSA_SAFE_RANGE", "#define ZSA_SAFE_RANGE SAFE_RANGE", "#endif");
   }
-  for (const p of before.filter((p) => p.anchor.startsWith("prelude"))) c.push("", p.source);
+  const keycodeNames = new Set(enumEntries.map((entry) => entry.split("=")[0]!.trim()));
+  const prelude = before.filter((p) => p.anchor.startsWith("prelude"));
+  const firstKeycodeUse = prelude.findIndex((p) => (p.source.match(/\b[A-Za-z_]\w*\b/g) ?? []).some((name) => keycodeNames.has(name)));
+  // Later declarations can depend on the moved globals or types, so keep their original order too.
+  const split = firstKeycodeUse === -1 ? prelude.length : firstKeycodeUse;
+  for (const p of prelude.slice(0, split)) c.push("", p.source);
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
   if (dances) c.push("", dances.codes);
+  for (const p of prelude.slice(split)) c.push("", p.source);
   for (const p of before.filter((p) => !p.anchor.startsWith("prelude"))) c.push("", p.source);
   if (wheels.prelude !== undefined) c.push("", wheels.prelude);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));

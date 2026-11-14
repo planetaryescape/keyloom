@@ -37,6 +37,8 @@ The projection uses 19.05 mm per display unit. With STL coordinates in millimete
 
 The assembly measures 100 × 110 mm for the body and about 96.94 × 77.74 mm for the wrist rest. The knobs measure about 26.9 mm across. The rendered ball uses the maker's stated 45 mm diameter. The yellow plastic and blue ball follow the owner's supplied photos. Those personal photos are not repository assets.
 
+The wrist rest stays visible to match the complete device in the owner's reference photos.
+
 The editor and key card use the same flat profile, print areas and materials. Fine texture, bevels, socket shading and a reflected highlight give the top view depth. This is a shaded vector view, not an interactive 3D mesh.
 
 ## Flashing requires the boot drive

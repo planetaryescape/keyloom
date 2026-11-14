@@ -3461,11 +3461,15 @@ The Ploopy A+ factory keymap needs Drashna's acceleration and gesture modules. I
 
 A firmware default import also fetches optional sibling `config.h`, `rules.mk` and `keymap.json`. Only a 404 means absent. Other failures refuse the incomplete import. C imports preserve custom includes, typedefs, ordinary enums and globals before the generated keymap. Custom-keycode enums can start at `SAFE_RANGE` or `ZSA_SAFE_RANGE` regardless of their name. Mixed numeric and named layer indexes retain the available names.
 
+A failed companion download returns a no-default reason and stops the lookup. It cannot silently select a JSON default instead. Generation puts declarations that use custom keycodes after their generated enum. Later declarations keep their order so their dependencies remain available.
+
 The compiled A+ candidate passed USB detection, factory import, validation of a button swap, source generation and a real UF2 build. No device was flashed. See [the board reference](../../boards/ploopy/aplus/README.md).
 
 ### D-607: Flat controls keep their physical shape in the key card. Extends D-277. (2026-11-14)
 
 A trackball button is not a sculpted keyboard cap. `display.keyShapes` can declare a flat profile and a safe `printArea` rectangle. Its physical contour already includes the gaps between buttons. The board and key card share that outline, aspect ratio and print area. Rotary presses stay circular. Advanced names retain the existing compact-label fallback and full accessible source.
+
+Flat key cards allocate tap, hold and corner regions from the same safe height. Short controls retain a positive tap area.
 
 Optional `display.materials` sets fixed case, cap, legend and ball colors. A crafted case with materials receives a shaded top and sidewall. The ball receives a reflected highlight. Other boards retain their existing materials. Mouse-action legends omit the word “mouse” because that category is not a hold action.
 

@@ -65,13 +65,31 @@ test("the factory config retains the gesture, wheel and VIA source when one butt
   expect(JSON.parse(files.find((f) => f.path === "keymap.json")!.content).modules).toEqual(["drashna/pointing_device_accel", "drashna/pointing_device_gestures"]);
 });
 
-test("a failed companion download never returns a factory config with missing firmware support", async () => {
+test.each(["config.h", "rules.mk", "keymap.json"])("a failed %s download refuses the default instead of using the JSON fallback", async (companion) => {
+  const requested: string[] = [];
   const found = await readDefaultKeymap(board.definition, {
     cacheDir: tempDir(),
     fetchText: (url) => {
-      if (url.endsWith("/rules.mk")) throw new Error("GET returned 503");
+      requested.push(url);
+      if (url.endsWith(`/${companion}`)) throw new Error("GET returned 503");
+      if (url.endsWith("/keymap.json")) return Promise.resolve(JSON.stringify({ layout: "LAYOUT", layers: [Array(8).fill("KC_A")] }));
       return tree(url);
     },
   });
   expect(found.layout).toBeNull();
+  expect("reason" in found && found.reason).toContain(`couldn't read ${companion}`);
+  expect("reason" in found && found.reason).toContain("503");
+  expect(requested.filter((url) => url.endsWith("/keymap.json"))).toHaveLength(1);
+});
+
+test("a missing C default still permits a JSON default with layers", async () => {
+  const found = await readDefaultKeymap(board.definition, {
+    cacheDir: tempDir(),
+    fetchText: async (url) => {
+      if (url.endsWith("/keymap.c")) throw new Error("GET returned 404");
+      return JSON.stringify({ layout: "LAYOUT", layers: [Array(8).fill("KC_A")] });
+    },
+  });
+  expect(found.layout?.layers[0]?.bindings).toEqual(Array(8).fill({ kind: "key", code: "A" }));
+  expect("from" in found && found.from).toContain("keymap.json");
 });

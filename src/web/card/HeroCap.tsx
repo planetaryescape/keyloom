@@ -66,11 +66,12 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
   const area = physical ? shape.printArea : undefined;
   const safeWidth = width * (area?.w ?? 0.85);
   const safeHeight = height * (area?.h ?? 0.76);
-  const frontHeight = hold !== null || staticFront !== null ? 24 : 0;
+  const cornerHeight = hasCorners ? physical ? Math.min(20, safeHeight / 3) : 20 : 0;
+  const frontHeight = hold !== null || staticFront !== null ? physical ? Math.min(24, (safeHeight - cornerHeight) / 2) : 24 : 0;
   const letters = [...legend.tap].length;
   const preferredSize = letters <= 1 ? 0.42 : letters <= 3 ? 0.32 : 0.22;
-  // Filled corners leave room for one symbol or two lines of text above the 24px hold target.
-  const faceHeight = physical ? Math.max(14, safeHeight - frontHeight - (hasCorners ? 20 : 0)) : size - (hasCorners ? Math.max(size * 0.34, 32) : size * 0.04) - Math.max(size * 0.2, 26);
+  // Flat controls share one print-area budget between the tap, front and filled corners.
+  const faceHeight = physical ? safeHeight - frontHeight - cornerHeight : size - (hasCorners ? Math.max(size * 0.34, 32) : size * 0.04) - Math.max(size * 0.2, 26);
   const tapSize = Math.min(preferredSize, faceHeight / size / (letters > 3 ? 2.6 : 1.3));
   // The face is 0.85u wide. Match its real inset instead of fitting against the whole cap.
   const fitWidth = (physical ? safeWidth / size : 0.85) + CAP_INSET;
@@ -97,7 +98,7 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
   const visibleTap = needsCaption ? compactFits ? shortTap : "Tap" : legend.tap;
   const visibleFit = needsCaption ? compactFits ? shortFit : tapFallbackFit : tapFit;
   const print = (text: string) => withSpaceMark(text.replace(/[_+(]/g, (seam) => `${seam}\u200b`));
-  const capStyle = { ...materialStyle(materials), "--u": `${physical ? physicalUnit : size}px`, width, height, ...(physical ? { "--hero-x": `${(area?.x ?? 0.075) * width}px`, "--hero-y": `${(area?.y ?? 0.12) * height}px`, "--hero-w": `${safeWidth}px`, "--hero-h": `${safeHeight}px`, "--hero-front": `${frontHeight}px`, "--hero-corners": hasCorners ? "20px" : "0px" } : {}) } as CSSProperties & { "--led"?: string };
+  const capStyle = { ...materialStyle(materials), "--u": `${physical ? physicalUnit : size}px`, width, height, ...(physical ? { "--hero-x": `${(area?.x ?? 0.075) * width}px`, "--hero-y": `${(area?.y ?? 0.12) * height}px`, "--hero-w": `${safeWidth}px`, "--hero-h": `${safeHeight}px`, "--hero-front": `${frontHeight}px`, "--hero-corners": `${cornerHeight}px` } : {}) } as CSSProperties & { "--led"?: string };
   if (led !== undefined) capStyle["--led"] = led;
   const outline = physical && shape.outline !== undefined ? shapePath(shape.outline, 0, 0, width, height, physicalUnit * 0.13) : null;
   const region = (slot: HeroSlot, value: Region | null, className: string, children: ReactNode) =>

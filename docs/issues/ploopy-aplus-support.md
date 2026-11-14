@@ -18,14 +18,14 @@ The broader focused run passed 316 tests across 23 files. The final board, picke
 
 ## The preview stays separate from installed keyloom
 
-The current compiled candidate is `/tmp/keyloom-aplus-wheels-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are local and unreleased.
+The current compiled candidate is `/tmp/keyloom-aplus-review-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are unreleased.
 
 The preview serves scratch data from `/tmp/keyloom-aplus-wheels-cli-check` on port 4489. The config is `A+ wheel smoke`. The previous preview stopped before this fix. The installed app and CLI remain unchanged. We did not flash a keyboard.
 
 To restart the preview:
 
 ```sh
-/tmp/keyloom-aplus-wheels-candidate/keyloom-darwin-arm64 \
+/tmp/keyloom-aplus-review-candidate/keyloom-darwin-arm64 \
   --data-dir /tmp/keyloom-aplus-wheels-cli-check serve --port 4489
 ```
 
@@ -45,4 +45,19 @@ The broader run passed 842 tests, skipped 19 Docker-gated cases and failed none.
 
 The full suite on delivery candidate `8ecde0199c684c666ea0fda48920325a263334f2` passed 5058 tests with 246 gated skips and zero failures. It ran 5304 tests across 518 files. The final copy change replaces the A+'s typing-key instruction with “Click a button or knob to edit it.” TypeScript passes after that change. No other implementation gap emerged from the audit.
 
-Next action: follow PR 353's CI and review, then finish the repository handoff. The PR carries all four implementation and evidence commits from the original local branch. We closed Computer Use. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Publishing and installed-copy updates remain separate release work.
+## Review found three defects
+
+All ten PR checks passed on `1191a426ab0e8e66b32e9b727d1cc48df3dcb39c`. The four review findings have these dispositions:
+
+- Fixed: a failed companion download returns a no-default reason and stops lookup. It cannot silently select a JSON default with fewer features. A missing C default can still use an available JSON default.
+- Fixed: declarations that use generated custom keycodes follow the enum. Later declarations keep their order. Regression tests compile both `custom_keycodes` and a renamed `actions` enum with the host C compiler.
+- Fixed: flat key cards share one safe-height budget across tap, hold and corners. Short controls retain a positive tap area.
+- Rejected: removing the wrist rest conflicts with BK's request to match the complete device in his photos. The board reference records this choice.
+
+The broader follow-up run passed 524 tests with 19 gated skips and no failures across 43 files. The final board and card regressions passed nine tests, including a valid JSON fallback. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-review-focused.log`, `/tmp/keyloom-aplus-review-final-regressions.log`, `/tmp/keyloom-aplus-review-typecheck.log` and `/tmp/keyloom-aplus-review-dependencies.log`.
+
+The compiled follow-up candidate generated all four firmware source files from scratch revision `rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ`. Output is `/tmp/keyloom-aplus-review-generated`. It serves the same scratch config on port 4489. The earlier preview stopped normally.
+
+Fresh visual verification is blocked: Computer Use returned `cgWindowNotFound` for Dia by name and bundle ID. Existing screenshots predate the height-budget fix. The rendered-component regression checks positive tap space, but it does not replace a fresh screenshot check. Computer Use closed after the attempts.
+
+Next action: follow PR 353's checks and review on the updated head, then repeat the card screenshot check when Computer Use can read Dia. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.

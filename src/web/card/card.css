@@ -363,7 +363,7 @@
 .hero-cap[data-profile="flat"] .hero-front .cap-front { font-size: 11px; }
 .hero-cap[data-profile="flat"] .hero-corner {
   top: var(--hero-y);
-  min-height: 20px;
+  min-height: var(--hero-corners);
   padding: 0;
 }
 .hero-cap[data-profile="flat"] .hero-corner-start { left: var(--hero-x); }

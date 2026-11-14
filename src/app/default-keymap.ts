@@ -69,7 +69,12 @@ export async function readDefaultKeymap(def: BoardDefinition, opts: GeometryOpti
             }
             await writeFile(join(dir, companion), source);
           }));
-          for (const result of companions) if (result.status === "rejected") throw result.reason;
+          // A JSON fallback cannot replace a C default whose required build files failed to download.
+          const failed = companions.find((result) => result.status === "rejected");
+          if (failed?.status === "rejected") return {
+            layout: null,
+            reason: `couldn't get ${def.name}'s default keymap (${file} at ${short(c.sha)}: ${failed.reason instanceof Error ? failed.reason.message : String(failed.reason)})`,
+          };
         }
         const imported = def.firmware === "zmk" ? await importZmkSource(path, def) : await importOryxSource(dir, def);
         return { layout: imported.layout, from: `${file} at ${short(c.sha)}` };
