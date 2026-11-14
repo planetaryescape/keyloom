@@ -102,6 +102,12 @@ export const BoardDefinitionSchema = z.strictObject({
   // Display-only rotation; never affects positions or generation (04).
   display: z
     .strictObject({
+      // Physical material colours stay fixed while the room follows the theme.
+      materials: z.strictObject({
+        case: z.strictObject({ light: z.string().regex(/^#[0-9a-f]{6}$/i), dark: z.string().regex(/^#[0-9a-f]{6}$/i) }).optional(),
+        caps: z.strictObject({ light: z.string().regex(/^#[0-9a-f]{6}$/i), dark: z.string().regex(/^#[0-9a-f]{6}$/i), legend: z.string().regex(/^#[0-9a-f]{6}$/i) }).optional(),
+        ball: z.strictObject({ light: z.string().regex(/^#[0-9a-f]{6}$/i), dark: z.string().regex(/^#[0-9a-f]{6}$/i) }).optional(),
+      }).optional(),
       rotate: z.array(z.strictObject({ positions, r: z.number(), rx: z.number(), ry: z.number() })).optional(),
       // Slides keys sideways, in key units, after rotation. QMK's Moonlander halves are 4u apart, too close for the thumb clusters to tilt inward without meeting.
       // dy moves keys down, for a row drawn taller than the geometry has it (a MacBook Pro's full-height function row).
@@ -123,6 +129,9 @@ export const BoardDefinitionSchema = z.strictObject({
           z.string().regex(/^\d+$/),
           z.strictObject({
             kind: z.literal("rotary-encoder").optional(),
+            profile: z.literal("flat").optional(),
+            // Safe legend rectangle inside a curved button, in fractions of its drawn box.
+            printArea: z.strictObject({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().positive().max(1), h: z.number().positive().max(1) }).refine((a) => a.x + a.w <= 1 && a.y + a.h <= 1, "print area must fit inside the control").optional(),
             x: z.number().optional(),
             y: z.number().optional(),
             w: z.number().positive().optional(),

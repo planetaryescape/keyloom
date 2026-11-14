@@ -25,6 +25,9 @@ const LIGHT: Readonly<Record<string, string>> = {
 };
 
 const MOUSE: Readonly<Record<string, string>> = {
+  MS_BTN1: "Click", MS_BTN2: "Right", MS_BTN3: "Middle", MS_BTN4: "Back", MS_BTN5: "Forward",
+  PKC_DRAG_SCROLL: "Drag", PKC_GESTURE: "Gesture", PKC_TGL_MIRROR: "Mirror", PKC_TGL_VERT_SCRL: "Vertical",
+  PKC_TGL_HORIZ_SCRL: "Horiz.", PKC_TGL_DRAG_SCRL: "Drag mode", PKC_ADJUST_LED_BRIGHTNESS: "LED", PKC_BLINKY_DPI_CONFIG: "DPI",
   KC_MS_BTN1: "Click", KC_BTN1: "Click", KC_MS_BTN2: "Right", KC_BTN2: "Right", KC_MS_BTN3: "Middle", KC_BTN3: "Middle",
   KC_MS_LEFT: "←", KC_MS_L: "←", KC_MS_RIGHT: "→", KC_MS_R: "→", KC_MS_UP: "↑", KC_MS_U: "↑", KC_MS_DOWN: "↓", KC_MS_D: "↓",
   KC_MS_WH_UP: "Scroll↑", KC_WH_U: "Scroll↑", KC_MS_WH_DOWN: "Scroll↓", KC_WH_D: "Scroll↓",
@@ -87,7 +90,7 @@ export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
     if (dual !== null) return dual;
   }
   if (LIGHT[source] !== undefined) return { tap: LIGHT[source] as string, hold: "lights" };
-  if (MOUSE[source] !== undefined) return { tap: MOUSE[source] as string, hold: "mouse" };
+  if (MOUSE[source] !== undefined) return { tap: MOUSE[source] as string };
   if (source === "QK_BOOT" || source === "RESET" || source === "&bootloader") return { tap: "Boot", hold: "flash" };
   // ZMK
   const sticky = /^&(?:sticky_key_quick_release|sk)\s+(\w+)$/.exec(source);

@@ -2,6 +2,8 @@
 
 The ZSA Moonlander is BK's QMK board (D-027). This document covers importing its current layout from Oryx, generating QMK source, building it locally and flashing it. Every fact here is in [../research/qmk-and-moonlander.md](../research/qmk-and-moonlander.md), checked 2026-10-15. Pinned commits: `zsa/qmk_firmware` `93b2b9ec3368f86c5eb5a2e3f934049f8daef885` (branch `firmware25`), `zsa/zapp` `a1be75837323001ad1ae8e5787d88cd33f2ccc46` (v1.0.2), and mainline `qmk/qmk_firmware` `7a1bbf37c5c07da4ea0a162bb139083a46ef40a1` for documentation.
 
+Status update, 2026-11-14: the Ploopy A+ uses its maker’s pinned QMK fork and an external module collection (D-606). Factory imports keep sibling support files and C declarations required by callbacks. [The board reference](../../boards/ploopy/aplus/README.md) records its sources and checks.
+
 ## There are two Moonlander revisions, and only ZSA's fork builds both
 
 ZSA started shipping a revision B Moonlander in mid-December 2025. Rev A uses the stock STM32 DFU bootloader (`0483:DF11`, flashing at `0x08000000`, USB PID `0x1969` in normal mode). Rev B uses ZSA's own bootloader (`3297:2003`, flashing at `0x08002000`, PID `0x1972`). Mainline QMK has only rev A. A PR adding rev B was closed unmerged on 2026-06-22. ZSA's fork has `zsa/moonlander/reva` and `zsa/moonlander/revb`, and Oryx builds from it.

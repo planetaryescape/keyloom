@@ -117,7 +117,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     throw new GenerateError("keymap.c keeps its own layer_state_set_user, so keyloom can't write one for the conditional layers beside it");
   }
   const dances = renderTapDances(layout.tapDances, layout.macros, ctx);
-  const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
+  const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes" || p.anchor === "prelude" || p.anchor.startsWith("prelude#"));
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
   // The keymap's own custom keycodes join keyloom's enum below instead of being a block of their own (D-377).
   const ownKeycodes = keymapC.filter((p) => p.anchor === CUSTOM_KEYCODES_ANCHOR);
@@ -155,9 +155,10 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (zsa) {
     c.push("#define MOON_LED_LEVEL LED_LEVEL", "#ifndef ZSA_SAFE_RANGE", "#define ZSA_SAFE_RANGE SAFE_RANGE", "#endif");
   }
+  for (const p of before.filter((p) => p.anchor.startsWith("prelude"))) c.push("", p.source);
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
   if (dances) c.push("", dances.codes);
-  for (const p of before) c.push("", p.source);
+  for (const p of before.filter((p) => !p.anchor.startsWith("prelude"))) c.push("", p.source);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));
   for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);

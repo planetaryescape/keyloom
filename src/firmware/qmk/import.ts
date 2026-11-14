@@ -119,7 +119,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
   const profilesUsed = new Set<string>();
   const layers = parsed.layers.map((args, li) => ({
     id: layerIds[li] as string,
-    name: parsed.layerNames[li] === undefined ? `Layer ${li}` : displayName(parsed.layerNames[li] as string),
+    name: !parsed.layerNames[li] ? `Layer ${li}` : displayName(parsed.layerNames[li] as string),
     bindings: args.map((expr, position) => {
       const mapped = mapKey(expr, position, tapDanceCtx);
       counts[mapped.binding.kind]++;

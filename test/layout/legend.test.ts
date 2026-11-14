@@ -104,8 +104,10 @@ describe("native bindings print human legends", () => {
     expect(native("OSM(MOD_RSFT)")).toEqual({ kind: "native", tap: "⇧", hold: "once" });
     expect(native("DUAL_FUNC_0")).toEqual({ kind: "native", tap: "F5", hold: "Game" });
     expect(native("RGB_HUD")).toEqual({ kind: "native", tap: "Hue−", hold: "lights" });
-    expect(native("KC_MS_BTN2")).toEqual({ kind: "native", tap: "Right", hold: "mouse" });
-    expect(native("KC_MS_LEFT")).toEqual({ kind: "native", tap: "←", hold: "mouse" });
+    expect(native("KC_MS_BTN2")).toEqual({ kind: "native", tap: "Right" });
+    expect(native("KC_MS_LEFT")).toEqual({ kind: "native", tap: "←" });
+    expect(native("MS_BTN5")).toEqual({ kind: "native", tap: "Forward" });
+    expect(native("PKC_GESTURE")).toEqual({ kind: "native", tap: "Gesture" });
     expect(native("QK_BOOT")).toEqual({ kind: "native", tap: "Boot", hold: "flash" });
   });
 

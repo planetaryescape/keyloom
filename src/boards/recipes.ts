@@ -18,6 +18,12 @@ export const QmkDockerBuildSchema = z.strictObject({
   keymapsDir: z.string().min(1).refine((path) => !/^[A-Za-z]:/.test(path) && !/[\\\0]/.test(path) && path.split("/").every((part) => part !== "" && part !== "." && part !== ".."), "must be a relative path without traversal"),
   /** Submodules the build needs; the others are skipped to keep the checkout small (S5). */
   submodules: z.array(z.string().min(1)),
+  /** External module collections missing from the firmware tree, copied under modules/<name>. */
+  moduleSources: z.array(z.strictObject({
+    name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/),
+    repo: z.string().url(),
+    sha,
+  })).refine((sources) => new Set(sources.map((source) => source.name)).size === sources.length, "module source names must be unique").optional(),
   /** Written to keymap.json when the layout carries none of its own. */
   modules: z.array(z.string().min(1)).optional(),
   /** The JSON file with `layouts`, when it isn't `keyboards/<qmkTarget>/keyboard.json` (mainline QMK keeps it in the parent folder's info.json). */

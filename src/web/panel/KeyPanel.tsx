@@ -645,6 +645,8 @@ export function KeyPanel(props: Props) {
         {props.board === undefined ? null : <EncoderTurns board={props.board} layer={layer} position={position} draft={draft.sensorBindings} onChange={(sensorBindings) => update((previous) => ({ ...previous, sensorBindings, sensorBindingsOriginal: previous.sensorBindingsOriginal === undefined ? layer.sensorBindings ?? null : previous.sensorBindingsOriginal }))} />}
         <div className="card-hero">
           <HeroCap
+            shape={props.board?.display?.keyShapes?.[String(position)]}
+            materials={props.board?.display?.materials}
             legend={advancedText ?? shownLegend}
             compactTap={shownLegend.tap}
             tone={shownTone}

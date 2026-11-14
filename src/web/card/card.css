@@ -343,6 +343,33 @@
   right: calc(var(--u) * 0.1);
 }
 
+/* Physical buttons keep the board's contour and safe print area at both preview sizes. */
+.hero-cap[data-profile="flat"] .hero-tap,
+.hero-cap[data-profile="flat"] .cap-body[data-corners="true"] .hero-tap {
+  inset: auto;
+  top: calc(var(--hero-y) + var(--hero-corners));
+  left: var(--hero-x);
+  width: var(--hero-w);
+  height: calc(var(--hero-h) - var(--hero-front) - var(--hero-corners));
+  border-radius: 3px;
+}
+.hero-cap[data-profile="flat"] .hero-front {
+  inset: auto;
+  top: calc(var(--hero-y) + var(--hero-h) - var(--hero-front));
+  left: var(--hero-x);
+  width: var(--hero-w);
+  height: var(--hero-front);
+}
+.hero-cap[data-profile="flat"] .hero-front .cap-front { font-size: 11px; }
+.hero-cap[data-profile="flat"] .hero-corner {
+  top: var(--hero-y);
+  min-height: 20px;
+  padding: 0;
+}
+.hero-cap[data-profile="flat"] .hero-corner-start { left: var(--hero-x); }
+.hero-cap[data-profile="flat"] .hero-corner-end { right: calc(100% - var(--hero-x) - var(--hero-w)); }
+.hero-cap[data-profile="flat"][data-rotary] .hero-tap { border-radius: 50%; }
+
 .hero-ghost {
   color: var(--ghost);
   font-weight: 500;

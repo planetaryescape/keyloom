@@ -3,7 +3,7 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure, DISK_FULL_MESSAGE, diskFull, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
-import { type CheckoutSpec, trustedCheckoutDir, withCheckout } from "../toolchain/checkout.ts";
+import { type CheckoutSpec, ensureTrustedCheckout, trustedCheckoutDir, withCheckout } from "../toolchain/checkout.ts";
 import { ensureSourceVolume } from "../toolchain/source-volume.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { workspacePath } from "../toolchain/workspace-path.ts";
@@ -116,8 +116,18 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
         log: input.log,
         ...(input.signal ? { signal: input.signal } : {}),
       });
-      const identity = new Bun.CryptoHasher("sha256").update(JSON.stringify([spec.repo, spec.sha, [...spec.submodules].sort(), rev.build.image])).digest("hex");
-      const volume = await ensureSourceVolume(request.checkoutDir, identity, rev.build.image, [{ dir: trustedCheckoutDir(spec), path: "qmk" }], {
+      const moduleSources = rev.build.moduleSources ?? [];
+      const sources = [{ dir: trustedCheckoutDir(spec), path: "qmk" }];
+      for (const module of moduleSources) {
+        const dir = await ensureTrustedCheckout({ dir: `${request.checkoutDir}.module-${module.name}`, repo: module.repo, sha: module.sha, submodules: [] }, {
+          log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}),
+        });
+        sources.push({ dir, path: `qmk/modules/${module.name}` });
+      }
+      const sourceIdentity: unknown[] = [spec.repo, spec.sha, [...spec.submodules].sort(), rev.build.image];
+      if (moduleSources.length > 0) sourceIdentity.push(moduleSources);
+      const identity = new Bun.CryptoHasher("sha256").update(JSON.stringify(sourceIdentity)).digest("hex");
+      const volume = await ensureSourceVolume(request.checkoutDir, identity, rev.build.image, sources, {
         log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}),
       });
       const cmd = [

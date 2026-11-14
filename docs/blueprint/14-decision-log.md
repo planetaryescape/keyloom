@@ -3454,3 +3454,19 @@ The picker opens with the card body at its top. Search keeps keyboard focus with
 ### D-605: An open picker keeps long source details behind a disclosure. Extends D-602 and D-604. (2026-11-13)
 
 The picker follows the compact preview before source notes and other details. A full-name caption that cannot fit on the cap becomes an explicit Full firmware name disclosure while the picker is open. Closing the picker restores the full caption. The source remains unchanged and available through that disclosure and the tap's accessible name. This keeps focused search visible even when a native binding has an unbounded source block.
+
+### D-606: QMK recipes can pin external module collections. Extends D-040 and D-584. (2026-11-14)
+
+The Ploopy A+ factory keymap needs Drashna's acceleration and gesture modules. Its firmware tree records the module commit without a usable submodule URL. A QMK recipe can declare `moduleSources` with a directory name, repository and full commit SHA. Trusted checkouts stage those collections under `qmk/modules/<name>` in the existing read-only source volume. Their identities participate in the cache key. Boards without external collections keep their prior cache identity.
+
+A firmware default import also fetches optional sibling `config.h`, `rules.mk` and `keymap.json`. Only a 404 means absent. Other failures refuse the incomplete import. C imports preserve custom includes, typedefs, ordinary enums and globals before the generated keymap. Custom-keycode enums can start at `SAFE_RANGE` or `ZSA_SAFE_RANGE` regardless of their name. Mixed numeric and named layer indexes retain the available names.
+
+The compiled A+ candidate passed USB detection, factory import, validation of a button swap, source generation and a real UF2 build. No device was flashed. See [the board reference](../../boards/ploopy/aplus/README.md).
+
+### D-607: Flat controls keep their physical shape in the key card. Extends D-277. (2026-11-14)
+
+A trackball button is not a sculpted keyboard cap. `display.keyShapes` can declare a flat profile and a safe `printArea` rectangle. Its physical contour already includes the gaps between buttons. The board and key card share that outline, aspect ratio and print area. Rotary presses stay circular. Advanced names retain the existing compact-label fallback and full accessible source.
+
+Optional `display.materials` sets fixed case, cap, legend and ball colors. A crafted case with materials receives a shaded top and sidewall. The ball receives a reflected highlight. Other boards retain their existing materials. Mouse-action legends omit the word “mouse” because that category is not a hold action.
+
+The A+ display derives its contours from the maker's CAD assembly. Its yellow plastic and blue ball follow the owner's photos. The [board reference](../../boards/ploopy/aplus/README.md) records the mechanical source, measurements and license.

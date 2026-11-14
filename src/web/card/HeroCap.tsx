@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { KeycapColour } from "../../boards/schema.ts";
+import type { BoardDefinition, KeycapColour } from "../../boards/schema.ts";
 import type { Legend } from "../../layout/legend.ts";
 import { frontWords } from "../keyboard/front-words.ts";
 import { CAP_INSET, fitLegend, isCondensed } from "../keyboard/fit.ts";
+import { shapePath } from "../keyboard/Cap.tsx";
+import { materialStyle } from "../keyboard/materials.ts";
 
 export type HeroSlot = "tap" | "hold" | "doubleTap" | "tapThenHold";
 
@@ -41,6 +43,8 @@ interface Props {
   /** Words under the cap for a screen reader: what the key does now. */
   label: string;
   size?: number;
+  shape?: NonNullable<NonNullable<BoardDefinition["display"]>["keyShapes"]>[string] | undefined;
+  materials?: NonNullable<BoardDefinition["display"]>["materials"] | undefined;
 }
 
 const withSpaceMark = (text: string): ReactNode[] =>
@@ -49,23 +53,32 @@ const withSpaceMark = (text: string): ReactNode[] =>
 // The card's hero (23#the-key-card): the key drawn large, in the same five layers as on the board. Its parts are its slots: the top face
 // is what a tap sends, the front skirt what a hold does, the top corners a double tap and a tap-then-hold. An empty slot is a faint word
 // on the cap, never a row of dashed boxes. Each part is a button that opens that slot's picker under the cap.
-export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, staticFront = null, doubleTap, tapThenHold, open, draft, changed, onOpen, label, size = 112 }: Props) {
+export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, staticFront = null, doubleTap, tapThenHold, open, draft, changed, onOpen, label, size = 112, shape, materials }: Props) {
   const probe = useRef<HTMLSpanElement>(null);
   const compactProbe = useRef<HTMLSpanElement>(null);
   const [needsCaption, setNeedsCaption] = useState(false);
   const [compactFits, setCompactFits] = useState(true);
   const hasCorners = doubleTap?.text != null || tapThenHold?.text != null;
+  const physical = shape?.profile === "flat";
+  const physicalUnit = size / Math.max(shape?.w ?? 1, shape?.h ?? 1);
+  const width = physical ? (shape.w ?? 1) * physicalUnit : size;
+  const height = physical ? (shape.h ?? 1) * physicalUnit : size;
+  const area = physical ? shape.printArea : undefined;
+  const safeWidth = width * (area?.w ?? 0.85);
+  const safeHeight = height * (area?.h ?? 0.76);
+  const frontHeight = hold !== null || staticFront !== null ? 24 : 0;
   const letters = [...legend.tap].length;
   const preferredSize = letters <= 1 ? 0.42 : letters <= 3 ? 0.32 : 0.22;
   // Filled corners leave room for one symbol or two lines of text above the 24px hold target.
-  const faceHeight = size - (hasCorners ? Math.max(size * 0.34, 32) : size * 0.04) - Math.max(size * 0.2, 26);
+  const faceHeight = physical ? Math.max(14, safeHeight - frontHeight - (hasCorners ? 20 : 0)) : size - (hasCorners ? Math.max(size * 0.34, 32) : size * 0.04) - Math.max(size * 0.2, 26);
   const tapSize = Math.min(preferredSize, faceHeight / size / (letters > 3 ? 2.6 : 1.3));
   // The face is 0.85u wide. Match its real inset instead of fitting against the whole cap.
-  const tapFit = fitLegend(legend.tap, 0.85 + CAP_INSET, { max: tapSize, min: 0.1 }, { unit: size }, isCondensed(legend.tap));
+  const fitWidth = (physical ? safeWidth / size : 0.85) + CAP_INSET;
+  const tapFit = fitLegend(legend.tap, fitWidth, { max: tapSize, min: 0.1 }, { unit: size }, isCondensed(legend.tap));
   const shortTap = compactTap ?? "Tap";
   const shortRange = { max: Math.min(0.32, faceHeight / size / 1.3), min: 0.1 };
-  const shortFit = fitLegend(shortTap, 0.85 + CAP_INSET, shortRange, { unit: size }, isCondensed(shortTap));
-  const tapFallbackFit = fitLegend("Tap", 0.85 + CAP_INSET, shortRange, { unit: size });
+  const shortFit = fitLegend(shortTap, fitWidth, shortRange, { unit: size }, isCondensed(shortTap));
+  const tapFallbackFit = fitLegend("Tap", fitWidth, shortRange, { unit: size });
   // Measure the full label even when the cap shows its short form. Font loading and preview resizing can change the line count.
   useLayoutEffect(() => {
     const text = probe.current;
@@ -84,8 +97,9 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
   const visibleTap = needsCaption ? compactFits ? shortTap : "Tap" : legend.tap;
   const visibleFit = needsCaption ? compactFits ? shortFit : tapFallbackFit : tapFit;
   const print = (text: string) => withSpaceMark(text.replace(/[_+(]/g, (seam) => `${seam}\u200b`));
-  const capStyle: CSSProperties & { "--u": string; "--led"?: string } = { "--u": `${size}px`, width: size, height: size };
+  const capStyle = { ...materialStyle(materials), "--u": `${physical ? physicalUnit : size}px`, width, height, ...(physical ? { "--hero-x": `${(area?.x ?? 0.075) * width}px`, "--hero-y": `${(area?.y ?? 0.12) * height}px`, "--hero-w": `${safeWidth}px`, "--hero-h": `${safeHeight}px`, "--hero-front": `${frontHeight}px`, "--hero-corners": hasCorners ? "20px" : "0px" } : {}) } as CSSProperties & { "--led"?: string };
   if (led !== undefined) capStyle["--led"] = led;
+  const outline = physical && shape.outline !== undefined ? shapePath(shape.outline, 0, 0, width, height, physicalUnit * 0.13) : null;
   const region = (slot: HeroSlot, value: Region | null, className: string, children: ReactNode) =>
     value === null ? null : (
       <button
@@ -104,10 +118,10 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
     );
   return (
     <>
-    <div className="hero-cap cap" data-tone={tone} data-keycap={keycap} data-led={led !== undefined} data-draft={draft} style={capStyle}>
+    <div className="hero-cap cap" data-tone={tone} data-keycap={keycap} data-profile={shape?.profile} data-rotary={shape?.kind === "rotary-encoder" || undefined} data-shaped={outline !== null} data-led={led !== undefined} data-draft={draft} style={capStyle}>
       <span className="sr-only">{label}</span>
       <span className="cap-bleed" aria-hidden="true" />
-      <span className="cap-body" data-corners={hasCorners}>
+      <span className="cap-body" data-corners={hasCorners} style={outline === null ? undefined : { clipPath: `path("${outline}")` }}>
         <span className="cap-top" aria-hidden="true" />
         {region("tap", { text: legend.tap, name: "When tapped" }, "hero-tap", <>
           <span ref={probe} className="cap-tap hero-fit-probe" aria-hidden="true" data-stretch={isCondensed(legend.tap) ? "condensed" : undefined} style={{ fontSize: size * tapFit.size }}>{print(legend.tap === "" ? "·" : legend.tap)}</span>
@@ -134,6 +148,7 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
         {region("tapThenHold", tapThenHold, "hero-corner hero-corner-start", <span aria-hidden="true">1×⇣</span>)}
         {region("doubleTap", doubleTap, "hero-corner hero-corner-end", <span aria-hidden="true">2×</span>)}
       </span>
+      {outline === null ? null : <svg className="cap-outline" aria-hidden="true" viewBox={`0 0 ${width} ${height}`} width={width} height={height}><path d={outline} /></svg>}
       {draft ? <span className="cap-mark cap-mark-draft" aria-hidden="true" /> : null}
     </div>
     {needsCaption ? open === null

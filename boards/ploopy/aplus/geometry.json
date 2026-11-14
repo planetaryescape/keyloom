@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "source": {"repo":"https://github.com/ploopyco/qmk_firmware","sha":"ed6bc4231cc0c39f5f4c0ff82f0d5ad5d8ef7e6e","path":"keyboards/ploopyco/aplus/info.json"},
+  "keys": [
+    {"x":0,"y":0,"w":1,"h":2,"r":0,"rx":0,"ry":0},
+    {"x":1.25,"y":0,"w":1,"h":1.25,"r":0,"rx":0,"ry":0},
+    {"x":2.5,"y":0,"w":1,"h":1.25,"r":0,"rx":0,"ry":0},
+    {"x":3.75,"y":0,"w":1,"h":2,"r":0,"rx":0,"ry":0},
+    {"x":0,"y":2.25,"w":1.75,"h":2,"r":0,"rx":0,"ry":0},
+    {"x":3,"y":2.25,"w":1.75,"h":2,"r":0,"rx":0,"ry":0},
+    {"x":0.5,"y":4.5,"w":1.75,"h":1.5,"r":0,"rx":0,"ry":0},
+    {"x":2.5,"y":4.5,"w":1.75,"h":1.5,"r":0,"rx":0,"ry":0}
+  ]
+}
