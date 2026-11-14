@@ -1,9 +1,24 @@
 #!/bin/sh
-# CI-only signing of the visible Rust executable BEFORE hashing/embedding. Never give Rust Bun's JIT entitlements.
+# Sign Rust before embedding, or the final Bun CLI with --bun-cli. Rust never gets Bun's JIT entitlements.
 set -eu
 umask 077
+kind=helper
+if [ "${1:-}" = --bun-cli ]; then kind=cli; shift; fi
+[ "$#" -eq 1 ] || { echo 'Usage: sign-device-helper.sh [--bun-cli] executable' >&2; exit 1; }
 helper="$1"
 [ "$(uname -s)" = Darwin ] || exit 0
+if [ "$kind" = cli ]; then
+  : "${APPLE_CERT_P12_BASE64:?Standalone CLI requires a Developer ID certificate}"
+  : "${APPLE_CERT_PASSWORD:?}"
+  : "${APPLE_SIGNING_IDENTITY_NAME:?}"
+  if ! { [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER_ID:-}" ] && [ -n "${APPLE_API_KEY_P8:-}" ]; } &&
+     ! { [ -n "${APPLE_ID_NAME:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID_VALUE:-}" ]; }; then
+    echo '::error::Standalone CLI requires notarization credentials.' >&2
+    exit 1
+  fi
+  entitlements="${0%/*}/../desktop/tauri/src-tauri/Entitlements.plist"
+  [ -f "$entitlements" ] || { echo '::error::Bun entitlements file is missing.' >&2; exit 1; }
+fi
 if [ -z "${APPLE_CERT_P12_BASE64:-}" ]; then
   codesign --force --sign - "$helper"
   echo '::warning::Helper is ad-hoc signed, not Developer ID signed or notarised.'
@@ -12,10 +27,10 @@ fi
 : "${RUNNER_TEMP:?CI runner temp is required}"
 : "${APPLE_CERT_PASSWORD:?}"
 : "${APPLE_SIGNING_IDENTITY_NAME:?}"
-keychain="$RUNNER_TEMP/helper-$(uuidgen).keychain-db"
-cert="$RUNNER_TEMP/helper-cert-$(uuidgen).p12"
-key="$RUNNER_TEMP/helper-notary-$(uuidgen).p8"
-archive="$RUNNER_TEMP/helper-$(uuidgen).zip"
+keychain="$RUNNER_TEMP/$kind-$(uuidgen).keychain-db"
+cert="$RUNNER_TEMP/$kind-cert-$(uuidgen).p12"
+key="$RUNNER_TEMP/$kind-notary-$(uuidgen).p8"
+archive="$RUNNER_TEMP/$kind-$(uuidgen).zip"
 echo 'helper-signing: snapshot user search list'
 original_keychains="$(security list-keychains -d user)"
 set --
@@ -53,13 +68,21 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password
 echo 'helper-signing: register temporary keychain on user search list'
 security list-keychains -d user -s "$keychain" "$@"
 echo 'helper-signing: codesign'
-codesign --force --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY_NAME" "$helper"
+if [ "$kind" = cli ]; then
+  codesign --force --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY_NAME" --entitlements "$entitlements" "$helper"
+else
+  codesign --force --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY_NAME" "$helper"
+fi
 echo 'helper-signing: verify signature'
-codesign --verify --strict "$helper"
-# Submit the helper itself: notarising the outer app cannot inspect executable bytes hidden in Bun's asset blob.
+if [ "$kind" = cli ]; then
+  codesign --verify --strict '-R=anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' "$helper"
+else
+  codesign --verify --strict "$helper"
+fi
+# Each executable needs its own ticket. The app cannot expose helper bytes hidden in Bun's asset blob.
 ditto -c -k --keepParent "$helper" "$archive"
-echo 'helper-signing: notarise helper archive'
-result="$RUNNER_TEMP/helper-notary-result.json"
+echo "helper-signing: notarise $kind archive"
+result="$RUNNER_TEMP/$kind-notary-result.json"
 if [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER_ID:-}" ] && [ -n "${APPLE_API_KEY_P8:-}" ]; then
   printf '%s' "$APPLE_API_KEY_P8" > "$key"
   xcrun notarytool submit "$archive" --key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --timeout 10m --output-format json > "$result"
