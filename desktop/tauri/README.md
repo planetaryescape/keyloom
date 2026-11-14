@@ -47,7 +47,7 @@ The app and its `keyloom` sidecar are one release. `fetch-sidecar.sh` with no ar
 
 ## Notarisation (needs BK)
 
-The release workflow's `build-desktop` job signs when `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` and `APPLE_SIGNING_IDENTITY` exist, and notarises and staples when either set below exists. That desktop step has unsigned and unnotarized fallback branches. The complete release also depends on the Mac CLI jobs, which require signing and notarization credentials. Published v0.80.4 passed both Mac verification jobs. See the [signature history and receipt](../../docs/issues/standalone-macos-cli-signature.md#v0804-passes-both-published-mac-checks).
+The release workflow's `build-desktop` job signs when `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` and `APPLE_SIGNING_IDENTITY` exist, and notarises and staples when the signing certificate and either notarization credential set below exist. That desktop step has unsigned and unnotarized fallback branches. The complete release also depends on the Mac CLI jobs, which require signing and notarization credentials. Published v0.80.4 passed both Mac verification jobs. See the [signature history and receipt](../../docs/issues/standalone-macos-cli-signature.md#v0804-passes-both-published-mac-checks).
 
 | Secret | Value |
 | --- | --- |
