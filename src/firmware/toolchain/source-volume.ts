@@ -6,13 +6,15 @@ import { capture, type LogSink, run } from "./run.ts";
 
 type Hooks = { log?: LogSink; onLine?: (line: string) => void; signal?: AbortSignal };
 export type SourceTree = { dir: string; path: string };
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const LABEL = "dev.keyloom.source-key";
 
 async function checked(cmd: string[], hooks: Hooks, what: string, container?: string): Promise<void> {
   const lines: string[] = [];
   const result = await run({
     cmd, timeoutMs: 20 * 60_000, processGroup: true,
+    // BSD tar otherwise synthesizes AppleDouble files that Zephyr reads as source.
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
     ...(hooks.log ? { log: hooks.log } : {}), ...(hooks.signal ? { signal: hooks.signal } : {}),
     ...(container ? { onKill: async () => { await capture(["docker", "rm", "-f", container], { timeoutMs: 30_000 }); } } : {}),
     onLine: (line) => { lines.push(line); if (lines.length > 10) lines.shift(); hooks.onLine?.(line); },
@@ -65,7 +67,14 @@ export async function ensureSourceVolume(workspace: string, identity: string, im
   const say = "keyloom: staging pinned firmware sources in Docker; later builds reuse this read-only copy";
   hooks.log?.line(say); hooks.onLine?.(say);
   const archives: string[] = [];
-  for (const source of sources) archives.push(await archive(source.dir, hooks));
+  for (let i = 0; i < sources.length; i += 5) {
+    const batch = await Promise.allSettled(sources.slice(i, i + 5).map((source) => archive(source.dir, hooks)));
+    // All writers settle before a failure can release the caller's lock.
+    for (const result of batch) {
+      if (result.status === "rejected") throw result.reason;
+      archives.push(result.value);
+    }
+  }
   if (hooks.signal?.aborted) throw new BuildFailure("The build was cancelled.");
   const volume = `${prefix}${crypto.randomUUID()}`;
   const container = `keyloom-source-copy-${crypto.randomUUID()}`;

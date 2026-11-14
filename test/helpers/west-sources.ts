@@ -13,7 +13,7 @@ export async function seedWestSources(workspace: string, projects: readonly West
     await mkdir(join(source, ".git"), { recursive: true });
     await Bun.write(join(source, ".git", "HEAD"), `${project.revision}\n`);
     // Fake Docker never extracts archives. The live mount test exercises real tar.
-    await Bun.write(`${source}.source-v2.tar`, new Uint8Array(1024));
+    await Bun.write(`${source}.source-v3.tar`, new Uint8Array(1024));
   }
 }
 
