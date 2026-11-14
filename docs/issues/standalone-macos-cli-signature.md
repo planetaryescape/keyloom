@@ -1,6 +1,6 @@
 # Standalone macOS CLI has an invalid ad-hoc signature
 
-Status: implementation prepared, pending release verification on both Mac targets. Published arm64 failures remain historical evidence until a new signed release passes the checks below.
+Status: code fix merged through PR 341 at `5fdc99eb354689afbf3cc7c49360b2f892f4dc85`. Signature and notarization verification on both Mac release targets remain pending. Published arm64 failures stay open delivery evidence until the new release passes these checks.
 
 Observed on the published arm64 CLI for v0.68.2 and the preserved normal v0.68.1 CLI during the v0.68.2 shipping checks, 2026-11-02. The desktop sidecar passes strict Developer ID signature verification. No other platform's CLI signature was assessed here.
 

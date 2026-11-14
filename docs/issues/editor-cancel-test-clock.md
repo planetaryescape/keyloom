@@ -1,6 +1,6 @@
 # Flash cancellation route test depends on a wall-clock window
 
-Status: test fix prepared in PR 341, pending CI.
+Status: fixed by `094307f13506bf8f5fe3464b2f4f56c7662fdcad`, merged through PR 341 at `5fdc99eb354689afbf3cc7c49360b2f892f4dc85`. All eight exact-head CI jobs passed.
 
 At `5e7af88f`, CI job `132398562801` timed out the waiting/writing cancellation test after its five-second budget.
 Bun reported 13,401 ms elapsed. A later request reached the test server after teardown and returned `ConnectionRefused`.
