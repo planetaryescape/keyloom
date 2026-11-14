@@ -7,12 +7,13 @@ Real scratch-CLI builds on macOS with Colima show faster West and QMK builds whe
 | Scenario | Secure baseline | First staged build | Warm build |
 |---|---:|---:|---:|
 | Keebart Corne Choc Pro BT | 260.53 s | 199.93 s | 25.59 s |
+| foostan Corne | 176.43 s | 58.66 s | 18.54 s |
 | Moonlander Rev B | 128.76 s | 40.39 s | 16.30 s |
 | Glove80 | 23.99 s | 26.85 s, includes new image | 24.96 s |
 
 Keebart also built a changed keymap in 24.69 seconds and a changed idle-timeout setting in 27.17 seconds. Each artifact contains its new build marker. Each build compiled from source with fresh output.
 
-The baseline binary came from `6034e1c22713f40e7ce2f3a91d1a3d30f934cd6d`. The first successful West cache binary came from `fade3a9b5cc68328cc6b233ac2655af23fe81e51`. QMK's first staged build used `96e854149a46c54b4470bd6f39ae5b41810aab33`. Warm Moonlander and bounded Glove80 used `590c4ab7f86d27bf73313d5d4308b4f44d9bdd26`, after dependency PR339 merged.
+The baseline binary came from `6034e1c22713f40e7ce2f3a91d1a3d30f934cd6d`. The first successful West cache binary came from `fade3a9b5cc68328cc6b233ac2655af23fe81e51`. QMK's first staged build used `96e854149a46c54b4470bd6f39ae5b41810aab33`. Corne's optimized builds, warm Moonlander and bounded Glove80 used `590c4ab7f86d27bf73313d5d4308b4f44d9bdd26`, after dependency PR339 merged.
 
 These elapsed times come from individual runs. They are not controlled statistical estimates. Host loads varied and the harness records them. Downloads and the original images were already warm. “First staged” includes new archives and a Docker volume, but does not represent a fresh installation. No Linux or Docker Desktop performance claim follows from these measurements.
 
@@ -48,8 +49,8 @@ AGENT_WORK_IDLE_SECONDS=0 agent-work run -- \
   /path/to/candidate/keyloom --data-dir /path/to/scratch --verbose build <layout>
 ```
 
-For Moonlander, add `--board-rev revb`. Build the same layout again to measure source-cache reuse. Apply a validated scratch layout change before measuring changed-input behavior. Keep downloads, image setup and first source staging separate from warm results.
+For Moonlander, add `--board-rev revb`. Build the same layout again to measure source-cache reuse. Apply a scratch layout change through the CLI before measuring changed-input behavior. Keep downloads, image setup and first source staging separate from warm results.
 
-The owner's preserved evidence lives in `.orchestrate/keyloom-quality-review/evidence/r2-performance/` beside the repository. `timed-cli-build.py` records the command, binary hash, source identity, host load, append-only build output and real exit code. `verified-speed-artifacts.json` records artifact hashes, UF2 families and marker checks. `binary-source-identities.json` corrects early harness headers that named the checkout rather than the preserved binary's source. Original logs remain unchanged.
+The owner's preserved evidence lives in `.orchestrate/keyloom-quality-review/evidence/r2-performance/` beside the repository. `timed-cli-build.py` records the command, binary hash, source identity, host load, append-only build output and real exit code. `verified-speed-artifacts.json` records artifact hashes, UF2 families and marker checks. `binary-source-identities.json` identifies the actual source behind early harness headers that named the checkout. Original logs remain unchanged.
 
 Focused tests cover failed archives, cancellation, publication, pruning and warm reuse. Real Docker probes cover read-only source/Git and orphan workspace isolation. These probes establish mount behavior, while the board builds establish firmware compatibility within their recorded source limits.
