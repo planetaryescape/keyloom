@@ -13,4 +13,4 @@ RUN set -eu; \
     cd /src && git checkout -q --detach "$ZMK_REF"; \
     nix-shell --run true -A zmk ./default.nix
 WORKDIR /config
-ENTRYPOINT ["sh", "-c", "nix-build ./config --arg firmware 'import /src/default.nix {}' -j2 -o /tmp/combined && install -o \"$UID\" -g \"$GID\" /tmp/combined/glove80.uf2 ./glove80.uf2"]
+ENTRYPOINT ["sh", "-c", "nix-build ./config --arg firmware 'import /src/default.nix {}' -j2 --cores 2 -o /tmp/combined && install -o \"$UID\" -g \"$GID\" /tmp/combined/glove80.uf2 ./glove80.uf2"]

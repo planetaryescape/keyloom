@@ -11,6 +11,16 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-14 Glove80 limits combined compiler concurrency
+
+### D-585: Give each of the two Glove80 Nix jobs two cores. Extends D-081.
+
+The existing image reports six build cores, while its entrypoint starts two derivations at once.
+The entrypoint now passes `--cores 2` with `-j2`, bounding their combined compiler workers at four.
+The A4 RUN block, pinned base, source ref and signed cache keys stay unchanged.
+The Dockerfile hash still selects the image, so an old image cannot silently retain the prior entrypoint.
+Real compiler concurrency and firmware compatibility are checked through the scratch CLI.
+
 ## 2026-11-14 QMK also builds on local container storage
 
 ### D-584: Copy QMK compiler inputs inside the container, while retaining guarded host writes. Extends D-583.
