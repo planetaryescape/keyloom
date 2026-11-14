@@ -6,6 +6,8 @@ keyloom is built; the [latest release](https://github.com/planetaryescape/keyloo
 
 ## Reading order
 
+To review firmware input isolation and distribution claims, read [build trust boundaries](../build-security.md). It maps each boundary to source and regression checks.
+
 To distinguish a published CLI from an installed or running desktop app, use [Verify the desktop installation](../verify-desktop-install.md). The checks do not launch the app, apply a config or access a keyboard.
 
 To try per-layer ZMK encoder editing, follow [mouse turns on Base, media on Numbers](../encoder-layers.md). The recipe states availability, uses synthetic data and stops before flashing.
