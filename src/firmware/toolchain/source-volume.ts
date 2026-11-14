@@ -6,6 +6,7 @@ import { capture, type LogSink, run } from "./run.ts";
 
 type Hooks = { log?: LogSink; onLine?: (line: string) => void; signal?: AbortSignal };
 export type SourceTree = { dir: string; path: string };
+const CACHE_VERSION = "v2";
 const LABEL = "dev.keyloom.source-key";
 
 async function checked(cmd: string[], hooks: Hooks, what: string, container?: string): Promise<void> {
@@ -22,12 +23,12 @@ async function checked(cmd: string[], hooks: Hooks, what: string, container?: st
 }
 
 async function archive(dir: string, hooks: Hooks): Promise<string> {
-  const path = `${dir}.tar`;
+  const path = `${dir}.source-${CACHE_VERSION}.tar`;
   if (existsSync(path)) return path;
   const partial = `${path}.partial-${crypto.randomUUID()}`;
   try {
     // tar preserves symlinks instead of following them outside the trusted snapshot.
-    await checked(["tar", "-cf", partial, "-C", dir, "."], hooks, "Archiving pinned firmware source");
+    await checked(["tar", "-cf", partial, "--no-xattrs", "--no-acls", "-C", dir, "."], hooks, "Archiving pinned firmware source");
     await rename(partial, path);
   } finally {
     await rm(partial, { force: true });
@@ -46,8 +47,8 @@ export async function ensureSourceVolume(workspace: string, identity: string, im
       throw new BuildFailure(`Invalid firmware source path: ${path}`);
     }
   }
-  const prefix = `keyloom-source-${identity.slice(0, 16)}-`;
-  const record = join(`${workspace}.source-volumes-v1`, `${identity}.json`);
+  const prefix = `keyloom-source-${CACHE_VERSION}-${identity.slice(0, 16)}-`;
+  const record = join(`${workspace}.source-volumes-${CACHE_VERSION}`, `${identity}.json`);
   if (existsSync(record)) {
     const cached: unknown = await Bun.file(record).json();
     if (!cached || typeof cached !== "object" || !("volume" in cached) || typeof cached.volume !== "string" || !cached.volume.startsWith(prefix) || !/^[a-z0-9-]+$/.test(cached.volume)) {
@@ -61,13 +62,13 @@ export async function ensureSourceVolume(workspace: string, identity: string, im
     }
     if (found.timedOut || !/no such volume/i.test(found.stderr)) throw new BuildFailure(`Docker could not inspect its firmware source cache: ${found.stderr || "timed out"}`);
   }
+  const say = "keyloom: staging pinned firmware sources in Docker; later builds reuse this read-only copy";
+  hooks.log?.line(say); hooks.onLine?.(say);
   const archives: string[] = [];
   for (const source of sources) archives.push(await archive(source.dir, hooks));
   if (hooks.signal?.aborted) throw new BuildFailure("The build was cancelled.");
   const volume = `${prefix}${crypto.randomUUID()}`;
   const container = `keyloom-source-copy-${crypto.randomUUID()}`;
-  const say = "keyloom: staging pinned firmware sources in Docker; later builds reuse this read-only copy";
-  hooks.log?.line(say); hooks.onLine?.(say);
   let published = false;
   const temporary = `${record}.partial-${crypto.randomUUID()}`;
   try {
@@ -79,7 +80,7 @@ export async function ensureSourceVolume(workspace: string, identity: string, im
       "--mount", `type=volume,src=${volume},dst=/cache`,
       ...archives.flatMap((path, i) => ["--mount", `type=bind,src=${path},dst=/archives/${i}.tar,readonly`]),
       ...(manifest ? ["-e", `KEYLOOM_SOURCE_MANIFEST=${manifest}`] : []),
-      image, "sh", "-c", 'set -e; while [ "$#" -gt 0 ]; do mkdir -p "/cache/$1"; tar -xf "/archives/$2.tar" -C "/cache/$1"; shift 2; done; if [ -n "$KEYLOOM_SOURCE_MANIFEST" ]; then mkdir -p /cache/config /cache/.west; printf \'[manifest]\\npath = config\\nfile = west.yml\\n\' > /cache/.west/config; printf \'%s\\n\' "$KEYLOOM_SOURCE_MANIFEST" > /cache/config/west.yml; fi',
+      "--entrypoint", "sh", image, "-c", 'set -e; while [ "$#" -gt 0 ]; do mkdir -p "/cache/$1"; tar -xf "/archives/$2.tar" -C "/cache/$1"; shift 2; done; if [ -n "$KEYLOOM_SOURCE_MANIFEST" ]; then mkdir -p /cache/config /cache/.west; printf \'[manifest]\\npath = config\\nfile = west.yml\\n[zephyr]\\nbase = zephyr\\n\' > /cache/.west/config; printf \'%s\\n\' "$KEYLOOM_SOURCE_MANIFEST" > /cache/config/west.yml; fi',
       "keyloom-source-copy", ...sources.flatMap((source, i) => [source.path, String(i)]),
     ], hooks, "Copying pinned firmware source", container);
     if (hooks.signal?.aborted) throw new BuildFailure("The build was cancelled.");
