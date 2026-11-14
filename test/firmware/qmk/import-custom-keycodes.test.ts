@@ -34,6 +34,33 @@ describe("the Moonlander's default keymap", () => {
 });
 
 describe("a hand-written keymap", () => {
+  test.each([
+    ["MY_KEY", "typedef /* MY_KEY storage */ uint16_t action_t;"],
+    ["MY_KEY", 'const char *name = "MY_KEY";\ntypedef uint16_t action_t;'],
+    ["M", "const char marker = 'M';\ntypedef uint16_t action_t;"],
+    ["L", "const int marker = L'M';\ntypedef uint16_t action_t;"],
+    ["u8", 'const char *name = u8"storage";\ntypedef uint16_t action_t;'],
+    ["xABCD", "const unsigned marker = 0xABCD;\ntypedef uint16_t action_t;"],
+    ["stdint", "#include <stdint.h>\ntypedef uint16_t action_t;"],
+    ["MY_KEY", "typedef // MY_KEY storage\\\ncontinued comment\nuint16_t action_t;"],
+  ])("incidental %s text does not move types behind their enum", async (key, prelude) => {
+    const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
+    const { layout } = await importQmkSource({ name: "t", keymapC: keymapC({
+      head: `${prelude}\nenum custom_keycodes { ${key} = (action_t)SAFE_RANGE };\naction_t last_key = ${key};`,
+      keys: `${key}, KC_A, KC_NO, KC_NO`,
+    }) }, board);
+    const c = generated(layout, board);
+    expect(c.indexOf("uint16_t action_t;")).toBeLessThan(c.indexOf("enum custom_keycodes"));
+    expect(c.indexOf(`action_t last_key = ${key};`)).toBeGreaterThan(c.indexOf("enum custom_keycodes"));
+    const dir = tempDir();
+    await Bun.write(`${dir}/keymap.c`, c);
+    await Bun.write(`${dir}/version.h`, "");
+    await Bun.write(`${dir}/keyboard.h`, '#include <stdint.h>\n#define SAFE_RANGE 0x7e00\n#define KC_A 4\n#define KC_NO 0\n#define PROGMEM\n#define MATRIX_ROWS 1\n#define MATRIX_COLS 4\n#define LAYOUT(...) {{__VA_ARGS__}}\n');
+    const compile = Bun.spawnSync(["cc", "-std=c11", "-Werror", "-fsyntax-only", "-DQMK_KEYBOARD_H=\"keyboard.h\"", "-I", dir, `${dir}/keymap.c`]);
+    expect(compile.stderr.toString()).toBe("");
+    expect(compile.exitCode).toBe(0);
+  });
+
   test.each(["custom_keycodes", "actions"])("declarations using %s members compile after the generated enum", async (enumName) => {
     const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
     const src = keymapC({

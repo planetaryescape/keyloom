@@ -18,14 +18,14 @@ The broader focused run passed 316 tests across 23 files. The final board, picke
 
 ## The preview stays separate from installed keyloom
 
-The current compiled candidate is `/tmp/keyloom-aplus-review-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are unreleased.
+The current compiled candidate is `/tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are unreleased.
 
 The preview serves scratch data from `/tmp/keyloom-aplus-wheels-cli-check` on port 4489. The config is `A+ wheel smoke`. The previous preview stopped before this fix. The installed app and CLI remain unchanged. We did not flash a keyboard.
 
 To restart the preview:
 
 ```sh
-/tmp/keyloom-aplus-review-candidate/keyloom-darwin-arm64 \
+/tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64 \
   --data-dir /tmp/keyloom-aplus-wheels-cli-check serve --port 4489
 ```
 
@@ -62,4 +62,12 @@ All eight CI jobs passed on `0bc2ab1b`. Both automated review checks completed w
 
 The [fresh visual check](../research/ui-audit/ploopy-aplus/review-followup/README.md) passed through the Codex CLI's Computer Use plugin. It captured the Back card and both knob cards in light and dark themes. Labels fit, the tap picker opens, and both turn directions stay separate from each press. No mode, action or revision changed. The earlier `cgWindowNotFound` error did not recur through this CLI path. The CLI sessions closed after the checks.
 
-Next action: confirm CI on the evidence commit, then obtain merge and release direction. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.
+## The second review found two edge cases
+
+The C dependency scan counted keycode names inside comments and literals. The fix recognizes identifier tokens after C line splicing. It skips comments, strings, character and numeric literals, and include paths. Eight host-compiled regressions cover incidental names before an enum that depends on a typedef. The compiled CLI also imported and generated the original comment reproduction. That generated source passed the host C compiler.
+
+The proportional corner band could be shorter than its label. D-609 keeps readable text and the physical outline. A short cap offers its extra slot controls below the cap. Roomy caps retain their existing regions. The [component evidence](../research/ui-audit/ploopy-aplus/corner-labels/README.md) records both themes and three working slot clicks.
+
+The broader QMK, board and card run passed 373 tests with 19 gated skips and no failures. The final web, documentation and C-import run passed 1338 tests with no failures. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-token-corner-focused.log`, `/tmp/keyloom-aplus-token-corner-final-tests.log`, `/tmp/keyloom-aplus-token-corner-types-complete.log` and `/tmp/keyloom-aplus-token-corner-dependencies.log`.
+
+Next action: confirm CI and review on the final fixes, then obtain merge and release direction. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.

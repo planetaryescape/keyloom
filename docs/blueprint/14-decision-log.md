@@ -3484,3 +3484,9 @@ Each wheel defaults to native `ploopy-aplus:factory`. The card offers factory or
 Generation checks the factory callback before adding a wheel hook. The hook consumes only custom-wheel deltas and leaves factory-wheel deltas intact. It accumulates key taps at the factory low-resolution threshold and clears partial turns across layer changes. Unknown callback changes refuse generation instead of silently replacing source. Generated helper code carries typed metadata. Reimport removes that code only when it matches the metadata exactly, then restores the editable pairs.
 
 The shared CLI path validates, saves and builds wheel edits. A native C harness checks direction dispatch, layer changes, factory fall-through, held knobs and deadzone filtering. Physical clockwise orientation and behavior after flashing still need a hardware check.
+
+### D-609: Short physical caps keep readable slot controls below the cap. Extends D-607 and D-337. (2026-11-14)
+
+A flat button's safe print area can be too short for tap, hold and filled corner labels. The card keeps the physical outline and the legend font floor. If all regions cannot fit, named hold and corner controls appear below the cap. The tap stays on the cap when its line fits. Otherwise it also becomes a named control below. These controls open the existing slot pickers and retain their accessible names, draft marks and focus states.
+
+A cap with enough space keeps its existing action regions. Its corner band stays 20 px high for the 12 px label. This replaces proportional corner bands that could be shorter than their own line box. The component fixture checks the compact A+ shape, a short wide control, both themes and slot clicks. See [the review evidence](../research/ui-audit/ploopy-aplus/corner-labels/README.md).

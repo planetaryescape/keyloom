@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode }
 import type { BoardDefinition, KeycapColour } from "../../boards/schema.ts";
 import type { Legend } from "../../layout/legend.ts";
 import { frontWords } from "../keyboard/front-words.ts";
-import { CAP_INSET, fitLegend, isCondensed } from "../keyboard/fit.ts";
+import { CAP_INSET, LEGEND_FLOOR_PX, fitLegend, isCondensed } from "../keyboard/fit.ts";
 import { shapePath } from "../keyboard/Cap.tsx";
 import { materialStyle } from "../keyboard/materials.ts";
 
@@ -66,8 +66,12 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
   const area = physical ? shape.printArea : undefined;
   const safeWidth = width * (area?.w ?? 0.85);
   const safeHeight = height * (area?.h ?? 0.76);
-  const cornerHeight = hasCorners ? physical ? Math.min(20, safeHeight / 3) : 20 : 0;
-  const frontHeight = hold !== null || staticFront !== null ? physical ? Math.min(24, (safeHeight - cornerHeight) / 2) : 24 : 0;
+  const hasFront = hold !== null || staticFront !== null;
+  const minimumLine = LEGEND_FLOOR_PX * 1.1;
+  const externalSlots = physical && safeHeight < minimumLine * (hasFront ? 2 : 1) + (hasCorners ? 20 : 0);
+  const externalTap = physical && safeHeight < minimumLine;
+  const cornerHeight = hasCorners && !externalSlots ? 20 : 0;
+  const frontHeight = hasFront && !externalSlots ? physical ? Math.min(24, (safeHeight - cornerHeight) / 2) : 24 : 0;
   const letters = [...legend.tap].length;
   const preferredSize = letters <= 1 ? 0.42 : letters <= 3 ? 0.32 : 0.22;
   // Flat controls share one print-area budget between the tap, front and filled corners.
@@ -94,7 +98,7 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
     observer.observe(compact);
     observer.observe(region);
     return () => observer.disconnect();
-  }, [legend.tap, compactTap, size, hasCorners, tapFit.size, shortFit.size]);
+  }, [legend.tap, compactTap, size, hasCorners, externalTap, tapFit.size, shortFit.size]);
   const visibleTap = needsCaption ? compactFits ? shortTap : "Tap" : legend.tap;
   const visibleFit = needsCaption ? compactFits ? shortFit : tapFallbackFit : tapFit;
   const print = (text: string) => withSpaceMark(text.replace(/[_+(]/g, (seam) => `${seam}\u200b`));
@@ -124,12 +128,12 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
       <span className="cap-bleed" aria-hidden="true" />
       <span className="cap-body" data-corners={hasCorners} style={outline === null ? undefined : { clipPath: `path("${outline}")` }}>
         <span className="cap-top" aria-hidden="true" />
-        {region("tap", { text: legend.tap, name: "When tapped" }, "hero-tap", <>
+        {externalTap ? null : region("tap", { text: legend.tap, name: "When tapped" }, "hero-tap", <>
           <span ref={probe} className="cap-tap hero-fit-probe" aria-hidden="true" data-stretch={isCondensed(legend.tap) ? "condensed" : undefined} style={{ fontSize: size * tapFit.size }}>{print(legend.tap === "" ? "·" : legend.tap)}</span>
           <span ref={compactProbe} className="cap-tap hero-fit-probe" aria-hidden="true" data-stretch={isCondensed(shortTap) ? "condensed" : undefined} style={{ fontSize: size * shortFit.size }}>{print(shortTap)}</span>
           <span className="cap-tap" data-stretch={isCondensed(visibleTap) ? "condensed" : undefined} style={{ fontSize: size * visibleFit.size }}>{print(visibleTap === "" ? "·" : visibleTap)}</span>
         </>)}
-        {region(
+        {externalSlots ? null : region(
           "hold",
           hold,
           "hero-front",
@@ -138,7 +142,7 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
             {hold === null ? null : hold.text === null ? <span className="hero-ghost">{hold.ghost}</span> : withSpaceMark(frontWords(hold.text, "both"))}
           </span>,
         )}
-        {hold === null && staticFront !== null ? (
+        {!externalSlots && hold === null && staticFront !== null ? (
           <span className="hero-front hero-front-static">
             <span className="cap-front">
               {reach === undefined ? null : <i className="cap-dot" data-unlit={reach === null} style={reach === null ? undefined : ({ "--dot": reach } as CSSProperties)} />}
@@ -146,13 +150,20 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
             </span>
           </span>
         ) : null}
-        {region("tapThenHold", tapThenHold, "hero-corner hero-corner-start", <span aria-hidden="true">1×⇣</span>)}
-        {region("doubleTap", doubleTap, "hero-corner hero-corner-end", <span aria-hidden="true">2×</span>)}
+        {externalSlots ? null : region("tapThenHold", tapThenHold, "hero-corner hero-corner-start", <span aria-hidden="true">1×⇣</span>)}
+        {externalSlots ? null : region("doubleTap", doubleTap, "hero-corner hero-corner-end", <span aria-hidden="true">2×</span>)}
       </span>
       {outline === null ? null : <svg className="cap-outline" aria-hidden="true" viewBox={`0 0 ${width} ${height}`} width={width} height={height}><path d={outline} /></svg>}
       {draft ? <span className="cap-mark cap-mark-draft" aria-hidden="true" /> : null}
     </div>
-    {needsCaption ? open === null
+    {externalSlots ? <div className="hero-extra-slots" role="group" aria-label="Key actions">
+      {externalTap ? region("tap", { text: legend.tap, name: "When tapped" }, "hero-extra-slot", `When tapped: ${legend.tap}`) : null}
+      {hold === null ? null : region("hold", hold, "hero-extra-slot", `${hold.name}: ${hold.text ?? hold.ghost ?? "Nothing"}`)}
+      {hold === null && staticFront !== null ? <span>{staticFront}</span> : null}
+      {tapThenHold?.text == null ? null : region("tapThenHold", tapThenHold, "hero-extra-slot", `${tapThenHold.name}: ${tapThenHold.text}`)}
+      {doubleTap?.text == null ? null : region("doubleTap", doubleTap, "hero-extra-slot", `${doubleTap.name}: ${doubleTap.text}`)}
+    </div> : null}
+    {needsCaption && !externalTap ? open === null
       ? <p className="hero-source">When tapped: <span>{legend.tap}</span></p>
       : <details className="hero-source"><summary>Full firmware name</summary><span>{legend.tap}</span></details>
       : null}

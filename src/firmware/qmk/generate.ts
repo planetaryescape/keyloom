@@ -20,6 +20,7 @@ import { GenerateError } from "./generate-error.ts";
 import { WRAPPER_SYMBOL, NO_LTO, WRAP_LINK_FLAG, buildMarker, serialDefine, wrapperSource } from "./handsfree.ts";
 import { STREAM_SYMBOL, WRAP_ACTION_EXEC_FLAG } from "./typing-stream.ts";
 import { writeAplusWheels } from "./ploopy-aplus-wheels.ts";
+import { refersToIdentifier } from "./c-identifiers.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -159,7 +160,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   }
   const keycodeNames = new Set(enumEntries.map((entry) => entry.split("=")[0]!.trim()));
   const prelude = before.filter((p) => p.anchor.startsWith("prelude"));
-  const firstKeycodeUse = prelude.findIndex((p) => (p.source.match(/\b[A-Za-z_]\w*\b/g) ?? []).some((name) => keycodeNames.has(name)));
+  const firstKeycodeUse = prelude.findIndex((p) => refersToIdentifier(p.source, keycodeNames));
   // Later declarations can depend on the moved globals or types, so keep their original order too.
   const split = firstKeycodeUse === -1 ? prelude.length : firstKeycodeUse;
   for (const p of prelude.slice(0, split)) c.push("", p.source);
