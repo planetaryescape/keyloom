@@ -1,7 +1,7 @@
 // What a build adds for hands-free flashing (D-095): the recipe, the serial-number conf, the module beside the checkout, and the
 // flags and Nix expression that put it into the firmware. Docker is a fake; the real builds are in the rung's evidence.
 import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
-import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
+import { FAKE_SOURCE_VOLUME, FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
 import { describe, expect, test } from "bun:test";
 import { zipSync } from "fflate";
 import { readFileSync, readdirSync } from "node:fs";
@@ -177,9 +177,9 @@ describe("west builds with the module (Corne)", () => {
     const build = zmkRevision(CORNE.definition).build;
     if (build.kind !== "zmk-west-docker") throw new Error("the Corne builds with west");
     const script = westScript(build, true);
-    expect(script.match(/-DZMK_EXTRA_MODULES=\/work\/keyloom-zmk -DEXTRA_DTC_OVERLAY_FILE=\/work\/keyloom-zmk\/keyloom-cdc-acm\.overlay/g)).toHaveLength(2);
+    expect(script.match(/-DZMK_EXTRA_MODULES=\/tmp\/keyloom-zmk -DEXTRA_DTC_OVERLAY_FILE=\/tmp\/keyloom-zmk\/keyloom-cdc-acm\.overlay/g)).toHaveLength(2);
     expect(westScript(build)).not.toContain("keyloom-zmk");
-    expect(moduleFlags()).toContain("-DZMK_EXTRA_MODULES=/work/keyloom-zmk");
+    expect(moduleFlags()).toContain("-DZMK_EXTRA_MODULES=/tmp/keyloom-zmk");
   });
 
   test("a build writes the module and the conf, runs west with the flags, and a plain generate's missing marker is reported", async () => {
@@ -188,7 +188,8 @@ describe("west builds with the module (Corne)", () => {
     await Bun.write(uf2, uf2Image(0xada52840, 4));
     const bin = fakeBinDir({
       git: FAKE_WEST_GIT,
-      docker: `echo "$@" >> "$FAKE_DOCKER_LOG"
+      docker: `${FAKE_SOURCE_VOLUME}
+echo "$@" >> "$FAKE_DOCKER_LOG"
 vol=""; prev=""
 for a in "$@"; do [ "$prev" = "-v" ] && vol="\${a%%:/work}"; prev="$a"; done
 ${fakeSha256Probe("/work")}
@@ -212,7 +213,7 @@ for t in left right; do mkdir -p "$vol/build/$t/zephyr"; cp "$FAKE_UF2" "$vol/bu
       }), { FAKE_DOCKER_LOG: join(dir, "docker.calls"), FAKE_UF2: uf2 });
     expect(files(join(dir, "work", MODULE_DIR))).toEqual(Object.keys(MODULE_FILES).sort());
     expect(await Bun.file(join(dir, "work", "config", "corne.conf")).text()).toContain(`CONFIG_USB_DEVICE_SN="keyloom/${KEY}-L:0123456789ABCDEF"`);
-    expect(await Bun.file(join(dir, "docker.calls")).text()).toContain("-DZMK_EXTRA_MODULES=/work/keyloom-zmk");
+    expect(await Bun.file(join(dir, "docker.calls")).text()).toContain("-DZMK_EXTRA_MODULES=/tmp/keyloom-zmk");
     expect(lines.some((l) => l.includes("does not carry the build key"))).toBe(true);
   });
 

@@ -16,11 +16,11 @@ import { tempDir } from "../../helpers/tmp.ts";
 import { uf2Image } from "../../helpers/zmk.ts";
 import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
 import inputs from "../../../src/firmware/zmk/west-inputs.json" with { type: "json" };
-import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
+import { FAKE_SOURCE_VOLUME, FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
 
 setDefaultTimeout(30_000);
 
-const FAKE_DOCKER_WEST = `
+const FAKE_DOCKER_WEST = `${FAKE_SOURCE_VOLUME}
 case "$1" in
   rm) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_RM_FAIL" ] && exit 1; [ -n "$FAKE_RM_HANG" ] && { sleep 5 >/dev/null 2>&1 & trap 'kill $!; exit 0' TERM; wait; exit 0; }; exit 0;;
   ps) echo "$@" >> "$FAKE_DOCKER_LOG"; [ -n "$FAKE_PS_FAIL" ] && { echo "error during connect" >&2; exit 1; }; [ -n "$FAKE_PS_HANG" ] && { sleep 5 >/dev/null 2>&1 & trap 'kill $!; exit 0' TERM; wait; exit 0; }; [ -n "$FAKE_ORPHANS" ] && echo "$FAKE_ORPHANS"; exit 0;;
@@ -91,9 +91,9 @@ describe("buildZmkWest (fake docker)", () => {
     expect(script).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
     expect(script).not.toContain("west update");
     expect(script).not.toContain("west zephyr-export");
-    expect(script).toContain("export ZEPHYR_BASE=/work/zephyr");
+    expect(script).toContain("export ZEPHYR_BASE=/keyloom-sources/zephyr");
     expect(script).toContain("-DUSER_CACHE_DIR=/tmp/keyloom-cache");
-    expect(script).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
+    expect(script).toContain("-DZephyr_DIR=/keyloom-sources/zephyr/share/zephyr-package/cmake");
     expect(script).not.toContain(".git");
   });
 
@@ -105,8 +105,8 @@ describe("buildZmkWest (fake docker)", () => {
     await s.build("ok");
     expect(await Bun.file(join(s.dir, "work", "config", "keyloom-left.conf")).text()).toBe('# Written by keyloom: this half\'s USB product name.\nCONFIG_USB_DEVICE_PRODUCT="Board Left"\n');
     const script = westScript(build);
-    expect(script).toContain("-DEXTRA_CONF_FILE=/work/config/keyloom-left.conf");
-    expect(script).toContain("-DEXTRA_CONF_FILE=/work/config/keyloom-right.conf");
+    expect(script).toContain("-DEXTRA_CONF_FILE=/tmp/keyloom-config/keyloom-left.conf");
+    expect(script).toContain("-DEXTRA_CONF_FILE=/tmp/keyloom-config/keyloom-right.conf");
     // A target without a name keeps the plain command, so no board gets a fragment it did not ask for.
     const unnamed = s.board.definition.revisions[0]!.build as typeof build;
     expect(westScript({ ...unnamed, targets: unnamed.targets.map((t) => ({ id: t.id, ...(t.shield ? { shield: t.shield } : {}) })) })).not.toContain("EXTRA_CONF_FILE");
@@ -136,11 +136,11 @@ describe("buildZmkWest (fake docker)", () => {
     expect(run).toContain(`--user ${process.getuid?.()}:${process.getgid?.()}`);
     expect(run).toContain(`-v ${join(s.dir, "work")}.run-`);
     expect(run).toContain("zmkfirmware/zmk-build-arm@sha256:");
-    expect(run).toContain("west build -p always -s zmk/app -d build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/work/config");
+    expect(run).toContain("west build -p always -s zmk/app -d /tmp/keyloom-build/left -b nice_nano_v2 -- -DSHIELD=board_left -DZMK_CONFIG=/tmp/keyloom-config");
     expect(run).toContain("-DSHIELD=board_right");
     expect(run).not.toContain("west update");
-    expect(run).toContain("dst=/work/zephyr,readonly");
-    expect(run).toContain("dst=/work/modules/hal/nordic,readonly");
+    expect(run).toContain("dst=/keyloom-sources,readonly");
+    expect(run).not.toContain("type=bind,src=");
   });
 
   test("a container an earlier keyloom left in this checkout is removed before the build, and the build's own is labelled", async () => {
@@ -186,7 +186,7 @@ describe("buildZmkWest (fake docker)", () => {
     const s = await setup();
     const script = westScript(s.board.definition.revisions[0]?.build as never);
     expect(script.split("\n")[0]).toBe("set -e");
-    expect(script).toContain("rm -rf build");
+    expect(script).toContain("cd /keyloom-sources");
   });
 
   test("a keymap or conf left from an earlier layout is removed before the new ones are written", async () => {
@@ -235,7 +235,8 @@ describe("buildZmkWest (fake docker)", () => {
     for (const name of ["w2", "w3"]) await seedWestSources(join(s.dir, name), westProjects(rev.source.repo, rev.source.sha, rev.build), rev.build.image);
     // The fake probe fails when config/west.yml is not visible.
     // An engine that can't see the folder still answers `ps`.
-    const probe = (exit: number) => withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `case "$1" in rm|ps) exit 0;; esac\nexit ${exit}` }), () =>
+    const probe = (exit: number) => withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `${FAKE_SOURCE_VOLUME}
+case "$1" in rm|ps) exit 0;; esac\nexit ${exit}` }), () =>
       buildZmkWest({
         board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w2"), imageContextDir: join(s.dir, "i"),
         artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l.log")), containerName: "x",
@@ -248,7 +249,8 @@ describe("buildZmkWest (fake docker)", () => {
     expect((other as BuildFailure).message).toMatch(/exit 125/);
     expect((other as BuildFailure).message).not.toMatch(/can't see/);
     // Docker Desktop refuses a folder outside File sharing before the container starts: exit 125 with its own words (PR #303 review).
-    const denied = await withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
+    const denied = await withPath(fakeBinDir({ git: FAKE_WEST_GIT, docker: `${FAKE_SOURCE_VOLUME}
+case "$1" in rm|ps) exit 0;; esac\necho "docker: Error response from daemon: Mounts denied: " >&2\necho "The path $PWD is not shared from the host and is not known to Docker." >&2\nexit 125` }), () =>
       buildZmkWest({
         board: s.board.definition, source: { keymapName: "board", files: [] }, checkoutDir: join(s.dir, "w3"), imageContextDir: join(s.dir, "i"),
         artifactPath: join(s.dir, "o.zip"), log: new LogSink(join(s.dir, "l3.log")), containerName: "x",

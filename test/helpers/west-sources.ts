@@ -12,5 +12,17 @@ export async function seedWestSources(workspace: string, projects: readonly West
     const source = trustedCheckoutDir(westSourceSpec(workspace, project, identity));
     await mkdir(join(source, ".git"), { recursive: true });
     await Bun.write(join(source, ".git", "HEAD"), `${project.revision}\n`);
+    // Fake Docker never extracts archives. The live mount test exercises real tar.
+    await Bun.write(`${source}.tar`, new Uint8Array(1024));
   }
 }
+
+
+// Source copying has its own trusted container. It must not enter a fake firmware build.
+export const FAKE_SOURCE_VOLUME = `
+case "$1:$2" in
+  volume:create|volume:rm) exit 0;;
+  volume:inspect) echo "no such volume" >&2; exit 1;;
+esac
+case " $* " in *" keyloom-source-copy "*) exit 0;; esac
+`;

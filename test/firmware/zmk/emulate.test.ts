@@ -15,14 +15,14 @@ import { fakeBinDir, withPath } from "../../helpers/fake-bin.ts";
 import { tempDir } from "../../helpers/tmp.ts";
 import { STYLE_FIXTURE, glove80 } from "../../helpers/zmk.ts";
 import { westProjects } from "../../../src/firmware/zmk/west-workspace.ts";
-import { FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
+import { FAKE_SOURCE_VOLUME, FAKE_WEST_GIT, seedWestSources } from "../../helpers/west-sources.ts";
 
 setDefaultTimeout(30_000);
 
 const FIXTURES = `${import.meta.dir}/../../fixtures/zmk`;
 
 // `image inspect` and `rm` answer at once; a run records its arguments and standard input and replies by FAKE_MODE.
-const FAKE_DOCKER_EMULATE = `
+const FAKE_DOCKER_EMULATE = `${FAKE_SOURCE_VOLUME}
 case "$1" in
   image|rm) exit 0;;
 esac
@@ -170,6 +170,6 @@ describe("the container scripts", () => {
     expect(westEmulateScript()).not.toContain("git -C");
     expect(westEmulateScript()).not.toContain("west zephyr-export");
     expect(westEmulateScript()).toContain("-DUSER_CACHE_DIR=/tmp/keyloom-cache");
-    expect(westEmulateScript()).toContain("-DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake");
+    expect(westEmulateScript()).toContain("-DZephyr_DIR=/keyloom-sources/zephyr/share/zephyr-package/cmake");
   });
 });

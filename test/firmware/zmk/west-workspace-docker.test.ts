@@ -14,16 +14,18 @@ test.skipIf(process.env.KEYLOOM_DOCKER_TESTS !== "1")("a container cannot alter 
   // Colima shares the home directory. The caller sets TMPDIR to scratch space there.
   const workspace = join(tempDir(), "work");
   const origin = originRepo();
-  await withWestWorkspace(workspace, [{ name: "zmk", url: origin.url, revision: origin.sha }], image, {}, async (workspace, mounts) => {
+  let volume = "";
+  try { await withWestWorkspace(workspace, [{ name: "zmk", url: origin.url, revision: origin.sha }], image, {}, async (workspace, mounts) => {
+  volume = mounts.join(" ").match(/src=([^,]+),dst=\/keyloom-sources/)?.[1] ?? "";
   await mkdir(join(workspace, "config"));
   const result = await capture([
     "docker", "run", "--rm", "-v", `${workspace}:/work`, ...mounts, image, "sh", "-c",
-    "set -e; test -f /work/zmk/Makefile; if printf changed > /work/zmk/Makefile; then exit 41; fi; if printf changed >> /work/zmk/.git/config; then exit 42; fi; printf output > /work/config/output",
+    'set -e; test -f /keyloom-sources/zmk/Makefile; if printf changed > /keyloom-sources/zmk/Makefile; then exit 41; fi; if printf changed >> /keyloom-sources/zmk/.git/config; then exit 42; fi; cd /keyloom-sources/zmk; test "$(west topdir)" = /keyloom-sources; printf output > /work/config/output',
   ], { timeoutMs: 60_000 });
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toContain("Read-only file system");
   expect(await Bun.file(join(workspace, "config", "output")).text()).toBe("output");
-  });
+  }); } finally { if (volume) await capture(["docker", "volume", "rm", volume], { timeoutMs: 30_000 }); }
 }, 90_000);
 
 test.skipIf(process.env.KEYLOOM_DOCKER_TESTS !== "1")("an orphan using the stable bind cannot change a later run's inputs", async () => {
