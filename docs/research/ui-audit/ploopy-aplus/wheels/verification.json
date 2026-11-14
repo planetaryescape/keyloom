@@ -12,6 +12,13 @@
     "flashed": false
   },
   "checks": {
+    "full_delivery_suite": {
+      "commit": "8ecde0199c684c666ea0fda48920325a263334f2",
+      "passed": 5058,
+      "skipped": 246,
+      "failed": 0,
+      "files": 518
+    },
     "broader_tests": {
       "passed": 842,
       "skipped": 19,

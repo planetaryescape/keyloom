@@ -1,6 +1,6 @@
 # Ploopy A+ support includes matching physical controls
 
-Status: implemented through `b3c0091b0ebc9e327459bf3ffabe79b9158c3519` on `fix/ploopy-aplus-wheel-controls`. Unreleased. Hardware behavior after flashing remains unchecked.
+Status: implemented through `b3c0091b0ebc9e327459bf3ffabe79b9158c3519`. Delivery continues on `fix/ploopy-aplus-delivery` in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). Unreleased. Hardware behavior after flashing remains unchecked.
 
 BK's right-hand A+ needs its own board definition, factory firmware and editor geometry. Earlier drawings had wrong proportions, clipped labels and a generic square key card.
 
@@ -41,4 +41,8 @@ Computer Use exposed a save blocker for a lost turn action with no key slot. The
 
 The broader run passed 842 tests, skipped 19 Docker-gated cases and failed none. After the save-flow fix, 51 focused tests passed. TypeScript, dependency checks and the changed-line anti-slop check pass. React Doctor reports two nonblocking warnings in `EncoderTurns`: function complexity and an array lookup over at most two sensor indexes.
 
-Next action: review the turn controls in the local preview. We closed Computer Use. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Publishing and installed-copy updates remain separate release work.
+## Full delivery checks pass locally
+
+The full suite on delivery candidate `8ecde0199c684c666ea0fda48920325a263334f2` passed 5058 tests with 246 gated skips and zero failures. It ran 5304 tests across 518 files. The final copy change replaces the A+'s typing-key instruction with “Click a button or knob to edit it.” TypeScript passes after that change. No other implementation gap emerged from the audit.
+
+Next action: follow PR 353's CI and review, then finish the repository handoff. The PR carries all four implementation and evidence commits from the original local branch. We closed Computer Use. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Publishing and installed-copy updates remain separate release work.
