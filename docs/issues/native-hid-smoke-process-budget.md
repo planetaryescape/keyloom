@@ -1,6 +1,6 @@
 # Native HID smoke stopped during process inspection
 
-Status: Candidate test-only fix gives process inspection five seconds. Controlled verification passed. Pending merge and CI.
+Status: fixed by `9676fade67fc1dcd6eb91708128806cf8d5648af`, merged through PR 339, and released in v0.80.3 at `7f12cc9b5db5a3c82da6c079f8a2276c579815a2`. Controlled verification and all eight exact-head CI jobs passed.
 
 At `7dad478e8a22e4d1c81eec268c41b8b5c1bae319`, Intel macOS job `132385963111` failed in the installed synthetic-capture smoke. Python raised `TimeoutExpired` because `/usr/bin/pgrep -P 4705` exceeded two seconds. Native compilation, Rust synthetic tests and the earlier TypeScript client contract passed.
 

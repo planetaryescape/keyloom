@@ -1,6 +1,8 @@
 # Reconnect banner crowds its text on phones
 
-Status: fixed by `280a0de7`, awaiting release.
+Status: fixed by `280a0de7` and released in v0.80.3 at `7f12cc9b5db5a3c82da6c079f8a2276c579815a2`.
+
+Published artifact and installation checks, including the remaining visual check, are in the [v0.80.3 receipt](../research/ui-polish-release-v0.80.3.json).
 
 At `origin/main` commit `6034e1c2`, the browser reconnect banner gives its text only 8.234375px at a 390×844 viewport. The fixed-size copy command takes 206.265625px. The banner grows to 468.25px and its text crosses behind the command control.
 

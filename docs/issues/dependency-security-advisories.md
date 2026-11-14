@@ -1,6 +1,6 @@
 # Dependency lockfiles retain security advisories
 
-Status: Candidate patch removes all sixteen npm advisory records and all six desktop Cargo vulnerability records. Pending full CI, merge and release.
+Status: fixed by PR 339 at `7f6466484495547208dfd33d2aa803497be62dd8` and released in v0.80.3 at `7f12cc9b5db5a3c82da6c079f8a2276c579815a2`. All sixteen npm advisory records and six desktop Cargo vulnerability records are removed.
 
 The v0.80.2 lockfiles at `6034e1c22713f40e7ce2f3a91d1a3d30f934cd6d` report sixteen npm advisories and six desktop Cargo vulnerability records. The desktop JavaScript and native-helper Cargo audits report none. These counts describe lockfiles, not demonstrated exploits in each product path.
 
