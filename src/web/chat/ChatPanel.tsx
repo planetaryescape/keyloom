@@ -319,12 +319,12 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     const element = log.current;
     if (element === null) return;
     const ours = placedAt.current !== null && Math.abs(element.scrollTop - placedAt.current) < 2;
-    if (!stick.current && !ours) return;
+    if (!stick.current && !ours && chat.observationFailure === null) return;
     const active = document.activeElement;
     if (active !== null && active.closest(".agent-work-disclosure") !== null && element.contains(active)) return;
     const replies = element.querySelectorAll<HTMLElement>(".msg-assistant");
     const reply = replies[replies.length - 1];
-    const attention = reply?.querySelector<HTMLElement>(".ask-card:not(.ask-card-done), .chat-problem-inline") ?? undefined;
+    const attention = element.querySelector<HTMLElement>(".chat-observation-problem") ?? reply?.querySelector<HTMLElement>(".ask-card:not(.ask-card-done), .chat-problem-inline") ?? undefined;
     const firstCard = attention ?? reply?.querySelector<HTMLElement>(".proposal-group");
     if (firstCard) {
       const view = element.getBoundingClientRect();
@@ -358,7 +358,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
       }
     }
     element.scrollTop = element.scrollHeight;
-  }, [transcript.turns, chat.problem, view, placed]);
+  }, [transcript.turns, chat.problem, chat.observationFailure, view, placed]);
 
   // Whether the log scrolls: then the sticky foot sits over the reply, and what passes under it fades (command-bar.css).
   useEffect(() => {
@@ -805,7 +805,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                 <ModelSetup {...setup} replacing={setupOpen} />
               </section>
             )}
-            {chat.observationFailure === null ? null : <div className="chat-problem" role="alert"><div className="chat-problem-body">
+            {chat.observationFailure === null ? null : <div className="chat-problem chat-observation-problem" role="alert"><div className="chat-problem-body">
               <strong>Can't read the saved reply</strong>
               <p>{chat.observationFailure.message}</p>
               <p>Resume reading this reply without sending your request again.</p>
