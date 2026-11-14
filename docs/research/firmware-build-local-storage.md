@@ -19,6 +19,17 @@ These elapsed times come from individual runs. They are not controlled statistic
 
 Glove80 already compiles inside Nix storage. Its small timing differences show no clear speed gain. The new `-j2 --cores 2` limit bounds its two derivations to four compiler workers. A Docker process monitor recorded 50 samples and a peak of four compiler processes. A private one-job/five-core experiment took 25.92 seconds and peaked at five workers across 59 samples. That result did not justify changing the agreed two-half schedule.
 
+## Warm sources still produce a fresh build
+
+These measurements distinguish four retained inputs: downloaded repositories, Docker images, host source archives and a completed Docker source volume.
+The first staged build can reuse downloads and images while still creating archives and filling the volume.
+A warm build reuses the source volume, not compiler output or a previous firmware artifact.
+West uses a fresh build directory. QMK copies source into private storage and removes `.build` before Make.
+
+ZMK emulation also retains finished result logs keyed by the generated inputs, emulator scripts, firmware/image identity and resolved dependency manifest.
+A result-cache hit skips compilation entirely. Keep that case separate from a warm-source build or an emulation that actually compiles.
+[The ZMK guide](../blueprint/06-firmware-zmk.md#emulate-runs-zmk-itself-on-the-host-with-a-mock-keyboard) describes the result cache.
+
 ## Source reads caused most of West's overhead
 
 Keebart's first baseline CMake configuration took 77.7 seconds. Moving only output into container storage still took 233.37 seconds overall under higher host load. Moving both source reads and output reduced the first configuration to 2.7 seconds. The second half configured in 1.9 seconds.
@@ -54,3 +65,21 @@ For Moonlander, add `--board-rev revb`. Build the same layout again to measure s
 The owner's preserved evidence lives in `.orchestrate/keyloom-quality-review/evidence/r2-performance/` beside the repository. `timed-cli-build.py` records the command, binary hash, source identity, host load, append-only build output and real exit code. `verified-speed-artifacts.json` records artifact hashes, UF2 families and marker checks. `binary-source-identities.json` identifies the actual source behind early harness headers that named the checkout. Original logs remain unchanged.
 
 Focused tests cover failed archives, cancellation, publication, pruning and warm reuse. Real Docker probes cover read-only source/Git and orphan workspace isolation. These probes establish mount behavior, while the board builds establish firmware compatibility within their recorded source limits.
+
+## Recheck the implementation without changing the measurements
+
+The build/storage contracts still match release source `b38c0d4a4baff6e23958990dac2f47aa0c839599` (v0.80.6).
+This source check adds no new timings or firmware compatibility evidence.
+Inspect the publication boundary and the per-run paths from the repository:
+
+```sh
+git show b38c0d4a4baff6e23958990dac2f47aa0c839599:src/firmware/toolchain/source-volume.ts
+git show b38c0d4a4baff6e23958990dac2f47aa0c839599:src/firmware/toolchain/workspace.ts
+git show b38c0d4a4baff6e23958990dac2f47aa0c839599:src/firmware/zmk/west-workspace.ts
+```
+
+Read Git metadata only in the repository or trusted source snapshots.
+Never run host Git in a debug snapshot or a directory that a firmware container could change.
+A pinned HEAD does not make that metadata safe.
+The old writable-cache reproduction changed a tracked Makefile and configured host command execution through Git's `core.fsmonitor`.
+D-580 removes that trust path rather than checking the old metadata again.

@@ -15,7 +15,13 @@ Key pairs emit `&inc_dec_kp`; other pairs get generated `zmk,behavior-sensor-rot
 
 The importer preserves each layer's sensor calls and kept definitions instead of dropping them. Unsupported calls stay opaque; parameterized opaque calls conservatively block layer renumbering. Generated custom rotation definitions reimport as native sensor calls, not editable pairs; keyloom JSON exports preserve the typed pairs. The real build compiled pointer turns and mouse clicks on Base with media turns/presses on Numbers; physical movement still needs an explicitly authorized hardware test. Build receipts are in [the encoder evidence](../screenshots/encoder-layers/README.md). To try it on synthetic data, use [the encoder recipe](../encoder-layers.md).
 
-The Glove80 and the Keebart Corne Choc Pro BT are BK's ZMK boards (D-027, D-462). This document covers importing their layouts, generating a `.keymap`, building firmware locally and flashing both halves. Most of it is the Glove80; the Keebart Corne's hardware module, per-half targets and RGB adapter are at the end. Every Glove80 fact here is in [../research/zmk-and-glove80.md](../research/zmk-and-glove80.md), checked 2026-10-15. Pinned commits: `moergo-sc/zmk` `ce69e85f585c724142aae37ddf8a7e019ff19e93` (tag `v26.09`), `moergo-sc/glove80-zmk-config` `34888be8c9d9a3d5b168a502b8b191ba43b4a1f3`, upstream `zmkfirmware/zmk` `4dd95d7840eb3d5a3f59bb29fbf1ab054715ef85`.
+The Glove80 and the Keebart Corne Choc Pro BT are BK's ZMK boards (D-027, D-462).
+The [Glove80 research](../research/zmk-and-glove80.md) records the 2026-10-15 baseline.
+The current recipes pin these inputs:
+
+- MoErgo firmware: `moergo-sc/zmk` at `ce69e85f585c724142aae37ddf8a7e019ff19e93` (tag `v26.09`).
+- Glove80 template: `moergo-sc/glove80-zmk-config` at `34888be8c9d9a3d5b168a502b8b191ba43b4a1f3`.
+- Corne firmware: `zmkfirmware/zmk` at `edf5c0814fd3ea202e43aad2d68fd32e882a518c` (tag `v0.3.0`).
 
 ## The firmware tree is MoErgo's fork, pinned to a release tag
 
@@ -54,9 +60,15 @@ A hold-tap whose tap runs a macro gets a specialized behavior for its timing pro
 
 ## Build runs the MoErgo template in Docker
 
-keyloom keeps a build workspace per board at `$XDG_CACHE_HOME/keyloom/build/moergo-glove80/`. It's a checkout of `moergo-sc/glove80-zmk-config` at the pinned SHA. `keyloom build` writes the generated `config/glove80.keymap` and `config/glove80.conf` into it and runs the template's Docker route (D-036):
+`keyloom build <layout>` copies the pinned `moergo-sc/glove80-zmk-config` template from trusted downloads into a new workspace for each run.
+The path is `$XDG_CACHE_HOME/keyloom/build/moergo-glove80.run-<random>/`.
+When `XDG_CACHE_HOME` is unset, it defaults to `~/.cache`.
+The copy excludes Git metadata and starts without prior compiler output.
+keyloom writes `config/glove80.keymap` and `config/glove80.conf` into this workspace.
+After the run, `moergo-glove80/` retains an untrusted debug snapshot, never a later build input (D-580, D-582).
 
-- The template's `Dockerfile` builds a `nixpkgs/nix` image that mirrors `moergo-sc/zmk`, and `build.sh <tag>` runs `nix-build config`. keyloom passes the pinned tag, never `main`.
+- keyloom's own image runs `nix-build ./config` against its pinned MoErgo firmware, with `-j2 --cores 2` (D-585).
+  It does not run the upstream template's `build.sh` or build its Dockerfile.
 - The output is one `glove80.uf2`: two images joined end to end (`combine_uf2`, `cat` of the left and right `zmk.uf2`).
 - keyloom copies it to `$XDG_DATA_HOME/keyloom/artifacts/<build id>.uf2`, stores the full log at `logs/<build id>.log`, and records the build in `builds` ([02](02-layout-model.md#database)).
 - **Failure handling.** A build starts the engine it finds when Docker isn't answering, and says so in the log (D-486). Only when that fails does it stop, naming the engine and what to do. A failed compile shows the last 40 lines of the log and the log path. If the error names a line in `glove80.keymap`, keyloom maps it back to the layer and position.
@@ -66,6 +78,22 @@ keyloom builds with its own lean image, `infra/glove80/Dockerfile`, not the temp
 Rejected: building in MoErgo's cloud Layout Editor, because it needs an account, has unpublished build limits, and takes the build off BK's machine (D-028). Rejected: GitHub Actions in a user config repo, because it needs a repo and a push for every change and takes minutes per round trip.
 
 Status update, 2026-11-11 (D-523): a keymap or devicetree error and a rejected `.conf` setting fail with `compile_error`, and a firmware too big for the flash with `too_large`, on both the MoErgo template and `west build`. Build and flash then offers the last revision that built and a question to keyloom instead of Build again. Checked against recorded log lines with a fake Docker; no real build was run for this.
+
+## Corne builds use a locked West dependency graph
+
+`keyloom build <layout>` selects `src/firmware/zmk/build-west.ts` for the foostan and Keebart Corne recipes.
+`west-inputs.json` contains 39 resolved projects for their pinned ZMK revision, with full commit SHAs and no recursive imports.
+The board's pinned hardware and RGB modules join that graph where the recipe needs them.
+A new ZMK SHA without a reviewed dependency lock fails before building.
+The source-cache identity includes every resolved project, repository URL, revision and the image digest (D-581, D-583).
+
+A separate producer stages the sources into a Docker volume.
+Builds mount it read-only at `/keyloom-sources`.
+Generated config, the hands-free module and output live in private `/tmp` directories.
+CMake receives the exact Zephyr package path and a private `USER_CACHE_DIR`, so it never needs to write into the immutable sources.
+Each target builds with `west build -p always`. No build-time `west update` runs, and no compiler output survives for reuse.
+The unique host workspace receives new UF2 files and diagnostics.
+See [the dependency-lock provenance](../research/west-input-lock.md) and [source-cache costs and limits](../research/firmware-build-local-storage.md).
 
 ## Emulate runs ZMK itself on the host, with a mock keyboard
 
@@ -84,7 +112,16 @@ The firmware's debug log is the output (`src/firmware/zmk/emulate-log.ts`, D-077
 
 The mock's clock needs handling (D-078). Its delay for event k is the wait before event k+1, and the first event's delay is also used before the first event, so an unmapped event goes first and each event carries the gap to the next, less one tick because Zephyr adds one to a relative timeout. The binary runs with `-no-rt`, so the simulated clock runs as fast as the host can and times in the log are deterministic: a report's `at` is its log time minus the first key event's, so a hold-tap that decides on its 280 ms term reports at 281.
 
-The container gets the native keymap and conf on standard input, builds in its own `/tmp`, and prints a marker line before running the binary; the output after it is the log (D-079). The saved log of a finished run is kept in `$XDG_CACHE_HOME/keyloom/emulate/<board>/runs/`, keyed by a hash of the firmware pin, image, scripts, native keymap and conf, so asking the same question twice answers in a fraction of a second. Measured on 2026-10-15 on an M-series Mac under Colima: about 7 s per Glove80 run and 25 s per Corne run once the image and workspace exist.
+The container reads the native keymap and config from standard input and builds in its own `/tmp`.
+It prints a marker before running the binary. Output after that marker is the log (D-079).
+The saved log of a finished run stays in `$XDG_CACHE_HOME/keyloom/emulate/<board>/runs/`.
+Its key includes the firmware pin, image identity, emulator scripts, native keymap, config and full resolved West manifest.
+The manifest includes the board's hardware and RGB modules.
+The cache retains at most 40 logs per work directory.
+An identical request can reuse its log without compiling.
+A miss in this result cache requires fresh compilation, even when the source volume is warm.
+The 2026-10-15 Colima measurements on an M-series Mac took about 7 seconds for Glove80 and 25 seconds for Corne.
+The image and workspace already existed.
 
 Not modelled: anything that needs a radio, LEDs or sleep, and mouse reports (the report contract has keyboard and consumer reports only). Key repeat is the host's and isn't simulated. QMK has its own emulator behind the same command ([05](05-firmware-qmk.md)).
 
