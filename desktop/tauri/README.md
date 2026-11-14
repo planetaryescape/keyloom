@@ -47,7 +47,7 @@ The app and its `keyloom` sidecar are one release. `fetch-sidecar.sh` with no ar
 
 ## Notarisation (needs BK)
 
-The release workflow's `build-desktop` job signs when `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` and `APPLE_SIGNING_IDENTITY` exist, and notarises and staples when either set below exists. Without them it still uploads the app and adds a note to the release.
+The release workflow's `build-desktop` job signs when `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` and `APPLE_SIGNING_IDENTITY` exist, and notarises and staples when the signing certificate and either notarization credential set below exist. That desktop step has unsigned and unnotarized fallback branches. The complete release also depends on the Mac CLI jobs, which require signing and notarization credentials. Published v0.80.4 passed both Mac verification jobs. See the [signature history and receipt](../../docs/issues/standalone-macos-cli-signature.md#v0804-passes-both-published-mac-checks).
 
 | Secret | Value |
 | --- | --- |
@@ -56,7 +56,7 @@ The release workflow's `build-desktop` job signs when `APPLE_CERT_P12_BASE64`, `
 | `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_API_KEY_P8` | an App Store Connect API key: its id, the issuer id, and the .p8 file's contents |
 | or `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` | an Apple ID, an app-specific password and `WAVMJLFY95` |
 
-## Auto-update (disabled until a key exists)
+## Auto-update requires an updater key
 
 The updater is compiled in only with the `updater` Cargo feature, so a build without a key cannot try to update. To turn it on:
 
