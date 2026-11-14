@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { type LogSink, capture, run } from "./run.ts";
 import { withWorkspace } from "./workspace.ts";
+import { workspacePath } from "./workspace-path.ts";
 
 export type CheckoutSpec = {
   dir: string;
@@ -113,16 +114,26 @@ export async function checkoutState(spec: CheckoutSpec): Promise<CheckoutState> 
  * including after interruption. No file from a previous container becomes a trusted input.
  * The caller holds spec.dir's lock until the container exits.
  */
-export async function withCheckout<T>(spec: CheckoutSpec, hooks: Hooks, build: (dir: string) => Promise<T>): Promise<T> {
+export async function withCheckout<T>(spec: CheckoutSpec, hooks: Hooks, build: (dir: string) => Promise<T>, paths?: readonly string[]): Promise<T> {
   const trusted = await ensureTrustedCheckout(spec, hooks);
   return withWorkspace(spec.dir, async (dir) => {
-    await cp(trusted, dir, {
+    const copy = (from: string, to: string) => cp(from, to, {
       recursive: true,
       // Reflinks keep copies cheap where supported. Hard links would expose the trusted source.
       mode: constants.COPYFILE_FICLONE,
       filter: (path) => basename(path) !== ".git",
       verbatimSymlinks: true,
     });
+    if (paths) {
+      // Container-local builds need only the host probe; their compiler reads the full read-only cache.
+      for (const path of paths) {
+        const target = await workspacePath(dir, path);
+        const source = await workspacePath(trusted, path);
+        if (!existsSync(source)) continue;
+        await mkdir(dirname(target), { recursive: true });
+        await copy(source, target);
+      }
+    } else await copy(trusted, dir);
     if (hooks.signal?.aborted) throw new CheckoutError("The checkout preparation was cancelled.");
     return build(dir);
   });
