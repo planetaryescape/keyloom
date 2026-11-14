@@ -55,5 +55,6 @@ Local ad hoc signing can prove seal validity and runtime behavior. It cannot pro
 
 Verify both Mac jobs' Developer ID checks and accepted CLI notarization receipts in the new release run.
 Scratch-install each architecture's checksum-verified final asset on its matching Mac runner, then verify strict codesign, version and paired-helper behavior.
+The release workflow retains the accepted CLI/helper receipts with the final CLI hash. After publication, matching Mac runners download each CLI and `SHA256SUMS`, match that hash to the receipts, and run the existing installed-pair smoke without signing credentials. Their verification receipts remain workflow artifacts.
 Keep the published hashes immutable. Any correction needs a new release.
 Do not substitute local ad hoc signing or removal of quarantine/security checks for a valid released signature.
