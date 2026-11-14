@@ -269,7 +269,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `vendor` | all | The maker as people know them, such as `foostan` or `Bastard Keyboards`. |
 | `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
 | `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
-| `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults. |
+| `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults or the QMK A+ wheel adapter. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
 | `revisions[].id` | all | A short name, such as `default` or `rev1`. Unique in the board. |
 | `revisions[].label` | optional | What Build and flash calls this revision when it must ask which one the keyboard is, such as `Rev A`. Only a board with more than one revision needs it. |
@@ -286,6 +286,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.keymapsDir` | `qmk-docker` | Where keyloom writes the keymap, relative to the QMK tree. |
 | `revisions[].build.submodules` | `qmk-docker` | Submodules the build needs. May be empty. |
 | `revisions[].build.moduleSources` | `qmk-docker`, optional | External QMK module collections, pinned independently and copied into the read-only build source. |
+| `revisions[].build.wheelAdapter` | `qmk-docker`, optional | `ploopy-aplus` dispatches the A+'s two analog wheels. Requires eight keys and `sensorPositions: [6, 7]`. Untouched wheels retain factory behavior. |
 | `revisions[].build.moduleSources[].name` | `moduleSources` | Module owner directory under `modules/`, such as `drashna`. Names must be unique and contain no path separators. |
 | `revisions[].build.moduleSources[].repo` | `moduleSources` | Repository URL for the collection. |
 | `revisions[].build.moduleSources[].sha` | `moduleSources` | Full 40-character commit SHA for the collection. |

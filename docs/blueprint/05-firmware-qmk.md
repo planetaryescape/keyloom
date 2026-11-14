@@ -1,5 +1,7 @@
 # 05: Firmware: QMK (Moonlander)
 
+Source update, 2026-11-14: the Ploopy A+ wheel adapter adds per-layer turn assignments while preserving untouched factory behavior (D-608). Its callback guard refuses unknown source changes. Generated turn pairs survive firmware export and reimport. The [A+ reference](../../boards/ploopy/aplus/README.md) records its inputs and limits.
+
 The ZSA Moonlander is BK's QMK board (D-027). This document covers importing its current layout from Oryx, generating QMK source, building it locally and flashing it. Every fact here is in [../research/qmk-and-moonlander.md](../research/qmk-and-moonlander.md), checked 2026-10-15. Pinned commits: `zsa/qmk_firmware` `93b2b9ec3368f86c5eb5a2e3f934049f8daef885` (branch `firmware25`), `zsa/zapp` `a1be75837323001ad1ae8e5787d88cd33f2ccc46` (v1.0.2), and mainline `qmk/qmk_firmware` `7a1bbf37c5c07da4ea0a162bb139083a46ef40a1` for documentation.
 
 Status update, 2026-11-14: the Ploopy A+ uses its maker’s pinned QMK fork and an external module collection (D-606). Factory imports keep sibling support files and C declarations required by callbacks. [The board reference](../../boards/ploopy/aplus/README.md) records its sources and checks.

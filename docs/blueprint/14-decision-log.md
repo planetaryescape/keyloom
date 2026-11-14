@@ -3470,3 +3470,13 @@ A trackball button is not a sculpted keyboard cap. `display.keyShapes` can decla
 Optional `display.materials` sets fixed case, cap, legend and ball colors. A crafted case with materials receives a shaded top and sidewall. The ball receives a reflected highlight. Other boards retain their existing materials. Mouse-action legends omit the word “mouse” because that category is not a hold action.
 
 The A+ display derives its contours from the maker's CAD assembly. Its yellow plastic and blue ball follow the owner's photos. The [board reference](../../boards/ploopy/aplus/README.md) records the mechanical source, measurements and license.
+
+### D-608: A+ analog wheels use per-layer turn pairs through a guarded factory adapter. Extends D-471 and D-606. (2026-11-14)
+
+The A+ reads magnetic wheel angles in its custom pointing-device callback. It does not use QMK's ordinary encoder map. A QMK recipe can select `wheelAdapter: "ploopy-aplus"`, with press positions 6 and 7. The existing sensor model, validator, draft and change operations carry its two wheels in left-to-right order.
+
+Each wheel defaults to native `ploopy-aplus:factory`. The card offers factory or custom mode per knob and layer. Custom mode has clockwise and counterclockwise key, scrolling or Nothing actions. It uses the highest active layer and pauses while the knob is held. Factory mode retains Ploopy's scrolling, arrows and Control-layer volume behavior.
+
+Generation checks the factory callback before adding a wheel hook. The hook consumes only custom-wheel deltas and leaves factory-wheel deltas intact. It accumulates key taps at the factory low-resolution threshold and clears partial turns across layer changes. Unknown callback changes refuse generation instead of silently replacing source. Generated helper code carries typed metadata. Reimport removes that code only when it matches the metadata exactly, then restores the editable pairs.
+
+The shared CLI path validates, saves and builds wheel edits. A native C harness checks direction dispatch, layer changes, factory fall-through, held knobs and deadzone filtering. Physical clockwise orientation and behavior after flashing still need a hardware check.

@@ -26,6 +26,7 @@ const LIGHT: Readonly<Record<string, string>> = {
 
 const MOUSE: Readonly<Record<string, string>> = {
   MS_BTN1: "Click", MS_BTN2: "Right", MS_BTN3: "Middle", MS_BTN4: "Back", MS_BTN5: "Forward",
+  MS_WHLU: "Scroll up", MS_WHLD: "Scroll down", MS_WHLL: "Scroll left", MS_WHLR: "Scroll right",
   PKC_DRAG_SCROLL: "Drag", PKC_GESTURE: "Gesture", PKC_TGL_MIRROR: "Mirror", PKC_TGL_VERT_SCRL: "Vertical",
   PKC_TGL_HORIZ_SCRL: "Horiz.", PKC_TGL_DRAG_SCRL: "Drag mode", PKC_ADJUST_LED_BRIGHTNESS: "LED", PKC_BLINKY_DPI_CONFIG: "DPI",
   KC_MS_BTN1: "Click", KC_BTN1: "Click", KC_MS_BTN2: "Right", KC_BTN2: "Right", KC_MS_BTN3: "Middle", KC_BTN3: "Middle",

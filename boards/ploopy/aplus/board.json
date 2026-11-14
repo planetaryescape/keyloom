@@ -5,6 +5,7 @@
   "vendor": "Ploopy",
   "firmware": "qmk",
   "keyCount": 8,
+  "sensorPositions": [6, 7],
   "revisions": [
     {
       "id": "rev2-001",
@@ -18,6 +19,7 @@
         "kind": "qmk-docker",
         "image": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
         "layoutMacro": "LAYOUT",
+        "wheelAdapter": "ploopy-aplus",
         "layoutFile": "keyboards/ploopyco/aplus/info.json",
         "keymapsDir": "keyboards/ploopyco/aplus/keymaps",
         "submodules": [

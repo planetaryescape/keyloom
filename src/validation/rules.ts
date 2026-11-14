@@ -3,8 +3,8 @@
 // Reachability (reachability.ts) supplies layer_unreachable and layer_trap here and function_lost below.
 import { hasLightingControls, lightingControlsRefusal, lightingRefusal } from "../boards/capabilities.ts";
 import { keyPlace } from "../boards/key-names.ts";
-import { boardSensorDefaults } from "../boards/sensors.ts";
-import { isZmkMouseBinding, sensorActions } from "../layout/sensors.ts";
+import { APLUS_FACTORY_WHEEL, boardSensorDefaults } from "../boards/sensors.ts";
+import { isQmkWheelBinding, isZmkMouseBinding, sensorActions } from "../layout/sensors.ts";
 import type { BoardDefinition } from "../boards/schema.ts";
 import { deepEqual } from "../layout/equal.ts";
 import { keptDefinitions } from "../layout/kept-behaviours.ts";
@@ -276,7 +276,14 @@ function sensorRules(board: BoardDefinition, doc: Layout): Issue[] {
   const count = boardSensorDefaults(board).length;
   return doc.layers.flatMap((layer) => {
     if (layer.sensorBindings === undefined) return [];
-    if (doc.firmware !== "zmk" || count === 0 || layer.sensorBindings.length !== count) return [issue("firmware_unsupported", `layer ${layer.id}: ${layer.sensorBindings.length} sensor bindings; ${board.id} supports ${count}`, `${layer.name} needs ${count} encoder sensor bindings in firmware order.`)];
+    if ((doc.firmware !== "zmk" && doc.firmware !== "qmk") || count === 0 || layer.sensorBindings.length !== count) return [issue("firmware_unsupported", `layer ${layer.id}: ${layer.sensorBindings.length} sensor bindings; ${board.id} supports ${count}`, `${layer.name} needs ${count} encoder sensor bindings in firmware order.`)];
+    if (doc.firmware === "qmk") {
+      const defaults = boardSensorDefaults(board);
+      for (const [i, sensor] of layer.sensorBindings.entries()) {
+        if (sensor.kind === "native" && (defaults[i]?.kind !== "native" || sensor.source !== defaults[i]?.source)) return [issue("firmware_unsupported", `layer ${layer.id}: unsupported QMK wheel source`, "Use factory wheel behavior or clockwise and counterclockwise actions.")];
+        if (sensor.kind === "rotation" && [sensor.clockwise, sensor.counterclockwise].some((action) => action.kind === "native" && !isQmkWheelBinding(action))) return [issue("firmware_unsupported", `layer ${layer.id}: unsupported QMK wheel action`, "Choose a key, scrolling, or Nothing for the turn.")];
+      }
+    }
     return [];
   });
 }
@@ -301,7 +308,7 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   // A kanata native is its own source, admitted only in the forms keyloom writes and with no layer refs to rewrite. A QMK or ZMK one is
   // admitted when keyloom reads it and its layer refs are the ones its reading needs (admittedLayerRefs).
   const understood = (b: Extract<Binding, { kind: "native" }>) =>
-    b.firmware === after.firmware && (isZmkMouseBinding(b) || (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept)));
+    b.firmware === after.firmware && (isZmkMouseBinding(b) || isQmkWheelBinding(b) || (b.firmware === "kanata" ? kanataWrittenByKeyloom(b.source) && (b.layerRefs ?? []).length === 0 : admittedLayerRefs(b, kept)));
   const out: Issue[] = [];
   for (const { binding: b, slot, where } of bindingsOf(after)) {
     if (b.kind === "native" && !known.has(nativeKey(b)) && !understood(b)) {
@@ -311,7 +318,7 @@ export function nativeEdit(before: Layout, after: Layout): Issue[] {
   }
   const importedSensors = new Set(before.layers.flatMap((l) => (l.sensorBindings ?? []).flatMap((s) => s.kind === "native" ? [s.source] : [])));
   for (const layer of after.layers) for (const sensor of layer.sensorBindings ?? []) {
-    if (sensor.kind === "native" && !importedSensors.has(sensor.source) && !["&trans", "&none"].includes(sensor.source)) out.push(issue("native_edit", `encoder turn on ${layer.id}: ${sensor.source} was not imported`, "Use clockwise and counterclockwise actions instead of inventing a sensor behaviour."));
+    if (sensor.kind === "native" && !importedSensors.has(sensor.source) && !["&trans", "&none"].includes(sensor.source) && !(after.firmware === "qmk" && sensor.source === APLUS_FACTORY_WHEEL)) out.push(issue("native_edit", `encoder turn on ${layer.id}: ${sensor.source} was not imported`, "Use clockwise and counterclockwise actions instead of inventing a sensor behaviour."));
   }
   const previousSettings = new Map(before.settings.map((s) => [`${s.firmware}:${s.key}`, s.value]));
   for (const setting of after.settings) {

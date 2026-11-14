@@ -7,7 +7,19 @@ keyloom --data-dir /tmp/keyloom-aplus build 'A+ factory'
 
 The board has six buttons and two knob presses. Positions 0–3 run across the top. Positions 4–5 are the lower buttons. Positions 6–7 are the left and right knob presses. The hand and finger hints describe right-hand use. Finger assignments are provisional.
 
-The factory keymap has eight layers. Its custom callbacks retain gesture recognition, drag scrolling, wheel rotation and VIA support. Knob rotation stays in that source. It is not a separately editable sensor binding.
+The factory keymap has eight layers. Its custom callbacks retain gesture recognition, drag scrolling, wheel rotation and VIA support. Each knob also supports custom turn actions on each layer.
+
+## Each knob has separate turn and press controls
+
+Select a layer, then click the round knob. Set **Turn behavior** to **Custom turns on this layer**. Choose the clockwise and counterclockwise actions, then apply the change. The press stays in the key card below those controls.
+
+Custom turns support keys, media keys, scrolling and Nothing. They use the highest active layer. Holding the knob pauses its custom turns. Each knob keeps its own mode on each layer. Selecting **Factory scrolling and volume** restores that knob's original behavior on the current layer.
+
+Factory mode retains Ploopy's scrolling, arrow and volume modes. Custom mode replaces those modes for that knob on that layer. It uses the factory low-resolution wheel threshold for each key tap. Unchanged wheels keep their factory processing, including host-specific scrolling.
+
+The CLI and agent use `setSensorBindings`. Sensor 0 is the left knob, and sensor 1 is the right knob. Preserve the other sensor when changing one. A native sensor with source `ploopy-aplus:factory` keeps factory mode. `null` restores both board defaults on that layer. The validator still requires consent before dropping a reachable action.
+
+The wheel adapter checks the pinned factory callback before adding custom turns. It refuses unknown callback changes. Firmware export and reimport retain editable turn pairs. The importer also checks generated wheel code against its saved metadata before removing it. It refuses edited code rather than losing it.
 
 ## Firmware comes from pinned sources
 
@@ -15,7 +27,7 @@ The QMK source is `ploopyco/qmk_firmware`, branch `ploopyco/a+`, commit `ed6bc42
 
 The build pins `drashna/qmk_modules` at `ac529c8fe24cb66403fdf0b4a308910c705cc64c`. It stages that collection under `modules/drashna` for the acceleration and gesture modules. The recipe also pins the QMK Docker image and required submodules.
 
-USB detection matches vendor `0x5043`, product `0x81db`, and product name `Ploopy A+ Trackball`. A compiled candidate detected the connected device and built a validated navigation-button swap as UF2. Hardware behavior after flashing remains unchecked.
+USB detection matches vendor `0x5043`, product `0x81db`, and product name `Ploopy A+ Trackball`. A compiled candidate detected the connected device. The validator accepted a navigation-button swap, which built as UF2. Hardware behavior after flashing remains unchecked.
 
 ## The display follows Ploopy's mechanical assembly
 

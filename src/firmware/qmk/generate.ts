@@ -19,6 +19,7 @@ import { qmkRevision } from "./board-config.ts";
 import { GenerateError } from "./generate-error.ts";
 import { WRAPPER_SYMBOL, NO_LTO, WRAP_LINK_FLAG, buildMarker, serialDefine, wrapperSource } from "./handsfree.ts";
 import { STREAM_SYMBOL, WRAP_ACTION_EXEC_FLAG } from "./typing-stream.ts";
+import { writeAplusWheels } from "./ploopy-aplus-wheels.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -105,7 +106,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   };
   const zsa = board.vendor === "ZSA";
 
-  const keymapC = passthroughIn(layout, "keymap.c");
+  const wheels = writeAplusWheels(layout, board, passthroughIn(layout, "keymap.c"));
+  const keymapC = wheels.chunks;
   // Oryx tap dance code that couldn't be read stays as written, and it already owns DANCE_n and tap_dance_actions[].
   if (layout.tapDances.length > 0 && keymapC.some((p) => p.anchor.startsWith("tap-dance"))) {
     throw new GenerateError("keymap.c keeps tap dance code from Oryx that keyloom couldn't read, so keyloom can't add tap dances beside it");
@@ -159,6 +161,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
   if (dances) c.push("", dances.codes);
   for (const p of before.filter((p) => !p.anchor.startsWith("prelude"))) c.push("", p.source);
+  if (wheels.prelude !== undefined) c.push("", wheels.prelude);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));
   for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);

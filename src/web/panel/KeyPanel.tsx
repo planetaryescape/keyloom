@@ -579,7 +579,9 @@ export function KeyPanel(props: Props) {
   const doubleRegion = !extras ? null : draft.doubleTap === null ? { text: null, ghost: "2×", name: "When double-tapped" } : { text: `2× ${shownLegend.double ?? ""}`.trim(), name: "When double-tapped" };
   const thenHoldRegion = !extras ? null : draft.tapThenHold === null ? { text: null, ghost: "tap+hold", name: "When tapped, then held" } : { text: slotPhrase(draft.tapThenHold, drawn), name: "When tapped, then held" };
   const isEncoder = props.board?.sensorPositions?.includes(position) === true;
-  const title = isEncoder ? `${props.board?.hands.left.includes(position) ? "Left" : "Right"} encoder` : cardTitle(shownBinding ?? original, drawn);
+  const build = props.board?.revisions[0]?.build;
+  const aplus = build?.kind === "qmk-docker" && build.wheelAdapter === "ploopy-aplus";
+  const title = isEncoder ? aplus ? `${position === 6 ? "Left" : "Right"} knob` : `${props.board?.hands.left.includes(position) ? "Left" : "Right"} encoder` : cardTitle(shownBinding ?? original, drawn);
   const where2 = [finger === undefined ? undefined : `${finger.replace("-", " ")} finger`, layerDisplayName(layer.name)].filter(Boolean).join(" · ");
   const showFoot = dirty || blocked || applyError !== null || confirmingNative || applying;
   const applyText = applying ? "Applying" : confirmingNative ? "Replace and apply" : turnsOnly ? "Apply encoder turns" : binding === null ? "Apply" : applyWords(original, binding, drawn);

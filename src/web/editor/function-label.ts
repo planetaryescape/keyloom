@@ -11,6 +11,8 @@ export function functionLabel(fn: string, layout: Layout): string {
   const [kind, ...rest] = fn.split(":");
   const body = rest.join(":");
   switch (kind) {
+    case "sensor":
+      return body === "qmk:ploopy-aplus:factory" ? "Factory wheel behavior" : "Custom encoder behavior";
     case "key": {
       const [code = body, ...mods] = body.split("+");
       return tapText(code, mods.length ? (mods as Mod[]) : undefined);

@@ -1,5 +1,7 @@
 # 16: Key editor: everything about a key is built on the key
 
+Source update, 2026-11-14: the QMK Ploopy A+ has per-layer controls for both wheel directions (D-608). Each knob can retain factory mode or use custom turns. Its press stays separate. The [A+ reference](../../boards/ploopy/aplus/README.md) records the flow and firmware limits.
+
 Source update, 2026-11-13 (D-568): modifier keys offer **For the next key only**. The picker also offers one-shot modifiers. Supported imported one-shots open with the control on. Firmware limits appear beside the disabled control.
 
 Source update, 2026-11-01: ZMK encoder turns are editable per layer on the encoder's key card (D-471). This replaces the encoder deferral in D-105, not the other deferred features below. [The encoder recipe](../encoder-layers.md) covers availability, the UI and checked CLI path; compilation passed for both Keebart halves, with no new hardware test.

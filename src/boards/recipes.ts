@@ -14,6 +14,8 @@ export const QmkDockerBuildSchema = z.strictObject({
   image: imageDigest,
   /** The `LAYOUT_*` macro keymaps[] is written with. Geometry is read from the layout of the same name. */
   layoutMacro: z.string().min(1),
+  /** Adapts the A+'s analog wheel callback while retaining its factory behavior by default. */
+  wheelAdapter: z.literal("ploopy-aplus").optional(),
   /** Where `<name>/keymap.c` goes, relative to the checkout. */
   keymapsDir: z.string().min(1).refine((path) => !/^[A-Za-z]:/.test(path) && !/[\\\0]/.test(path) && path.split("/").every((part) => part !== "" && part !== "." && part !== ".."), "must be a relative path without traversal"),
   /** Submodules the build needs; the others are skipped to keep the checkout small (S5). */
