@@ -36,7 +36,8 @@ def record(interrupt):
                 if len(output) > 65536:
                     raise RuntimeError("bounded PTY output exceeded")
             if not acted and b"typed:" in output:
-                children = subprocess.run(["/usr/bin/pgrep", "-P", str(proc.pid)], capture_output=True, timeout=2, env=env)
+                # Hosted Intel process inspection exceeded the old two-second limit.
+                children = subprocess.run(["/usr/bin/pgrep", "-P", str(proc.pid)], capture_output=True, timeout=5, env=env)
                 ids = children.stdout.decode().split()
                 if len(ids) != 1:
                     raise RuntimeError("expected one owned synthetic helper child")
