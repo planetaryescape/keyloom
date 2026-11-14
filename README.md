@@ -36,6 +36,8 @@ Press ⌘K to open the conversation column. Describe what's wrong, or pick a sug
 
 You can also ask it to open History, the typing lab, Decisions or settings. These requests only open the existing view; they do not record, change settings or apply anything. See [ask the agent to open a view](docs/agent-views.md).
 
+If a background read fails, keep the loaded editor open and use its recovery control. `Resume reply` reads accepted work without sending it again. [Recover work after a failed read](docs/recover-work.md) covers chat, model setup, install tracking and archived config cards.
+
 ![The conversation column with suggested starting points](docs/screenshots/ask-keyloom.png)
 
 History shows what was on the keyboard and when. You can name a version, compare it with now, or go back to it.
