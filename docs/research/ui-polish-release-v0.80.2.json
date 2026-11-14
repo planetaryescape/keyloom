@@ -1,0 +1,40 @@
+{
+  "release": "v0.80.2",
+  "verifiedAt": "2026-11-13T19:24:16.282775+00:00",
+  "sourceCommit": "6034e1c22713f40e7ce2f3a91d1a3d30f934cd6d",
+  "sourceTree": "5248c5feef2e81819c4fa6eb5feb27b7bdfe7229",
+  "uiMerge": "6e478777f400ca776700a7f02131ec99a51d859c",
+  "testedUiHead": "13c04a933f8c11b17845de7d3f135fae6f317e52",
+  "workflows": {
+    "releaseCi": 43488146612,
+    "uiPostMergeCi": 43488043000,
+    "releasePostMergeCi": 43489900221,
+    "publication": 43489900213,
+    "all": "success"
+  },
+  "desktopZipSha256": "2cc8c4c03e0dfb14d73061036f8801ab11716d6c277b5a204cc667b6d3e9c617",
+  "installedCliSha256": "ee0bb2c04c55c069865c7bfa77208f10d953bf6f11dd13715f6f785bbbc5d5d7",
+  "delivery": "unchanged signed desktop sidecar",
+  "standaloneCli": {
+    "checksumVerified": true,
+    "strictSignaturePassed": false,
+    "issue": "docs/issues/standalone-macos-cli-signature.md"
+  },
+  "installedVersions": {
+    "desktop": "0.80.2",
+    "cli": "0.80.2",
+    "liveServer": "0.80.2"
+  },
+  "strictAppSignature": true,
+  "strictCliDeveloperIdSignature": true,
+  "gatekeeper": "Notarized Developer ID",
+  "installedBundleMatchesArchive": true,
+  "normalQuitAndReopen": true,
+  "restoredView": "Corne Choc Pro BT / Default layer / dark / no key card",
+  "layoutHeadsUnchanged": 9,
+  "revisionDocumentsUnchanged": 35,
+  "flashRecordsUnchanged": 31,
+  "hardwareWrites": false,
+  "localResigning": false,
+  "remainingUiFinding": "Phone reconnect banner crowds its text. Round 3 owns the fix."
+}
