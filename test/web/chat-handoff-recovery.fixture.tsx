@@ -37,7 +37,7 @@ globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: Request
     const id = `run-${posts.length}`;
     const snapshot: AgentRunSnapshot = {
       version: 1, id, requestId: body.requestId, conversationId: "copy-conversation", userMessageId: "user", status: text === "Stop after lost observation" ? "running" : "completed", seq: 1,
-      cancelRequested: false, committedPreparations: 0, preparations: [], presentation: null,
+      cancelRequested: false, committedPreparations: 0, preparations: [], presentation: text === "Recover sustained reads" ? { version: 1, userMessageId: "user", status: "completed", operations: [], messages: [], effectsMayHaveOccurred: false, warning: null, detailsTruncated: false } : null,
       ...(text.startsWith("copy") ? { handoff: { layoutId: "copied-config", conversationId: "target-conversation", runId: "target-run", requestId: "target-request" } } : {}),
     };
     runs.set(id, { snapshot, text });
@@ -81,12 +81,17 @@ async function runChecks() {
       await chat().send("Recover one read", null); await frame();
       check(posts.length === before + 1 && !chat().streaming && (chat().observationFailure ?? null) === null, "A transient read did not recover the accepted reply");
       observationMisses = 3;
+      const beforeCompletion = chat().liveCompleted?.id ?? 0;
       await chat().send("Recover sustained reads", null); await frame();
       check(chat().observationFailure !== null && chat().streaming, "Lost observation did not keep the accepted run separate from execution failure");
       observationMisses = 0;
       chat().resumeObservation();
       while (chat().streaming) await frame();
       check(posts.length === before + 2 && (chat().observationFailure ?? null) === null, "Resume reply submitted another acceptance POST");
+      const completion = chat().liveCompleted;
+      check(completion !== null && completion.id > beforeCompletion, "Resuming a live reply lost its completion notification");
+      chat().resumeObservation(); await frame(); await frame();
+      check(chat().liveCompleted === completion && posts.length === before + 2, "Reading a completed run announced it twice");
     }
     missDetail = false;
     chat().newConversation(); await frame();
