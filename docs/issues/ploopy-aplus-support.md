@@ -1,6 +1,6 @@
 # Ploopy A+ support includes matching physical controls
 
-Status: implemented in `2aee18144986a4d0434d7734a64f0eafac98dc87` on `feat/ploopy-adept-aplus`. Unreleased. Hardware behavior after flashing remains unchecked.
+Status: implemented through `b3c0091b0ebc9e327459bf3ffabe79b9158c3519` on `fix/ploopy-aplus-wheel-controls`. Unreleased. Hardware behavior after flashing remains unchecked.
 
 BK's right-hand A+ needs its own board definition, factory firmware and editor geometry. Earlier drawings had wrong proportions, clipped labels and a generic square key card.
 
@@ -18,17 +18,27 @@ The broader focused run passed 316 tests across 23 files. The final board, picke
 
 ## The preview stays separate from installed keyloom
 
-The final compiled candidate is `/tmp/keyloom-aplus-candidate-final/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are local and unreleased.
+The current compiled candidate is `/tmp/keyloom-aplus-wheels-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are local and unreleased.
 
-The preview serves scratch data from `/tmp/keyloom-aplus-review` on port 4489. The separate CLI check uses `/tmp/keyloom-aplus-cli-check`. The installed app and CLI remain unchanged. We did not flash a keyboard.
+The preview serves scratch data from `/tmp/keyloom-aplus-wheels-cli-check` on port 4489. The config is `A+ wheel smoke`. The previous preview stopped before this fix. The installed app and CLI remain unchanged. We did not flash a keyboard.
 
 To restart the preview:
 
 ```sh
-/tmp/keyloom-aplus-candidate-final/keyloom-darwin-arm64 \
-  --data-dir /tmp/keyloom-aplus-review serve --port 4489
+/tmp/keyloom-aplus-wheels-candidate/keyloom-darwin-arm64 \
+  --data-dir /tmp/keyloom-aplus-wheels-cli-check serve --port 4489
 ```
 
 Open the authenticated URL printed by that command. Its token changes after a restart.
 
-Next action: review the matching board and key card in the local preview. Hardware acceptance requires an explicit flash request, then checks of all buttons, both knob presses, wheel rotation, gestures and drag scrolling. Publishing and installed-copy updates remain separate release work.
+## Both knobs now have per-layer turn controls
+
+The card offers factory or custom turn mode. Custom mode exposes clockwise and counterclockwise actions before the press. Left and right knob titles follow physical position, independently of the assigned hand. The adapter preserves factory behavior for every untouched knob and layer. Export and reimport retain editable pairs.
+
+The validator accepted volume turns on the left knob, horizontal scrolling on the right, and Page Down/Up on the Control-layer right knob. CLI apply saved revision `rev_01M7DS9ZZCAANS97YQK296RADN`. Build `bld_01M7DSA0S83RTTXS68CN2R7K35` produced a 123392-byte UF2. The [wheel evidence](../research/ui-audit/ploopy-aplus/wheels/README.md) records the artifact digest and portable receipt.
+
+Computer Use exposed a save blocker for a lost turn action with no key slot. The fix offers an explicit drop choice. Browser Apply saved `rev_01M7DSMDN12T793F8FP0AT1AW9`. The CLI returned the new turn, unchanged counterclockwise action, other knob and Control layer. Browser Undo restored the built assignments at `rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ`.
+
+The broader run passed 842 tests, skipped 19 Docker-gated cases and failed none. After the save-flow fix, 51 focused tests passed. TypeScript, dependency checks and the changed-line anti-slop check pass. React Doctor reports two nonblocking warnings in `EncoderTurns`: function complexity and an array lookup over at most two sensor indexes.
+
+Next action: review the turn controls in the local preview. We closed Computer Use. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Publishing and installed-copy updates remain separate release work.

@@ -1,0 +1,52 @@
+{
+  "source_commit": "b3c0091b0ebc9e327459bf3ffabe79b9158c3519",
+  "source_branch": "fix/ploopy-aplus-wheel-controls",
+  "base_ref": "origin/main",
+  "base_commit": "3d0b79d425e24ef5e9cc9ef0718dfc4d21f8ef6c",
+  "firmware": {
+    "build_id": "bld_01M7DSA0S83RTTXS68CN2R7K35",
+    "revision_id": "rev_01M7DS9ZZCAANS97YQK296RADN",
+    "status": "succeeded",
+    "bytes": 123392,
+    "sha256": "7defe45a05ee233c3fb73b60daa2a721eb8f00cdbef9a3f4e2c305f21780a07b",
+    "flashed": false
+  },
+  "checks": {
+    "broader_tests": {
+      "passed": 842,
+      "skipped": 19,
+      "failed": 0
+    },
+    "followup_tests": {
+      "passed": 51,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "dependencies": "passed",
+    "changed_line_anti_slop": "passed",
+    "react_doctor": {
+      "warnings": [
+        "EncoderTurns function complexity",
+        "array lookup over at most two sensor indexes"
+      ]
+    }
+  },
+  "browser": {
+    "method": "Computer Use in Dia",
+    "applied_revision": "rev_01M7DSMDN12T793F8FP0AT1AW9",
+    "undo_revision": "rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ",
+    "scratch_data_dir": "/tmp/keyloom-aplus-wheels-cli-check",
+    "physical_wheel_direction_checked": false
+  },
+  "captures": {
+    "dpr": 2,
+    "desktop_viewport": [
+      1440,
+      900
+    ],
+    "phone_viewport": [
+      390,
+      844
+    ]
+  }
+}
