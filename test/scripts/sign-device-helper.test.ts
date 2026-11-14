@@ -28,7 +28,8 @@ case "$command" in
       *) exit 90 ;;
     esac ;;
   codesign)
-    if [ "$1" = --verify ]; then exit 0; fi
+    if [ "$1" = --verify ]; then exit "\${FAIL_VERIFY:-0}"; fi
+    if [ "\${2:-}" = --sign ] && [ "\${3:-}" = - ]; then exit 0; fi
     chain=''
     while [ "$#" -gt 0 ]; do
       if [ "$1" = --keychain ]; then shift; chain="$1"; fi
@@ -43,13 +44,20 @@ case "$command" in
       exit 44
     fi
     if [ "\${FAIL_CODESIGN:-}" = 1 ]; then exit 42; fi ;;
-  xcrun) printf '{"status":"Accepted"}\\n' ;;
-  rm|ditto|jq) ;;
+  xcrun) printf '{"status":"%s"}\\n' "\${NOTARY_STATUS:-Accepted}" ;;
+  jq) [ "\${NOTARY_STATUS:-Accepted}" = Accepted ] ;;
+  rm|ditto) ;;
   *) exit 91 ;;
 esac
 `;
 
-function runSigning(failCodesign = false) {
+function runSigning(options: {
+  bunCli?: boolean;
+  failCodesign?: boolean;
+  failVerify?: boolean;
+  notaryStatus?: string;
+  credentials?: Record<string, string>;
+} = {}) {
   const root = tempDir("keyloom-signing-test-");
   const bin = join(root, "fake-bin");
   const runner = join(root, "CI temp π");
@@ -62,19 +70,22 @@ function runSigning(failCodesign = false) {
   const original = '    "/ci/login.keychain-db"\n    "/ci/Extra "Keychain" π.keychain-db"\n';
   writeFileSync(state, original);
   const log = join(root, "commands");
-  const result = Bun.spawnSync(["/bin/sh", resolve(import.meta.dir, "../../scripts/sign-device-helper.sh"), join(root, "helper")], {
+  const result = Bun.spawnSync(["/bin/sh", resolve(import.meta.dir, "../../scripts/sign-device-helper.sh"), ...(options.bunCli ? ["--bun-cli"] : []), join(root, "helper")], {
     env: {
       PATH: bin,
       RUNNER_TEMP: runner,
       COMMAND_LOG: log,
       KEYCHAIN_STATE: state,
-      FAIL_CODESIGN: failCodesign ? "1" : "0",
+      FAIL_CODESIGN: options.failCodesign ? "1" : "0",
+      FAIL_VERIFY: options.failVerify ? "43" : "0",
+      NOTARY_STATUS: options.notaryStatus ?? "Accepted",
       APPLE_CERT_P12_BASE64: "synthetic-cert-base64",
       APPLE_CERT_PASSWORD: "synthetic-cert-password",
       APPLE_SIGNING_IDENTITY_NAME: "synthetic-signing-identity",
       APPLE_API_KEY_ID: "synthetic-key-id",
       APPLE_API_ISSUER_ID: "synthetic-issuer",
       APPLE_API_KEY_P8: "synthetic-notary-key",
+      ...options.credentials,
     },
     timeout: 5_000,
   });
@@ -83,7 +94,7 @@ function runSigning(failCodesign = false) {
     original,
     current: readFileSync(state, "utf8"),
     commands: readFileSync(log, "utf8").trimEnd().split("\n").map((line) => line.split("\t")),
-    keychain: join(runner, "helper-TEST-UUID.keychain-db"),
+    keychain: join(runner, `${options.bunCli ? "cli" : "helper"}-TEST-UUID.keychain-db`),
   };
 }
 
@@ -97,11 +108,12 @@ describe.skipIf(process.platform === "win32")("CI helper signing search-list lif
     expect(registration).toBeGreaterThanOrEqual(0);
     expect(signing).toBeGreaterThan(registration);
     expect(commands.some((args) => args[0] === "xcrun")).toBe(true);
+    expect(commands.flat()).not.toContain("--entitlements");
     expect(commands).toContainEqual(["security", "delete-keychain", keychain]);
   });
 
   test("restores the search list after codesign failure without continuing to notarisation", () => {
-    const { result, current, original, commands, keychain } = runSigning(true);
+    const { result, current, original, commands, keychain } = runSigning({ failCodesign: true });
     expect(result.exitCode).toBe(42);
     expect(current).toBe(original);
     expect(commands).toContainEqual(["security", "delete-keychain", keychain]);
@@ -112,5 +124,53 @@ describe.skipIf(process.platform === "win32")("CI helper signing search-list lif
     for (const secret of ["synthetic-cert-base64", "synthetic-cert-password", "synthetic-notary-key"]) {
       expect(output + result.stderr.toString()).not.toContain(secret);
     }
+  });
+
+  test("signs the final Bun CLI with its runtime entitlements and requires Developer ID before notarization", () => {
+    const { result, commands, current, original } = runSigning({ bunCli: true });
+    expect({ exit: result.exitCode, stderr: result.stderr.toString() }).toEqual({ exit: 0, stderr: "" });
+    expect(current).toBe(original);
+    const signing = commands.find((args) => args[0] === "codesign" && args.includes("--force"));
+    const entitlements = signing?.[signing.indexOf("--entitlements") + 1];
+    if (!entitlements) throw new Error("missing Bun signing entitlements");
+    expect(resolve(entitlements)).toBe(resolve(import.meta.dir, "../../desktop/tauri/src-tauri/Entitlements.plist"));
+    expect(signing).toContain("runtime");
+    expect(signing).toContain("--timestamp");
+    const verification = commands.findIndex((args) => args[0] === "codesign" && args.includes("--verify"));
+    expect(commands[verification]).toContain("-R=anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists");
+    expect(commands.findIndex((args) => args[0] === "xcrun")).toBeGreaterThan(verification);
+    expect(commands.find((args) => args[0] === "jq")?.at(-1)).toEndWith("/cli-notary-result.json");
+  });
+
+  test.each(["APPLE_CERT_P12_BASE64", "APPLE_CERT_PASSWORD", "APPLE_SIGNING_IDENTITY_NAME", "APPLE_API_KEY_P8"])("refuses CLI publication without %s before changing keychains", (credential) => {
+    const { result, commands, current, original } = runSigning({ bunCli: true, credentials: { [credential]: "" } });
+    expect(result.exitCode).not.toBe(0);
+    expect(current).toBe(original);
+    expect(commands.map((args) => args[0])).toEqual(["uname"]);
+  });
+
+  test("accepts the existing Apple ID notarization credential alternative for CLI", () => {
+    const { result, commands } = runSigning({ bunCli: true, credentials: {
+      APPLE_API_KEY_P8: "", APPLE_ID_NAME: "synthetic-id", APPLE_APP_PASSWORD: "synthetic-app-password", APPLE_TEAM_ID_VALUE: "synthetic-team",
+    } });
+    expect(result.exitCode).toBe(0);
+    expect(commands.find((args) => args[0] === "xcrun")).toContain("--apple-id");
+    expect(result.stdout.toString() + result.stderr.toString()).not.toContain("synthetic-app-password");
+  });
+
+  test.each(["signature", "notarization"])("rejects a failed CLI %s check and restores keychains", (failure) => {
+    const { result, commands, current, original, keychain } = runSigning({ bunCli: true, failVerify: failure === "signature", notaryStatus: failure === "notarization" ? "Invalid" : "Accepted" });
+    expect(result.exitCode).not.toBe(0);
+    expect(current).toBe(original);
+    expect(commands).toContainEqual(["security", "delete-keychain", keychain]);
+    if (failure === "signature") expect(commands.some((args) => args[0] === "xcrun")).toBe(false);
+  });
+
+  test("preserves the helper's local ad hoc fallback without Bun entitlements", () => {
+    const { result, commands } = runSigning({ credentials: { APPLE_CERT_P12_BASE64: "" } });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("ad-hoc signed");
+    expect(commands.map((args) => args[0])).toEqual(["uname", "codesign"]);
+    expect(commands.flat()).not.toContain("--entitlements");
   });
 });
