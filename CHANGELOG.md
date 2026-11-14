@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.80.5](https://github.com/planetaryescape/keyloom/compare/v0.80.4...v0.80.5) (2026-11-14)
+
+
+### Performance Improvements
+
+* keep firmware sources and compiler output inside Docker ([#342](https://github.com/planetaryescape/keyloom/issues/342)) ([884b45e](https://github.com/planetaryescape/keyloom/commit/884b45ee96bb0951d72994ab4f8938aa27e3a31f))
+
 ## [0.80.4](https://github.com/planetaryescape/keyloom/compare/v0.80.3...v0.80.4) (2026-11-14)
 
 
