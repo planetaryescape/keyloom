@@ -17,7 +17,7 @@ import { BUILD_TIMEOUT_MS, type ZmkBuildInput, type ZmkBuildResult, hint } from 
 import { moduleReport } from "./handsfree.ts";
 import { MODULE_DIR, MODULE_FILES, OVERLAY_FILE, writeModule } from "./module.ts";
 import { describeLocation, locateCompileError, locateConfError } from "./locate-error.ts";
-import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects, westLocalWorkspace, WEST_WORK_DIR, WEST_CONFIG_DIR, WEST_BUILD_DIR } from "./west-workspace.ts";
 
 /** Flattened, immutable dependencies plus the board's pinned modules. */
 export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDockerBuild["boardModule"], rgbMatrix?: ZmkWestDockerBuild["rgbMatrix"]): string {
@@ -25,7 +25,7 @@ export function westManifest(repo: string, sha: string, boardModule?: ZmkWestDoc
 }
 
 /** What a build with keyloom's module adds to `west build`: the module, and the overlay that gives it a serial port (a module can't add an overlay itself). */
-export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/work/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/work/${MODULE_DIR}/${OVERLAY_FILE}`;
+export const moduleFlags = (): string => `-DZMK_EXTRA_MODULES=/tmp/${MODULE_DIR} -DEXTRA_DTC_OVERLAY_FILE=/tmp/${MODULE_DIR}/${OVERLAY_FILE}`;
 
 /** Docker label naming the checkout a build container works in, so a container left by a keyloom that died can be found. */
 export const CHECKOUT_LABEL = "dev.keyloom.checkout";
@@ -38,10 +38,13 @@ export function westScript(build: ZmkWestDockerBuild, withModule = false): strin
   const lines = [
     "set -e",
     "export CMAKE_BUILD_PARALLEL_LEVEL=5",
-    "rm -rf build",
-    "[ -d .west ] || west init -l config",
-    "export ZEPHYR_BASE=/work/zephyr",
-    ...build.targets.map((t) => `west build -p always -s zmk/app -d build/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=/work/config -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=/work/config/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...westLocalWorkspace(withModule),
+    // Keep compiler diagnostics for failed runs without copying thousands of object files over SSHFS.
+    `keep_diagnostics() { status=$?; trap - EXIT; if [ -d ${WEST_BUILD_DIR} ]; then (cd ${WEST_BUILD_DIR}; find . -type f \\( -name '*.log' -o -name CMakeCache.txt -o -name zephyr.dts -o -name .config \\) -exec sh -c 'for path; do mkdir -p "/work/build/$(dirname "$path")"; cp "$path" "/work/build/$path"; done' sh {} +) || true; fi; exit "$status"; }`,
+    "trap keep_diagnostics EXIT",
+    `export ZEPHYR_BASE=${WEST_WORK_DIR}/zephyr`,
+    ...build.targets.map((t) => `west build -p always -s zmk/app -d ${WEST_BUILD_DIR}/${t.id} -b ${t.board ?? build.board} --${t.shield ? ` -DSHIELD=${t.shield}` : ""} -DZMK_CONFIG=${WEST_CONFIG_DIR} -DZephyr_DIR=${WEST_WORK_DIR}/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache${t.productName === undefined ? "" : ` -DEXTRA_CONF_FILE=${WEST_CONFIG_DIR}/${targetConfFile(t.id)}`}${build.rgbMatrix ? ` -DDTS_EXTRA_CPPFLAGS=-DKEYLOOM_RGB_LEFT=${t.id === build.rgbMatrix.leftTarget ? 1 : 0}` : ""}${withModule ? ` ${moduleFlags()}` : ""}`),
+    ...build.targets.map((t) => `mkdir -p /work/build/${t.id}/zephyr; cp ${WEST_BUILD_DIR}/${t.id}/zephyr/zmk.uf2 /work/build/${t.id}/zephyr/zmk.uf2`),
   ];
   return lines.join("\n");
 }

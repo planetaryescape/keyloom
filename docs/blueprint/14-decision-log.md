@@ -28,6 +28,54 @@ Ad hoc local checks prove only seal validity and runtime behavior.
 Publisher identity and accepted notarization remain release gates. Existing published assets stay unchanged.
 See [the signature issue](../issues/standalone-macos-cli-signature.md).
 
+## 2026-11-14 Glove80 limits combined compiler concurrency
+
+### D-585: Give each of the two Glove80 Nix jobs two cores. Extends D-081.
+
+The existing image reports six build cores, while its entrypoint starts two derivations at once.
+The entrypoint now passes `--cores 2` with `-j2`, bounding their combined compiler workers at four.
+The A4 RUN block, pinned base, source ref and signed cache keys stay unchanged.
+The Dockerfile hash still selects the image, so an old image cannot silently retain the prior entrypoint.
+Real compiler concurrency and firmware compatibility are checked through the scratch CLI.
+
+## 2026-11-14 QMK also builds on local container storage
+
+### D-584: Copy QMK compiler inputs inside the container, while retaining guarded host writes. Extends D-583.
+
+The secure Moonlander Rev B baseline at `6034e1c2` took 128.8 seconds, including about 31 seconds before make started.
+Copying its entire source tree into a host run folder costs time even when the compiler later uses local storage.
+
+The host run now receives only its trusted Makefile probe and generated keymap. Complete pinned submodules remain in the trusted cache.
+All workspacePath and writeSource guards still use the unique host run root. Stale host artifact cleanup stays guarded.
+The source-copy container fills a separate immutable QMK source volume. Each build mounts it read-only, then copies its source into private container storage.
+It strips private Git metadata and stale output before copying in the checked generated keymap. Make runs with at most five workers.
+Only new artifacts and the ELF return to the host. Existing format and required-symbol checks remain unchanged.
+Compiler output and writable source are discarded with the container, so neither can poison a later build.
+
+## 2026-11-14 Firmware compiles beside read-only local sources
+
+### D-583: Stage pinned sources once inside Docker, then compile with private container output. Extends D-580 through D-582.
+
+A secure Keebart baseline at `6034e1c2` took 260.5 seconds. Its first CMake configure alone took 77.7 seconds.
+Moving only output off Colima's SSHFS took 233.4 seconds under higher host load. Source reads still crossed the share.
+
+West now stages complete pinned snapshots into a Docker source volume before any generated firmware runs.
+A separate copy container receives individual read-only source archives. It executes only archive extraction and writes immutable West metadata.
+The source-cache identity includes every resolved project, repository, revision, and image. Only a completed copy publishes its host cache record.
+Failed or cancelled copies publish nothing. A pruned volume is recreated from the trusted archives.
+
+Every build and emulator mounts the completed source volume read-only. Source Git configuration and West metadata remain read-only too.
+Generated config, the hands-free module, and compiler output live in the container's private temporary directories.
+Only finished UF2 files and text diagnostics return to the unique host workspace. No compiler output becomes a later input.
+D-582's unique host roots, locking, marker checks and artifact validation remain. QMK guards remain unchanged.
+
+Host archives and publication records stay outside all writable container mounts. Downloads remain warm.
+The Docker cache can be pruned independently without changing source pins. No privileged container or engine configuration change is required.
+
+Verification: source-cache tests cover warm reuse, pruning, failed copies, cancellation and incomplete archives.
+A real Docker probe verifies source and Git writes fail, West discovers its immutable workspace, and an orphan cannot change later run roots.
+Real firmware timing and compatibility results are recorded in the build-speed ledger. No hardware behavior is inferred.
+
 ## 2026-11-13 Each container gets a unique workspace path
 
 ### D-582: Never bind a later run to a host path an older container used. Replaces D-580 and D-581's stable workspace path.

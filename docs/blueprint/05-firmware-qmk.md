@@ -76,17 +76,18 @@ ZIP imports inspect metadata before inflation. The compressed limit is 8 MiB, th
 
 Status, 2026-11-13: D-580 separates trusted downloads from disposable build and emulation workspaces. D-582 gives each run a unique mount path.
 
-Each writable run uses `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander.run-<random>/`. After the run, `zsa-moonlander/` keeps an untrusted debug snapshot. That snapshot never supplies a later build. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. The identity hashes the repository URL, full commit SHA, and requested submodules. Each run copies pinned source and requested submodules into the workspace, without Git metadata or previous output. Downloads remain warm. Host Git never reads a writable workspace or debug snapshot. Share the parent `keyloom/build/` folder with Docker so it can see each new run and the trusted sources. keyloom writes the generated keymap and runs QMK's documented Docker build from the checkout root:
+Each writable run uses `$XDG_CACHE_HOME/keyloom/build/zsa-moonlander.run-<random>/`. After the run, `zsa-moonlander/` keeps an untrusted debug snapshot. That snapshot never supplies a later build. Trusted Git downloads live beside it in `zsa-moonlander.sources-v1/<identity>/`. Host Git never reads a writable workspace or debug snapshot.
+
+Status, 2026-11-14: D-584 copies only the Makefile probe and generated keymap into the host run folder. A separate container stages complete pinned source and submodules into a Docker volume. Each build mounts that volume read-only, copies it into `/tmp/qmk_firmware`, removes Git metadata and old output, then adds the checked keymap. Make uses at most five workers. New artifacts and the ELF return to the host for existing format and symbol checks. Compiler output is never reused. Emulation still copies the full pinned tree into its disposable workspace.
+
+Allow Docker to share the parent `keyloom/build/` folder so it can see each unique run and individual source archives. Containers never mount that parent.
+
 Board `keymapsDir` values must be relative paths without traversal. Before host cleanup or source writes, keyloom rejects symlinks within the workspace and checks every generated filename (D-661). This also covers emulation source and stale QMK artifact cleanup. The checks protect host writes between builds. They do not claim isolation from a process that changes directories during a write.
 
 
-```
-docker run --rm --user "$(id -u):$(id -g)" -w /qmk_firmware -v <checkout>:/qmk_firmware \
-  -e SKIP_GIT=1 -e MAKEFLAGS=-j4 ghcr.io/qmk/qmk_cli@sha256:<pinned digest> \
-  make zsa/moonlander/<reva|revb>:keyloom
-```
+The private compiler runs the same QMK make target as `util/docker_build.sh`, without its terminal-only `-it` flags. The image digest, layout macro, keymaps folder, requested submodules and bootloader are in the board definition. ZSA's Oryx module requires `lib/lufa` as well as `lib/chibios`, `lib/chibios-contrib`, `lib/printf` and `modules/zsa`. The source cache preserves all requested submodules.
 
-This is the `docker run` behind QMK's `util/docker_build.sh`, called directly. That script's helper passes `-it`, which needs a terminal. Spike S5 ([../research/spikes/S5.md](../research/spikes/S5.md)) built BK's unchanged Oryx source for both revisions this way, in 101 s and 110 s. The checkout needs five submodules: `lib/chibios`, `lib/chibios-contrib`, `lib/printf`, `lib/lufa` and `modules/zsa`. ZSA's Oryx module fails to compile without LUFA. The image digest, layout macro, keymaps folder and submodule list are in the board definition (`revisions[].build`), as is each revision's bootloader (`revisions[].flash.bootloader`). Before `make`, keyloom runs `test -f Makefile` in the container, because Docker Desktop mounts an empty folder for a path it may not share and `make` then only says "No rule to make target". The output `.bin` is checked for a DFU suffix naming the revision's bootloader and a valid CRC, then copied to `$XDG_DATA_HOME/keyloom/artifacts/<build id>.bin`; the log is kept. Builds in one checkout are serialised with a lock directory beside it.
+Before compilation, keyloom probes the host run's Makefile and verifies that Docker sees the generated files. The output `.bin` must carry the revision's DFU suffix and a valid CRC. Builds using one cache hold a lock until their container exits. [Local firmware storage measurements](../research/firmware-build-local-storage.md) record setup costs, warm times and source boundaries.
 
 Failure handling matches [06](06-firmware-zmk.md#build-runs-the-moergo-template-in-docker): Docker checked first, the engine started when it isn't answering (D-486), the log tail shown, compiler errors mapped back to a layer and position where the line is in a `LAYOUT(...)` call.
 

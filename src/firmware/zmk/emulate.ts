@@ -13,7 +13,7 @@ import { withLock } from "../toolchain/lock.ts";
 import { run } from "../toolchain/run.ts";
 import { zmkRevision } from "./board-config.ts";
 import { hint } from "./build.ts";
-import { lockedWestManifest, withWestWorkspace, westProjects } from "./west-workspace.ts";
+import { lockedWestManifest, withWestWorkspace, westProjects, westLocalWorkspace, WEST_WORK_DIR } from "./west-workspace.ts";
 import { readZmkLighting } from "./import-lighting.ts";
 import { nativeFiles } from "./emulate-keymap.ts";
 import { parseRunLog } from "./emulate-log.ts";
@@ -49,9 +49,10 @@ export function westEmulateScript(): string {
   return [
     "set -e",
     ...READ_CONFIG,
-    "[ -d .west ] || west init -l config",
-    "export ZEPHYR_BASE=/work/zephyr",
-    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} -DZephyr_DIR=/work/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache`,
+    ...westLocalWorkspace(),
+    "export CMAKE_BUILD_PARALLEL_LEVEL=5",
+    `export ZEPHYR_BASE=${WEST_WORK_DIR}/zephyr`,
+    `west build -s zmk/app -d ${BUILD_DIR} -b native_posix_64 -- -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} -DZephyr_DIR=${WEST_WORK_DIR}/zephyr/share/zephyr-package/cmake -DUSER_CACHE_DIR=/tmp/keyloom-cache`,
     `echo ${RUN_MARKER}`,
     `${BUILD_DIR}/zephyr/zmk.exe -no-rt`,
     "",
@@ -71,7 +72,7 @@ export const MOERGO_INNER_SCRIPT = [
   '[ -n "$GCC" ] || { echo "keyloom: no host gcc in the image"; exit 3; }',
   'export PATH="$GCC/bin:$PATH"',
   `cmake -GNinja -S /src/app -B ${BUILD_DIR} -DBOARD=native_posix_64 -DZEPHYR_TOOLCHAIN_VARIANT=host -DZEPHYR_BASE="$ZEPHYR/zephyr" -DZEPHYR_MODULES="$MODULES" -DUSER_CACHE_DIR=/tmp/.cache -DCONFIG_ASSERT=y -DZMK_CONFIG=${CONFIG_DIR} > ${BUILD_DIR}.cmake.log 2>&1 || { cat ${BUILD_DIR}.cmake.log; exit 1; }`,
-  `ninja -C ${BUILD_DIR}`,
+  `ninja -j5 -C ${BUILD_DIR}`,
   `echo ${RUN_MARKER}`,
   `${BUILD_DIR}/zephyr/zmk.exe -no-rt`,
   "",

@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { FAKE_SOURCE_VOLUME } from "./source-volume.ts";
 import { tempDir } from "./tmp.ts";
 
 const syntheticExecutables = new Set<string>();
@@ -105,7 +106,7 @@ esac`;
 
 // Stands in for `docker`: `version`, `rm`, the "can the container see the checkout" probe, and `make`.
 // Modes (FAKE_MODE): ok, nobin, compile, log (prints the file FAKE_LOG names), disk, daemongone (the daemon stops mid-build), hang, nodaemon.
-export const FAKE_DOCKER = `
+export const FAKE_DOCKER = `${FAKE_SOURCE_VOLUME}
 case "$1" in
   version) [ "$FAKE_MODE" = nodaemon ] && exit 1; echo 28.0.0; exit 0;;
   info) printf 'Docker Desktop\\tdocker-desktop\\n'; exit 0;;
