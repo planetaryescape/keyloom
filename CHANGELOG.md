@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.80.4](https://github.com/planetaryescape/keyloom/compare/v0.80.3...v0.80.4) (2026-11-14)
+
+
+### Bug Fixes
+
+* sign and notarize final standalone macOS CLI ([5fdc99e](https://github.com/planetaryescape/keyloom/commit/5fdc99eb354689afbf3cc7c49360b2f892f4dc85))
+
 ## [0.80.3](https://github.com/planetaryescape/keyloom/compare/v0.80.2...v0.80.3) (2026-11-14)
 
 
