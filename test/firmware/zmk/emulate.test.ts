@@ -169,6 +169,8 @@ describe("the container scripts", () => {
     expect(westEmulateScript()).not.toContain("west update");
     expect(westEmulateScript()).not.toContain("git -C");
     expect(westEmulateScript()).not.toContain("west zephyr-export");
+    expect(westEmulateScript()).toContain("CMAKE_BUILD_PARALLEL_LEVEL=5");
+    expect(MOERGO_INNER_SCRIPT).toContain("ninja -j5");
     expect(westEmulateScript()).toContain("-DUSER_CACHE_DIR=/tmp/keyloom-cache");
     expect(westEmulateScript()).toContain("-DZephyr_DIR=/keyloom-sources/zephyr/share/zephyr-package/cmake");
   });
