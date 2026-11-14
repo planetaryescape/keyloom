@@ -14,7 +14,7 @@ export type ConfigCardData =
 /** The config BK came from when the thread was carried here, which is where "Back" goes. */
 export type CardOrigin = { id: string; name: string };
 
-export type ConfigCardAction = { kind: "open" | "back" | "review"; id: string; label: string };
+export type ConfigCardAction = { kind: "open" | "back" | "review" | "restore"; id: string; label: string };
 export type ConfigCardView = {
   title: string;
   /** Board, source and open proposals, in the order they are read. */
@@ -45,7 +45,7 @@ export function configCardView(data: ConfigCardData, currentId: string, origin: 
   const { config, waiting } = data;
   const facts = [config.boardName];
   if (config.copiedFrom !== null) facts.push(`Copied from ${config.copiedFrom.layoutName ?? "a config that has been deleted"}`);
-  if (config.archivedAt !== null) return { title: config.name, facts, note: "Archived. Restore it from the config menu to open it.", ...NONE };
+  if (config.archivedAt !== null) return { title: config.name, facts, note: "This config is archived.", action: { kind: "restore", id: config.id, label: "Restore and open" }, secondary: null };
   const counted = [...facts, ...count(waiting)];
   if (configId !== currentId) return { title: config.name, facts: counted, note: null, action: { kind: "open", id: config.id, label: "Open" }, secondary: null };
   // On the new config: review what waits on it, and keep the way back to the config BK asked from when this thread knows it.

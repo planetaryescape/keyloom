@@ -106,9 +106,9 @@ describe("the config card", () => {
     expect(configCardView(ready({}, null), "x", null, "c1").action).toMatchObject({ kind: "open" });
   });
 
-  test("says so, with no button, for a config that is gone, archived or unreadable", () => {
+  test("offers restoration for an archived config on another board, but never opens a gone or unreadable config", () => {
     expect(configCardView({ state: "gone" }, "x", null, "c1")).toMatchObject({ note: "This config has since been deleted.", action: null });
-    expect(configCardView(ready({ archivedAt: 5 }), "x", null, "c1")).toMatchObject({ action: null, note: expect.stringContaining("Archived") });
+    expect(configCardView(ready({ archivedAt: 5 }), "x", null, "c1")).toMatchObject({ action: { kind: "restore", id: "c1", label: "Restore and open" }, note: "This config is archived." });
     const failed = configCardView({ state: "error", failure: { message: "Can't reach keyloom.", code: "unreachable" } }, "x", null, "c1");
     expect(failed.action).toBeNull();
     expect(failed.note).toBe("keyloom couldn't read this config right now.");

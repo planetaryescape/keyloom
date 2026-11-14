@@ -2,7 +2,7 @@ import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { coverage, positionFacts, type BoardDevView } from "../../boards/dev.ts";
 import type { KeyDescription } from "../../layout/describe.ts";
-import { fetchBoardDev } from "../api.ts";
+import { ApiError, fetchBoardDev } from "../api.ts";
 import { Keyboard } from "../keyboard/Keyboard.tsx";
 import { applyDisplayRotation } from "../keyboard/geometry.ts";
 import { Header } from "../shell/Header.tsx";
@@ -27,7 +27,7 @@ function describePosition(position: number): KeyDescription {
 
 export function BoardDevApp({ token }: { token: string }) {
   const [view, setView] = useState<BoardDevView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; unavailable: boolean } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -40,7 +40,7 @@ export function BoardDevApp({ token }: { token: string }) {
         setError(null);
       })
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Something went wrong loading the board.");
+        if (!controller.signal.aborted) setError({ message: err instanceof Error ? err.message : "Something went wrong loading the board.", unavailable: err instanceof ApiError && err.status === 404 });
       });
     return () => controller.abort();
   }, [token]);
@@ -60,8 +60,9 @@ export function BoardDevApp({ token }: { token: string }) {
   if (error !== null && view === null) {
     return (
       <Shell>
-        <ErrorState level={1} title="Can't show this board" onRetry={load}>
-          {error}
+        <ErrorState level={1} title={error.unavailable ? "Board development is not open here" : "Can't show this board"}
+          {...(error.unavailable ? { actions: <a className="button button-primary" href={`/?t=${encodeURIComponent(token)}`}>Open keyloom</a> } : { onRetry: load })}>
+          {error.unavailable ? "This keyloom server shows your layouts. Open it to continue, or start keyloom with --board-dev to work on board.json." : error.message}
         </ErrorState>
       </Shell>
     );
@@ -100,7 +101,7 @@ export function BoardDevApp({ token }: { token: string }) {
         <div className="callout callout-error boarddev-reload-error" role="alert">
           <TriangleAlert size={18} aria-hidden="true" />
           <div className="callout-body">
-            <p>keyloom couldn't read board.json again: {error} The board below is the last one that loaded.</p>
+            <p>keyloom couldn't read board.json again: {error.message} The board below is the last one that loaded.</p>
             <div className="callout-actions">
               <button type="button" className="button" onClick={load}>
                 <RefreshCw size={14} aria-hidden="true" />

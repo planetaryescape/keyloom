@@ -38,7 +38,7 @@ import type { FindingRepairDraft } from "../api/review.ts";
 // which the page reads again by itself when it is back (D-494).
 // `code`: the failure's own code, for the buttons a failure no screen planned for gets (R7-01).
 type Failure = { message: string; retryable: boolean; kind?: "gone" | "waiting" | "token"; code?: string };
-type View = { id: string; detail: LayoutDetail } | { id: string; error: Failure };
+type View = { id: string; detail: LayoutDetail; error?: Failure } | { id: string; error: Failure };
 
 // Runs a state change that replaces the page as a crossfade where the browser has view transitions; elsewhere, and with reduced
 // motion, it happens at once. flushSync makes React commit inside the transition's callback, so the new page is what it captures.
@@ -148,7 +148,7 @@ export function App({ token }: { token: string }) {
         if (!controller.signal.aborted && sequence === requestSequence.current) crossfade(() => setView({ id: selectedId, detail }));
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted && sequence === requestSequence.current) setView({ id: selectedId, error: describe(error) });
+        if (!controller.signal.aborted && sequence === requestSequence.current) setView((now) => now?.id === selectedId && "detail" in now ? { ...now, error: describe(error) } : { id: selectedId, error: describe(error) });
       });
     return () => controller.abort();
   }, [token, selectedId, attempt, sync.lastLayoutUpdated]);
@@ -162,7 +162,7 @@ export function App({ token }: { token: string }) {
   }, [token, selectedId]);
 
   const retry = () => {
-    setView(null);
+    setView((now) => now !== null && "detail" in now ? now : null);
     setAttempt((count) => count + 1);
   };
 
@@ -176,12 +176,26 @@ export function App({ token }: { token: string }) {
   };
   // Restart keyloom beside a failure no screen planned for (R7-01, R7-09); ErrorState's own Try again stays for one that may pass.
   const wayOut = (failure: Failure) => (unexpectedWayOut(failure.code, false) === null ? {} : { actions: <UnexpectedWayOut token={token} code={failure.code} /> });
-  const wrap = (page: ReactNode) => <>{banner}{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
+  const readFailure = listError ?? (view !== null && "detail" in view ? view.error ?? null : null);
+  const readWays = readFailure === null ? undefined : wayOut(readFailure).actions;
+  const readNotice = readFailure === null || layouts === null ? null : (
+    <div className="callout callout-error page-read-error" role="alert">
+      <div className="callout-body">
+        <p>{readFailure.kind === "token" ? <RestartAdvice lead="keyloom restarted, so this page's link no longer works." /> : `keyloom couldn't refresh this page. ${readFailure.message}`}</p>
+        <p>Your loaded page stays open. Your draft is kept.</p>
+        <div className="callout-actions">
+          {readFailure.retryable ? <button type="button" className="button" onClick={retry}>Try again</button> : null}
+          {readFailure.kind === "gone" ? <button type="button" className="button" onClick={() => { setView(null); setSelectedId(null); setOnWall(true); setAttempt((count) => count + 1); }}>Show your other layouts</button> : readWays === undefined ? null : <details><summary>More recovery options</summary>{readWays}</details>}
+        </div>
+      </div>
+    </div>
+  );
+  const wrap = (page: ReactNode) => <>{banner}{readNotice}{page}{managing ? <KeyboardCollection token={token} choices={boardChoices}
     active={layouts?.find((layout) => layout.id === selectedId)?.boardId ?? null} onChanged={reload} initiallyRemoved={manageRemoved}
     onClose={() => setManaging(false)} onAdd={controls.onAddKeyboard}
     onSetUp={(board) => { setManaging(false); setImporting(false); setSetupBoard(board); setAdding(true); }} /> : null}</>;
 
-  if (listError !== null) {
+  if (listError !== null && layouts === null) {
     return wrap(
       <Shell>
         <ErrorState level={1} title="Can't load your layouts" {...(listError.retryable ? { onRetry: retry } : {})} {...wayOut(listError)}>
@@ -315,7 +329,7 @@ export function App({ token }: { token: string }) {
       </Shell>
     );
   }
-  if ("error" in current) {
+  if (!("detail" in current)) {
     const gone = current.error.kind === "gone";
     return wrap(
       <Shell menu={menu}>

@@ -1,0 +1,88 @@
+{
+  "release": "v0.80.4",
+  "verifiedAt": "2026-11-14T10:09:11.317644+00:00",
+  "sourceCommit": "8c3b54a1fbbdc757af8a53c0153e7d8c045ed20b",
+  "sourceTree": "7b097820e6b5f26025723d58104cc660db3f0f0d",
+  "testedReleaseHead": "db73ce6b689456dad8976dfdde6b2d43503eaa8c",
+  "signingMerge": "5fdc99eb354689afbf3cc7c49360b2f892f4dc85",
+  "workflows": {
+    "releaseCi": 43581266766,
+    "postMergeCi": 43582673765,
+    "publication": 43582673755,
+    "all": "success"
+  },
+  "githubAssetDigestCount": 10,
+  "cliChecksumCount": 4,
+  "desktopZipSha256": "ea44973c0a2b1b18235065037a6b111808d5a02100729877456bd469d9ae49d6",
+  "installedCliSha256": "c0b5b53be4dff791bf2d5d850cacee5dd88922783f71324b667b88292859e8fd",
+  "desktopSidecarSha256": "06b4ab4b7d95600741544237442787f534d61fab05dd9551d22e35fc9c9d9287",
+  "delivery": "published Developer ID signed standalone CLI and separately verified desktop ZIP",
+  "bothMatchingMacRunnersPassed": true,
+  "macosPublisherProof": [
+    {
+      "asset": "keyloom-darwin-arm64",
+      "sha256": "c0b5b53be4dff791bf2d5d850cacee5dd88922783f71324b667b88292859e8fd",
+      "cli": {
+        "id": "cf8482c3-977b-4c23-9d6d-be5d01597af2",
+        "status": "Accepted",
+        "message": "Processing complete"
+      },
+      "helper": {
+        "id": "4b2c1faf-2b87-4b6e-b7d7-cd6fe8cca983",
+        "status": "Accepted",
+        "message": "Processing complete"
+      },
+      "verifiedTag": "v0.80.4",
+      "verifiedArchitecture": "arm64",
+      "publishedChecksumVerified": true,
+      "developerIdVerified": true,
+      "installedPairSmoke": "passed"
+    },
+    {
+      "asset": "keyloom-darwin-x64",
+      "sha256": "fc3f7535ac594a8d746d804b2fd13bc674d0130ca3356daef5916eae82834a25",
+      "cli": {
+        "id": "54f321d9-0db5-4b62-99b1-d4dcea68465d",
+        "status": "Accepted",
+        "message": "Processing complete"
+      },
+      "helper": {
+        "id": "e3a0062e-4277-43ac-b9ce-a7d266a1dc7f",
+        "status": "Accepted",
+        "message": "Processing complete"
+      },
+      "verifiedTag": "v0.80.4",
+      "verifiedArchitecture": "x86_64",
+      "publishedChecksumVerified": true,
+      "developerIdVerified": true,
+      "installedPairSmoke": "passed"
+    }
+  ],
+  "installedVersions": {
+    "desktop": "0.80.4",
+    "cli": "0.80.4",
+    "sidecar": "0.80.4",
+    "liveServer": "0.80.4"
+  },
+  "strictAppSignature": true,
+  "strictStandaloneCliDeveloperId": true,
+  "strictSidecarDeveloperId": true,
+  "gatekeeper": "Notarized Developer ID",
+  "installedBundleMatchesArchive": true,
+  "normalQuitAndReopen": true,
+  "uiSmoke": {
+    "passed": true,
+    "journey": "Open Corne Default layer, inspect Backspace, close card, return to the original keyboard wall.",
+    "restoredView": "keyboard wall / dark / no card",
+    "earlierCaptureErrorResolved": true
+  },
+  "layoutHeadsUnchanged": 9,
+  "revisionDocumentsUnchanged": 35,
+  "flashRecordsUnchanged": 31,
+  "activeBuilds": 0,
+  "activeFlashes": 0,
+  "activeSyncs": 0,
+  "hardwareWrites": false,
+  "localResigning": false,
+  "broaderDesignFindingsStillOpen": 6
+}

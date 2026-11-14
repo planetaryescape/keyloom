@@ -1731,3 +1731,17 @@ a.menu-item {
 .unexpected-actions:empty {
   display: none;
 }
+
+/* A failed background read keeps the editor and its draft mounted, without moving the board. */
+.page-read-error {
+  position: fixed;
+  z-index: 60;
+  top: 64px;
+  left: 50%;
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100dvh - 96px);
+  overflow: auto;
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  box-shadow: var(--card-shadow);
+}

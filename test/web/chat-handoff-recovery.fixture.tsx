@@ -7,16 +7,19 @@ import type { ConversationDetail } from "../../src/api/http.ts";
 
 const posts: string[] = [];
 const redirects: unknown[] = [];
+const cancellations: string[] = [];
 const failed = new Set<string>();
 const runs = new Map<string, { snapshot: AgentRunSnapshot; text: string }>();
 let releaseSlow: (() => void) | undefined;
 let slowWaiting = false;
-let deferred: { stage: "conversation" | "latest-run"; entered: boolean; release?: () => void } | undefined;
-async function deferOpen(stage: "conversation" | "latest-run", path: string) {
+let deferred: { stage: "acceptance" | "conversation" | "latest-run"; entered: boolean; release?: () => void } | undefined;
+async function deferOpen(stage: "acceptance" | "conversation" | "latest-run", path: string) {
   if (deferred?.stage !== stage || !path.includes("deferred")) return;
   deferred.entered = true;
   await new Promise<void>((resolve) => { if (deferred) deferred.release = resolve; });
 }
+let observationMisses = 0;
+let missDetail = false;
 let current: ReturnType<typeof useChat> | undefined;
 const storageKey = "keyloom.agent.current.synthetic-handoff";
 localStorage.removeItem(storageKey);
@@ -33,14 +36,23 @@ globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: Request
     if (text.startsWith("fail") && !failed.has(text)) { failed.add(text); throw new TypeError("Synthetic network failure before acceptance"); }
     const id = `run-${posts.length}`;
     const snapshot: AgentRunSnapshot = {
-      version: 1, id, requestId: body.requestId, conversationId: "copy-conversation", userMessageId: "user", status: "completed", seq: 1,
-      cancelRequested: false, committedPreparations: 0, preparations: [], presentation: null,
+      version: 1, id, requestId: body.requestId, conversationId: "copy-conversation", userMessageId: "user", status: text === "Stop after lost observation" ? "running" : "completed", seq: 1,
+      cancelRequested: false, committedPreparations: 0, preparations: [], presentation: text === "Recover sustained reads" ? { version: 1, userMessageId: "user", status: "completed", operations: [], messages: [], effectsMayHaveOccurred: false, warning: null, detailsTruncated: false } : null,
       ...(text.startsWith("copy") ? { handoff: { layoutId: "copied-config", conversationId: "target-conversation", runId: "target-run", requestId: "target-request" } } : {}),
     };
     runs.set(id, { snapshot, text });
+    await deferOpen("acceptance", text);
     return Response.json(snapshot);
   }
   if (path.startsWith("/api/agent/v1/runs/")) {
+    if (path.endsWith("/cancel")) {
+      cancellations.push(path);
+      const row = runs.get(path.split("/").at(-2) ?? "");
+      if (!row) throw new Error("Unknown synthetic run to cancel");
+      row.snapshot = { ...row.snapshot, seq: row.snapshot.seq + 1, status: "cancelled", cancelRequested: true };
+      return Response.json(row.snapshot);
+    }
+    if (!missDetail && observationMisses-- > 0) return Response.json({ error: { code: "internal", message: "Synthetic read failure" } }, { status: 500 });
     const row = runs.get(path.split("/").at(-1) ?? "");
     if (!row) throw new Error("Unknown synthetic run");
     if (row.text === "copy slow") {
@@ -50,7 +62,7 @@ globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: Request
     return Response.json(row.snapshot);
   }
   if (path.startsWith("/api/agent/v1/conversations/")) { await deferOpen("latest-run", path); return Response.json(null); }
-  if (path.startsWith("/api/conversations/")) { await deferOpen("conversation", path); return Response.json(detail(path.split("/").at(-1) ?? "history", "historic input")); }
+  if (path.startsWith("/api/conversations/")) { if (missDetail && observationMisses-- > 0) return Response.json({ error: { code: "internal", message: "Synthetic read failure" } }, { status: 500 }); await deferOpen("conversation", path); return Response.json(detail(path.split("/").at(-1) ?? "history", "historic input")); }
   throw new Error(`Unexpected synthetic request: ${path}`);
 }, { preconnect: globalThis.fetch.preconnect });
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -61,6 +73,37 @@ async function runChecks() {
   if (!output) throw new Error("Missing fixture output");
   output.textContent = "Running actual useChat recovery checks…";
   try {
+    for (const detailRead of [false, true]) {
+      chat().newConversation(); await frame();
+      missDetail = detailRead;
+      observationMisses = 1;
+      const before = posts.length;
+      await chat().send("Recover one read", null); await frame();
+      check(posts.length === before + 1 && !chat().streaming && (chat().observationFailure ?? null) === null, "A transient read did not recover the accepted reply");
+      observationMisses = 3;
+      const beforeCompletion = chat().liveCompleted?.id ?? 0;
+      await chat().send("Recover sustained reads", null); await frame();
+      check(chat().observationFailure !== null && chat().streaming, "Lost observation did not keep the accepted run separate from execution failure");
+      observationMisses = 0;
+      chat().resumeObservation();
+      while (chat().streaming) await frame();
+      check(posts.length === before + 2 && (chat().observationFailure ?? null) === null, "Resume reply submitted another acceptance POST");
+      const completion = chat().liveCompleted;
+      check(completion !== null && completion.id > beforeCompletion, "Resuming a live reply lost its completion notification");
+      chat().resumeObservation(); await frame(); await frame();
+      check(chat().liveCompleted === completion && posts.length === before + 2, "Reading a completed run announced it twice");
+    }
+    missDetail = false;
+    chat().newConversation(); await frame();
+    observationMisses = 3;
+    const beforeStop = posts.length;
+    await chat().send("Stop after lost observation", null); await frame();
+    check(chat().observationFailure !== null && chat().streaming, "No lost observation to stop");
+    observationMisses = 0;
+    chat().stop();
+    while (chat().streaming) await frame();
+    check(posts.length === beforeStop + 1 && (chat().observationFailure ?? null) === null, "Stop after lost observation repeated execution or failed to read cancellation");
+    chat().newConversation(); await frame();
     for (const stage of ["conversation", "latest-run"] as const) {
       for (const replacement of ["new", "open"] as const) {
         deferred = { stage, entered: false };
@@ -100,13 +143,22 @@ async function runChecks() {
     await chat().retry(); await frame();
     check(redirects.length === 1 && posts.length === beforeGenuine, "Current handoff Retry stopped following its target");
     redirects.length = 0;
+    deferred = { stage: "acceptance", entered: false };
+    const accepting = chat().send("deferred acceptance", null);
+    while (!deferred.entered) await frame();
+    chat().newConversation(); await frame();
+    deferred.release?.(); await accepting; await frame();
+    const beforeCancel = cancellations.length;
+    chat().stop(); await frame();
+    check(localStorage.getItem(storageKey) === null && cancellations.length === beforeCancel && chat().transcript.turns.length === 0, "A late acceptance restored a retired run after New");
+    deferred = undefined;
     const slow = chat().send("copy slow", null);
     while (!slowWaiting) await frame();
     chat().newConversation(); await frame();
     releaseSlow?.(); await slow; await frame();
     await chat().retry(); await frame();
     check(redirects.length === 0 && chat().transcript.turns.length === 0, "An old observer restored the handoff after New");
-    output.textContent = "PASS 10 actual useChat recovery checks: canceled opens at both async boundaries after New/replacement, normal history, new-message retry, New conversation, Open history, genuine handoff retry, late observer protection.";
+    output.textContent = "PASS 16 actual useChat recovery checks: late acceptance protection, Stop after lost observation, transient/sustained snapshot and detail read recovery without resend, canceled opens at both async boundaries after New/replacement, normal history, new-message retry, New conversation, Open history, genuine handoff retry, late observer protection.";
   } catch (error) { output.textContent = `FAIL ${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ posts, redirects })}`; }
 }
 function Harness() {

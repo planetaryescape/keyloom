@@ -2,7 +2,8 @@
 // the CLI with Homebrew through the same install job as Docker and the flashing tools, shows the output while it runs, and re-reads
 // the status when it ends, so the setup moves on to Sign in with Codex. Elsewhere it links the install page and checks again.
 import { CircleAlert, Download, ExternalLink, LoaderCircle, RefreshCw } from "lucide-react";
-import { InstallCancel, InstallStopped } from "../release/InstallCancel.tsx";
+import { InstallCancel, InstallLost, InstallStopped } from "../release/InstallCancel.tsx";
+import { UnexpectedActions } from "../release/UnexpectedActions.tsx";
 import { LogTail } from "../release/LogTail.tsx";
 import { useInstall } from "../release/useInstall.ts";
 
@@ -27,7 +28,7 @@ function CheckAgain({ onReload }: { onReload: () => void }) {
 export function CodexInstall({ token, text, page, canInstall, onReload }: { token: string; text: string; page: string; canInstall: boolean; onReload: () => void }) {
   const install = useInstall(token, "codex", onReload);
   const state = install.state;
-  const problem = install.problem === null ? null : <p className="chat-inline-error" role="alert">{install.problem}</p>;
+  const problem = install.problem === null ? null : <><p className="chat-inline-error" role="alert">{install.problem}</p><UnexpectedActions token={token} failure={install.failure} /></>;
   if (state?.status === "running") {
     return (
       <div className="setup-install" role="status">
@@ -38,6 +39,7 @@ export function CodexInstall({ token, text, page, canInstall, onReload }: { toke
         <LogTail label="Install log" lines={state.logTail} />
         <InstallCancel phase={state.phase} onCancel={install.cancel} />
         {problem}
+        <InstallLost install={install} />
       </div>
     );
   }

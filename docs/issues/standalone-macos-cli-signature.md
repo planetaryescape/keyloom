@@ -1,6 +1,6 @@
 # Standalone macOS CLI has an invalid ad-hoc signature
 
-Status: code fix merged through PR 341 at `5fdc99eb354689afbf3cc7c49360b2f892f4dc85`. Signature and notarization verification on both Mac release targets remain pending. Published arm64 failures stay open delivery evidence until the new release passes these checks.
+Status: fixed through PR 341 at `5fdc99eb354689afbf3cc7c49360b2f892f4dc85` and released in v0.80.4 at `8c3b54a1fbbdc757af8a53c0153e7d8c045ed20b`. Both Mac targets pass published-byte, Developer ID, Accepted CLI/helper notarization and installed-pair checks.
 
 Observed on the published arm64 CLI for v0.68.2 and the preserved normal v0.68.1 CLI during the v0.68.2 shipping checks, 2026-11-02. The desktop sidecar passes strict Developer ID signature verification. No other platform's CLI signature was assessed here.
 
@@ -58,3 +58,11 @@ Scratch-install each architecture's checksum-verified final asset on its matchin
 The release workflow retains the accepted CLI/helper receipts with the final CLI hash. After publication, matching Mac runners download each CLI and `SHA256SUMS`, match that hash to the receipts, and run the existing installed-pair smoke without signing credentials. Their verification receipts remain workflow artifacts.
 Keep the published hashes immutable. Any correction needs a new release.
 Do not substitute local ad hoc signing or removal of quarantine/security checks for a valid released signature.
+
+## v0.80.4 passes both published Mac checks
+
+Publication run `43582673755` retains the Accepted CLI and helper notarization receipts for arm64 and Intel. Each receipt is bound to the final CLI hash. Matching Mac runners downloaded the published binary and checksum list, verified the hash and Developer ID, and passed the existing installed-pair smoke. These are real release receipts, separate from the earlier local ad hoc proof.
+
+The arm64 CLI hash is `c0b5b53be4dff791bf2d5d850cacee5dd88922783f71324b667b88292859e8fd`. The Intel CLI hash is `fc3f7535ac594a8d746d804b2fd13bc674d0130ca3356daef5916eae82834a25`. The desktop sidecar retains its separately verified packaged hash.
+
+Both normal installed copies and the running server report 0.80.4. Strict signatures, the app's Gatekeeper assessment and the native read-only Backspace-card smoke pass. Saved layout and flash-history hashes remain unchanged. The [release receipt](../research/standalone-cli-signing-release-v0.80.4.json) records these checks and the two Mac publisher receipts. No local re-signing, protection bypass or hardware write occurred.

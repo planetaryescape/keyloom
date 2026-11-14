@@ -52,21 +52,33 @@ export function cancelSavedRequest(token: string, requestId: string): Promise<Ag
 /** Coalesced snapshot catch-up is read-only. A failed observation never repeats acceptance. */
 export async function observeSavedRun(token: string, id: string, signal: AbortSignal, emit: (snapshot: AgentRunSnapshot, detail: ConversationDetail) => void): Promise<void> {
   let seq = 0;
+  let misses = 0;
   for (;;) {
     signal.throwIfAborted();
-    const snapshot = await fetchSavedRun(token, id, signal);
-    if (snapshot.seq > seq) {
-      const detail = await fetchConversation(token, snapshot.conversationId, signal);
-      emit(snapshot, detail);
-      seq = snapshot.seq;
+    try {
+      const snapshot = await fetchSavedRun(token, id, signal);
+      if (snapshot.seq > seq) {
+        const detail = await fetchConversation(token, snapshot.conversationId, signal);
+        emit(snapshot, detail);
+        seq = snapshot.seq;
+      }
+      misses = 0;
+      if (snapshot.status !== "running") return;
+    } catch (error) {
+      // Retry only reads, and leave permanent refusals/mismatches to the page's recovery controls.
+      if (signal.aborted || !(error instanceof ApiError) || (error.status !== 0 && error.status < 500) || error.code === "unreadable" || ++misses >= 3) throw error;
     }
-    if (snapshot.status !== "running") return;
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => { clearTimeout(timer); reject(signal.reason); };
-      const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 250);
-      signal.addEventListener("abort", abort, { once: true });
-    });
+    await observationDelay(signal);
   }
+}
+
+function observationDelay(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 250);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
 }
 
 export function fetchProviderStatus(token: string, signal: AbortSignal): Promise<ChatProviderStatus> {
