@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.80.3](https://github.com/planetaryescape/keyloom/compare/v0.80.2...v0.80.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* keep reconnect notices readable on phones ([#338](https://github.com/planetaryescape/keyloom/issues/338)) ([cd2ebba](https://github.com/planetaryescape/keyloom/commit/cd2ebba529e155ae576da6b2ef6eba6c11661a79))
+* patch transitive security dependencies ([76561aa](https://github.com/planetaryescape/keyloom/commit/76561aa16f1035aa72d191ecf200ae5a15ec8640))
+* patch transitive security dependencies ([#339](https://github.com/planetaryescape/keyloom/issues/339)) ([7f64664](https://github.com/planetaryescape/keyloom/commit/7f6466484495547208dfd33d2aa803497be62dd8))
+* upgrade test DOM past security advisories ([1413fe2](https://github.com/planetaryescape/keyloom/commit/1413fe2915db1fb194bb6e731257fdaf69152b2d))
+
 ## [0.80.2](https://github.com/planetaryescape/keyloom/compare/v0.80.1...v0.80.2) (2026-11-13)
 
 
