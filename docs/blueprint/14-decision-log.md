@@ -11,6 +11,30 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-14 Firmware compiles beside read-only local sources
+
+### D-583: Stage pinned sources once inside Docker, then compile with private container output. Extends D-580 through D-582.
+
+A secure Keebart baseline at `6034e1c2` took 260.5 seconds. Its first CMake configure alone took 77.7 seconds.
+Moving only output off Colima's SSHFS took 233.4 seconds under higher host load. Source reads still crossed the share.
+
+West now stages complete pinned snapshots into a Docker source volume before any generated firmware runs.
+A separate copy container receives individual read-only source archives. It executes only archive extraction and writes immutable West metadata.
+The source-cache identity includes every resolved project, repository, revision, and image. Only a completed copy publishes its host cache record.
+Failed or cancelled copies publish nothing. A pruned volume is recreated from the trusted archives.
+
+Every build and emulator mounts the completed source volume read-only. Source Git configuration and West metadata remain read-only too.
+Generated config, the hands-free module, and compiler output live in the container's private temporary directories.
+Only finished UF2 files and text diagnostics return to the unique host workspace. No compiler output becomes a later input.
+D-582's unique host roots, locking, marker checks and artifact validation remain. QMK guards remain unchanged.
+
+Host archives and publication records stay outside all writable container mounts. Downloads remain warm.
+The Docker cache can be pruned independently without changing source pins. No privileged container or engine configuration change is required.
+
+Verification: source-cache tests cover warm reuse, pruning, failed copies, cancellation and incomplete archives.
+A real Docker probe verifies source and Git writes fail, West discovers its immutable workspace, and an orphan cannot change later run roots.
+Real firmware timing and compatibility results are recorded in the build-speed ledger. No hardware behavior is inferred.
+
 ## 2026-11-13 Each container gets a unique workspace path
 
 ### D-582: Never bind a later run to a host path an older container used. Replaces D-580 and D-581's stable workspace path.

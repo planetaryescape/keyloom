@@ -5,6 +5,7 @@ Status update, 2026-11-13 round 11 (D-563): a keymap with another board's number
 Status update, 2026-11-01: layer-specific encoder turns and mouse presses are implemented (D-471); generation/import, the compiled scratch-CLI journey and a real firmware build for both Keebart halves are checked. After the initial Docker blocker, build `bld_01M6ACXF8GWXY7Z9DYMP59X0H8` produced verified left/right UF2 images. No new hardware flash or pointer-motion observation is claimed.
 
 Status, 2026-11-13: D-580 keeps Glove80 template downloads outside writable mounts. Each build gets a fresh copy without Git metadata or prior output. Downloads remain warm. D-581 locks all transitive west inputs and mounts their source read-only for builds and emulation. D-582 gives each run a unique sibling path. The stable base is an untrusted debug snapshot, never a later input.
+Status, 2026-11-14: D-583 stages pinned West sources once into a Docker volume. Builds mount it read-only and compile in private container storage. Fresh UF2 files and text diagnostics return to the unique host run root. Compiler output is never reused.
 
 ## Per-layer encoder turns
 
@@ -70,7 +71,7 @@ Status update, 2026-11-11 (D-523): a keymap or devicetree error and a rejected `
 
 `keyloom emulate <layout> --keys "<script>"` says what the keyboard would send for a sequence of key presses, without the keyboard ([10](10-cli.md#emulate-prints-what-a-layout-types-for-a-sequence-of-key-presses)). It runs ZMK itself (D-075): the layout's generated keymap is built for Zephyr's `native_posix_64` board, with a mock kscan that replays the key events, which is how ZMK's own test suite (`app/tests`) works. `src/firmware/zmk/emulate.ts` does it in the images the real builds use:
 
-- **Corne and other upstream boards** build in ZMK's `zmk-build-arm` image, against the west workspace the real build keeps in `$XDG_CACHE_HOME/keyloom/build/<board>/`. Only a workspace that is missing or not at the pinned SHA runs `west update`.
+- **Corne and other upstream boards** build in ZMK's `zmk-build-arm` image. They share the real build's read-only pinned source volume. Each emulator gets private config and output. No build-time `west update` runs.
 - **Glove80** builds in the MoErgo image (`infra/glove80/Dockerfile`), inside the `nix-shell -A zmk` that image already has. Zephyr and the modules are in its Nix store, and so is the gcc that Nix's stdenv was bootstrapped with, which `native_posix_64` needs as a host compiler. The image needs no change.
 
 What the generated source becomes (`src/firmware/zmk/emulate-keymap.ts`, D-076):
