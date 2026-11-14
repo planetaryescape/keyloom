@@ -54,6 +54,8 @@ To navigate from a conversation, follow [ask the agent to open a view](../agent-
 
 Research behind these decisions:
 
+- [Firmware build storage and timing](../research/firmware-build-local-storage.md): read-only source reuse, fresh compiler output, first-staging costs and measured macOS/Colima results.
+
 - [../research/rust-device-helper.md](../research/rust-device-helper.md): transport source baseline, conversation/reversal, pinned local reuse map, native API contracts and unverified platform assumptions.
 
 - [../research/qmk-and-moonlander.md](../research/qmk-and-moonlander.md): the Moonlander's two revisions, Oryx's export and API, `keymap.json` limits, tap-hold options, Zapp, and VIA and Vial.
