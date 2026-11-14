@@ -1,3 +1,4 @@
+import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 import { Activity, ArrowRightLeft, Cpu, Ellipsis, Keyboard, MessageSquare, MessagesSquare, Plus, ScrollText, SquarePen, X } from "lucide-react";
 import { Menu } from "../shell/Menu.tsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -607,7 +608,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
     <section className="chat" data-streaming={streaming} data-variant={variant} data-presentation={variant === "bar" ? presentation : undefined} data-folded={folded} data-overlap={variant === "bar" && collapsed && !folded && presentation === "bar"} aria-label="Ask keyloom">
       {variant === "bar" ? (
         // The model surfaces only from the menu or when it fails (P3 review); its picker opens above the bar.
-        <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
+        <ProviderPicker token={token} reading={provider.reading} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} menuOpened={{ open: modelOpen, onClose: () => setModelOpen(false) }} />
       ) : null}
       {/* The bar hides the panel's head, so its states' h3s keep a parent heading for a screen reader. */}
       {variant === "bar" ? <h2 className="sr-only">Ask keyloom</h2> : null}
@@ -634,7 +635,7 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
         </div>
       </header>
 
-      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} /> : null}
+      {view === "chat" && variant !== "bar" ? <ProviderPicker token={token} reading={provider.reading} status={provider.status} pinned={transcript.pinned} onChanged={provider.replace} onReload={reloadProvider} /> : null}
       {view !== "chat" ? null : <div className="chat-context"><p>Editing {board.name} · {configName ?? layoutRef}</p>{streaming ? <AgentMotionToggle paused={motionPaused} onChange={setMotionPaused} /> : null}</div>}
 
       {view === "decisions" ? (
@@ -804,6 +805,15 @@ export function ChatPanel({ beginViewRequest, variant = "panel", onClose, collap
                 <ModelSetup {...setup} replacing={setupOpen} />
               </section>
             )}
+            {chat.observationFailure === null ? null : <div className="chat-problem" role="alert"><div className="chat-problem-body">
+              <strong>Can't read the saved reply</strong>
+              <p>{chat.observationFailure.message}</p>
+              <p>Resume reading this reply without sending your request again.</p>
+              <div className="chat-problem-actions">
+                <RetryOrRestart token={token} failure={chat.observationFailure} onRetry={chat.resumeObservation} retryLabel="Resume reply" />
+                <button type="button" className="button" onClick={showHistory}>Open history</button>
+              </div>
+            </div></div>}
             {chat.problem === null ? null : <ProblemNotice problem={chat.problem} setup={setup} retry={retry} onStop={streaming ? chat.stop : undefined} onDismiss={chat.dismissProblem} />}
             {switchFailure === null ? null : <SwitchFailed token={token} to={switchFailure.id} failure={switchFailure.failure} onRetry={switchFailure.again} onDismiss={() => setSwitchFailure(null)} />}
           </div>

@@ -1,8 +1,11 @@
-import { ArrowLeft, ArrowRight, ClipboardCheck, Keyboard } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, ArrowRight, ClipboardCheck, Keyboard } from "lucide-react";
 import type { ChatPresentation } from "../../api/http.ts";
 import { madeConfigs } from "../configs/agent-made-configs.ts";
 import { configCardView, type CardOrigin, type ConfigCardAction, type ConfigCardData } from "../configs/config-card.ts";
-import { RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
+import { useEffect, useRef, useState } from "react";
+import { restoreConfig } from "../configs/api-configs.ts";
+import { pageFailure, type PageFailure } from "../shell/unexpected.ts";
+import { FailureNote, RetryOrRestart } from "../shell/UnexpectedWayOut.tsx";
 
 /** What a reply's config cards need from the page: the cards' data, which config is on screen, and how to open one. */
 export type ConfigCards = {
@@ -42,7 +45,7 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
             )}
             {view.action === null ? null : (
               <div className="config-card-actions">
-                <CardButton action={view.action} cards={cards} primary />
+                <CardButton key={view.action.kind} action={view.action} cards={cards} primary />
                 {view.secondary === null ? null : <CardButton action={view.secondary} cards={cards} link />}
               </div>
             )}
@@ -53,14 +56,37 @@ export function ConfigCardList({ presentation, cards }: { presentation: ChatPres
   );
 }
 
-const ICONS = { open: ArrowRight, back: ArrowLeft, review: ClipboardCheck };
+const ICONS = { open: ArrowRight, back: ArrowLeft, review: ClipboardCheck, restore: ArchiveRestore };
 
 function CardButton({ action, cards, primary = false, link = false }: { action: ConfigCardAction; cards: ConfigCards; primary?: boolean; link?: boolean }) {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const Icon = ICONS[action.kind];
+  const [saving, setSaving] = useState(false);
+  const [failure, setFailure] = useState<PageFailure | null>(null);
+  async function act() {
+    if (saving) return;
+    if (action.kind === "review") { cards.onReview(); return; }
+    if (action.kind !== "restore") { cards.onOpen(action.id); return; }
+    setSaving(true);
+    setFailure(null);
+    try {
+      // Use the same restore route as Archived in the config menu. Opening never puts it on hardware.
+      await restoreConfig(cards.token, action.id);
+      if (!mounted.current) return;
+      cards.onReadAgain();
+      cards.onOpen(action.id);
+    } catch (error) {
+      if (mounted.current) setFailure(pageFailure(error, "keyloom couldn't restore this config."));
+    } finally { if (mounted.current) setSaving(false); }
+  }
   return (
-    <button type="button" className={primary ? "button config-card-action button-primary" : link ? "button config-card-action config-card-back" : "button config-card-action"} onClick={() => (action.kind === "review" ? cards.onReview() : cards.onOpen(action.id))}>
+    <>
+    <button type="button" className={primary ? "button config-card-action button-primary" : link ? "button config-card-action config-card-back" : "button config-card-action"} disabled={saving} onClick={() => void act()}>
       <Icon size={14} aria-hidden="true" />
-      {action.label}
+      {saving ? "Restoring…" : action.label}
     </button>
+    {failure === null ? null : <FailureNote token={cards.token} failure={failure} className="chat-inline-error" />}
+    </>
   );
 }

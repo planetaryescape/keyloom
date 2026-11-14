@@ -20,13 +20,14 @@ interface Props {
   onChanged: (status: ChatProviderStatus) => void;
   /** Re-reads the status, when a key save finds it changed under the page (an environment key appeared, the store went away). */
   onReload: () => void;
+  reading?: boolean;
   /** The command bar opens the picker from its menu and shows no model line: the model surfaces only when it fails (P3 review). */
   menuOpened?: { open: boolean; onClose: () => void };
 }
 
 // Which model answers, and the way to change it for the next conversation (19#choosing-a-provider).
 // The choice goes to the data directory's config.json; a conversation already going keeps its own.
-export function ProviderPicker({ token, status, pinned, onChanged, onReload, menuOpened }: Props) {
+export function ProviderPicker({ token, status, pinned, onChanged, onReload, menuOpened, reading = false }: Props) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider["id"]>("anthropic");
   const [model, setModel] = useState("");
@@ -43,7 +44,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
   useEffect(() => {
     if (outsideOpen) start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outsideOpen]);
+  }, [outsideOpen, status === null]);
 
   useLayoutEffect(() => {
     const element = picker.current;
@@ -72,7 +73,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
       element.style.top = `${Math.max(top + 12, Math.min(y, top + height - bounds.height - 12))}px`;
     };
     position();
-    element.querySelector<HTMLInputElement>("input:checked, input:not([disabled])")?.focus({ preventScroll: true });
+    element.querySelector<HTMLInputElement>("input:checked, input:not([disabled]), button:not([disabled])")?.focus({ preventScroll: true });
     let frame = 0;
     const schedulePosition = () => {
       if (frame !== 0) return;
@@ -110,9 +111,9 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
       window.visualViewport?.removeEventListener("resize", schedulePosition);
       window.visualViewport?.removeEventListener("scroll", schedulePosition);
     };
-  }, [shownOpen]);
+  }, [shownOpen, status === null]);
 
-  if (status === null && pinned === null) return null;
+  if (status === null && pinned === null && menuOpened === undefined) return null;
   const shown = pinned ? { provider: pinned.provider, model: pinned.model } : (status?.active ?? null);
   const chosen = status?.providers.find((candidate) => candidate.id === provider);
 
@@ -169,11 +170,10 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
       {saved === null || open || menuOpened !== undefined ? null : (
         <p className="provider-saved" role="status">{pinned === null ? saved : `${saved} This conversation stays on ${PROVIDER_NAMES[pinned.provider]}.`}</p>
       )}
-      {!shownOpen || status === null ? null : createPortal(
+      {!shownOpen ? null : createPortal(
+        <div role="dialog" aria-label="Model for the next conversation">
         <form
           ref={picker}
-          role="dialog"
-          aria-label="Model for the next conversation"
           className="provider-picker"
           onKeyDown={(event) => {
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
@@ -184,6 +184,7 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
           }}
         >
           <div className="provider-picker-content">
+          {status === null ? <ModelSetup token={token} status={null} reading={reading} onChanged={onChanged} onReload={onReload} /> : <>
           <fieldset disabled={saving || locked !== null}>
             <legend>Model for the next conversation</legend>
             {/* A lock leaves one provider that answers, so only it is listed (R2-04); ModelSetup below says why. */}
@@ -214,15 +215,17 @@ export function ProviderPicker({ token, status, pinned, onChanged, onReload, men
             // Under a lock this is the locked provider's setup, with the reason only it is listed.
             <ModelSetup token={token} status={status} only={[chosen.id]} onChanged={onChanged} onReload={onReload} />
           )}
+          </>}
           {/* Save is the Try again; an answer that fails the same way every time adds Restart keyloom (R8-03). */}
           {problem === null ? null : <FailureNote token={token} failure={problem} className="chat-inline-error" />}
           </div>
           <div className="provider-actions">
             <button type="button" className="button" onClick={close}>{locked === null ? "Cancel" : "Close"}</button>
             {/* Nothing to choose under a lock, so no choice to save. */}
-            {locked === null ? <button type="submit" className="button button-primary" disabled={saving}>Use for new conversations</button> : null}
+            {status !== null && locked === null ? <button type="submit" className="button button-primary" disabled={saving}>Use for new conversations</button> : null}
           </div>
-        </form>, document.body
+        </form>
+        </div>, document.body
       )}
     </div>
   );

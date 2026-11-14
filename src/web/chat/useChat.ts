@@ -81,6 +81,7 @@ const isAbort = (error: unknown): boolean => error instanceof DOMException && er
 export function useChat(token: string, layoutRef: string, onContinueCopy?: (handoff: NonNullable<ChatPresentation["handoff"]>) => void, initialConversation?: string, beginOpenView?: () => OpenRequestedView) {
   const [liveCompleted, setLiveCompleted] = useState<{ presentation: ChatPresentation; id: number } | null>(null);
   const [transcript, dispatch] = useReducer(transcriptReducer, EMPTY);
+  const [observationFailure, setObservationFailure] = useState<PageFailure | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [history, setHistory] = useState<History>({ status: "idle" });
   const controller = useRef<AbortController | null>(null);
@@ -104,16 +105,24 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
   }, [streaming]);
 
   const observe = useCallback(async (id: string, mine: AbortController, finished?: (presentation: ChatPresentation | null) => void, handleView?: (snapshot: AgentRunSnapshot) => void) => {
+    if (controller.current !== mine || mine.signal.aborted) return;
     let completed: ChatPresentation | null = null;
-    await observeSavedRun(token, id, mine.signal, (snapshot, detail) => {
-      if (controller.current !== mine || mine.signal.aborted) return;
-      handleView?.(snapshot);
-      savedRun.current = snapshot.id;
-      handoff.current = snapshot.handoff;
-      conversationId.current = snapshot.conversationId;
-      completed = snapshot.status === "completed" ? snapshot.presentation : null;
-      dispatch({ type: "saved", snapshot, detail });
-    });
+    savedRun.current = id;
+    setObservationFailure(null);
+    try {
+      await observeSavedRun(token, id, mine.signal, (snapshot, detail) => {
+        if (controller.current !== mine || mine.signal.aborted) return;
+        handleView?.(snapshot);
+        savedRun.current = snapshot.id;
+        handoff.current = snapshot.handoff;
+        conversationId.current = snapshot.conversationId;
+        completed = snapshot.status === "completed" ? snapshot.presentation : null;
+        dispatch({ type: "saved", snapshot, detail });
+      });
+    } catch (error) {
+      if (controller.current === mine && !mine.signal.aborted) setObservationFailure(pageFailure(error, "keyloom couldn't read the saved reply."));
+      return;
+    }
     // Only a run that ended while this request was still the one on screen counts as finished here.
     if (finished !== undefined && controller.current === mine && !mine.signal.aborted) finished(completed);
   }, [token]);
@@ -130,11 +139,20 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     return () => mine.abort();
   }, [storageKey, observe, initialConversation]);
 
+  const resumeObservation = useCallback(() => {
+    const id = savedRun.current;
+    if (id === null || controller.current !== null) return;
+    const mine = new AbortController();
+    controller.current = mine;
+    void observe(id, mine).finally(() => { if (controller.current === mine) controller.current = null; });
+  }, [observe]);
+
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
 
   const run = useCallback(
     async (text: string, selection: ChatSelection | null, begin: Action, onRejected?: (text: string) => void, drafts: ChatDrafts = [], answer?: { toolUseId: string }) => {
       handoff.current = undefined;
+      setObservationFailure(null);
       setProblem(null);
       dispatch(begin);
       const mine = new AbortController();
@@ -164,6 +182,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
         pendingAcceptance.current = pending;
         const accepted = await startSavedChat(token, layoutRef, requestId, body, mine.signal, openView === undefined ? undefined : { version: 1, owner });
         if (pendingAcceptance.current === pending) pendingAcceptance.current = null;
+        if (controller.current !== mine || mine.signal.aborted) return;
         if (accepted !== null) {
           started = true;
           savedRun.current = accepted.id;
@@ -264,11 +283,12 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
 
   /** Asks again for the reply that failed, in the same conversation. */
   const retry = useCallback(() => {
+    if (observationFailure !== null) { resumeObservation(); return Promise.resolve(); }
     if (handoff.current !== undefined && onContinueCopy !== undefined) { onContinueCopy(handoff.current); return Promise.resolve(); }
     const user = lastUser(transcript);
     if (user === undefined || streaming) return Promise.resolve();
     return run(user.text, user.selection, { type: "retry", assistantId: nextId("reply") });
-  }, [transcript, streaming, run, onContinueCopy]);
+  }, [transcript, streaming, run, onContinueCopy, observationFailure, resumeObservation]);
 
   const stop = useCallback(() => {
     viewLife.current?.abort();
@@ -286,14 +306,14 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     // (PR #310 CodeRabbit).
     if (savedRun.current !== null) {
       const run = savedRun.current;
-      void cancelSavedRun(token, run).catch(failedStop(() => savedRun.current === run));
+      void cancelSavedRun(token, run).then(() => { if (savedRun.current === run) resumeObservation(); }).catch(failedStop(() => savedRun.current === run));
       return;
     }
     const stopping = controller.current;
     if (stopping === null) return;
     stopping.abort();
     dispatch({ type: "stopped" });
-  }, [token]);
+  }, [token, resumeObservation]);
 
   const newConversation = useCallback(() => {
     viewLife.current?.abort();
@@ -305,6 +325,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     localStorage.removeItem(storageKey);
     conversationId.current = null;
     setProblem(null);
+    setObservationFailure(null);
     dispatch({ type: "reset" });
   }, [storageKey]);
 
@@ -322,6 +343,7 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     async (id: string): Promise<PageFailure | null | undefined> => {
       viewLife.current?.abort();
       handoff.current = undefined;
+      setObservationFailure(null);
       controller.current?.abort();
       const mine = new AbortController();
       controller.current = mine;
@@ -360,5 +382,5 @@ export function useChat(token: string, layoutRef: string, onContinueCopy?: (hand
     [token],
   );
 
-  return { transcript, streaming, liveCompleted, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, answer, retry, stop, newConversation, open, markApplied, removePriority };
+  return { transcript, streaming, liveCompleted, observationFailure, resumeObservation, problem, dismissProblem: () => setProblem(null), history, loadHistory, send, answer, retry, stop, newConversation, open, markApplied, removePriority };
 }
