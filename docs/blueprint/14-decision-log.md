@@ -11,6 +11,20 @@ Change a decision only by adding a new entry that replaces the old one.
 
 Numbers are not contiguous. Ranges were set aside for parallel workers and some went unused (the largest gap is 25 numbers in the D-190s and D-200s). A missing number is not a lost decision.
 
+## 2026-11-14 QMK also builds on local container storage
+
+### D-584: Copy QMK compiler inputs inside the container, while retaining guarded host writes. Extends D-583.
+
+The secure Moonlander Rev B baseline at `6034e1c2` took 128.8 seconds, including about 31 seconds before make started.
+Copying its entire source tree into a host run folder costs time even when the compiler later uses local storage.
+
+The host run now receives only its trusted Makefile probe and generated keymap. Complete pinned submodules remain in the trusted cache.
+All workspacePath and writeSource guards still use the unique host run root. Stale host artifact cleanup stays guarded.
+The source-copy container fills a separate immutable QMK source volume. Each build mounts it read-only, then copies its source into private container storage.
+It strips private Git metadata and stale output before copying in the checked generated keymap. Make runs with at most five workers.
+Only new artifacts and the ELF return to the host. Existing format and required-symbol checks remain unchanged.
+Compiler output and writable source are discarded with the container, so neither can poison a later build.
+
 ## 2026-11-14 Firmware compiles beside read-only local sources
 
 ### D-583: Stage pinned sources once inside Docker, then compile with private container output. Extends D-580 through D-582.

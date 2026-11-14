@@ -109,3 +109,19 @@ exec '${realGit}' "$@"` });
     });
   });
 });
+
+
+test("container-local builds copy only guarded host probe inputs while retaining complete pinned submodules", async () => {
+  const origin = originRepo({ submodule: true });
+  const dir = join(tempDir(), "board");
+  const spec = { dir, repo: origin.url, sha: origin.sha, submodules: ["lib/chibios"] };
+  await inFileProtocol(async () => {
+    await withCheckout(spec, {}, async (run) => {
+      expect(existsSync(join(run, "Makefile"))).toBe(true);
+      expect(existsSync(join(run, "lib"))).toBe(false);
+      expect(existsSync(join(run, ".git"))).toBe(false);
+      expect(existsSync(join(trustedCheckoutDir(spec), "lib/chibios/os.c"))).toBe(true);
+    }, ["Makefile"]);
+    await expect(withCheckout(spec, {}, async () => undefined, ["../outside"])).rejects.toThrow();
+  });
+});

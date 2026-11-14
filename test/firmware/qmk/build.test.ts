@@ -54,13 +54,16 @@ describe("buildQmk (fake docker)", () => {
     const keymapDir = join(s.dir, "checkout", "keyboards/zsa/moonlander/keymaps/keyloom");
     for (const f of ["keymap.c", "config.h", "rules.mk", "keymap.json"]) expect(existsSync(join(keymapDir, f))).toBe(true);
     const calls = await Bun.file(s.dockerLog).text();
-    const make = calls.split("\n").find((l) => l.includes(" make "));
+    const make = calls.slice(calls.indexOf("run --rm --name keyloom-test"));
     expect(make).toContain("--rm");
     expect(make).toContain(`--user ${process.getuid?.()}:${process.getgid?.()}`);
     expect(make).toContain("-w /qmk_firmware");
     expect(make).toContain(`-v ${join(s.dir, "checkout")}.run-`);
-    expect(make).toContain("-e SKIP_GIT=1 -e MAKEFLAGS=-j4");
-    expect(make).toContain("ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a make zsa/moonlander/revb:keyloom");
+    expect(make).toContain("-e SKIP_GIT=1 -e MAKEFLAGS=-j5");
+    expect(make).toContain("ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a sh -c");
+    expect(make).toContain("dst=/keyloom-sources,readonly");
+    expect(make).toContain('make "$3"');
+    expect(make).toContain("zsa/moonlander/revb:keyloom");
     expect(make).not.toContain(" -it");
     expect(make).not.toContain(" -t ");
     expect(s.lines.some((l) => l.includes("DFU 3297:2003"))).toBe(true);
@@ -92,7 +95,7 @@ describe("buildQmk (fake docker)", () => {
     expect(hashes).toHaveLength(3);
     expect(hashes[0]).toContain(`-v ${join(s.dir, "checkout")}.run-`);
     expect(hashes[0]).toContain("/qmk_firmware/keyboards/zsa/moonlander/keymaps/keyloom/keymap.c");
-    expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" make ")));
+    expect(calls.lastIndexOf(hashes[2] as string)).toBeLessThan(calls.findIndex((l) => l.includes(" --name keyloom-test ")));
   });
 
   test("a stale .bin from an earlier build can't pass for this one", async () => {

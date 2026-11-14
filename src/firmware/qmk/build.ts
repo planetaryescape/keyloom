@@ -3,7 +3,8 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { BoardDefinition } from "../../boards/schema.ts";
 import { BuildFailure, DISK_FULL_MESSAGE, diskFull, NOT_SHARED_EXIT, PROBE_CLEANUP_EXIT, classifyBuildFailure, probeFailure } from "../toolchain/build-failure.ts";
-import { type CheckoutSpec, withCheckout } from "../toolchain/checkout.ts";
+import { type CheckoutSpec, trustedCheckoutDir, withCheckout } from "../toolchain/checkout.ts";
+import { ensureSourceVolume } from "../toolchain/source-volume.ts";
 import { definedSymbols } from "../toolchain/elf.ts";
 import { workspacePath } from "../toolchain/workspace-path.ts";
 import { withLock } from "../toolchain/lock.ts";
@@ -37,6 +38,22 @@ export type QmkBuildInput = {
 export type QmkBuildResult = { artifactPath: string; bytes: number; durationMs: number };
 
 const idFor = (qmkTarget: string): string => qmkTarget.replaceAll("/", "_");
+
+// The checked host keymap is the only mutable input copied into the private compiler tree.
+const LOCAL_BUILD = `set -e
+cp -a /keyloom-sources/qmk /tmp/qmk_firmware
+cd /tmp/qmk_firmware
+find . -name .git -prune -exec rm -rf {} +
+rm -rf .build "$1"
+mkdir -p "$1"
+cp -a "/qmk_firmware/$1/." "$1/"
+for ext in bin elf hex uf2; do rm -f "$2.$ext"; done
+make "$3"
+mkdir -p /qmk_firmware/.build
+for ext in bin elf hex uf2; do
+  if [ -f ".build/$2.$ext" ]; then cp ".build/$2.$ext" "/qmk_firmware/.build/$2.$ext"; fi
+  if [ -f "$2.$ext" ]; then cp "$2.$ext" "/qmk_firmware/$2.$ext"; fi
+done`;
 
 function hint(lines: readonly string[]): string | undefined {
   const text = lines.join("\n");
@@ -99,9 +116,16 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
         log: input.log,
         ...(input.signal ? { signal: input.signal } : {}),
       });
+      const identity = new Bun.CryptoHasher("sha256").update(JSON.stringify([spec.repo, spec.sha, [...spec.submodules].sort(), rev.build.image])).digest("hex");
+      const volume = await ensureSourceVolume(request.checkoutDir, identity, rev.build.image, [{ dir: trustedCheckoutDir(spec), path: "qmk" }], {
+        log: input.log, ...(input.onLine ? { onLine: input.onLine } : {}), ...(input.signal ? { signal: input.signal } : {}),
+      });
       const cmd = [
-        ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3), "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j4", "-e", "QMK_USERSPACE=",
-        rev.build.image, "make", `${rev.qmkTarget}:${input.source.keymapName}`,
+        ...base.slice(0, 3), "--name", input.containerName, ...base.slice(3),
+        "--mount", `type=volume,src=${volume},dst=/keyloom-sources,readonly`,
+        "-e", "SKIP_GIT=1", "-e", "MAKEFLAGS=-j5", "-e", "QMK_USERSPACE=",
+        rev.build.image, "sh", "-c", LOCAL_BUILD, "keyloom-build",
+        `${rev.build.keymapsDir}/${input.source.keymapName}`, id, `${rev.qmkTarget}:${input.source.keymapName}`,
       ];
       say(`keyloom: building ${rev.qmkTarget}:${input.source.keymapName} in ${rev.build.image.split("@")[0]}`);
       const result = await run({
@@ -154,7 +178,7 @@ export async function buildQmk(input: QmkBuildInput): Promise<QmkBuildResult> {
       await copyFile(file.name as string, input.artifactPath);
       say(`keyloom: wrote ${input.artifactPath} (${bytes.length} bytes${rev.flash.kind === "zapp" ? `, DFU ${rev.flash.bootloader}` : `, ${kind}`})`);
       return { artifactPath: input.artifactPath, bytes: bytes.length, durationMs: Date.now() - started };
-    }),
+    }, ["Makefile"]),
     { timeoutMs: BUILD_TIMEOUT_MS, onWait: (pid) => say(`keyloom: waiting for another build to finish${pid ? ` (pid ${pid})` : ""}`), ...(input.signal ? { signal: input.signal } : {}) },
   );
 }
