@@ -1,6 +1,6 @@
 # Ploopy A+ support includes matching physical controls
 
-Status: implemented through `b3c0091b0ebc9e327459bf3ffabe79b9158c3519`. Delivery continues on `fix/ploopy-aplus-delivery` in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). Unreleased. Hardware behavior after flashing remains unchecked.
+Status: implemented through `0bc2ab1b1e6cfb948e5514e4a7bda2183c4bf2a7`. Delivery continues on `fix/ploopy-aplus-delivery` in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). Unreleased. Hardware behavior after flashing remains unchecked.
 
 BK's right-hand A+ needs its own board definition, factory firmware and editor geometry. Earlier drawings had wrong proportions, clipped labels and a generic square key card.
 
@@ -58,6 +58,8 @@ The broader follow-up run passed 524 tests with 19 gated skips and no failures a
 
 The compiled follow-up candidate generated all four firmware source files from scratch revision `rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ`. Output is `/tmp/keyloom-aplus-review-generated`. It serves the same scratch config on port 4489. The earlier preview stopped normally.
 
-Fresh visual verification is blocked: Computer Use returned `cgWindowNotFound` for Dia by name and bundle ID. Existing screenshots predate the height-budget fix. The rendered-component regression checks positive tap space, but it does not replace a fresh screenshot check. Computer Use closed after the attempts.
+All eight CI jobs passed on `0bc2ab1b`. Both automated review checks completed with neutral results. All four review threads are resolved. CodeRabbit and Baz acknowledged the three functional fixes.
 
-Next action: follow PR 353's checks and review on the updated head, then repeat the card screenshot check when Computer Use can read Dia. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.
+The [fresh visual check](../research/ui-audit/ploopy-aplus/review-followup/README.md) passed through the Codex CLI's Computer Use plugin. It captured the Back card and both knob cards in light and dark themes. Labels fit, the tap picker opens, and both turn directions stay separate from each press. No mode, action or revision changed. The earlier `cgWindowNotFound` error did not recur through this CLI path. The CLI sessions closed after the checks.
+
+Next action: confirm CI on the evidence commit, then obtain merge and release direction. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.
