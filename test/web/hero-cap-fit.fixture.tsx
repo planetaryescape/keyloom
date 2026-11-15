@@ -12,7 +12,7 @@ import "../../src/web/card/card.css";
 const longName = `tap-dance td_${"long_identifier_".repeat(12)}`;
 type Shape = Parameters<typeof HeroCap>[0]["shape"];
 const aplusShape = aplus.display.keyShapes["0"] as Shape;
-const cases: { text: string; size: number; corners: boolean; compactTap?: string; shape?: Shape }[] = [
+const cases: { text: string; size: number; corners: boolean; emptyCorners?: boolean; compactTap?: string; shape?: Shape }[] = [
   { text: "RCTL(KC_B)", size: 112, corners: false },
   { text: "RCTL(KC_B)", size: 84, corners: false },
   { text: "TD(DANCE_0)", size: 84, corners: true },
@@ -22,6 +22,7 @@ const cases: { text: string; size: number; corners: boolean; compactTap?: string
   { text: "A", size: 112, corners: true, shape: { profile: "flat", w: 4, h: 1 } },
   { text: "A", size: 84, corners: true, shape: aplusShape },
   { text: "A", size: 112, corners: true, shape: aplusShape },
+  { text: "A", size: 84, corners: true, emptyCorners: true, shape: { profile: "flat", w: 4, h: 1 } },
 ];
 let replaceLong: ((short: boolean) => void) | undefined;
 function Fixture() {
@@ -39,7 +40,7 @@ function Fixture() {
         <h2 style={{ fontSize: 14 }}>Case {index} · {value.size}px · {value.corners ? "Filled corners" : "Plain tap"}</h2>
         <div className="card-hero">
           <HeroCap legend={{ tap: short && index === 3 ? "A" : value.text }} compactTap={value.compactTap ?? "Esc"} tone="tapDance" hold={{ text: "Control", name: "When held" }}
-            doubleTap={value.corners ? { text: "B", name: "When double-tapped" } : null} tapThenHold={value.corners ? { text: "C", name: "When tapped, then held" } : null}
+            doubleTap={value.corners ? { text: value.emptyCorners ? null : "B", ghost: "double tap…", name: "When double-tapped" } : null} tapThenHold={value.corners ? { text: value.emptyCorners ? null : "C", name: "When tapped, then held" } : null}
             open="tap" draft={false} onOpen={(slot) => { document.querySelector("#opened")!.textContent = `Opened ${slot} in case ${index}`; }} label="Synthetic tap-dance action" size={short && index === 3 ? 112 : value.size} shape={value.shape} />
         </div>
       </section>)}
@@ -78,6 +79,10 @@ async function run() {
         if (value.shape) check(cornerBox.bottom <= box.top + 1, `Case ${index}: corner overlaps the tap`);
       }
       const extra = card.querySelector(".hero-extra-slots");
+      if (value.emptyCorners) {
+        check(extra?.querySelector('[aria-label="When double-tapped: nothing yet. Add"]')?.textContent === "When double-tapped: double tap…", `Case ${index}: empty double-tap control is missing`);
+        check(extra?.querySelector('[aria-label="When tapped, then held: nothing yet. Add"]')?.textContent === "When tapped, then held: Nothing", `Case ${index}: empty tap-then-hold control is missing`);
+      }
       if (extra) {
         check(extra.getBoundingClientRect().top >= card.querySelector(".hero-cap")!.getBoundingClientRect().bottom - 1, `Case ${index}: extra slots overlap the physical button`);
         for (const button of extra.querySelectorAll("button")) {
@@ -91,7 +96,7 @@ async function run() {
     replaceLong?.(false);
     await frame();
     check(document.querySelector('[data-case="3"] .hero-source span')?.textContent === longName, "Changing back loses the long name");
-    output.textContent = "PASS: nine rendered cases, corner bands, external slots, full names, font floor and label changes";
+    output.textContent = "PASS: ten rendered cases, empty corner controls, corner bands, external slots, full names, font floor and label changes";
     document.body.dataset.result = "passed";
   } catch (error) {
     output.textContent = `FAIL: ${String(error)}`;

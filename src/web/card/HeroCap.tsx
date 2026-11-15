@@ -160,8 +160,8 @@ export function HeroCap({ legend, compactTap, tone, keycap, led, reach, hold, st
       {externalTap ? region("tap", { text: legend.tap, name: "When tapped" }, "hero-extra-slot", `When tapped: ${legend.tap}`) : null}
       {hold === null ? null : region("hold", hold, "hero-extra-slot", `${hold.name}: ${hold.text ?? hold.ghost ?? "Nothing"}`)}
       {hold === null && staticFront !== null ? <span>{staticFront}</span> : null}
-      {tapThenHold?.text == null ? null : region("tapThenHold", tapThenHold, "hero-extra-slot", `${tapThenHold.name}: ${tapThenHold.text}`)}
-      {doubleTap?.text == null ? null : region("doubleTap", doubleTap, "hero-extra-slot", `${doubleTap.name}: ${doubleTap.text}`)}
+      {tapThenHold === null ? null : region("tapThenHold", tapThenHold, "hero-extra-slot", `${tapThenHold.name}: ${tapThenHold.text ?? tapThenHold.ghost ?? "Nothing"}`)}
+      {doubleTap === null ? null : region("doubleTap", doubleTap, "hero-extra-slot", `${doubleTap.name}: ${doubleTap.text ?? doubleTap.ghost ?? "Nothing"}`)}
     </div> : null}
     {needsCaption && !externalTap ? open === null
       ? <p className="hero-source">When tapped: <span>{legend.tap}</span></p>

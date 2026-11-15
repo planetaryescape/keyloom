@@ -44,6 +44,21 @@ test("a cap shorter than a text line keeps its tap available below the cap", () 
   expect(html).not.toContain('class="hero-region hero-tap"');
 });
 
+test("empty corner actions remain available when a flat cap moves its slots below the cap", () => {
+  const html = renderToStaticMarkup(createElement(HeroCap, {
+    legend: { tap: "A" }, tone: "tapDance", hold: { text: "Control", name: "When held" },
+    doubleTap: { text: null, ghost: "double tap…", name: "When double-tapped" },
+    tapThenHold: { text: null, name: "When tapped, then held" },
+    open: null, draft: false, onOpen: () => {}, label: "A", size: 84,
+    shape: { profile: "flat", w: 4, h: 1 },
+  }));
+  expect(html).toContain('class="hero-extra-slots"');
+  expect(html).toContain('aria-label="When double-tapped: nothing yet. Add"');
+  expect(html).toContain("When double-tapped: double tap…");
+  expect(html).toContain('aria-label="When tapped, then held: nothing yet. Add"');
+  expect(html).toContain("When tapped, then held: Nothing");
+});
+
 test.each([84, 112])("an A+ button at %s px keeps filled slots readable", async (size) => {
   const board = await loadBoardDir(`${import.meta.dir}/../../boards/ploopy/aplus`);
   const html = renderToStaticMarkup(createElement(HeroCap, {

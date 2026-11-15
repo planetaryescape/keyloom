@@ -71,3 +71,19 @@ The proportional corner band could be shorter than its label. D-609 keeps readab
 The broader QMK, board and card run passed 373 tests with 19 gated skips and no failures. The final web, documentation and C-import run passed 1338 tests with no failures. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-token-corner-focused.log`, `/tmp/keyloom-aplus-token-corner-final-tests.log`, `/tmp/keyloom-aplus-token-corner-types-complete.log` and `/tmp/keyloom-aplus-token-corner-dependencies.log`.
 
 Next action: merge PR 353, merge the updated release-please PR after its exact-head CI passes, then verify publication and both installed copies. The review server is stopped. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Shipping authorization does not authorize flashing.
+
+## The shipping review found three more regressions
+
+All ten PR checks passed on `f95ca9a1852d03d0c26c8b01b011e5fb34f1f7af`. The new review findings reproduced before their fixes:
+
+- Include directives with block comments could move a typedef after its dependent enum. Both single-line and multiline comment cases now pass import, generation and host compilation.
+- Retained aliases followed globals that used them. Definitions now precede those declarations. A new import-and-generate regression compiles the result with the host C compiler.
+- A short flat cap could hide empty corner actions when it moved its controls below the cap. Present actions now retain their buttons, ghost labels and accessible names. An absent ghost label uses `Nothing`.
+
+The compiled CLI imported and generated a combined include-comment and alias reproduction in scratch data. Its generated source passed the host C compiler. Evidence is `/tmp/keyloom-aplus-last-review-cli-generated`.
+
+The real component fixture passed ten rendered cases. Computer Use through the Codex CLI opened both empty corner controls in case 9 and confirmed the corresponding action status. Both themes retained their accessible names. Screenshot processing failed, so this run does not add a screenshot-based clipping check. Evidence is `/tmp/keyloom-aplus-empty-corner-cua-fixed`. Computer Use and the temporary fixture server are closed. The earlier screenshots remain evidence for the unchanged cap geometry and styles.
+
+The full follow-up suite passed 5081 tests, skipped 246 gated cases and failed none across 519 files. TypeScript passed. The dependency check exited successfully with its TypeScript 7 compatibility warning. React Doctor reported no issues. Changed-line lint flags the existing board and component `shape` names in test code. Those names retain the schema's public contract. Logs are `/tmp/keyloom-aplus-final-followup-full-tests.log`, `/tmp/keyloom-aplus-final-followup-types.log`, `/tmp/keyloom-aplus-final-followup-deps.log`, `/tmp/keyloom-aplus-final-followup-react.log` and `/tmp/keyloom-aplus-final-followup-slop.log`.
+
+The compiled candidate also generated the preserved `A+ factory` config at `rev_01M7DREPP95RXBW3EW28STCC5Q`, with all four expected source files. Output is `/tmp/keyloom-aplus-last-review-aplus-generated`. It did not start a server or flash a device.
