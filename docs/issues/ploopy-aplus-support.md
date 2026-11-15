@@ -1,6 +1,6 @@
 # Ploopy A+ support includes matching physical controls
 
-Status: implemented through `15130ca8ff4fd55d73895e7aba72ae0a9731db99`. All eight CI jobs passed and all six review threads are resolved in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). BK authorized shipping on 15 November 2026. Release and installed-copy verification remain pending. Hardware behavior after flashing remains unchecked.
+Status: Fixed in `72b9bfc4395d55ff64ae50f8554cb02a6bbbd973`, shipped in v0.81.0 at `eeaf0b7c95446a1a54d744c0a82ec675da627764`. Both installed copies and the live server report 0.81.0. Hardware behavior after flashing remains unchecked.
 
 BK's right-hand A+ needs its own board definition, factory firmware and editor geometry. Earlier drawings had wrong proportions, clipped labels and a generic square key card.
 
@@ -87,3 +87,17 @@ The real component fixture passed ten rendered cases. Computer Use through the C
 The full follow-up suite passed 5081 tests, skipped 246 gated cases and failed none across 519 files. TypeScript passed. The dependency check exited successfully with its TypeScript 7 compatibility warning. React Doctor reported no issues. Changed-line lint flags the existing board and component `shape` names in test code. Those names retain the schema's public contract. Logs are `/tmp/keyloom-aplus-final-followup-full-tests.log`, `/tmp/keyloom-aplus-final-followup-types.log`, `/tmp/keyloom-aplus-final-followup-deps.log`, `/tmp/keyloom-aplus-final-followup-react.log` and `/tmp/keyloom-aplus-final-followup-slop.log`.
 
 The compiled candidate also generated the preserved `A+ factory` config at `rev_01M7DREPP95RXBW3EW28STCC5Q`, with all four expected source files. Output is `/tmp/keyloom-aplus-last-review-aplus-generated`. It did not start a server or flash a device.
+
+## v0.81.0 is shipped, installed and live
+
+Release PR 352 merged as `eeaf0b7c95446a1a54d744c0a82ec675da627764`. Its tree matches tested head `d1de41bf10304fc902403599eb8b9cbf0bd8bf7b`. All eight [release-candidate CI jobs](https://github.com/planetaryescape/keyloom/actions/runs/43703306694), [post-merge CI](https://github.com/planetaryescape/keyloom/actions/runs/43732968722) and [publication](https://github.com/planetaryescape/keyloom/actions/runs/43732968662) passed.
+
+Both matching Mac runners verified downloaded checksums, strict Developer ID signatures, Accepted final-CLI/helper notarization receipts and scratch installed pairs. Local checks verified all ten asset digests and the desktop archive. The app, PATH CLI, sidecar and fresh live server report 0.81.0. The installed app passes Gatekeeper as Notarized Developer ID.
+
+The published and installed CLIs imported the factory fixture, read eight layers of eight controls, generated all four source files and reimported their bindings and layer IDs unchanged. Firmware generation uses numeric layer indexes. Three display names reimport as generic names, matching the existing QMK emitter behavior.
+
+The live app recognizes the connected A+ and offers its known-board setup flow. Native accessibility checks opened an existing keyboard and key card, then restored the dark keyboard wall. Computer Use returned white screenshots, so this delivery adds no pixel-based clipping claim. The earlier rendered checks retain their stated scope.
+
+All nine saved layout heads, 35 revision documents and 31 flash records retain their hashes. Prior installed copies and the stopped database remain backed up. No flash, sync, real-data Apply or paid model call ran. Computer Use was reset after the native check.
+
+Software delivery is complete. Hardware acceptance still requires an explicit flash request and physical checks of both turn directions, buttons, gestures and drag scrolling. Shipping authorization does not grant that request.
