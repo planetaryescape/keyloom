@@ -1,6 +1,6 @@
 # Ploopy A+ support includes matching physical controls
 
-Status: implemented through `0bc2ab1b1e6cfb948e5514e4a7bda2183c4bf2a7`. Delivery continues on `fix/ploopy-aplus-delivery` in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). Unreleased. Hardware behavior after flashing remains unchecked.
+Status: implemented through `15130ca8ff4fd55d73895e7aba72ae0a9731db99`. All eight CI jobs passed and all six review threads are resolved in [PR 353](https://github.com/planetaryescape/keyloom/pull/353). BK authorized shipping on 15 November 2026. Release and installed-copy verification remain pending. Hardware behavior after flashing remains unchecked.
 
 BK's right-hand A+ needs its own board definition, factory firmware and editor geometry. Earlier drawings had wrong proportions, clipped labels and a generic square key card.
 
@@ -16,17 +16,17 @@ The local build receipt is `/tmp/keyloom-aplus-firmware-build.log`. The firmware
 
 The broader focused run passed 316 tests across 23 files. The final board, picker, slot, dance and contrast run passed 70 tests. TypeScript and dependency checks passed. The only whitespace findings are in the verbatim upstream `keymap.c` fixture.
 
-## The preview stays separate from installed keyloom
+## The review preview stopped before shipping
 
 The current compiled candidate is `/tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are unreleased.
 
-The preview serves scratch data from `/tmp/keyloom-aplus-wheels-cli-check` on port 4489. The config is `A+ wheel smoke`. The previous preview stopped before this fix. The installed app and CLI remain unchanged. We did not flash a keyboard.
+The final review preview served `/tmp/keyloom-aplus-review` on port 4489. It restored the earlier edited `A+ factory` config after a separate wheel-test config omitted six button assignments. A comparison with the earlier revision reported no button differences after recovery. Keep wheel-test configs on a separate port. The review server stopped at BK's request on 15 November 2026. Its data remains intact. We did not flash a keyboard.
 
 To restart the preview:
 
 ```sh
 /tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64 \
-  --data-dir /tmp/keyloom-aplus-wheels-cli-check serve --port 4489
+  --data-dir /tmp/keyloom-aplus-review serve --port 4489 --no-open
 ```
 
 Open the authenticated URL printed by that command. Its token changes after a restart.
@@ -70,4 +70,4 @@ The proportional corner band could be shorter than its label. D-609 keeps readab
 
 The broader QMK, board and card run passed 373 tests with 19 gated skips and no failures. The final web, documentation and C-import run passed 1338 tests with no failures. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-token-corner-focused.log`, `/tmp/keyloom-aplus-token-corner-final-tests.log`, `/tmp/keyloom-aplus-token-corner-types-complete.log` and `/tmp/keyloom-aplus-token-corner-dependencies.log`.
 
-Next action: confirm CI and review on the final fixes, then obtain merge and release direction. The preview server stays running on port 4489 for review. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. The PR is unmerged. Publishing and installed-copy updates remain separate release work.
+Next action: merge PR 353, merge the updated release-please PR after its exact-head CI passes, then verify publication and both installed copies. The review server is stopped. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Shipping authorization does not authorize flashing.
