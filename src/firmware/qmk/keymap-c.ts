@@ -65,6 +65,13 @@ function classify(node: Node, used: ReadonlySet<string>, modelled: ReadonlySet<s
       return `function:${name}`;
     }
     case "preproc_include":
+      return /#include\s+(?:QMK_KEYBOARD_H|"version.h")\s*$/.test(text) ? null : "prelude";
+    case "type_definition":
+      return TAP_DANCE.test(text) ? "tap-dance" : "prelude";
+    case "enum_specifier":
+      if (isKeycodeEnum(node)) return null;
+      if (text.includes("tap_dance_codes")) return "tap-dance-codes";
+      return TAP_DANCE.test(text) ? "tap-dance" : "prelude";
     case "preproc_ifdef":
     case "preproc_if":
       return null;
@@ -77,7 +84,7 @@ function classify(node: Node, used: ReadonlySet<string>, modelled: ReadonlySet<s
       if (text.includes("tap_dance_codes")) return "tap-dance-codes";
       if (TAP_DANCE.test(text)) return "tap-dance";
       if (RGB.test(text)) return "rgb";
-      return null;
+      return node.type === "declaration" ? "prelude" : null;
     }
   }
 }
@@ -145,7 +152,7 @@ function parseLayers(root: Node): { layers: Expr[][]; layerNames: string[] } {
       throw new ImportError(i > 0 && byIndex[i - 1]?.index === l.index ? `keymaps[] has two layers numbered ${l.index}` : `keymaps[] has no layer ${i}; its layers must be numbered 0 to ${found.length - 1} with no gaps`);
     }
   });
-  const layerNames = byIndex.every((l) => l.name !== undefined) ? byIndex.map((l) => l.name as string) : [];
+  const layerNames = byIndex.some((l) => l.name !== undefined) ? byIndex.map((l) => l.name ?? "") : [];
   return { layers: byIndex.map((l) => l.args), layerNames };
 }
 
@@ -192,10 +199,15 @@ function parseCases(root: Node, source: string): ParsedKeymap["cases"] {
   return cases;
 }
 
+function isKeycodeEnum(spec: Node): boolean {
+  const first = spec.childForFieldName("body")?.namedChildren.find((n) => n.type === "enumerator");
+  return spec.childForFieldName("name")?.text === "custom_keycodes" || /^(?:ZSA_)?SAFE_RANGE$/.test(first?.childForFieldName("value")?.text.trim() ?? "");
+}
+
 function parseKeycodeEnum(root: Node): ParsedKeymap["keycodeEnum"] {
   const members: ParsedKeymap["keycodeEnum"] = [];
   for (const spec of root.descendantsOfType("enum_specifier")) {
-    if (spec?.childForFieldName("name")?.text !== "custom_keycodes") continue;
+    if (!isKeycodeEnum(spec)) continue;
     for (const m of spec.childForFieldName("body")?.namedChildren ?? []) {
       if (m.type !== "enumerator") continue;
       const name = m.childForFieldName("name")?.text;

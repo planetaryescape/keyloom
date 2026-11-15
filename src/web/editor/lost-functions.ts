@@ -37,7 +37,8 @@ const sameSlot = (a: Slot, b: Slot) => a.layerId === b.layerId && a.position ===
 export function splitLost(lost: readonly LostFunction[], touched: readonly Slot[]): { direct: LostFunction[]; collateral: LostFunction[] } {
   const direct: LostFunction[] = [];
   const collateral: LostFunction[] = [];
-  for (const entry of lost) (entry.was.some((slot) => touched.some((t) => sameSlot(slot, t))) ? direct : collateral).push(entry);
+  // Turns and combo outputs have no key slot. They still need an explicit drop choice.
+  for (const entry of lost) (entry.was.length === 0 || entry.was.some((slot) => touched.some((t) => sameSlot(slot, t))) ? direct : collateral).push(entry);
   return { direct, collateral };
 }
 

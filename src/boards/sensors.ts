@@ -2,8 +2,11 @@ import type { BoardDefinition } from "./schema.ts";
 import type { Layout, Layer, SensorBinding } from "../layout/schema.ts";
 import { sensorFromSource } from "../layout/sensors.ts";
 
+export const APLUS_FACTORY_WHEEL = "ploopy-aplus:factory";
+
 export function boardSensorDefaults(board: BoardDefinition): SensorBinding[] {
   const build = board.revisions[0]?.build;
+  if (build?.kind === "qmk-docker" && build.wheelAdapter === "ploopy-aplus") return Array.from({ length: 2 }, () => ({ kind: "native", source: APLUS_FACTORY_WHEEL }));
   return build?.kind === "zmk-west-docker" ? (build.sensorBindings ?? []).map(sensorFromSource) : [];
 }
 

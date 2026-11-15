@@ -2258,7 +2258,7 @@ export function Viewer({ detail, summary, keys, token, layoutRef, onChanged, onO
           <div className="stage-floor" data-under-bar={!narrow && chatOpen && !chatPanel}>
             {/* Toasts rise from the top of the floor, so they never sit over the strip or the hint. */}
             <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} />
-            <p className="stage-hint">Press a key on your {boardDisplayName(board.name)} to find it here</p>
+            <p className="stage-hint">{board.id === "ploopy/aplus" ? "Click a button or knob to edit it" : <>Press a key on your {boardDisplayName(board.name)} to find it here</>}</p>
             {/* The strip and the view controls share one row, so the strip is centred where it fits and moves aside where it doesn't. */}
             <div className="stage-floor-row">
             <LayerTabs

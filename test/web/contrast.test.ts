@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { materialStyle } from "../../src/web/keyboard/materials.ts";
+import { loadBoardDir } from "../../src/boards/load.ts";
 import { colourwayAttributes } from "../../src/web/keyboard/colourway.ts";
 
 // Reads the real stylesheet, so a token change that drops a pair below WCAG fails here.
@@ -268,4 +270,15 @@ describe("a pinned colourway keeps the board readable", () => {
       expect(ratio(grey.get("case-hi") as string, black.get("case-hi") as string)).toBeGreaterThan(1.2);
     }
   });
+});
+
+
+test("the A+'s yellow button legends retain text contrast in both themes", async () => {
+  const board = await loadBoardDir(`${import.meta.dir}/../../boards/ploopy/aplus`);
+  const style = materialStyle(board.definition.display?.materials);
+  for (const face of ["--top-hi", "--top-lo", "--skirt-hi", "--skirt-lo"]) {
+    const value = Object.entries(style).find(([key]) => key === face)?.[1];
+    const legend = Object.entries(style).find(([key]) => key === "--legend")?.[1];
+    expect(ratio(String(legend), String(value))).toBeGreaterThanOrEqual(TEXT);
+  }
 });

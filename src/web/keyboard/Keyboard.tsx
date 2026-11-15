@@ -19,6 +19,7 @@ import { colourwayAttributes, type Tones } from "./colourway.ts";
 import { useRoom } from "../shell/theme.ts";
 import "./keyboard.css";
 import "./colourway.css";
+import { materialStyle } from "./materials.ts";
 
 // Space between neighbouring caps, in key units.
 export const GAP = 0.09;
@@ -227,6 +228,7 @@ export function Keyboard({
   const shapes = display?.keyShapes;
   const caseId = useId().replace(/:/g, "");
   const generatedBody = (display?.case?.length ?? 0) === 0 && parts.some((part) => part.kind === "body");
+  const physicalMaterials = display?.materials !== undefined;
   const { delays, outgoing, origin: rippleOrigin } = useRipple(keys, canvas, layerKey, descriptions, legendOverrides, rippleFrom);
   // Only a board whose case is in two pieces can part; a laptop's keys belong to hands but sit on one deck.
   const parts2 = parts.some((part) => part.hand !== null);
@@ -307,15 +309,16 @@ export function Keyboard({
         data-inspect={inspect}
         data-previewing={previewing}
         data-surface={display?.surface ?? "slab"}
+        data-materials={physicalMaterials || undefined}
         {...colourwayAttributes(colourway, room)}
         role="group"
         aria-label={`Keyboard, ${layerName}. Arrow keys move between keys.`}
         data-part={part === null || part.px === 0 ? undefined : part.hand}
-        style={{ width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 ? undefined : `translateX(${shiftPx}px)`, "--part": `${part?.px ?? 0}px`, "--part-units": `${(part?.px ?? 0) / unit}` } as CSSProperties}
+        style={{ ...materialStyle(display?.materials), width: canvas.width * unit, height: canvas.height * unit, transform: shiftPx === 0 ? undefined : `translateX(${shiftPx}px)`, "--part": `${part?.px ?? 0}px`, "--part-units": `${(part?.px ?? 0) / unit}` } as CSSProperties}
       >
         <span className="keyboard-contact" aria-hidden="true" />
         <svg className="keyboard-case" aria-hidden="true" viewBox={`${canvas.minX} ${canvas.minY} ${canvas.width} ${canvas.height}`} data-surface={display?.surface ?? "slab"}>
-          {generatedBody ? <defs><linearGradient id={`${caseId}-body`} x1="0" y1="0" x2="0.2" y2="1"><stop offset="0" className="case-top-hi" /><stop offset="1" className="case-top-lo" /></linearGradient></defs> : null}
+          {generatedBody || physicalMaterials ? <defs><linearGradient id={`${caseId}-body`} x1="0" y1="0" x2={physicalMaterials ? "0.65" : "0.2"} y2="1"><stop offset="0" className="case-top-hi" /><stop offset="1" className="case-top-lo" /></linearGradient><pattern id={`${caseId}-grain`} width={0.035} height={0.035} patternUnits="userSpaceOnUse"><path d="M0,0.0175 H0.035" stroke="#603600" strokeOpacity="0.08" strokeWidth={0.007} /></pattern></defs> : null}
           {parts.some((part) => part.kind === "grille" || part.kind === "ball") ? (
             <defs>
               {/* A speaker grille's holes, as a pattern in key units: drawn one by one they would be a thousand paths. */}
@@ -323,22 +326,33 @@ export function Keyboard({
                 <circle className="case-grille-hole" cx={0.045} cy={0.045} r={0.022} />
               </pattern>
               {/* A trackball's shading, in the ball's own box so one gradient lights any size of ball from the same side. */}
-              <radialGradient id={`${caseId}-ball`} cx="0.36" cy="0.3" r="0.75" fx="0.32" fy="0.26">
+              <radialGradient id={`${caseId}-ball`} cx="0.36" cy={physicalMaterials ? "0.28" : "0.3"} r={physicalMaterials ? "0.73" : "0.75"} fx={physicalMaterials ? "0.3" : "0.32"} fy={physicalMaterials ? "0.24" : "0.26"}>
                 <stop offset="0" className="case-ball-hi" />
+                {physicalMaterials ? <stop offset="0.46" stopColor="var(--ball-lo)" /> : null}
+                {physicalMaterials ? <stop offset="0.8" stopColor="#080b69" /> : null}
                 <stop offset="1" className="case-ball-lo" />
+              </radialGradient>
+              <radialGradient id={`${caseId}-reflection`} cx="0.3" cy="0.22" r="0.7">
+                <stop offset="0" stopColor="white" stopOpacity="0.88" />
+                <stop offset="0.045" stopColor="white" stopOpacity="0.8" />
+                <stop offset="0.1" stopColor="#b5e4ff" stopOpacity="0.25" />
+                <stop offset="0.3" stopColor="#8ecbff" stopOpacity="0.13" />
+                <stop offset="0.6" stopColor="white" stopOpacity="0" />
               </radialGradient>
             </defs>
           ) : null}
           {parts.map((part, i) =>
-            generatedBody && part.kind === "body" ? (
+            (generatedBody && part.kind === "body") || (physicalMaterials && (part.kind === "body" || part.kind === "module")) ? (
               <g key={i} data-hand={part.hand ?? undefined}>
                 <path className="case-edge" d={part.d} transform="translate(0 0.12)" />
                 <path className="case-body" d={part.d} style={{ fill: `url(#${caseId}-body)` }} />
+                {physicalMaterials ? <path d={part.d} fill={`url(#${caseId}-grain)`} /> : null}
               </g>
             ) : part.kind === "ball" ? (
               <g key={i} data-hand={part.hand ?? undefined}>
                 <path className="case-ball-socket" d={part.d} />
                 <path className="case-ball" d={part.d} style={{ fill: `url(#${caseId}-ball)` }} />
+                {physicalMaterials ? <path d={part.d} fill={`url(#${caseId}-reflection)`} /> : null}
                 <path className="case-ball-rim" d={part.d} />
               </g>
             ) : (
@@ -357,6 +371,7 @@ export function Keyboard({
           if (description === undefined || description === null) return null;
           if (visible !== null && !visible.has(index)) return null;
           const rect = keyRect(geometryKey, canvas);
+          const gap = shapes?.[String(index)]?.profile === "flat" ? 0 : GAP;
           return (
             <Cap
               key={index}
@@ -364,6 +379,9 @@ export function Keyboard({
                 buttons.current[index] = element;
               }}
               data-rotary={shapes?.[String(index)]?.kind === "rotary-encoder" || undefined}
+              data-profile={shapes?.[String(index)]?.profile}
+              printArea={shapes?.[String(index)]?.printArea}
+              gap={gap}
               tone={description.kind}
               {...(keycaps?.[String(index)] === undefined ? {} : { keycap: keycaps[String(index)] as KeycapColour })}
               legend={overrideLegend(legendOverrides?.[index], short) ?? description.legend}
@@ -381,10 +399,10 @@ export function Keyboard({
               unit={unit}
               floorPx={legendFloor}
               width={geometryKey.w}
-              {...(shapes?.[String(index)]?.outline === undefined ? {} : { shape: { outline: shapes[String(index)]?.outline ?? [], w: (rect.width - GAP) * unit, h: (rect.height - GAP) * unit } })}
+              {...(shapes?.[String(index)]?.outline === undefined ? {} : { shape: { outline: shapes[String(index)]?.outline ?? [], w: (rect.width - gap) * unit, h: (rect.height - gap) * unit } })}
               // The Moonlander's thumbs tilt a little and read fine; the Glove80's fan out to 60 degrees.
               {...(Math.abs(rect.rotate) > UPRIGHT_ABOVE_DEG ? { legendTurn: -rect.rotate, ...uprightBox(rect) } : {})}
-              style={keyStyle(rect, unit)}
+              style={keyStyle(rect, unit, gap)}
               tabIndex={index === tabStop ? 0 : -1}
               aria-label={ariaLabel(index, description, fingers[String(index)], pendingIndex === index, marks?.get(index), remembered?.has(index))}
               // Pressed means "in the chat's Asking about chips"; `data-current` is the key whose panel is open.
@@ -399,7 +417,7 @@ export function Keyboard({
               data-found={found === index}
               data-lab-lit={lab?.lit?.has(index) ?? false}
               data-lab-finding={lab?.findings?.has(index) ?? false}
-              {...(lab?.heat?.has(index) ? { "data-lab-heat": "true", style: { ...keyStyle(rect, unit), "--heat": String(lab.heat.get(index)) } as CSSProperties } : {})}
+              {...(lab?.heat?.has(index) ? { "data-lab-heat": "true", style: { ...keyStyle(rect, unit, gap), "--heat": String(lab.heat.get(index)) } as CSSProperties } : {})}
               {...(then?.has(index) ? { "data-then": `then: ${then.get(index) || "nothing"}` } : {})}
               data-review={review?.problems.has(index) ? "problem" : review?.hints.has(index) ? "hint" : undefined}
               data-key-index={index}
@@ -551,14 +569,14 @@ const SWIPE_PX = 48;
 
 // The gap shrinks each box and keeps the rotation origin on the same point, because the
 // origin is measured from the box's top-left.
-export function keyStyle(rect: KeyRect, unit: number): CSSProperties {
+export function keyStyle(rect: KeyRect, unit: number, gap = GAP): CSSProperties {
   return {
     position: "absolute",
-    left: (rect.left + GAP / 2) * unit,
-    top: (rect.top + GAP / 2) * unit,
-    width: (rect.width - GAP) * unit,
-    height: (rect.height - GAP) * unit,
+    left: (rect.left + gap / 2) * unit,
+    top: (rect.top + gap / 2) * unit,
+    width: (rect.width - gap) * unit,
+    height: (rect.height - gap) * unit,
     transform: rect.rotate === 0 ? undefined : `rotate(${rect.rotate}deg)`,
-    transformOrigin: `${(rect.originX - GAP / 2) * unit}px ${(rect.originY - GAP / 2) * unit}px`,
+    transformOrigin: `${(rect.originX - gap / 2) * unit}px ${(rect.originY - gap / 2) * unit}px`,
   };
 }

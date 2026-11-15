@@ -3,7 +3,7 @@
 // importer for its firmware, so a default is exactly what importing that file would give. Nothing here is required: no default is a reason, not an error.
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type GeometryOptions, defaultFetcher, fetchPinned } from "../boards/geometry.ts";
 import type { BoardDefinition, BoardRevision } from "../boards/schema.ts";
 import { ImportError, importOryxSource } from "../firmware/qmk/import.ts";
@@ -57,6 +57,25 @@ export async function readDefaultKeymap(def: BoardDefinition, opts: GeometryOpti
         const name = file.split("/").at(-1) as string;
         const path = join(dir, name);
         await writeFile(path, text);
+        if (def.firmware === "qmk" && name === "keymap.c") {
+          // These files can enable VIA or modules that the keymap's callbacks require.
+          const companions = await Promise.allSettled(["config.h", "rules.mk", "keymap.json"].map(async (companion) => {
+            let source: string;
+            try {
+              source = await fetchPinned({ source: { repo: c.repo, ref: "pinned", sha: c.sha } }, `${dirname(file)}/${companion}`, fetchText, cache);
+            } catch (err) {
+              if (err instanceof Error && /returned 404\b/.test(err.message)) return;
+              throw new ImportError(`couldn't read ${companion} beside ${file}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            await writeFile(join(dir, companion), source);
+          }));
+          // A JSON fallback cannot replace a C default whose required build files failed to download.
+          const failed = companions.find((result) => result.status === "rejected");
+          if (failed?.status === "rejected") return {
+            layout: null,
+            reason: `couldn't get ${def.name}'s default keymap (${file} at ${short(c.sha)}: ${failed.reason instanceof Error ? failed.reason.message : String(failed.reason)})`,
+          };
+        }
         const imported = def.firmware === "zmk" ? await importZmkSource(path, def) : await importOryxSource(dir, def);
         return { layout: imported.layout, from: `${file} at ${short(c.sha)}` };
       } catch (err) {

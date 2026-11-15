@@ -2,6 +2,7 @@
 // the file is derived, and `boards check` regenerates it to catch drift.
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import Hjson from "hjson";
 import { GeometryError } from "./geometry-error.ts";
 import { parsePhysicalLayout } from "./zmk-geometry.ts";
 import { type BoardDefinition, type BoardRevision, type Geometry, GeometrySchema } from "./schema.ts";
@@ -90,7 +91,7 @@ export async function generateGeometry(board: BoardDefinition, rev: BoardRevisio
   }
   let doc: { layouts?: Record<string, { layout?: QmkKey[] }>; layout_aliases?: Record<string, string> };
   try {
-    doc = JSON.parse(text);
+    doc = Hjson.parse(text);
   } catch (err) {
     throw new GeometryError(`${path} at ${rev.source.sha} is not valid JSON: ${(err as Error).message}`);
   }

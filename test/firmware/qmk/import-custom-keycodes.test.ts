@@ -6,6 +6,7 @@ import { GenerateError, generateQmkSource } from "../../../src/firmware/qmk/gene
 import { ImportError, importOryxSource, importQmkSource } from "../../../src/firmware/qmk/import.ts";
 import { FIXTURE_DIR, MOONLANDER_DIR } from "../../helpers/board.ts";
 import { templateCopy } from "../../helpers/board-recipes.ts";
+import { tempDir } from "../../helpers/tmp.ts";
 
 const MOONLANDER_DEFAULT = `${import.meta.dir}/../../fixtures/qmk/zsa-moonlander-default`;
 const keymapC = (m: { head: string; keys: string; after?: string }) =>
@@ -33,6 +34,75 @@ describe("the Moonlander's default keymap", () => {
 });
 
 describe("a hand-written keymap", () => {
+  test("an alias used by a global and the keymap is defined before both", async () => {
+    const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
+    const { layout } = await importQmkSource({ name: "t", keymapC: keymapC({
+      head: "#define ALIAS KC_A\nuint16_t last_key = ALIAS;",
+      keys: "ALIAS, KC_A, KC_NO, KC_NO",
+    }) }, board);
+    const c = generated(layout, board);
+    expect(c).toContain("#define ALIAS KC_A");
+    expect(c.indexOf("#define ALIAS KC_A")).toBeLessThan(c.indexOf("uint16_t last_key = ALIAS;"));
+    const dir = tempDir();
+    await Bun.write(`${dir}/keymap.c`, c);
+    await Bun.write(`${dir}/version.h`, "");
+    await Bun.write(`${dir}/keyboard.h`, '#include <stdint.h>\n#define KC_A 4\n#define KC_NO 0\n#define PROGMEM\n#define MATRIX_ROWS 1\n#define MATRIX_COLS 4\n#define LAYOUT(...) {{__VA_ARGS__}}\n');
+    const compile = Bun.spawnSync(["cc", "-std=c11", "-Werror", "-fsyntax-only", "-DQMK_KEYBOARD_H=\"keyboard.h\"", "-I", dir, `${dir}/keymap.c`]);
+    expect(compile.stderr.toString()).toBe("");
+    expect(compile.exitCode).toBe(0);
+  });
+
+  test.each([
+    ["MY_KEY", "typedef /* MY_KEY storage */ uint16_t action_t;"],
+    ["MY_KEY", 'const char *name = "MY_KEY";\ntypedef uint16_t action_t;'],
+    ["M", "const char marker = 'M';\ntypedef uint16_t action_t;"],
+    ["L", "const int marker = L'M';\ntypedef uint16_t action_t;"],
+    ["u8", 'const char *name = u8"storage";\ntypedef uint16_t action_t;'],
+    ["xABCD", "const unsigned marker = 0xABCD;\ntypedef uint16_t action_t;"],
+    ["stdint", "#include <stdint.h>\ntypedef uint16_t action_t;"],
+    ["stdint", "#include /* types */ <stdint.h>\ntypedef uint16_t action_t;"],
+    ["stdint", "#include /* system\nheader */ <stdint.h>\ntypedef uint16_t action_t;"],
+    ["MY_KEY", "typedef // MY_KEY storage\\\ncontinued comment\nuint16_t action_t;"],
+  ])("incidental %s text does not move types behind their enum", async (key, prelude) => {
+    const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
+    const { layout } = await importQmkSource({ name: "t", keymapC: keymapC({
+      head: `${prelude}\nenum custom_keycodes { ${key} = (action_t)SAFE_RANGE };\naction_t last_key = ${key};`,
+      keys: `${key}, KC_A, KC_NO, KC_NO`,
+    }) }, board);
+    const c = generated(layout, board);
+    expect(c.indexOf("uint16_t action_t;")).toBeLessThan(c.indexOf("enum custom_keycodes"));
+    expect(c.indexOf(`action_t last_key = ${key};`)).toBeGreaterThan(c.indexOf("enum custom_keycodes"));
+    const dir = tempDir();
+    await Bun.write(`${dir}/keymap.c`, c);
+    await Bun.write(`${dir}/version.h`, "");
+    await Bun.write(`${dir}/keyboard.h`, '#include <stdint.h>\n#define SAFE_RANGE 0x7e00\n#define KC_A 4\n#define KC_NO 0\n#define PROGMEM\n#define MATRIX_ROWS 1\n#define MATRIX_COLS 4\n#define LAYOUT(...) {{__VA_ARGS__}}\n');
+    const compile = Bun.spawnSync(["cc", "-std=c11", "-Werror", "-fsyntax-only", "-DQMK_KEYBOARD_H=\"keyboard.h\"", "-I", dir, `${dir}/keymap.c`]);
+    expect(compile.stderr.toString()).toBe("");
+    expect(compile.exitCode).toBe(0);
+  });
+
+  test.each(["custom_keycodes", "actions"])("declarations using %s members compile after the generated enum", async (enumName) => {
+    const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
+    const src = keymapC({
+      head: `typedef uint16_t action_t;\nenum ${enumName} { MY_KEY = SAFE_RANGE };\naction_t last_key = MY_KEY;`,
+      keys: "MY_KEY, KC_A, KC_NO, KC_NO",
+      after: "action_t *last_key_address = &last_key;",
+    });
+    const { layout } = await importQmkSource({ name: "t", keymapC: src }, board);
+    const c = generated(layout, board);
+    const enumStart = c.indexOf("enum custom_keycodes");
+    expect(c.indexOf("typedef uint16_t action_t;")).toBeLessThan(enumStart);
+    expect(c.indexOf("action_t last_key = MY_KEY;")).toBeGreaterThan(enumStart);
+    expect(c.indexOf("action_t *last_key_address = &last_key;")).toBeGreaterThan(c.indexOf("action_t last_key = MY_KEY;"));
+    const dir = tempDir();
+    await Bun.write(`${dir}/keymap.c`, c);
+    await Bun.write(`${dir}/version.h`, "");
+    await Bun.write(`${dir}/keyboard.h`, '#include <stdint.h>\n#define SAFE_RANGE 0x7e00\n#define KC_A 4\n#define KC_NO 0\n#define PROGMEM\n#define MATRIX_ROWS 1\n#define MATRIX_COLS 4\n#define LAYOUT(...) {{__VA_ARGS__}}\n');
+    const compile = Bun.spawnSync(["cc", "-std=c11", "-Werror", "-fsyntax-only", "-DQMK_KEYBOARD_H=\"keyboard.h\"", "-I", dir, `${dir}/keymap.c`]);
+    expect(compile.stderr.toString()).toBe("");
+    expect(compile.exitCode).toBe(0);
+  });
+
   test("keeps explicit values, re-bases the first member on SAFE_RANGE, and leaves a case with no press guard alone", async () => {
     const board = (await loadBoardDir(await templateCopy("qmk"))).definition;
     const src = keymapC({

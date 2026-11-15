@@ -18,6 +18,11 @@ export function isZmkMouseBinding(b: Binding): boolean {
   ) && !(b.layerRefs?.length || b.unprovable?.length);
 }
 
+/** A wheel step can send these four QMK scroll keys without arbitrary source. */
+export function isQmkWheelBinding(b: Binding): boolean {
+  return b.kind === "native" && b.firmware === "qmk" && /^MS_WHL[UDLR]$/.test(b.source) && !(b.layerRefs?.length || b.unprovable?.length);
+}
+
 export function sensorActions(sensors: readonly SensorBinding[]): Binding[] {
   return sensors.flatMap((s) => s.kind === "rotation" ? [s.clockwise, s.counterclockwise] : []);
 }

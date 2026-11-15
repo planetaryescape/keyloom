@@ -11,7 +11,7 @@ describe("the firmware default keymap", () => {
   test("a QMK board's is keymaps/default at its pinned SHA", async () => {
     const urls: string[] = [];
     const found = await readDefaultKeymap(showBoard("zsa/moonlander").definition, { fetchText: defaultKeymapTree(urls), cacheDir: tempDir() });
-    expect(urls).toEqual(["https://raw.githubusercontent.com/zsa/qmk_firmware/93b2b9ec3368f86c5eb5a2e3f934049f8daef885/keyboards/zsa/moonlander/keymaps/default/keymap.c"]);
+    expect(urls).toEqual(["keymap.c", "config.h", "rules.mk", "keymap.json"].map((file) => `https://raw.githubusercontent.com/zsa/qmk_firmware/93b2b9ec3368f86c5eb5a2e3f934049f8daef885/keyboards/zsa/moonlander/keymaps/default/${file}`));
     expect(found.layout?.layers.map((l) => l.name)).toEqual(["BASE", "SYMB", "MDIA"]);
     expect(found.layout?.boardId).toBe("zsa/moonlander");
   });

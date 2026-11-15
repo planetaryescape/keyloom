@@ -19,6 +19,8 @@ import { qmkRevision } from "./board-config.ts";
 import { GenerateError } from "./generate-error.ts";
 import { WRAPPER_SYMBOL, NO_LTO, WRAP_LINK_FLAG, buildMarker, serialDefine, wrapperSource } from "./handsfree.ts";
 import { STREAM_SYMBOL, WRAP_ACTION_EXEC_FLAG } from "./typing-stream.ts";
+import { writeAplusWheels } from "./ploopy-aplus-wheels.ts";
+import { refersToIdentifier } from "./c-identifiers.ts";
 
 export { GenerateError } from "./generate-error.ts";
 
@@ -105,7 +107,8 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   };
   const zsa = board.vendor === "ZSA";
 
-  const keymapC = passthroughIn(layout, "keymap.c");
+  const wheels = writeAplusWheels(layout, board, passthroughIn(layout, "keymap.c"));
+  const keymapC = wheels.chunks;
   // Oryx tap dance code that couldn't be read stays as written, and it already owns DANCE_n and tap_dance_actions[].
   if (layout.tapDances.length > 0 && keymapC.some((p) => p.anchor.startsWith("tap-dance"))) {
     throw new GenerateError("keymap.c keeps tap dance code from Oryx that keyloom couldn't read, so keyloom can't add tap dances beside it");
@@ -117,7 +120,7 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
     throw new GenerateError("keymap.c keeps its own layer_state_set_user, so keyloom can't write one for the conditional layers beside it");
   }
   const dances = renderTapDances(layout.tapDances, layout.macros, ctx);
-  const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes");
+  const before = keymapC.filter((p) => p.anchor.startsWith("define:") || p.anchor === "tap-dance-codes" || p.anchor === "prelude" || p.anchor.startsWith("prelude#"));
   const cases = keymapC.filter((p) => p.anchor.startsWith("process_record_user:"));
   // The keymap's own custom keycodes join keyloom's enum below instead of being a block of their own (D-377).
   const ownKeycodes = keymapC.filter((p) => p.anchor === CUSTOM_KEYCODES_ANCHOR);
@@ -155,9 +158,18 @@ export function generateQmkSource(input: GenerateInput): GeneratedSource {
   if (zsa) {
     c.push("#define MOON_LED_LEVEL LED_LEVEL", "#ifndef ZSA_SAFE_RANGE", "#define ZSA_SAFE_RANGE SAFE_RANGE", "#endif");
   }
+  const keycodeNames = new Set(enumEntries.map((entry) => entry.split("=")[0]!.trim()));
+  for (const p of before.filter((p) => p.anchor.startsWith("define:"))) c.push("", p.source);
+  const prelude = before.filter((p) => p.anchor.startsWith("prelude"));
+  const firstKeycodeUse = prelude.findIndex((p) => refersToIdentifier(p.source, keycodeNames));
+  // Later declarations can depend on the moved globals or types, so keep their original order too.
+  const split = firstKeycodeUse === -1 ? prelude.length : firstKeycodeUse;
+  for (const p of prelude.slice(0, split)) c.push("", p.source);
   if (enumEntries.length > 0) c.push("", `enum custom_keycodes {\n${enumEntries.map((e) => `  ${e},`).join("\n")}\n};`);
   if (dances) c.push("", dances.codes);
-  for (const p of before) c.push("", p.source);
+  for (const p of prelude.slice(split)) c.push("", p.source);
+  for (const p of before.filter((p) => !p.anchor.startsWith("prelude") && !p.anchor.startsWith("define:"))) c.push("", p.source);
+  if (wheels.prelude !== undefined) c.push("", wheels.prelude);
   c.push("", renderKeymaps(layout, board, rev.build.layoutMacro, ctx));
   for (const p of beforeCombos) c.push("", p.source);
   if (combos.source) c.push("", combos.source);

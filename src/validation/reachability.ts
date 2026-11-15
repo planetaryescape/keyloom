@@ -207,7 +207,7 @@ export function functionHomes(doc: Layout, reachable: Set<string> = reachableLay
     if (!reachable.has(layer.id)) continue;
     for (const [position, b] of layer.bindings.entries()) for (const fn of bindingFunctions(b, doc.tapDances)) add(fn, { layerId: layer.id, position });
     for (const b of sensorActions(layer.sensorBindings ?? [])) for (const fn of bindingFunctions(b, doc.tapDances)) add(fn);
-    for (const s of layer.sensorBindings ?? []) if (s.kind === "native" && !["&none", "&trans"].includes(s.source)) add(`sensor:zmk:${s.source}`);
+    for (const s of layer.sensorBindings ?? []) if (s.kind === "native" && !["&none", "&trans"].includes(s.source)) add(`sensor:${doc.firmware}:${s.source}`);
   }
   for (const combo of doc.combos) {
     if (comboLayers(doc, combo.layerIds).some((id) => reachable.has(id))) for (const fn of bindingFunctions(combo.output, doc.tapDances)) add(fn);

@@ -16,6 +16,7 @@ import { importTapDances } from "./import-tap-dance.ts";
 import { readLighting } from "./import-lighting.ts";
 import { macroFor, parseMacroCase } from "./send-string.ts";
 import { ImportError, type SourceFiles, readOryxSource } from "./source.ts";
+import { readAplusWheels } from "./ploopy-aplus-wheels.ts";
 
 export { ImportError } from "./source.ts";
 export type { ImportReport, NativeItem, PassthroughItem } from "../../layout/import-report.ts";
@@ -88,7 +89,8 @@ export async function importOryxSource(path: string, board: BoardDefinition): Pr
 export async function importQmkSource(files: SourceFiles, board: BoardDefinition): Promise<ImportResult> {
   if (board.firmware !== "qmk") throw new ImportError(`board ${board.id} is ${board.firmware}, not qmk`);
   const warnings: string[] = [];
-  const parsed = await parseKeymapC(files.keymapC);
+  const wheels = readAplusWheels(files.keymapC, board);
+  const parsed = await parseKeymapC(wheels.source);
 
   parsed.layers.forEach((args, i) => {
     if (args.length !== board.keyCount) {
@@ -119,7 +121,7 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
   const profilesUsed = new Set<string>();
   const layers = parsed.layers.map((args, li) => ({
     id: layerIds[li] as string,
-    name: parsed.layerNames[li] === undefined ? `Layer ${li}` : displayName(parsed.layerNames[li] as string),
+    name: !parsed.layerNames[li] ? `Layer ${li}` : displayName(parsed.layerNames[li] as string),
     bindings: args.map((expr, position) => {
       const mapped = mapKey(expr, position, tapDanceCtx);
       counts[mapped.binding.kind]++;
@@ -133,6 +135,8 @@ export async function importQmkSource(files: SourceFiles, board: BoardDefinition
       return mapped.binding;
     }),
   }));
+  if (wheels.sensors !== undefined && wheels.sensors.length !== layers.length) throw new ImportError("the A+ wheel map and keymap have different layer counts");
+  wheels.sensors?.forEach((sensorBindings, i) => Object.assign(layers[i]!, { sensorBindings }));
 
   // Oryx's layer colours become lighting on the layers when they read back exactly (D-190); otherwise they stay code.
   const read = board.lighting === undefined ? null : readLighting(parsed.chunks, layers, board.lighting.ledPositions);

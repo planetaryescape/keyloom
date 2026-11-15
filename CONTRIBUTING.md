@@ -269,7 +269,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `vendor` | all | The maker as people know them, such as `foostan` or `Bastard Keyboards`. |
 | `firmware` | all | `qmk` or `zmk`. It decides the importer, the generator and the validator rules. |
 | `keyCount` | all | The number of keys. It must equal the number of keys in `geometry.json`. |
-| `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults. |
+| `sensorPositions` | optional | Encoder press positions in firmware sensor order. Alternative encoder footprints may share one press position; keyloom edits those turn bindings together. Requires ZMK `build.sensorBindings` defaults or the QMK A+ wheel adapter. |
 | `revisions` | all | A list of hardware revisions. One entry when there is only one. |
 | `revisions[].id` | all | A short name, such as `default` or `rev1`. Unique in the board. |
 | `revisions[].label` | optional | What Build and flash calls this revision when it must ask which one the keyboard is, such as `Rev A`. Only a board with more than one revision needs it. |
@@ -285,6 +285,11 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.layoutMacro` | `qmk-docker` | The `LAYOUT_*` macro the keymap uses. Geometry is read from the layout of the same name. |
 | `revisions[].build.keymapsDir` | `qmk-docker` | Where keyloom writes the keymap, relative to the QMK tree. |
 | `revisions[].build.submodules` | `qmk-docker` | Submodules the build needs. May be empty. |
+| `revisions[].build.moduleSources` | `qmk-docker`, optional | External QMK module collections, pinned independently and copied into the read-only build source. |
+| `revisions[].build.wheelAdapter` | `qmk-docker`, optional | `ploopy-aplus` dispatches the A+'s two analog wheels. Requires eight keys and `sensorPositions: [6, 7]`. Untouched wheels retain factory behavior. |
+| `revisions[].build.moduleSources[].name` | `moduleSources` | Module owner directory under `modules/`, such as `drashna`. Names must be unique and contain no path separators. |
+| `revisions[].build.moduleSources[].repo` | `moduleSources` | Repository URL for the collection. |
+| `revisions[].build.moduleSources[].sha` | `moduleSources` | Full 40-character commit SHA for the collection. |
 | `revisions[].build.modules` | `qmk-docker` | QMK community modules to write into `keymap.json`. ZSA boards use it. Leave it out otherwise. |
 | `revisions[].build.layoutFile` | `qmk-docker` | The JSON file with `layouts`, when it isn't `keyboards/<qmkTarget>/keyboard.json`. |
 | `revisions[].build.artifact` | `qmk-docker` | `bin` (default), `hex` or `uf2`. |
@@ -364,6 +369,17 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `limits.lighting` | all | Why the board can't show per-key colours, such as "its lights are underglow, which shows one effect across the whole strip". Set it on a board with no `lighting`. |
 | `settingDefaults` | all | Optional. An object from a setting's name to the value this board has by default when that differs from the firmware's, such as `"MOUSEKEY_ENABLE": true`. |
 | `display` | all | Optional. Changes how the board is drawn, never what positions mean. |
+| `display.materials` | all, optional | Fixed physical colors for the case, caps and trackball. They stay the same in either theme. |
+| `display.materials.case` | optional | Case material colors. |
+| `display.materials.case.light` | case material | Highlight color as `#rrggbb`. |
+| `display.materials.case.dark` | case material | Shade color as `#rrggbb`. |
+| `display.materials.caps` | optional | Keycap or button material colors. |
+| `display.materials.caps.light` | cap material | Highlight color as `#rrggbb`. |
+| `display.materials.caps.dark` | cap material | Shade color as `#rrggbb`. |
+| `display.materials.caps.legend` | cap material | Text color as `#rrggbb`. Check its contrast against both cap colors. |
+| `display.materials.ball` | optional | Trackball material colors. |
+| `display.materials.ball.light` | ball material | Highlight color as `#rrggbb`. |
+| `display.materials.ball.dark` | ball material | Shade color as `#rrggbb`. |
 | `display.rotate` | all | Optional. A list of rotations to draw. |
 | `display.rotate[].positions` | all | The keys to turn. |
 | `display.rotate[].r` | all | The angle in degrees. |
@@ -379,7 +395,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `display.statusLeds[].x` | all | An LED's horizontal position, in key units after `rotate` and `shift`. |
 | `display.statusLeds[].y` | all | The LED's vertical position, in the same units. |
 | `display.caseHug` | all | Optional. Draws a case that hugs the keys, reaching this many key units past each one, instead of one outline around them all. Keys turned about the same point (a thumb fan) get a curved band. The Glove80 uses `0.3`. |
-| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. An optional `kind: "rotary-encoder"` draws a circular knurled control while retaining its editable press binding. Drawing only: binding order never changes. |
+| `display.keyShapes` | all | Optional. Caps that aren't the geometry's rectangle, keyed by position as a string (the Moonlander's red thumb caps). Each may give `x`, `y`, `w` and `h` to replace the cap's box, in the geometry's unrotated key units, and an `outline` of `[x, y]` points in fractions of that box, such as `[[0, 0.38], [0.5, 0], [1, 0.38], [1, 1], [0, 1]]` for a house shape; corners are rounded for you. An optional `kind: "rotary-encoder"` draws a circular control while retaining its editable press binding. Set `profile: "flat"` for shallow buttons or smooth dials. Flat contours include their physical gaps. `printArea: {x, y, w, h}` reserves a safe legend rectangle in fractions of the drawn box. The key card uses the same flat shape and material. Drawing only: binding order never changes. |
 | `display.colourways` | all | Optional. The case and keycap colours the maker sells, so the drawn board can be pinned to the one on the desk in Settings (D-395, D-319). Leave it out and the board follows the theme. |
 | `display.colourways.cases` | all | The case colours, at least two. |
 | `display.colourways.cases[].id` | all | A short id, kept in the browser when it is pinned, such as `black`. |

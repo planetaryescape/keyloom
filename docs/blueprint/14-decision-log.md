@@ -3454,3 +3454,39 @@ The picker opens with the card body at its top. Search keeps keyboard focus with
 ### D-605: An open picker keeps long source details behind a disclosure. Extends D-602 and D-604. (2026-11-13)
 
 The picker follows the compact preview before source notes and other details. A full-name caption that cannot fit on the cap becomes an explicit Full firmware name disclosure while the picker is open. Closing the picker restores the full caption. The source remains unchanged and available through that disclosure and the tap's accessible name. This keeps focused search visible even when a native binding has an unbounded source block.
+
+### D-606: QMK recipes can pin external module collections. Extends D-040 and D-584. (2026-11-14)
+
+The Ploopy A+ factory keymap needs Drashna's acceleration and gesture modules. Its firmware tree records the module commit without a usable submodule URL. A QMK recipe can declare `moduleSources` with a directory name, repository and full commit SHA. Trusted checkouts stage those collections under `qmk/modules/<name>` in the existing read-only source volume. Their identities participate in the cache key. Boards without external collections keep their prior cache identity.
+
+A firmware default import also fetches optional sibling `config.h`, `rules.mk` and `keymap.json`. Only a 404 means absent. Other failures refuse the incomplete import. C imports preserve custom includes, typedefs, ordinary enums and globals before the generated keymap. Custom-keycode enums can start at `SAFE_RANGE` or `ZSA_SAFE_RANGE` regardless of their name. Mixed numeric and named layer indexes retain the available names.
+
+A failed companion download returns a no-default reason and stops the lookup. It cannot silently select a JSON default instead. Generation puts declarations that use custom keycodes after their generated enum. Later declarations keep their order so their dependencies remain available.
+
+The compiled A+ candidate passed USB detection, factory import, validation of a button swap, source generation and a real UF2 build. No device was flashed. See [the board reference](../../boards/ploopy/aplus/README.md).
+
+### D-607: Flat controls keep their physical shape in the key card. Extends D-277. (2026-11-14)
+
+A trackball button is not a sculpted keyboard cap. `display.keyShapes` can declare a flat profile and a safe `printArea` rectangle. Its physical contour already includes the gaps between buttons. The board and key card share that outline, aspect ratio and print area. Rotary presses stay circular. Advanced names retain the existing compact-label fallback and full accessible source.
+
+Flat key cards allocate tap, hold and corner regions from the same safe height. Short controls retain a positive tap area.
+
+Optional `display.materials` sets fixed case, cap, legend and ball colors. A crafted case with materials receives a shaded top and sidewall. The ball receives a reflected highlight. Other boards retain their existing materials. Mouse-action legends omit the word “mouse” because that category is not a hold action.
+
+The A+ display derives its contours from the maker's CAD assembly. Its yellow plastic and blue ball follow the owner's photos. The [board reference](../../boards/ploopy/aplus/README.md) records the mechanical source, measurements and license.
+
+### D-608: A+ analog wheels use per-layer turn pairs through a guarded factory adapter. Extends D-471 and D-606. (2026-11-14)
+
+The A+ reads magnetic wheel angles in its custom pointing-device callback. It does not use QMK's ordinary encoder map. A QMK recipe can select `wheelAdapter: "ploopy-aplus"`, with press positions 6 and 7. The existing sensor model, validator, draft and change operations carry its two wheels in left-to-right order.
+
+Each wheel defaults to native `ploopy-aplus:factory`. The card offers factory or custom mode per knob and layer. Custom mode has clockwise and counterclockwise key, scrolling or Nothing actions. It uses the highest active layer and pauses while the knob is held. Factory mode retains Ploopy's scrolling, arrows and Control-layer volume behavior.
+
+Generation checks the factory callback before adding a wheel hook. The hook consumes only custom-wheel deltas and leaves factory-wheel deltas intact. It accumulates key taps at the factory low-resolution threshold and clears partial turns across layer changes. Unknown callback changes refuse generation instead of silently replacing source. Generated helper code carries typed metadata. Reimport removes that code only when it matches the metadata exactly, then restores the editable pairs.
+
+The shared CLI path validates, saves and builds wheel edits. A native C harness checks direction dispatch, layer changes, factory fall-through, held knobs and deadzone filtering. Physical clockwise orientation and behavior after flashing still need a hardware check.
+
+### D-609: Short physical caps keep readable slot controls below the cap. Extends D-607 and D-337. (2026-11-14)
+
+A flat button's safe print area can be too short for tap, hold and filled corner labels. The card keeps the physical outline and the legend font floor. If all regions cannot fit, named hold and corner controls appear below the cap. The tap stays on the cap when its line fits. Otherwise it also becomes a named control below. These controls open the existing slot pickers and retain their accessible names, draft marks and focus states.
+
+A cap with enough space keeps its existing action regions. Its corner band stays 20 px high for the 12 px label. This replaces proportional corner bands that could be shorter than their own line box. The component fixture checks the compact A+ shape, a short wide control, both themes and slot clicks. See [the review evidence](../research/ui-audit/ploopy-aplus/corner-labels/README.md).

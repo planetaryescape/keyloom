@@ -3,7 +3,7 @@ import { animate } from "motion";
 import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from "react";
 import type { Legend } from "../../layout/legend.ts";
 import type { KeycapColour } from "../../boards/schema.ts";
-import { fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
+import { CAP_INSET, fitLegend, HOLD_SIZE, isCondensed, tapRange } from "./fit.ts";
 import { FRONT_INSET, frontWords, type FrontMode } from "./front-words.ts";
 import { measureText } from "./measure.ts";
 import { roundedPath } from "./case-shape.ts";
@@ -28,6 +28,10 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
   legendTurn?: number;
   /** With legendTurn: the upright box, in key units, the print is centred in, where the cap's own box would poke out of the cap. */
   printBox?: { w: number; h: number };
+  /** A safe rectangle inside a curved control, in fractions of the drawn box. */
+  printArea?: { x: number; y: number; w: number; h: number } | undefined;
+  /** Physical contours already include their gaps. */
+  gap?: number;
   /** The key's LED colour on this layer as a hex: it bleeds onto the plate under the cap and tints the skirt (D-263). */
   led?: string;
   /** The physical keycap's colour (the Moonlander's red thumb keys). */
@@ -55,7 +59,7 @@ interface CapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"
 }
 
 // An outline in fractions, drawn into a box of w by h px whose top-left sits at (x, y), with rounded corners.
-function shapePath(outline: readonly (readonly [number, number])[], x: number, y: number, w: number, h: number, radius: number): string {
+export function shapePath(outline: readonly (readonly [number, number])[], x: number, y: number, w: number, h: number, radius: number): string {
   return roundedPath(outline.map(([fx, fy]) => ({ x: x + fx * w, y: y + fy * h })), radius);
 }
 
@@ -153,7 +157,7 @@ function Print({ legend, compactTap, unit, width, floorPx, reach, breakable, sym
 // the legends printed on the top and the front. Kind is not drawn at rest; Inspect tints the face by kind (D-264). The selection,
 // draft and remembered marks are each their own element so they can show together.
 export function Cap({
-  tone, legend, compactTap, unit, floorPx, width, as = "button", legendTurn, printBox, keycap, led, reach, outgoing = null,
+  tone, legend, compactTap, unit, floorPx, width, as = "button", legendTurn, printBox, printArea, gap = 0.09, keycap, led, reach, outgoing = null,
   rippleMs = 0, frontMode = "both", pressed, pending = false, remembered = false, breakable = false, shape, style, ...rest
 }: CapProps) {
   const body = useRef<HTMLSpanElement>(null);
@@ -170,7 +174,7 @@ export function Cap({
 
   const turn = legendTurn === undefined ? undefined : ({ "--turn": `${legendTurn}deg`, ...(printBox === undefined ? {} : { "--print-w": `${printBox.w * unit}px`, "--print-h": `${printBox.h * unit}px` }) } as CSSProperties);
   const print = (value: CapLegend, className: string) => (
-    <Print legend={value} compactTap={value === legend ? compactTap : undefined} unit={unit} width={printBox?.w ?? width} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
+    <Print legend={value} compactTap={value === legend ? compactTap : undefined} unit={unit} width={printArea === undefined ? (printBox?.w ?? width) : (width - gap) * printArea.w + CAP_INSET} floorPx={floorPx} reach={reach} breakable={breakable} symbols={frontMode} className={className} />
   );
   const selected = rest["aria-pressed"] === true;
   const source = breakable ? [legend.tap, legend.hold, legend.double].filter((text) => text !== undefined).join(" / ") : null;
@@ -213,7 +217,7 @@ export function Cap({
       ) : null}
     </>
   );
-  const capStyle = { "--u": `${unit}px`, "--ripple": `${Math.round(rippleMs)}ms`, ...(led === undefined ? {} : { "--led": led }), ...style } as CSSProperties;
+  const capStyle = { "--u": `${unit}px`, "--ripple": `${Math.round(rippleMs)}ms`, ...(printArea === undefined ? {} : { "--print-x": `${printArea.x * 100}%`, "--print-y": `${printArea.y * 100}%`, "--print-width": `${printArea.w * 100}%`, "--print-height": `${printArea.h * 100}%` }), ...(led === undefined ? {} : { "--led": led }), ...style } as CSSProperties;
   if (as === "span") {
     return (
       // A swatch only illustrates; whatever it sits beside carries the words.

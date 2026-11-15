@@ -20,11 +20,11 @@ import { tempDir } from "../../helpers/tmp.ts";
 const real = await moonlander();
 const { layout } = await importOryxSource(FIXTURE_DIR, real.definition);
 
-async function setup(over: { makefile?: boolean } = {}) {
+async function setup(over: { makefile?: boolean; traceSources?: boolean } = {}) {
   const origin = originRepo({ makefile: over.makefile ?? true });
   const rev = (r: BoardDefinition["revisions"][number]) => ({ ...r, source: { ...r.source, repo: origin.url, sha: origin.sha }, build: { ...r.build, submodules: [] } });
   const board: BoardDefinition = { ...real.definition, revisions: real.definition.revisions.map(rev) };
-  const bin = fakeBinDir({ docker: FAKE_DOCKER });
+  const bin = fakeBinDir({ docker: over.traceSources ? `echo "$@" >> "$FAKE_DOCKER_LOG"\n${FAKE_DOCKER}` : FAKE_DOCKER });
   const dir = tempDir();
   const dockerLog = join(dir, "docker.calls");
   const binFile = join(dir, "fake.bin");
@@ -67,6 +67,30 @@ describe("buildQmk (fake docker)", () => {
     expect(make).not.toContain(" -it");
     expect(make).not.toContain(" -t ");
     expect(s.lines.some((l) => l.includes("DFU 3297:2003"))).toBe(true);
+  });
+
+  test("stages external module sources at their pinned commits and invalidates the cache when a pin changes", async () => {
+    const s = await setup({ traceSources: true });
+    const module = originRepo();
+    await Bun.write(join(module.dir, "module.c"), "int module_version = 1;\n");
+    git(module.dir, "add", "module.c");
+    git(module.dir, "commit", "--quiet", "-m", "module v1");
+    const first = git(module.dir, "rev-parse", "HEAD");
+    const rev = s.board.revisions.find((r) => r.id === "revb")!;
+    if (rev.build.kind !== "qmk-docker") throw new Error("expected a QMK build");
+    rev.build.moduleSources = [{ name: "drashna", repo: module.url, sha: first }];
+    try {
+      await s.build("ok");
+      let calls = await Bun.file(s.dockerLog).text();
+      expect(calls).toContain("qmk/modules/drashna 1");
+      expect(calls.match(/volume create/g)).toHaveLength(1);
+      await Bun.write(join(module.dir, "module.c"), "int module_version = 2;\n");
+      git(module.dir, "commit", "--quiet", "-am", "module v2");
+      rev.build.moduleSources[0]!.sha = git(module.dir, "rev-parse", "HEAD");
+      await s.build("ok");
+      calls = await Bun.file(s.dockerLog).text();
+      expect(calls.match(/volume create/g)).toHaveLength(2);
+    } finally { s.log.close(); }
   });
 
   test("the next build discards source and Git configuration written through the prior mount", async () => {

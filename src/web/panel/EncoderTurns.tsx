@@ -1,6 +1,6 @@
 import { RotateCcw, RotateCw } from "lucide-react";
 import type { BoardDefinition } from "../../boards/schema.ts";
-import { boardSensorDefaults, effectiveSensors } from "../../boards/sensors.ts";
+import { APLUS_FACTORY_WHEEL, boardSensorDefaults, effectiveSensors } from "../../boards/sensors.ts";
 import { KEYCODES, keyCodeLabel } from "../../layout/keycodes.ts";
 import type { Binding, Layer, SensorBinding } from "../../layout/schema.ts";
 import { deepEqual } from "../../layout/equal.ts";
@@ -11,6 +11,7 @@ const MOUSE: Action[] = [
   ...["RIGHT", "LEFT", "DOWN", "UP"].map((direction): Action => ({ kind: "native", firmware: "zmk", source: `&mmv MOVE_${direction}`, label: `Mouse ${direction.toLowerCase()}` })),
   ...["UP", "DOWN", "LEFT", "RIGHT"].map((direction): Action => ({ kind: "native", firmware: "zmk", source: `&msc SCRL_${direction}`, label: `Scroll ${direction.toLowerCase()}` })),
 ];
+const QMK_SCROLL: Action[] = ["U", "D", "L", "R"].map((direction, index) => ({ kind: "native", firmware: "qmk", source: `MS_WHL${direction}`, label: `Scroll ${["up", "down", "left", "right"][index]}` }));
 const valueOf = (a: Action) => a.kind === "key" ? `key:${a.code}${a.mods?.length ? `:${a.mods.join("+")}` : ""}` : a.kind === "native" ? a.source : "none";
 export const turnActionWords = (a: Binding): string => a.kind === "key" ? keyCodeLabel(a.code) : a.kind === "native" ? a.label : "Nothing";
 
@@ -22,6 +23,10 @@ export function EncoderTurns({ board, layer, position, draft, onChange }: {
   const sensors = draft === undefined ? effectiveSensors(board, layer) : draft === null ? boardSensorDefaults(board) : draft;
   const current = sensors[indices[0]!];
   if (!current) return null;
+  const defaults = boardSensorDefaults(board);
+  const defaultWheel = defaults[indices[0]!];
+  const factory = defaultWheel?.kind === "native" && defaultWheel.source === APLUS_FACTORY_WHEEL;
+  const mouseActions = board.firmware === "qmk" ? QMK_SCROLL : MOUSE;
   const setAction = (direction: "clockwise" | "counterclockwise", action: Action) => {
     const rotation = current.kind === "rotation" ? current : { kind: "rotation" as const, clockwise: { kind: "none" as const }, counterclockwise: { kind: "none" as const } };
     onChange(sensors.map((s, i) => indices.includes(i) ? { ...rotation, [direction]: action } : s));
@@ -29,26 +34,38 @@ export function EncoderTurns({ board, layer, position, draft, onChange }: {
   return (
     <section className="encoder-turns" aria-label="Encoder turns">
       <p className="card-note">Turns on {layer.name}. Edit the press below.</p>
-      {(["clockwise", "counterclockwise"] as const).map((direction) => {
+      {factory ? <>
+        <label className="encoder-turn">
+          <span>Turn behavior</span>
+          <select aria-label="Turn behavior" value={current.kind === "native" ? "factory" : "custom"} onChange={(event) => {
+            onChange(sensors.map((sensor, index) => !indices.includes(index) ? sensor : event.target.value === "factory" ? defaults[index]! : { kind: "rotation", clockwise: { kind: "none" }, counterclockwise: { kind: "none" } }));
+          }}>
+            <option value="factory">Factory scrolling and volume</option>
+            <option value="custom">Custom turns on this layer</option>
+          </select>
+        </label>
+        <p className="card-note">{current.kind === "native" ? "Factory turns keep Ploopy’s scrolling, arrow, and volume modes. Choose custom turns to assign both directions." : "These turns replace factory turns for this knob on this layer. Holding the knob pauses its turns."}</p>
+      </> : null}
+      {(factory && current.kind === "native" ? [] : ["clockwise", "counterclockwise"] as const).map((direction) => {
         const action = current.kind === "rotation" ? current[direction] : null;
         const value = action === null ? "custom" : valueOf(action);
         const Icon = direction === "clockwise" ? RotateCw : RotateCcw;
-        const custom = action !== null && ((action.kind === "key" && (action.mods?.length ?? 0) > 0) || (action.kind === "native" && !MOUSE.some((m) => valueOf(m) === value)));
+        const custom = action !== null && ((action.kind === "key" && (action.mods?.length ?? 0) > 0) || (action.kind === "native" && !mouseActions.some((m) => valueOf(m) === value)));
         return <label className="encoder-turn" key={direction}>
           <span><Icon size={15} aria-hidden="true" />{direction === "clockwise" ? "Clockwise" : "Counterclockwise"}</span>
           <select aria-label={direction === "clockwise" ? "Clockwise turn" : "Counterclockwise turn"} value={value} onChange={(event) => {
             const selected = event.target.value;
-            const mouse = MOUSE.find((a) => valueOf(a) === selected);
+            const mouse = mouseActions.find((a) => valueOf(a) === selected);
             setAction(direction, mouse ?? (selected === "none" ? { kind: "none" } : { kind: "key", code: selected.slice(4) }));
           }}>
             {action === null ? <option value="custom" disabled>Custom encoder behaviour</option> : custom ? <option value={value} disabled>{turnActionWords(action)}</option> : null}
             <option value="none">Nothing</option>
-            <optgroup label="Mouse">{MOUSE.map((a) => <option value={valueOf(a)} key={valueOf(a)}>{turnActionWords(a)}</option>)}</optgroup>
+            <optgroup label="Mouse">{mouseActions.map((a) => <option value={valueOf(a)} key={valueOf(a)}>{turnActionWords(a)}</option>)}</optgroup>
             <optgroup label="Keys">{KEYCODES.map((k) => <option value={`key:${k.name}`} key={k.name}>{k.label}</option>)}</optgroup>
           </select>
         </label>;
       })}
-      {deepEqual(sensors, boardSensorDefaults(board)) ? null : <button type="button" className="link-button" onClick={() => onChange(null)}>Use board defaults on this layer</button>}
+      {factory || deepEqual(sensors, defaults) ? null : <button type="button" className="link-button" onClick={() => onChange(null)}>Use board defaults on this layer</button>}
     </section>
   );
 }

@@ -53,6 +53,7 @@ function checkRecipes(def: BoardDefinition, rev: BoardRevision, err: (message: s
   if (rev.build.kind === "kanata-config" || rev.flash.kind === "kanata-reload") err(`${at}: kanata recipes are for kanata boards`);
   if (rev.device) err(`${at}: device is for kanata boards`);
   if (def.firmware === "qmk") {
+    if (rev.build.kind === "qmk-docker" && rev.build.wheelAdapter === "ploopy-aplus" && def.sensorPositions === undefined) err(`${at}: the A+ wheel adapter needs sensorPositions [6, 7]`);
     if (!rev.qmkTarget) err(`${at} needs a qmkTarget`);
     if (rev.build.kind !== "qmk-docker") err(`${at}: a QMK board builds with qmk-docker, not ${rev.build.kind}`);
     if (rev.flash.kind === "uf2-drives" && rev.build.kind === "qmk-docker" && rev.build.artifact !== "uf2") err(`${at}: uf2-drives flashing needs build.artifact "uf2"`);
@@ -126,7 +127,10 @@ function checkFacts(board: Board, dir: string, issues: CheckIssue[]): void {
   if (def.sensorPositions !== undefined) {
     for (const position of def.sensorPositions) if (position >= def.keyCount) err(`sensorPositions refers to position ${position}, but keyCount is ${def.keyCount}`);
     for (const revision of def.revisions) {
-      if (def.firmware !== "zmk" || revision.build.kind !== "zmk-west-docker" || revision.build.sensorBindings?.length !== def.sensorPositions.length) err(`revision "${revision.id}": sensorPositions must match the ZMK sensorBindings defaults`);
+      const aplus = def.firmware === "qmk" && revision.build.kind === "qmk-docker" && revision.build.wheelAdapter === "ploopy-aplus";
+      if (aplus) {
+        if (def.keyCount !== 8 || def.sensorPositions.length !== 2 || def.sensorPositions[0] !== 6 || def.sensorPositions[1] !== 7) err(`revision "${revision.id}": the A+ wheel adapter needs eight keys and sensorPositions [6, 7]`);
+      } else if (def.firmware !== "zmk" || revision.build.kind !== "zmk-west-docker" || revision.build.sensorBindings?.length !== def.sensorPositions.length) err(`revision "${revision.id}": sensorPositions must match the ZMK sensorBindings defaults`);
     }
   }
 

@@ -59,11 +59,11 @@ describe("enum layer names", () => {
     expect(issue?.message ?? "").toContain("line 2 (my_fn(_NAV);)");
   });
 
-  test("numbers keep working, and a mix of numbers and names names no layers", async () => {
+  test("numbers keep working, and mixed indexes keep each named layer", async () => {
     const numbers = await importQmkSource({ name: "t", keymapC: keymap("", [layer("0", "MO(1)", "KC_A"), layer("1", "KC_B", "KC_C")].join("\n")) }, await template());
     expect(numbers.layout.layers.map((l) => l.name)).toEqual(["Layer 0", "Layer 1"]);
     const mixed = await importQmkSource({ name: "t", keymapC: keymap("enum layers { A, B };", [layer("A", "KC_A", "KC_B"), layer("1", "KC_C", "KC_D")].join("\n")) }, await template());
-    expect(mixed.layout.layers.map((l) => l.name)).toEqual(["Layer 0", "Layer 1"]);
+    expect(mixed.layout.layers.map((l) => l.name)).toEqual(["A", "Layer 1"]);
   });
 
   test("a member with no value, a gap and a repeat are errors that say so", async () => {
