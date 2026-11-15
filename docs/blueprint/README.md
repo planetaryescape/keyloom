@@ -12,6 +12,8 @@ To distinguish a published CLI from an installed or running desktop app, use [Ve
 
 To try per-layer ZMK encoder editing, follow [mouse turns on Base, media on Numbers](../encoder-layers.md). The recipe states availability, uses synthetic data and stops before flashing.
 
+For the QMK Ploopy A+, follow [volume turns without changing the presses](../ploopy-aplus-turns.md). It uses two sensor entries and distinguishes generated firmware from a JSON backup.
+
 To navigate from a conversation, follow [ask the agent to open a view](../agent-views.md). It covers the four released destinations and what an acknowledgement does and does not prove.
 
 | # | Document | What it covers |
