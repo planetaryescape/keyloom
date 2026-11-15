@@ -1,5 +1,7 @@
 # Ploopy A+ uses the factory QMK layout
 
+Available in v0.81.0. For a checked CLI path that stops before flashing, follow [volume turns without changing the presses](../../../docs/ploopy-aplus-turns.md).
+
 ```sh
 keyloom --data-dir /tmp/keyloom-aplus config new 'A+ factory' --blank --board ploopy/aplus
 keyloom --data-dir /tmp/keyloom-aplus build 'A+ factory'
@@ -20,6 +22,8 @@ Factory mode retains Ploopy's scrolling, arrow and volume modes. Custom mode rep
 The CLI and agent use `setSensorBindings`. Sensor 0 is the left knob, and sensor 1 is the right knob. Preserve the other sensor when changing one. A native sensor with source `ploopy-aplus:factory` keeps factory mode. `null` restores both board defaults on that layer. The validator still requires consent before dropping a reachable action.
 
 The wheel adapter checks the pinned factory callback before adding custom turns. It refuses unknown callback changes. Firmware export and reimport retain editable turn pairs. The importer also checks generated wheel code against its saved metadata before removing it. It refuses edited code rather than losing it.
+
+Keep a `keyloom layout export` JSON file for an editable backup. Generated QMK source preserves turn pairs and bindings, but writes numeric layer indexes. Reimport can replace enum-derived layer names with `Layer 0`, `Layer 1` and so on. The [CLI recipe](../../../docs/ploopy-aplus-turns.md#keep-a-json-backup) checks the JSON backup separately.
 
 ## Firmware comes from pinned sources
 

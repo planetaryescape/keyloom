@@ -45,6 +45,8 @@ What an Oryx export of BK's actual layout contains was spike S3 ([../research/sp
 
 - **Layers named with an enum (D-375):** QMK's own keymaps write `enum layers { BASE, NAV }`, `[BASE] = LAYOUT(...)`, `MO(NAV)` and `LT(NAV, KC_A)`. The tree-sitter parse resolves each enum member to its index (explicit values, `= BASE + 1` and the members after them included), reads the layer keys by those indexes, and keeps the member as the layer's name, minus leading underscores. Layers must come out numbered 0 to n-1; a member with no value keyloom can compute, a gap or a repeat is an import error that says so. Generation still writes numbers (`[0] = LAYOUT`), and the enum itself is not kept.
 
+  Reimporting generated C can therefore replace those names with `Layer 0`, `Layer 1` and so on. Binding and layer-ID preservation does not establish display-name preservation. Use `keyloom layout export <config> --out <file.json>` for the editing model, including layer names. The [A+ recipe](../ploopy-aplus-turns.md#keep-a-json-backup) checks both formats separately.
+
 - **Custom keycodes (D-377):** a keymap's own `enum custom_keycodes` is kept as passthrough (anchor `custom-keycodes`, one member per line) and the generated enum writes it after ZSA's `RGB_SLD` and the macros, so `VRSN` in a layer and `case VRSN:` in `process_record_user` compile. Members keyloom writes itself (`RGB_SLD` on a ZSA board, the `ST_MACRO_n` of macros it imported) are not carried. A case whose switch sat inside `if (record->event.pressed)` keeps that guard. A member with a name keyloom's enum also writes is an import error naming it (and a generation error if a later edit creates the clash).
 
 ## Generation writes `keymap.c`, `config.h` and `rules.mk`

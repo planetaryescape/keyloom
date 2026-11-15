@@ -13,6 +13,7 @@ The CLI equivalent is `keyloom agent replan <config> --proposal <id> --draft --f
 - Configure any QMK or ZMK keyboard, and the MacBook keyboard, from one app.
 - Click a key and change it. Tap, hold, double-tap and tap-then-hold are slots on the key, and macros and combos are made on the board.
 - Edit supported ZMK encoder turns per layer and keep their presses as ordinary keys. [Try mouse turns on Base with media on Numbers](docs/encoder-layers.md).
+- Configure the Ploopy A+ trackball's six buttons, knob presses and per-layer turns. [Try volume turns without changing the presses](docs/ploopy-aplus-turns.md).
 - Have changes reach the keyboard without touching it, where the board supports that.
 - Tell the AI what's in your way. It proposes changes, and you preview them on the keys before accepting.
 - Copy a setup from one of your boards to another, even when the keys differ.
@@ -100,6 +101,7 @@ keyloom import --board moergo/glove80 ~/Downloads/layout.keymap
 | Board | Firmware | Import from | Flashing | Per-key colours |
 |---|---|---|---|---|
 | ZSA Moonlander (rev A and B) | QMK | Oryx source zip | Zapp. Hands-free once a keyloom build is on the board | Yes |
+| [Ploopy A+ trackball](boards/ploopy/aplus/README.md) | QMK | Factory default or QMK source folder | UF2 boot drive, entered manually. Physical acceptance after flashing remains unchecked | No per-key RGB |
 | MoErgo Glove80 | ZMK | Layout Editor `.keymap` | UF2 drive per half. keyloom's `keyloom-zmk` module lets it restart each half into the bootloader itself after one manual flash | No: its lights show one effect across all keys |
 | foostan Corne | ZMK | ZMK `.keymap` | The same as the Glove80 | No |
 | Keebart Corne Choc Pro BT (46 positions, two encoders) | ZMK | ZMK `.keymap` | Matching UF2 per half on KEEBART; [first-flash record](docs/issues/keebart-corne-first-flash.md) | Per-key/layer adapter; [BT LED map verification pending](docs/issues/corne-per-key-rgb.md) |

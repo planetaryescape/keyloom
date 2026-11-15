@@ -18,11 +18,11 @@ The broader focused run passed 316 tests across 23 files. The final board, picke
 
 ## The review preview stopped before shipping
 
-The current compiled candidate is `/tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64`. It reports the base version `0.80.6`. Its A+ changes are unreleased.
+Before v0.81.0 shipped, the compiled review candidate was `/tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64`. It reported the base version `0.80.6`. The released and installed versions are recorded in [the delivery check](#v0810-is-shipped-installed-and-live).
 
 The final review preview served `/tmp/keyloom-aplus-review` on port 4489. It restored the earlier edited `A+ factory` config after a separate wheel-test config omitted six button assignments. A comparison with the earlier revision reported no button differences after recovery. Keep wheel-test configs on a separate port. The review server stopped at BK's request on 15 November 2026. Its data remains intact. We did not flash a keyboard.
 
-To restart the preview:
+To restart that historical preview with its retained data:
 
 ```sh
 /tmp/keyloom-aplus-final-review-candidate/keyloom-darwin-arm64 \
@@ -56,7 +56,7 @@ All ten PR checks passed on `1191a426ab0e8e66b32e9b727d1cc48df3dcb39c`. The four
 
 The broader follow-up run passed 524 tests with 19 gated skips and no failures across 43 files. The final board and card regressions passed nine tests, including a valid JSON fallback. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-review-focused.log`, `/tmp/keyloom-aplus-review-final-regressions.log`, `/tmp/keyloom-aplus-review-typecheck.log` and `/tmp/keyloom-aplus-review-dependencies.log`.
 
-The compiled follow-up candidate generated all four firmware source files from scratch revision `rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ`. Output is `/tmp/keyloom-aplus-review-generated`. It serves the same scratch config on port 4489. The earlier preview stopped normally.
+The compiled follow-up candidate generated all four firmware source files from scratch revision `rev_01M7DSQ8JW6YD1WHQ3S3QKV9DQ`. Output is `/tmp/keyloom-aplus-review-generated`. It served the same scratch config on port 4489 during review. The earlier preview stopped normally.
 
 All eight CI jobs passed on `0bc2ab1b`. Both automated review checks completed with neutral results. All four review threads are resolved. CodeRabbit and Baz acknowledged the three functional fixes.
 
@@ -70,7 +70,7 @@ The proportional corner band could be shorter than its label. D-609 keeps readab
 
 The broader QMK, board and card run passed 373 tests with 19 gated skips and no failures. The final web, documentation and C-import run passed 1338 tests with no failures. TypeScript and dependency checks passed. Logs are `/tmp/keyloom-aplus-token-corner-focused.log`, `/tmp/keyloom-aplus-token-corner-final-tests.log`, `/tmp/keyloom-aplus-token-corner-types-complete.log` and `/tmp/keyloom-aplus-token-corner-dependencies.log`.
 
-Next action: merge PR 353, merge the updated release-please PR after its exact-head CI passes, then verify publication and both installed copies. The review server is stopped. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Shipping authorization does not authorize flashing.
+The merge, publication and installed-copy gates from this review are complete, as recorded in [the delivery check](#v0810-is-shipped-installed-and-live). The review server is stopped. Hardware acceptance requires an explicit flash request, then checks of both turn directions, all buttons, gestures and drag scrolling. Physical clockwise orientation remains unchecked. Shipping authorization does not authorize flashing.
 
 ## The shipping review found three more regressions
 

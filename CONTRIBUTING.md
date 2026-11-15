@@ -290,7 +290,7 @@ Paths ending in `[]` are lists. The "For" column says which recipe uses the fiel
 | `revisions[].build.moduleSources[].name` | `moduleSources` | Module owner directory under `modules/`, such as `drashna`. Names must be unique and contain no path separators. |
 | `revisions[].build.moduleSources[].repo` | `moduleSources` | Repository URL for the collection. |
 | `revisions[].build.moduleSources[].sha` | `moduleSources` | Full 40-character commit SHA for the collection. |
-| `revisions[].build.modules` | `qmk-docker` | QMK community modules to write into `keymap.json`. ZSA boards use it. Leave it out otherwise. |
+| `revisions[].build.modules` | `qmk-docker`, optional | QMK community modules to write into `keymap.json`, such as ZSA's Oryx modules or Ploopy's acceleration and gesture modules. Pin external collections with `moduleSources`. Omit it when the board needs no modules. |
 | `revisions[].build.layoutFile` | `qmk-docker` | The JSON file with `layouts`, when it isn't `keyboards/<qmkTarget>/keyboard.json`. |
 | `revisions[].build.artifact` | `qmk-docker` | `bin` (default), `hex` or `uf2`. |
 | `revisions[].build.template` | `zmk-moergo-template` | MoErgo's config template. Only the Glove80 uses it. |
