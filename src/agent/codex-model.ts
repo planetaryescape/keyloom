@@ -11,6 +11,7 @@ import { CodexError, codexErrorFor, notInstalled } from "./codex/errors.ts";
 import { codexBin } from "./codex/login.ts";
 import { type Scratch, codexArgs, prepareScratch, writeInstructions } from "./codex/lockdown.ts";
 import { transcriptPrompt } from "./codex/prompt.ts";
+import { type QuestionGate, questionGate } from "./codex/question-gate.ts";
 import { startToolServer } from "./codex/tool-server.ts";
 import { DEFAULT_MODELS } from "./provider.ts";
 
@@ -77,7 +78,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       // Counting here, not in Codex: it has no iteration cap of its own, so the cap is enforced where the tools run.
       let toolCalls = 0;
       let limitHit = false;
-      let paused = false;
+      const question = questionGate();
       let finished = false;
       let abortRun: (() => void) | undefined;
       let ordered = Promise.resolve();
@@ -87,7 +88,10 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
           // MCP requests can overlap. Queue arrival order before awaiting a tool, so an async terminal call owns the boundary.
           const result = ordered.then(async () => {
             request.signal?.throwIfAborted();
-            if (paused || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
+            if (tool.pauses === true) question.arrived();
+            await question.verdict(tool.pauses === true);
+            request.signal?.throwIfAborted();
+            if (question.isPaused() || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
             if (++toolCalls > request.maxIterations) {
               limitHit = true;
               abortRun?.();
@@ -95,8 +99,8 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
             }
             const out = await tool.run(raw);
             // A question for the person. Codex is stopped when the call's completed item arrives, which is the id the answer will attach to (D-382).
-            // From here every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452).
-            if (tool.pauses === true) paused = true;
+            // Until Codex reports the call failed, every call throws, so nothing is saved after the question and `onPause` has nothing to tell the turn (D-452, D-610).
+            if (tool.pauses === true) question.pause();
             if (tool.completes === true) finished = true;
             return out;
           });
@@ -109,7 +113,7 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       const server = await startToolServer(tools);
       const scratch = prepareScratch(server.token, env);
       try {
-        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isFinished: () => finished, isLimitHit: () => limitHit || paused || finished, isPaused: () => paused, pausing: new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name)), setAbort: (f) => (abortRun = f) });
+        return await runCodex({ request, server, scratch, model, effort, env, timeoutMs, isFinished: () => finished, isLimitHit: () => limitHit || question.isPaused() || finished, question, pausing: new Set(request.tools.filter((t) => t.pauses === true).map((t) => t.name)), setAbort: (f) => (abortRun = f) });
       } finally {
         await server.stop();
         scratch.remove();
@@ -127,7 +131,7 @@ async function runCodex(input: {
   env: Record<string, string | undefined>;
   timeoutMs: number;
   isLimitHit: () => boolean;
-  isPaused: () => boolean;
+  question: QuestionGate;
   isFinished: () => boolean;
   pausing: ReadonlySet<string>;
   setAbort: (abort: () => void) => void;
@@ -195,7 +199,7 @@ async function runCodex(input: {
     return input.pausing.has(call.tool) && !call.error && call.status !== "failed" && tool?.inputSchema.safeParse(call.arguments ?? {}).success === true;
   };
   // A question ends the turn only once Codex confirms the call. If Codex reports it failed, the run carries on and its own ending stands.
-  const stoppedByKeyloom = (): boolean => input.isLimitHit() && !(input.isPaused() && !steps.some((step) => "call" in step && isSuccessfulPausingCall(step.call)));
+  const stoppedByKeyloom = (): boolean => input.isLimitHit() && !(input.question.isPaused() && !steps.some((step) => "call" in step && isSuccessfulPausingCall(step.call)));
   const publish = (kind: "working_note" | "answer") => {
     if (!pendingPublicText) return;
     request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind, text: pendingPublicText });
@@ -218,6 +222,7 @@ async function runCodex(input: {
           failure = `Codex tried to use ${item.type}, which keyloom does not allow, so the run was stopped.`;
           continue;
         }
+        if (event.kind === "item.started" && item.kind === "mcp_tool_call" && input.pausing.has(item.call.tool)) input.question.started(item.call.id);
         if (event.kind === "item.completed") {
           if (questionSeen) continue;
           if (item.kind === "agent_message") {
@@ -229,7 +234,8 @@ async function runCodex(input: {
           } else if (item.kind === "mcp_tool_call") {
             publish("working_note");
             steps.push({ call: { ...item.call, id: `codex_${executionId}_${item.call.id}` } });
-            if ((input.isPaused() && isSuccessfulPausingCall(item.call)) || (input.isFinished() && request.tools.some((tool) => tool.name === item.call.tool && tool.completes) && !item.call.error && item.call.status !== "failed")) {
+            if (input.pausing.has(item.call.tool)) input.question.completed(item.call.id, isSuccessfulPausingCall(item.call));
+            if ((input.question.isPaused() && isSuccessfulPausingCall(item.call)) || (input.isFinished() && request.tools.some((tool) => tool.name === item.call.tool && tool.completes) && !item.call.error && item.call.status !== "failed")) {
               questionSeen = true;
               kill("limit");
             }
@@ -264,7 +270,7 @@ async function runCodex(input: {
 
   const at = steps.findIndex((step) => "call" in step && isSuccessfulPausingCall(step.call));
   const pendingStep = steps[at];
-  if (input.isPaused() && pendingStep && "call" in pendingStep) {
+  if (input.question.isPaused() && pendingStep && "call" in pendingStep) {
     // Everything after the question is dropped: the person's answer may change what comes next.
     const kept = steps.slice(0, at + 1);
     const { call } = pendingStep;
