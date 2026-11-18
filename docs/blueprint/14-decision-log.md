@@ -3490,3 +3490,13 @@ The shared CLI path validates, saves and builds wheel edits. A native C harness 
 A flat button's safe print area can be too short for tap, hold and filled corner labels. The card keeps the physical outline and the legend font floor. If all regions cannot fit, named hold and corner controls appear below the cap. The tap stays on the cap when its line fits. Otherwise it also becomes a named control below. These controls open the existing slot pickers and retain their accessible names, draft marks and focus states.
 
 A cap with enough space keeps its existing action regions. Its corner band stays 20 px high for the 12 px label. This replaces proportional corner bands that could be shorter than their own line box. The component fixture checks the compact A+ shape, a short wide control, both themes and slot clicks. See [the review evidence](../research/ui-audit/ploopy-aplus/corner-labels/README.md).
+
+### D-610: A Codex question holds the turn until Codex confirms or fails it. Refines D-452. (2026-11-18, BK: "fix the still open")
+
+keyloom's `ask_user` handler runs before Codex reports the call. Codex can still report that call as failed. The turn stayed paused after that report, so a corrected question in the same run was refused.
+
+A failed report now releases the pause, and the next call runs. Codex's item id does not reach the MCP handler, so keyloom cannot match a report to the call that paused. It counts reports instead. The pause ends only when every question up to the paused one has failed and no other question is unreported. Only the paused call can be confirmed, because every later call is refused.
+
+A call that arrives during the pause waits up to one second from its arrival for the report, because Codex's events and its MCP requests reach keyloom on separate connections. If no report arrives, the call is refused as before. D-452's rule stands for a question that Codex has not failed: nothing runs after it.
+
+Clearing the pause on any failed `ask_user` report was rejected. A buffered report for an earlier call would release a later valid question and lose it.

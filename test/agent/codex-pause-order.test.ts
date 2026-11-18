@@ -117,3 +117,48 @@ test("a Codex run that fails after an unconfirmed question reports the failure",
     app.db.close();
   }
 });
+
+const correctedQuestion = { ...confirmedQuestion, question: "Keep it on the left or the right?" };
+
+test("a question Codex reports as failed can be asked again in the same run", async () => {
+  const fake = fakeCodex({ steps: [
+    { call: "ask_user", input: confirmedQuestion, codexError: "PRIVATE_FAILURE" },
+    { call: "ask_user", input: correctedQuestion },
+  ] });
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    const result = await sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-retry-"), KEYLOOM_CODEX_BIN: fake.bin } }) });
+    expect(result.status).toBe("awaiting_answer");
+    expect(result.question).toMatchObject({ question: correctedQuestion.question, toolUseId: expect.stringMatching(/^codex_.+_item_1$/) });
+    const presentation = showConversation(app, result.conversationId).presentations[0];
+    expect(presentation?.status).toBe("waiting_user");
+    expect(JSON.stringify(presentation)).not.toContain("PRIVATE_FAILURE");
+  } finally {
+    app.db.close();
+  }
+});
+
+test("a question whose completion Codex has not reported still refuses the next call", async () => {
+  const fake = fakeCodex({ steps: [
+    { call: "ask_user", input: confirmedQuestion, deferCompletion: true },
+    { call: "ask_user", input: correctedQuestion },
+  ] });
+  const base = codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-unreported-"), KEYLOOM_CODEX_BIN: fake.bin } });
+  let questionsRun = 0;
+  const model: AgentModel = { ...base, run: (request) => base.run({ ...request, tools: request.tools.map((tool) => tool.name !== "ask_user" ? tool : {
+    ...tool,
+    run(raw) {
+      questionsRun++;
+      return tool.run(raw);
+    },
+  }) }) };
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    const result = await sendMessage(app, layoutId, { message: "Ask first", model });
+    expect(questionsRun).toBe(1);
+    expect(result.status).toBe("awaiting_answer");
+    expect(result.question).toMatchObject({ question: confirmedQuestion.question, toolUseId: expect.stringMatching(/^codex_.+_item_0$/) });
+  } finally {
+    app.db.close();
+  }
+});
