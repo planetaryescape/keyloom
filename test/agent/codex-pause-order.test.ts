@@ -81,3 +81,37 @@ test("a failed malformed question alone does not create an unanswerable waiting 
     app.db.close();
   }
 });
+
+const confirmedQuestion = { question: "Keep or replace?", options: [{ label: "Keep" }, { label: "Replace" }], considerations: ["It changes the proposal."], step: { n: 1, of: 1 } };
+
+test("a question Codex reports as failed after its handler ran keeps Codex's closing reply", async () => {
+  const fake = fakeCodex({ steps: [
+    { call: "ask_user", input: confirmedQuestion, codexError: "PRIVATE_FAILURE" },
+    { say: "The question could not be asked." },
+  ] });
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    const result = await sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-unconfirmed-"), KEYLOOM_CODEX_BIN: fake.bin } }) });
+    expect(result.status).toBe("complete");
+    expect(result.question).toBeUndefined();
+    expect(result.text).toContain("The question could not be asked.");
+    const presentation = showConversation(app, result.conversationId).presentations[0];
+    expect(presentation?.status).toBe("completed");
+    expect(JSON.stringify(presentation)).not.toContain("PRIVATE_FAILURE");
+  } finally {
+    app.db.close();
+  }
+});
+
+test("a Codex run that fails after an unconfirmed question reports the failure", async () => {
+  const fake = fakeCodex({ steps: [
+    { call: "ask_user", input: confirmedQuestion, codexError: "PRIVATE_FAILURE" },
+    { fail: "The model is overloaded." },
+  ] });
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    await expect(sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-failed-run-"), KEYLOOM_CODEX_BIN: fake.bin } }) })).rejects.toThrow("overloaded");
+  } finally {
+    app.db.close();
+  }
+});

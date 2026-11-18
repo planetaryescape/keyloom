@@ -194,6 +194,8 @@ async function runCodex(input: {
     const tool = request.tools.find((candidate) => candidate.name === call.tool);
     return input.pausing.has(call.tool) && !call.error && call.status !== "failed" && tool?.inputSchema.safeParse(call.arguments ?? {}).success === true;
   };
+  // A question ends the turn only once Codex confirms the call. If Codex reports it failed, the run carries on and its own ending stands.
+  const stoppedByKeyloom = (): boolean => input.isLimitHit() && !(input.isPaused() && !steps.some((step) => "call" in step && isSuccessfulPausingCall(step.call)));
   const publish = (kind: "working_note" | "answer") => {
     if (!pendingPublicText) return;
     request.onPublicMessage?.({ id: `public_${++publicMessages}`, kind, text: pendingPublicText });
@@ -249,12 +251,12 @@ async function runCodex(input: {
     if (killedFor === "abort") throw new DOMException("aborted", "AbortError");
     if (killedFor === "forbidden") throw new CodexError("request", failure ?? "Codex tried to act outside keyloom's tools, so the run was stopped.");
     if (killedFor === "timeout") throw new CodexError("connection", `Codex did not finish within ${Math.round(input.timeoutMs / 60_000)} minutes and was stopped.`);
-    if (failure !== null && !input.isLimitHit()) throw codexErrorFor(failure);
-    if (!input.isLimitHit() && !completed) {
+    if (failure !== null && !stoppedByKeyloom()) throw codexErrorFor(failure);
+    if (!stoppedByKeyloom() && !completed) {
       throw codexErrorFor(lastError ?? (stderr.trim() || `Codex exited with code ${code}`));
     }
   } finally {
-    if (!completed || input.isLimitHit()) publish("working_note");
+    if (!completed || stoppedByKeyloom()) publish("working_note");
     clearTimeout(timer);
     request.signal?.removeEventListener("abort", onAbort);
     if (child.exitCode === null && child.signalCode === null) kill("abort");
@@ -271,7 +273,7 @@ async function runCodex(input: {
       pending: { id: call.id, name: call.tool, input: call.arguments ?? {} },
     };
   }
-  const limited = input.isLimitHit();
+  const limited = stoppedByKeyloom();
   publish(limited ? "working_note" : "answer");
   // A cut-off turn keeps only what finished: a tool call without its result would be unreplayable.
   const completedSteps = limited ? steps.filter((s, i) => "call" in s || steps.slice(i).some((later) => "call" in later)) : steps;
