@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.81.1](https://github.com/planetaryescape/keyloom/compare/v0.81.0...v0.81.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep the reply when Codex reports a question failed ([5bd6d65](https://github.com/planetaryescape/keyloom/commit/5bd6d654fc61142eef9447d04a51eb04d803743a))
+* keep the reply when Codex reports a question failed ([711f3d1](https://github.com/planetaryescape/keyloom/commit/711f3d12185edf23071a7e22539fe5eeb1cc88b1))
+
 ## [0.81.0](https://github.com/planetaryescape/keyloom/compare/v0.80.6...v0.81.0) (2026-11-15)
 
 
