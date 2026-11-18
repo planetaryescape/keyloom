@@ -45,7 +45,7 @@ const QMK_STEPS = new Map<string, Step>([
 
 // Shift, Ctrl, Alt and GUI names as ZMK's keys header spells them, short and long. A name not in here is not a modifier keyloom reads.
 const ZMK_MODS = new Map<string, Mod>([
-  ["LSHFT", "LSFT"], ["LSHIFT", "LSFT"], ["LEFT_SHIFT", "LSFT"], ["RSHFT", "RSFT"], ["RSHIFT", "RSFT"], ["RIGHT_SHIFT", "RSFT"],
+  ["LSHFT", "LSFT"], ["LSHIFT", "LSFT"], ["LSFT", "LSFT"], ["LEFT_SHIFT", "LSFT"], ["RSHFT", "RSFT"], ["RSHIFT", "RSFT"], ["RSFT", "RSFT"], ["RIGHT_SHIFT", "RSFT"],
   ["LCTRL", "LCTL"], ["LCTL", "LCTL"], ["LEFT_CONTROL", "LCTL"], ["RCTRL", "RCTL"], ["RCTL", "RCTL"], ["RIGHT_CONTROL", "RCTL"],
   ["LALT", "LALT"], ["LEFT_ALT", "LALT"], ["RALT", "RALT"], ["RIGHT_ALT", "RALT"],
   ["LGUI", "LGUI"], ["LEFT_GUI", "LGUI"], ["LCMD", "LGUI"], ["LEFT_COMMAND", "LGUI"], ["LWIN", "LGUI"], ["LEFT_WIN", "LGUI"], ["LMETA", "LGUI"], ["LEFT_META", "LGUI"],
