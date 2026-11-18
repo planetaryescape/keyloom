@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.81.2](https://github.com/planetaryescape/keyloom/compare/v0.81.1...v0.81.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* count queue time toward the Codex question wait ([07fb86b](https://github.com/planetaryescape/keyloom/commit/07fb86b65de8fde6e7462dcfe4661800650d6f72))
+* let Codex ask again after it reports a question failed ([8d4439e](https://github.com/planetaryescape/keyloom/commit/8d4439eefc04fa25105f667e2d9b755f559717e8))
+* let Codex retry failed questions and name ZMK sticky modifiers ([580133a](https://github.com/planetaryescape/keyloom/commit/580133aa5df379f4e02355deedf79b4669a65fb3))
+* name sticky modifiers in every spelling ZMK allows ([306f8d0](https://github.com/planetaryescape/keyloom/commit/306f8d0e446cc9357b889d330df999a2e9ca6c42))
+* read ZMK's deprecated Shift names as modifiers ([6975502](https://github.com/planetaryescape/keyloom/commit/6975502222d337c1525775ea5dd6f7979bd714e5))
+
 ## [0.81.1](https://github.com/planetaryescape/keyloom/compare/v0.81.0...v0.81.1) (2026-11-18)
 
 
