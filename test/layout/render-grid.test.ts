@@ -24,6 +24,11 @@ describe("labels", () => {
     expect(bindingLabel({ kind: "transparent" }, ctx)).toBe("▽");
     expect(bindingLabel({ kind: "none" }, ctx)).toBe("×");
     expect(bindingLabel({ kind: "native", firmware: "qmk", source: "TD(DANCE_0)", label: "TD0" }, ctx)).toBe("TD0");
+    expect(bindingLabel({ kind: "native", firmware: "zmk", source: "&sk LEFT_COMMAND", label: "LEFT_COMMAND" }, ctx)).toBe("OS⌘");
+    expect(bindingLabel({ kind: "native", firmware: "zmk", source: "&sticky_key_quick_release LSHFT", label: "sticky_key_quick_release" }, ctx)).toBe("OS⇧");
+    expect(bindingLabel({ kind: "native", firmware: "zmk", source: "&sk RSFT", label: "RSFT" }, ctx)).toBe("OSr⇧");
+    expect(bindingLabel({ kind: "native", firmware: "qmk", source: "OSM(MOD_LCTL)", label: "OSM" }, ctx)).toBe("OS⌃");
+    expect(bindingLabel({ kind: "native", firmware: "zmk", source: "&some_behavior FOO", label: "SB_FOO" }, ctx)).toBe("SB_FOO");
   });
 
   test("a layer that doesn't exist is shown by its id, not hidden", () => {

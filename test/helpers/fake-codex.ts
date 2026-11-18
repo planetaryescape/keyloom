@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 export type FakeStep =
   | { say: string }
-  | { call: string; input: unknown; /** Report the call as failed by Codex rather than by the tool. */ codexError?: string; /** Report this completion after the next call executes, simulating buffered JSONL. */ deferCompletion?: boolean }
+  | { call: string; input: unknown; /** Report the call as failed by Codex rather than by the tool. */ codexError?: string; /** Report this completion after the next call executes, simulating buffered JSONL. */ deferCompletion?: boolean; /** Send MCP's cancel notification for this call after this long. */ cancelAfterMs?: number; /** Report buffered completions after this long, while this call is still running. */ flushDeferredAfterMs?: number }
   | { raw: Record<string, unknown> }
   | { fail: string }
   | { hang: true }
@@ -45,8 +45,9 @@ const url = config["mcp_servers.keyloom.url"];
 const token = process.env.KEYLOOM_MCP_TOKEN;
 const record = { args, prompt, cwd: process.cwd(), env: { HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME, KEYLOOM_MCP_TOKEN: process.env.KEYLOOM_MCP_TOKEN, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, PATH: process.env.PATH }, tools: [], results: [], unauthorised: 0, authLink: (() => { try { return readlinkSync(join(process.env.CODEX_HOME, "auth.json")); } catch { return null; } })(), configToml: (() => { try { return readFileSync(join(process.env.CODEX_HOME, "config.toml"), "utf8"); } catch { return null; } })() };
 const save = () => writeFileSync(join(dir, "record.json"), JSON.stringify(record));
-const rpc = async (method, params, auth = true) => {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(auth ? { authorization: "Bearer " + token } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+const post = (body, auth = true) => fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(auth ? { authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body) });
+const rpc = async (method, params, auth = true, id = 1) => {
+  const r = await post({ jsonrpc: "2.0", id, method, params }, auth);
   if (r.status === 401) { record.unauthorised++; return null; }
   return (await r.json()).result;
 };
@@ -63,7 +64,10 @@ for (const step of scenario.steps) {
     const id = "item_" + n++;
     const base = { id, type: "mcp_tool_call", server: "keyloom", tool: step.call, arguments: step.input };
     out({ type: "item.started", item: { ...base, status: "in_progress" } });
-    const res = await rpc("tools/call", { name: step.call, arguments: step.input });
+    const requestId = "call_" + id;
+    if (step.cancelAfterMs !== undefined) setTimeout(() => void post({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId, reason: "cancelled by the test" } }), step.cancelAfterMs);
+    if (step.flushDeferredAfterMs !== undefined) setTimeout(() => { for (const pending of deferred.splice(0)) out(pending); }, step.flushDeferredAfterMs);
+    const res = await rpc("tools/call", { name: step.call, arguments: step.input }, true, requestId);
     const text = (res?.content ?? []).map((c) => c.text ?? "").join("");
     record.results.push({ tool: step.call, text, isError: Boolean(res?.isError) });
     const event = step.codexError

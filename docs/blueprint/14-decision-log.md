@@ -3500,3 +3500,15 @@ A failed report now releases the pause, and the next call runs. Codex's item id 
 A call that arrives during the pause waits up to one second from its arrival for the report, because Codex's events and its MCP requests reach keyloom on separate connections. If no report arrives, the call is refused as before. D-452's rule stands for a question that Codex has not failed: nothing runs after it.
 
 Clearing the pause on any failed `ask_user` report was rejected. A buffered report for an earlier call would release a later valid question and lose it.
+
+### D-611: A Codex call that Codex cancelled saves nothing. The tool server runs on `Bun.serve`. Extends D-108 and D-610. (2026-11-18, BK: "dont' come back with things still open")
+
+Codex can give up on a tool call while the call waits behind another call or for a question's report. keyloom did not see that, so the call could still run and save a proposal.
+
+The tool server now gives each call a signal. The signal aborts when Codex sends MCP's cancel notification or drops the connection. keyloom checks it after the wait and before the tool runs. A tool that has already started runs to its end, because keyloom's tools have no safe point to stop at.
+
+Each POST has its own MCP server, so a cancel notification arrives on a different server from the call it names. The tool server keeps one map of running calls by request id to join them.
+
+The server moved from `node:http` to `Bun.serve`. Under Bun 1.3.14, `node:http` reported no close event when a client disconnected during a call. `Request.signal` from `Bun.serve` aborted within a millisecond. `idleTimeout` is 0 so that a slow tool is not dropped after Bun's default 10 seconds.
+
+Checked with the Codex CLI 0.169.0: `initialize`, `notifications/initialized` and `tools/list` all succeed. A tool call from the real binary was not checked, because the account's Codex allowance had run out. The official MCP client completed a tool call.

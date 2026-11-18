@@ -52,9 +52,6 @@ const ZMK_MODS = new Map<string, Mod>([
   ["RGUI", "RGUI"], ["RIGHT_GUI", "RGUI"], ["RCMD", "RGUI"], ["RIGHT_COMMAND", "RGUI"], ["RWIN", "RGUI"], ["RIGHT_WIN", "RGUI"], ["RMETA", "RGUI"], ["RIGHT_META", "RGUI"],
 ]);
 
-/** The modifier a ZMK key name means, in any spelling ZMK's keys header gives it. */
-export const zmkModifier = (name: string): Mod | undefined => ZMK_MODS.get(name);
-
 const BT_CLEAR = new Map<string, "clear" | "clearAll" | "next" | "previous">([["BT_CLR", "clear"], ["BT_CLR_ALL", "clearAll"], ["BT_NXT", "next"], ["BT_PRV", "previous"]]);
 
 const ZMK_RGB = new Map<string, LightingOp>([
@@ -126,6 +123,20 @@ function readZmk(native: NativeSource, kept: KeptMap, forWarning: boolean): Read
   if (def.compatible === HOLD_TAP) return holdLayer(native, call.params, def, kept, forWarning);
   const steps = resolveKept(call, def, kept, 1, forWarning);
   return steps === undefined ? { kind: "unknown" } : { kind: "steps", steps };
+}
+
+/**
+ * The modifiers a binding holds for the next key, when it is a one-shot. MoErgo's `&sticky_key_quick_release` is defined in the keymap
+ * template rather than the layout, so it is read by name here without its definition.
+ */
+export function oneShotMods(native: NativeSource): readonly Mod[] | undefined {
+  const reading = readNative(native, new Map());
+  const [step] = reading.kind === "steps" ? reading.steps : [];
+  if (step?.kind === "oneShot") return step.mods;
+  if (native.firmware !== "zmk") return undefined;
+  const name = /^&sticky_key_quick_release\s+(\w+)$/.exec(native.source.trim())?.[1];
+  const mod = name === undefined ? undefined : ZMK_MODS.get(name);
+  return mod === undefined ? undefined : [mod];
 }
 
 /** A call passes exactly the parameters its node declares with `#binding-cells`; a node that declares none reads no call. */
