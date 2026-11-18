@@ -1,6 +1,6 @@
 # Codex cannot ask again after it reports a question failed
 
-Status: open.
+Status: fixed in `8d4439ee` (D-610). A call that arrives while a question is unreported waits up to one second for Codex's report. A failed report releases the question, so the corrected call runs.
 
 The `ask_user` handler can succeed and Codex can then report that call as failed. keyloom keeps the turn paused, so a corrected `ask_user` in the same run is refused with "keyloom is waiting for an answer; this tool was not run". The person gets Codex's closing reply and no question. They can ask again in the next message.
 
