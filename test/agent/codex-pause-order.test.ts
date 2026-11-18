@@ -162,3 +162,29 @@ test("a question whose completion Codex has not reported still refuses the next 
     app.db.close();
   }
 });
+
+test("a call Codex cancels while it waits does not run when the question is released", async () => {
+  const fake = fakeCodex({ steps: [
+    { call: "ask_user", input: confirmedQuestion, codexError: "PRIVATE_FAILURE", deferCompletion: true },
+    { call: "ask_user", input: correctedQuestion, cancelAfterMs: 20, flushDeferredAfterMs: 200 },
+    { say: "The call was cancelled." },
+  ] });
+  const base = codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-cancelled-"), KEYLOOM_CODEX_BIN: fake.bin } });
+  let questionsRun = 0;
+  const model: AgentModel = { ...base, run: (request) => base.run({ ...request, tools: request.tools.map((tool) => tool.name !== "ask_user" ? tool : {
+    ...tool,
+    run(raw) {
+      questionsRun++;
+      return tool.run(raw);
+    },
+  }) }) };
+  const { app, layoutId } = await optionOptionApp();
+  try {
+    const result = await sendMessage(app, layoutId, { message: "Ask first", model });
+    expect(questionsRun).toBe(1);
+    expect(result.status).toBe("complete");
+    expect(result.question).toBeUndefined();
+  } finally {
+    app.db.close();
+  }
+});

@@ -33,7 +33,8 @@ export type ModelTool = {
   pauses?: boolean;
   /** A successful call stores its result and ends this turn; subsequent calls cannot run. */
   completes?: boolean;
-  run: (rawInput: unknown) => Promise<string> | string;
+  /** `signal` aborts when the caller cancels this one call. Only the Codex tool server sends it. */
+  run: (rawInput: unknown, signal?: AbortSignal) => Promise<string> | string;
 };
 
 export const AWAITING_ANSWER = "awaiting_answer";
