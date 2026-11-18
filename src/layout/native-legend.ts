@@ -6,7 +6,7 @@ import type { GridContext } from "./render-grid.ts";
 import type { Binding, Mod } from "./schema.ts";
 import { capMods, layerLegend } from "./cap-words.ts";
 import { renumber } from "./layer-refs.ts";
-import { readNative, zmkModifier } from "./native-read.ts";
+import { oneShotMods } from "./native-read.ts";
 
 type Native = Extract<Binding, { kind: "native" }>;
 export type NativePrint = { tap: string; hold?: string; layerId?: string };
@@ -82,9 +82,8 @@ export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
   }
   // Use the reader for generated ZMK aliases and kanata one-shots.
   if (binding.firmware !== "qmk") {
-    const reading = readNative({ firmware: binding.firmware, source }, new Map());
-    const [step] = reading.kind === "steps" ? reading.steps : [];
-    if (step?.kind === "oneShot") return { tap: capMods(step.mods), hold: "once" };
+    const mods = oneShotMods({ firmware: binding.firmware, source });
+    if (mods !== undefined) return { tap: capMods(mods), hold: "once" };
   }
   if (/^DUAL_FUNC_\d+$/.test(source)) {
     const dual = dualFunction(source, ctx);
@@ -94,10 +93,6 @@ export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
   if (MOUSE[source] !== undefined) return { tap: MOUSE[source] as string };
   if (source === "QK_BOOT" || source === "RESET" || source === "&bootloader") return { tap: "Boot", hold: "flash" };
   // ZMK
-  const sticky = /^&(?:sticky_key_quick_release|sk)\s+(\w+)$/.exec(source);
-  const stickyName = sticky?.[1];
-  const stickyMod = stickyName === undefined ? undefined : zmkModifier(stickyName);
-  if (stickyMod !== undefined) return { tap: capMods([stickyMod]), hold: "once" };
   const onHold = /^&layer_on_hold\s+(\d+)\s+(.+)$/.exec(source);
   if (onHold !== null) {
     const layerId = layerAt(ctx, Number(onHold[1]));

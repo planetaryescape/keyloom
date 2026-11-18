@@ -1,6 +1,7 @@
 // Plain-text grids of a layout, placed by the board's physical rows (10-cli.md). Pure, so the
 // CLI and, later, the agent's get_layout tool print the same text.
 import { KEYCODES, type KeyCodeInfo } from "./keycodes.ts";
+import { oneShotMods } from "./native-read.ts";
 import type { Binding, Layer, Macro, Mod, Passthrough, SlotAction, TapDance } from "./schema.ts";
 
 /** Structural, so this module needs nothing from src/boards. */
@@ -127,8 +128,11 @@ export function bindingLabel(b: Binding, ctx: GridContext): string {
       return "▽";
     case "none":
       return "×";
-    case "native":
-      return b.label;
+    case "native": {
+      // An importer's label for a one-shot is the firmware's own spelling, and a cell is too narrow to show it.
+      const mods = oneShotMods(b);
+      return mods === undefined ? b.label : `OS${modsText(mods)}`;
+    }
   }
 }
 
