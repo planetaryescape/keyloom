@@ -312,7 +312,7 @@ Use a user-owned, nonsymlink cache that other users cannot write. Reinstall the 
 ## Output contract
 
 - Every command that creates something prints its ID first, in table mode and in JSON.
-- `layout show` in table mode prints each layer as a grid placed by the board's physical rows, the same rendering the agent gets from `get_layout` ([03](03-agent.md#tools)). What the agent sees and what a human debugging it sees are the same text.
+- `layout show` in table mode prints each layer as a grid placed by the board's physical rows, the same rendering the agent gets from `get_layout` ([03](03-agent.md#tools)). A one-shot modifier prints as `OS` and its modifier, such as `OS⌘`. What the agent sees and what a human debugging it sees are the same text.
 - `chat` streams assistant text to stdout as it arrives. With `--format json` it prints one final object: `{ conversationId, messageIds, proposals: [{ changeSetId, title, validation }] }`.
 - A reply may name a config, a proposal, a layer or a key with a typed marker (D-468). `chat` writes the name in table mode and keeps the marker itself in `text` under `--format json`, exactly as stored; see [What a reply names](#what-a-reply-names).
 
