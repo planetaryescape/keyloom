@@ -113,6 +113,13 @@ describe("native bindings print human legends", () => {
 
   test("ZMK sticky keys, layer-on-hold, magic, lighting, Bluetooth and output", () => {
     expect(native("&sticky_key_quick_release LEFT_SHIFT", "OS⇧", "zmk")).toEqual({ kind: "native", tap: "⇧", hold: "once" });
+    expect(native("&sticky_key_quick_release LSHFT", "OS⇧", "zmk")).toEqual({ kind: "native", tap: "⇧", hold: "once" });
+    expect(native("&sk LEFT_COMMAND", "LEFT_COMMAND", "zmk")).toEqual({ kind: "native", tap: "⌘", hold: "once" });
+    for (const name of ["LEFT_GUI", "LEFT_WIN", "LWIN", "LEFT_META", "LMETA", "RIGHT_GUI", "RIGHT_COMMAND", "RIGHT_WIN", "RWIN", "RIGHT_META", "RMETA"]) {
+      expect(native(`&sk ${name}`, name, "zmk")).toEqual({ kind: "native", tap: "⌘", hold: "once" });
+    }
+    expect(native("&sk LEFT_CONTROL", "LEFT_CONTROL", "zmk")).toEqual({ kind: "native", tap: "⌃", hold: "once" });
+    expect(native("&sk RIGHT_ALT", "RIGHT_ALT", "zmk")).toEqual({ kind: "native", tap: "⌥", hold: "once" });
     expect(native("&layer_on_hold 2 ENTER", "Enter/OSL2", "zmk")).toEqual({ kind: "native", tap: "⏎", hold: "Numbers" });
     expect(native("&layer_on_hold 1 LA(SPACE)", "⌥SPC/OSL1", "zmk")).toEqual({ kind: "native", tap: "⌥␣", hold: "One shot" });
     expect(native("&magic 4 0", "magic/L4", "zmk")).toEqual({ kind: "native", tap: "Magic", hold: "Magic" });

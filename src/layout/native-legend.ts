@@ -6,7 +6,7 @@ import type { GridContext } from "./render-grid.ts";
 import type { Binding, Mod } from "./schema.ts";
 import { capMods, layerLegend } from "./cap-words.ts";
 import { renumber } from "./layer-refs.ts";
-import { readNative } from "./native-read.ts";
+import { readNative, zmkModifier } from "./native-read.ts";
 
 type Native = Extract<Binding, { kind: "native" }>;
 export type NativePrint = { tap: string; hold?: string; layerId?: string };
@@ -95,7 +95,9 @@ export function nativeLegend(binding: Native, ctx: GridContext): NativePrint {
   if (source === "QK_BOOT" || source === "RESET" || source === "&bootloader") return { tap: "Boot", hold: "flash" };
   // ZMK
   const sticky = /^&(?:sticky_key_quick_release|sk)\s+(\w+)$/.exec(source);
-  if (sticky !== null && MOD_OF[sticky[1] as string] !== undefined) return { tap: capMods([MOD_OF[sticky[1] as string] as Mod]), hold: "once" };
+  const stickyName = sticky?.[1];
+  const stickyMod = stickyName === undefined ? undefined : zmkModifier(stickyName);
+  if (stickyMod !== undefined) return { tap: capMods([stickyMod]), hold: "once" };
   const onHold = /^&layer_on_hold\s+(\d+)\s+(.+)$/.exec(source);
   if (onHold !== null) {
     const layerId = layerAt(ctx, Number(onHold[1]));

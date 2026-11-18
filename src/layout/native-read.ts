@@ -46,9 +46,14 @@ const QMK_STEPS = new Map<string, Step>([
 // Shift, Ctrl, Alt and GUI names as ZMK's keys header spells them, short and long. A name not in here is not a modifier keyloom reads.
 const ZMK_MODS = new Map<string, Mod>([
   ["LSHFT", "LSFT"], ["LSHIFT", "LSFT"], ["LEFT_SHIFT", "LSFT"], ["RSHFT", "RSFT"], ["RSHIFT", "RSFT"], ["RIGHT_SHIFT", "RSFT"],
-  ["LCTRL", "LCTL"], ["LCTL", "LCTL"], ["RCTRL", "RCTL"], ["RCTL", "RCTL"],
-  ["LALT", "LALT"], ["RALT", "RALT"], ["LGUI", "LGUI"], ["LCMD", "LGUI"], ["RGUI", "RGUI"], ["RCMD", "RGUI"],
+  ["LCTRL", "LCTL"], ["LCTL", "LCTL"], ["LEFT_CONTROL", "LCTL"], ["RCTRL", "RCTL"], ["RCTL", "RCTL"], ["RIGHT_CONTROL", "RCTL"],
+  ["LALT", "LALT"], ["LEFT_ALT", "LALT"], ["RALT", "RALT"], ["RIGHT_ALT", "RALT"],
+  ["LGUI", "LGUI"], ["LEFT_GUI", "LGUI"], ["LCMD", "LGUI"], ["LEFT_COMMAND", "LGUI"], ["LWIN", "LGUI"], ["LEFT_WIN", "LGUI"], ["LMETA", "LGUI"], ["LEFT_META", "LGUI"],
+  ["RGUI", "RGUI"], ["RIGHT_GUI", "RGUI"], ["RCMD", "RGUI"], ["RIGHT_COMMAND", "RGUI"], ["RWIN", "RGUI"], ["RIGHT_WIN", "RGUI"], ["RMETA", "RGUI"], ["RIGHT_META", "RGUI"],
 ]);
+
+/** The modifier a ZMK key name means, in any spelling ZMK's keys header gives it. */
+export const zmkModifier = (name: string): Mod | undefined => ZMK_MODS.get(name);
 
 const BT_CLEAR = new Map<string, "clear" | "clearAll" | "next" | "previous">([["BT_CLR", "clear"], ["BT_CLR_ALL", "clearAll"], ["BT_NXT", "next"], ["BT_PRV", "previous"]]);
 
