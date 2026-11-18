@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.81.3](https://github.com/planetaryescape/keyloom/compare/v0.81.2...v0.81.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* name one-shot modifiers in the grid and honour cancelled Codex calls ([22eb373](https://github.com/planetaryescape/keyloom/commit/22eb373118bded4c3d16c9e312edaea09fd70601))
+* never run a tool call that Codex cancelled ([62a4e84](https://github.com/planetaryescape/keyloom/commit/62a4e84ff6f23332d3d15f7dae1bc1d85f435a14))
+* print one-shot modifiers by name in the terminal grid ([de4728e](https://github.com/planetaryescape/keyloom/commit/de4728ecb3ddaf5dc42a21114c98bb98077d5074))
+
 ## [0.81.2](https://github.com/planetaryescape/keyloom/compare/v0.81.1...v0.81.2) (2026-11-18)
 
 
