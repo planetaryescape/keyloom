@@ -3497,6 +3497,6 @@ keyloom's `ask_user` handler runs before Codex reports the call. Codex can still
 
 A failed report now releases the pause, and the next call runs. Codex's item id does not reach the MCP handler, so keyloom cannot match a report to the call that paused. It counts reports instead. The pause ends only when every question up to the paused one has failed and no other question is unreported. Only the paused call can be confirmed, because every later call is refused.
 
-A call that arrives during the pause waits up to one second for the report, because Codex's events and its MCP requests reach keyloom on separate connections. If no report arrives, the call is refused as before. D-452's rule stands for a question that Codex has not failed: nothing runs after it.
+A call that arrives during the pause waits up to one second from its arrival for the report, because Codex's events and its MCP requests reach keyloom on separate connections. If no report arrives, the call is refused as before. D-452's rule stands for a question that Codex has not failed: nothing runs after it.
 
 Clearing the pause on any failed `ask_user` report was rejected. A buffered report for an earlier call would release a later valid question and lose it.

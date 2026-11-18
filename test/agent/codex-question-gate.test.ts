@@ -47,7 +47,7 @@ test("a held call resumes as soon as Codex reports the question failed", async (
   const gate = paused(5_000);
   gate.started("retry");
   gate.arrived();
-  const held = gate.verdict(true);
+  const held = gate.verdict(true, performance.now());
   gate.completed("question", false);
   await held;
   expect(gate.isPaused()).toBe(false);
@@ -55,7 +55,7 @@ test("a held call resumes as soon as Codex reports the question failed", async (
 
 test("a held call resumes as soon as Codex confirms the question", async () => {
   const gate = paused(5_000);
-  const held = gate.verdict(false);
+  const held = gate.verdict(false, performance.now());
   gate.completed("question", true);
   await held;
   expect(gate.isPaused()).toBe(true);
@@ -63,6 +63,14 @@ test("a held call resumes as soon as Codex confirms the question", async () => {
 
 test("a held call stops waiting when Codex reports nothing", async () => {
   const gate = paused(5);
-  await gate.verdict(false);
+  await gate.verdict(false, performance.now());
+  expect(gate.isPaused()).toBe(true);
+});
+
+test("a call that queued behind another counts its queue time toward the wait", async () => {
+  const gate = paused(5_000);
+  const startedWaiting = performance.now();
+  await gate.verdict(false, startedWaiting - 5_000);
+  expect(performance.now() - startedWaiting).toBeLessThan(1_000);
   expect(gate.isPaused()).toBe(true);
 });

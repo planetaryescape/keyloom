@@ -16,8 +16,8 @@ export type QuestionGate = {
   pause(): void;
   /** Codex reported a question call. */
   completed(id: string, confirmed: boolean): void;
-  /** Waits briefly for Codex's report on the paused question. `asking` says the waiting call is itself a question. */
-  verdict(asking: boolean): Promise<void>;
+  /** Waits briefly for Codex's report on the paused question. `asking` says the waiting call is itself a question. The wait counts from `arrivedAt`, so time queued behind another call is part of it. */
+  verdict(asking: boolean, arrivedAt: number): Promise<void>;
 };
 
 export function questionGate(graceMs = VERDICT_GRACE_MS): QuestionGate {
@@ -54,13 +54,14 @@ export function questionGate(graceMs = VERDICT_GRACE_MS): QuestionGate {
       }
       settle();
     },
-    async verdict(asking) {
+    async verdict(asking, arrivedAt) {
       if (!paused || confirmed) return;
       waitingQuestions = asking ? 1 : 0;
       settle();
-      if (paused && !confirmed) {
+      const remainingMs = graceMs - (performance.now() - arrivedAt);
+      if (paused && !confirmed && remainingMs > 0) {
         await new Promise<void>((resolve) => {
-          const timer = setTimeout(() => wake?.(), graceMs);
+          const timer = setTimeout(() => wake?.(), remainingMs);
           wake = () => {
             clearTimeout(timer);
             wake = null;

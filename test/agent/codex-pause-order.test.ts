@@ -143,9 +143,19 @@ test("a question whose completion Codex has not reported still refuses the next 
     { call: "ask_user", input: confirmedQuestion, deferCompletion: true },
     { call: "ask_user", input: correctedQuestion },
   ] });
+  const base = codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-unreported-"), KEYLOOM_CODEX_BIN: fake.bin } });
+  let questionsRun = 0;
+  const model: AgentModel = { ...base, run: (request) => base.run({ ...request, tools: request.tools.map((tool) => tool.name !== "ask_user" ? tool : {
+    ...tool,
+    run(raw) {
+      questionsRun++;
+      return tool.run(raw);
+    },
+  }) }) };
   const { app, layoutId } = await optionOptionApp();
   try {
-    const result = await sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-unreported-"), KEYLOOM_CODEX_BIN: fake.bin } }) });
+    const result = await sendMessage(app, layoutId, { message: "Ask first", model });
+    expect(questionsRun).toBe(1);
     expect(result.status).toBe("awaiting_answer");
     expect(result.question).toMatchObject({ question: confirmedQuestion.question, toolUseId: expect.stringMatching(/^codex_.+_item_0$/) });
   } finally {

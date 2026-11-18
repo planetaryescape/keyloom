@@ -85,11 +85,12 @@ export function codexModel(opts: CodexModelOptions = {}): AgentModel {
       const tools: ModelTool[] = request.tools.map((tool) => ({
         ...tool,
         run: (raw) => {
+          const arrivedAt = performance.now();
           // MCP requests can overlap. Queue arrival order before awaiting a tool, so an async terminal call owns the boundary.
           const result = ordered.then(async () => {
             request.signal?.throwIfAborted();
             if (tool.pauses === true) question.arrived();
-            await question.verdict(tool.pauses === true);
+            await question.verdict(tool.pauses === true, arrivedAt);
             request.signal?.throwIfAborted();
             if (question.isPaused() || finished) throw new Error("keyloom is waiting for an answer; this tool was not run");
             if (++toolCalls > request.maxIterations) {
