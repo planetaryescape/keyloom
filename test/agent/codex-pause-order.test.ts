@@ -92,6 +92,7 @@ test("a question Codex reports as failed after its handler ran keeps Codex's clo
   const { app, layoutId } = await optionOptionApp();
   try {
     const result = await sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-unconfirmed-"), KEYLOOM_CODEX_BIN: fake.bin } }) });
+    expect(fake.record()?.results).toMatchObject([{ tool: "ask_user", isError: false }]);
     expect(result.status).toBe("complete");
     expect(result.question).toBeUndefined();
     expect(result.text).toContain("The question could not be asked.");
@@ -111,6 +112,7 @@ test("a Codex run that fails after an unconfirmed question reports the failure",
   const { app, layoutId } = await optionOptionApp();
   try {
     await expect(sendMessage(app, layoutId, { message: "Ask first", model: codexModel({ env: { PATH: process.env.PATH, CODEX_HOME: tempDir("codex-pause-failed-run-"), KEYLOOM_CODEX_BIN: fake.bin } }) })).rejects.toThrow("overloaded");
+    expect(fake.record()?.results).toMatchObject([{ tool: "ask_user", isError: false }]);
   } finally {
     app.db.close();
   }
