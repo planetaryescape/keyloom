@@ -73,6 +73,7 @@ keyloom
   lab start <layout> [--passage P | --text T]  record the connected keyboard while you type a passage; Ctrl-C ends it
   lab analyse <session> [--no-propose] [--max-runs N] [--show]  replay it, say what went wrong per finger, try other settings on it
   lab sessions [layout]                    recorded sessions, newest first
+  lab show <session>                       show what you typed in a session and its prompt passage (local only)
   lab delete <session>                     delete a session with its recording and what you typed
   workload list                            list built-in deterministic typing workloads
   workload evaluate <layout> [--builtin S | --suite <file>] [--rev R] [--board-rev B]

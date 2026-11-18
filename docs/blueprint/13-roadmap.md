@@ -721,7 +721,7 @@ No new accounts or credentials are required by this plan. Use the provider setup
 
 ## Rung 26: I can see what the agent is doing
 
-Status: 26a and 26b are released in v0.42.0 and v0.43.0. The bounded public CLI/web journeys passed; no live-provider or hardware validation is claimed. BK's later working-order and independent display/LED configuration corrections are being implemented separately (D-412, D-413). App-wide control remains later work.
+Status: 26a and 26b are released in v0.42.0 and v0.43.0. The bounded public CLI/web journeys passed; no live-provider or hardware validation is claimed. The v0.43.1 patch shipped BK's working-order, display and LED colour, model-picker and New conversation corrections (D-412 to D-415). D-472 later put the result first in a completed reply. App-wide control remains later work.
 
 Previously, one activity string represents a running turn. Now a request has distinct user/agent hierarchy, real correlated tool progress, a quiet thinking shimmer, and a final answer with routine work folded away.
 
@@ -765,7 +765,7 @@ Previously, the agent shows one activity string and combines working notes with 
 
 ## Rung 26b: I reload the same work without executing it again
 
-Status: released in [v0.43.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.43.0). The checksum-verified installed public CLI and bundled web app passed [21 preflight checks and four durable-work journeys](../screenshots/agent-experience/26b-published-0.43.0/README.md): early Stop, request deduplication and reload, interrupted recovery with a visible receipt, and consecutive questions with distinct saved answers. This is the existing preparation/question scope in the [26b contract](../research/spikes/26b-contract.md), not app-wide control. The real desktop update is held for BK's subsequent ordering/colour corrections; native runtime, paid providers and hardware are not part of this proof. D-411 records the narrower storage and job scope.
+Status: released in [v0.43.0](https://github.com/planetaryescape/keyloom/releases/tag/v0.43.0). The checksum-verified installed public CLI and bundled web app passed [21 preflight checks and four durable-work journeys](../screenshots/agent-experience/26b-published-0.43.0/README.md): early Stop, request deduplication and reload, interrupted recovery with a visible receipt, and consecutive questions with distinct saved answers. This is the existing preparation/question scope in the [26b contract](../research/spikes/26b-contract.md), not app-wide control. BK's ordering and colour corrections followed in v0.43.1. Native runtime, paid providers and hardware are not part of this proof. D-411 records the narrower storage and job scope.
 
 Previously, completed activity is inspectable but a stream interruption may still lose in-flight execution/history. Now execution belongs to a persisted run instead of a subscriber, and a reconnect reads the same work without resending its effects.
 

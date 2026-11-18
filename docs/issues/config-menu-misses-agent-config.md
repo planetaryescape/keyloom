@@ -6,4 +6,4 @@ The cause is in `src/web/configs/useConfigs.ts`. The list loads when its key cha
 
 Fix (D-450): the chat reports every turn to the page, and the page reloads the config list once for each config a turn names (a `put_config` or `create_config` operation's config reference) that the list lacks. The same change opens the config and shows a card for it, and the card's "Open" also reloads the page's own layout list, because selecting a config that list lacks left the page on "Loading layout". Checked in the browser on a scratch data directory with a scripted model behind the real server: after the reply the menu listed the new config without a reload.
 
-Status: fixed in b2b497d.
+Status: fixed in 20587688 (#179).
